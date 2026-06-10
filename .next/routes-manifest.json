@@ -60,6 +60,12 @@
       "regex": "^/api/gmail/send(?:/)?$",
       "routeKeys": {},
       "namedRegex": "^/api/gmail/send(?:/)?$"
+    },
+    {
+      "page": "/api/manifest",
+      "regex": "^/api/manifest(?:/)?$",
+      "routeKeys": {},
+      "namedRegex": "^/api/manifest(?:/)?$"
     }
   ],
   "dataRoutes": [],

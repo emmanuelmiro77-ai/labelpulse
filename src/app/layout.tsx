@@ -34,7 +34,7 @@ export const metadata: Metadata = {
     "music production",
   ],
   authors: [{ name: "LabelPulse" }],
-  manifest: "/manifest.webmanifest",
+  manifest: "/api/manifest",
   icons: {
     icon: [
       { url: "/icons/favicon-32.png", sizes: "32x32", type: "image/png" },

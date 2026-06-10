@@ -3,6 +3,7 @@
   "/_not-found/page": "/_not-found",
   "/api/auth/[...nextauth]/route": "/api/auth/[...nextauth]",
   "/api/gmail/send/route": "/api/gmail/send",
+  "/api/manifest/route": "/api/manifest",
   "/api/route": "/api",
   "/page": "/"
 }
