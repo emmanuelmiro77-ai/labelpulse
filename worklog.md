@@ -19,3 +19,23 @@ Stage Summary:
 - NEXTAUTH_URL: https://d1wv240wp180-d.space-z.ai
 - Dev server running at http://localhost:3000
 - All 4 sections working: Dashboard, Labels (1192), Demos, Pitch Generator
+
+---
+Task ID: 2
+Agent: Main Agent
+Task: Add PWA support for desktop installation
+
+Work Log:
+- Generated app icon using AI image generation (1024x1024 → resized to 192, 512, favicon, apple-touch)
+- Created manifest.webmanifest with PWA config (standalone display, theme color, icons)
+- Updated layout.tsx with viewport metadata, manifest link, apple-touch-icon, PWA meta tags
+- Created service worker (sw.js) with network-first caching strategy and static asset caching
+- Created PWAInstall component with install banner prompt
+- Rebuilt and verified all PWA assets are served correctly
+
+Stage Summary:
+- LabelPulse is now a full PWA installable on desktop/mobile
+- Icon appears in taskbar/dock when installed
+- App opens in standalone window (no browser chrome)
+- Service worker provides offline fallback
+- Install banner shows automatically in supported browsers
