@@ -14,7 +14,7 @@ import {
   Globe,
   Loader2,
 } from "lucide-react";
-import { useState, useEffect, useSyncExternalStore } from "react";
+import { useState, useEffect } from "react";
 import { Button } from "@/components/ui/button";
 import {
   Popover,
@@ -56,11 +56,11 @@ export default function Home() {
   const [helpOpen, setHelpOpen] = useState(false);
 
   // Wait for Zustand persist to rehydrate from localStorage before rendering
-  const hydrated = useSyncExternalStore(
-    () => () => {},
-    () => true,
-    () => false,
-  );
+  const [hydrated, setHydrated] = useState(false);
+
+  useEffect(() => {
+    setHydrated(true);
+  }, []);
 
   if (!hydrated) {
     return (
