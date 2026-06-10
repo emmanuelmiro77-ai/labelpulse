@@ -1,0 +1,3 @@
+{
+  "/api/gmail/send/route": "app/api/gmail/send/route.js"
+}

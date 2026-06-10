@@ -1,0 +1,8 @@
+Google Client ID:
+421413107155-sf5m4feakvfe9ora1j0b9qsf1spjd76f.apps.googleusercontent.com
+
+Google Client Secret:
+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
+
+URI reindirizzamento:
+https://d1wv240wp180-d.space-z.ai/api/auth/callback/google
