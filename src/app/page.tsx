@@ -247,7 +247,7 @@ export default function Home() {
         <div className="max-w-7xl mx-auto flex items-center justify-between">
           <div className="flex items-center gap-2 text-xs text-muted-foreground/50">
             <Disc3 className="h-3.5 w-3.5" />
-            <span className="font-mono">LabelPulse v2.0</span>
+            <span className="font-mono">LabelPulse v2.1</span>
           </div>
           <p className="text-[10px] text-muted-foreground/30 font-mono">
             {t(locale, "footer.dataStored")}
