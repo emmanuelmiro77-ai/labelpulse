@@ -1,5 +1,20 @@
-const CACHE_NAME = "labelpulse-v3";
-const STATIC_ASSETS = [
+/**
+ * LabelPulse Service Worker v4 — Bulletproof Offline-First PWA
+ * 
+ * Strategy: Cache-First for static assets, Network-First for HTML
+ * 
+ * This ensures:
+ * - The app loads INSTANTLY from cache (even offline)
+ * - HTML is always fresh when online (updates detected immediately)
+ * - If the server is down, the app still works 100% from cache
+ * - Users get an update notification when a new version is available
+ */
+
+const CACHE_NAME = "labelpulse-v4";
+const OFFLINE_URL = "/";
+
+// Pre-cache essential assets on install
+const PRECACHE_ASSETS = [
   "/",
   "/manifest.webmanifest",
   "/icons/icon-192.png",
@@ -8,89 +23,146 @@ const STATIC_ASSETS = [
   "/icons/apple-touch-icon.png",
 ];
 
-// Install: cache static assets and activate immediately
+// Install: cache critical assets and activate immediately
 self.addEventListener("install", (event) => {
   event.waitUntil(
     caches.open(CACHE_NAME).then((cache) => {
-      return cache.addAll(STATIC_ASSETS);
+      // Cache what we can, don't fail if some assets aren't available yet
+      return cache.addAll(PRECACHE_ASSETS).catch((err) => {
+        console.warn("[SW] Some pre-cache assets failed:", err);
+      });
     })
   );
-  // Force the new service worker to activate immediately
+  // Activate immediately — don't wait for old SW to die
   self.skipWaiting();
 });
 
-// Activate: clean old caches and take control of all clients
+// Activate: clean old caches and claim all pages immediately
 self.addEventListener("activate", (event) => {
   event.waitUntil(
     caches.keys().then((keys) =>
       Promise.all(
         keys
           .filter((key) => key !== CACHE_NAME)
-          .map((key) => caches.delete(key))
+          .map((key) => {
+            console.log("[SW] Deleting old cache:", key);
+            return caches.delete(key);
+          })
       )
-    ).then(() => self.clients.claim())
+    ).then(() => {
+      console.log("[SW] Claiming all clients");
+      return self.clients.claim();
+    })
   );
-  // Claim all clients so the new SW controls pages immediately
-  self.clients.claim();
 });
 
-// Fetch: network-first with cache fallback
-// This means every time you open the app, it fetches the latest version from the server
+// Fetch: Smart routing based on request type
 self.addEventListener("fetch", (event) => {
   const { request } = event;
 
   // Skip non-GET requests
   if (request.method !== "GET") return;
 
-  // Skip API calls and auth — always go to network
+  // Skip API calls and external requests
   if (
     request.url.includes("/api/") ||
     request.url.includes("googleapis.com") ||
-    request.url.includes("next-auth")
+    request.url.includes("next-auth") ||
+    !request.url.startsWith(self.location.origin)
   ) {
     return;
   }
 
-  // For navigation requests (page loads), always try network first
+  const url = new URL(request.url);
+
+  // STRATEGY 1: Service Worker — always from network (never cache SW)
+  if (url.pathname === "/sw.js") {
+    event.respondWith(
+      fetch(request).catch(() => new Response("", { status: 503 }))
+    );
+    return;
+  }
+
+  // STRATEGY 2: Navigation (HTML pages) — Network-First with instant cache fallback
+  // This ensures users always get the latest HTML when online,
+  // but the app still works when offline or server is down
   if (request.mode === "navigate") {
     event.respondWith(
       fetch(request)
         .then((response) => {
           if (response.ok) {
+            // Cache the fresh HTML
             const clone = response.clone();
-            caches.open(CACHE_NAME).then((cache) => {
-              cache.put(request, clone);
-            });
+            caches.open(CACHE_NAME).then((cache) => cache.put(request, clone));
           }
           return response;
         })
         .catch(() => {
+          // Network failed — serve from cache (app works offline!)
           return caches.match(request).then((cached) => {
-            return cached || caches.match("/");
+            if (cached) return cached;
+            // Ultimate fallback: serve the cached index.html
+            return caches.match(OFFLINE_URL);
           });
         })
     );
     return;
   }
 
-  // For other assets (JS, CSS, images): network-first with cache fallback
+  // STRATEGY 3: Static assets (JS, CSS, images, fonts) — Cache-First
+  // These are immutable (content-hashed filenames), so cache-first is safe
+  // This makes the app load INSTANTLY on repeat visits
+  if (
+    url.pathname.startsWith("/_next/static/") ||
+    url.pathname.startsWith("/icons/") ||
+    url.pathname.match(/\.(js|css|png|jpg|svg|ico|woff2?|ttf|eot|webp)$/)
+  ) {
+    event.respondWith(
+      caches.match(request).then((cached) => {
+        if (cached) {
+          // Return cached version immediately (instant load!)
+          // Also update cache in background for next time
+          fetch(request).then((response) => {
+            if (response.ok) {
+              caches.open(CACHE_NAME).then((cache) => cache.put(request, response));
+            }
+          }).catch(() => {}); // Ignore background update failures
+          return cached;
+        }
+        // Not in cache — fetch from network and cache
+        return fetch(request).then((response) => {
+          if (response.ok) {
+            const clone = response.clone();
+            caches.open(CACHE_NAME).then((cache) => cache.put(request, clone));
+          }
+          return response;
+        }).catch(() => new Response("Offline", { status: 503 }));
+      })
+    );
+    return;
+  }
+
+  // STRATEGY 4: Other requests (manifest, etc.) — Network-First with cache fallback
   event.respondWith(
     fetch(request)
       .then((response) => {
-        // Cache successful responses
         if (response.ok) {
           const clone = response.clone();
-          caches.open(CACHE_NAME).then((cache) => {
-            cache.put(request, clone);
-          });
+          caches.open(CACHE_NAME).then((cache) => cache.put(request, clone));
         }
         return response;
       })
       .catch(() => {
-        // Fallback to cache
         return caches.match(request).then((cached) => {
           return cached || new Response("Offline", { status: 503 });
         });
       })
   );
+});
+
+// Handle messages from the app
+self.addEventListener("message", (event) => {
+  if (event.data && event.data.type === "SKIP_WAITING") {
+    self.skipWaiting();
+  }
 });
