@@ -106,7 +106,7 @@ self.__SERVER_FILES_MANIFEST={
     },
     "outputFileTracingRoot": "/home/z/my-project",
     "allowedDevOrigins": [
-      ".space-z.ai"
+      ".vercel.app"
     ],
     "cacheComponents": false,
     "cacheLife": {
