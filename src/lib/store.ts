@@ -251,10 +251,46 @@ export const useAppStore = create<AppState>()(
           const parsed = JSON.parse(jsonString);
           if (parsed.app !== "labelpulse" || !parsed.data) return false;
           
-          const { labels, demos, userProfile, locale } = parsed.data;
-          
+          const { labels: importedLabels = [], demos = [], userProfile, locale } = parsed.data;
+          const currentLabels = get().labels;
+
+          // Smart merge: combine imported labels with current, avoiding duplicates
+          // A label is a duplicate if it has the same id OR the same name (case-insensitive)
+          const existingIds = new Set(currentLabels.map(l => l.id));
+          const existingNames = new Set(currentLabels.map(l => l.name.toLowerCase().trim()));
+
+          const newLabels = importedLabels.filter((l: Label) => {
+            if (existingIds.has(l.id)) return false;
+            if (existingNames.has(l.name.toLowerCase().trim())) {
+              // Same name exists — merge user-enriched data into the existing label
+              const existingIdx = currentLabels.findIndex(
+                el => el.name.toLowerCase().trim() === l.name.toLowerCase().trim()
+              );
+              if (existingIdx !== -1) {
+                const existing = currentLabels[existingIdx];
+                // Merge: imported data takes priority for user-editable fields,
+                // but keep existing Beatport data if imported label lacks it
+                currentLabels[existingIdx] = {
+                  ...existing,
+                  emails: l.emails?.length ? l.emails : existing.emails,
+                  contactInfo: l.contactInfo || existing.contactInfo,
+                  website: l.website || existing.website,
+                  demoLink: l.demoLink || existing.demoLink,
+                  socialLink: l.socialLink || existing.socialLink,
+                  soundcloudLink: l.soundcloudLink || existing.soundcloudLink,
+                  notes: l.notes || existing.notes,
+                  genres: l.genres?.length ? l.genres : existing.genres,
+                  rankByGenre: Object.keys(l.rankByGenre || {}).length ? l.rankByGenre : existing.rankByGenre,
+                  pointsByGenre: Object.keys(l.pointsByGenre || {}).length ? l.pointsByGenre : existing.pointsByGenre,
+                };
+              }
+              return false;
+            }
+            return true;
+          });
+
           set({
-            labels: labels || [],
+            labels: [...currentLabels, ...newLabels],
             demos: demos || [],
             userProfile: userProfile || { artistName: "", scLink: "" },
             locale: locale || "it",
