@@ -31,3 +31,22 @@ Stage Summary:
 - App is now a static export served by a bulletproof Node.js server
 - PWA works offline with aggressive caching
 - All features preserved: SoundCloud, auto-save, SW updater, data backup
+
+---
+Task ID: 2
+Agent: Main Agent
+Task: Update Gmail integration for Vercel domain migration
+
+Work Log:
+- Explored project structure: LabelPulse uses Google Identity Services (GIS) popup flow — NO redirect URIs needed
+- User confirmed Google Cloud Console is already configured correctly
+- Updated next.config.ts: Changed allowedDevOrigins from ".space-z.ai" to ".vercel.app"
+- Cleaned up sw.js: Removed dead "next-auth" reference in fetch skip rules
+- Verified gmail.ts: GIS popup flow works entirely client-side, only needs NEXT_PUBLIC_GOOGLE_CLIENT_ID
+- No redirect URI changes needed in code (GIS uses popup, not redirect)
+
+Stage Summary:
+- next.config.ts now references .vercel.app instead of .space-z.ai
+- Service worker cleaned up (removed next-auth remnant)
+- Gmail integration code (gmail.ts) is correct — no changes needed
+- The GOOGLE_CLIENT_SECRET in .env.local is unused by the GIS flow (client-side only)

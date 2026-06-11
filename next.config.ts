@@ -14,7 +14,7 @@ const nextConfig: NextConfig = {
   },
   reactStrictMode: false,
   allowedDevOrigins: [
-    ".space-z.ai",
+    ".vercel.app",
   ],
 };
 
