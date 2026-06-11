@@ -1,18 +1,26 @@
 import type { Metadata, Viewport } from "next";
-import { Geist, Geist_Mono } from "next/font/google";
+import localFont from "next/font/local";
 import "./globals.css";
 import { Toaster } from "@/components/ui/toaster";
 import { PWAInstall } from "@/components/pwa-install";
 import { SWUpdater } from "@/components/sw-updater";
 
-const geistSans = Geist({
+const geistSans = localFont({
+  src: [
+    { path: "../fonts/geist-sans/Carlito-Regular.ttf", style: "normal", weight: "400" },
+    { path: "../fonts/geist-sans/Carlito-Bold.ttf", style: "normal", weight: "700" },
+  ],
   variable: "--font-geist-sans",
-  subsets: ["latin"],
+  display: "swap",
 });
 
-const geistMono = Geist_Mono({
+const geistMono = localFont({
+  src: [
+    { path: "../fonts/geist-mono/DejaVuSansMono.ttf", style: "normal", weight: "400" },
+    { path: "../fonts/geist-mono/DejaVuSansMono-Bold.ttf", style: "normal", weight: "700" },
+  ],
   variable: "--font-geist-mono",
-  subsets: ["latin"],
+  display: "swap",
 });
 
 export const viewport: Viewport = {

@@ -251,49 +251,139 @@ export const useAppStore = create<AppState>()(
           const parsed = JSON.parse(jsonString);
           if (parsed.app !== "labelpulse" || !parsed.data) return false;
           
-          const { labels: importedLabels = [], demos = [], userProfile, locale } = parsed.data;
+          const { labels: importedLabels = [], demos: importedDemos = [], userProfile, locale: importedLocale } = parsed.data;
           const currentLabels = get().labels;
+          const currentDemos = get().demos;
 
-          // Smart merge: combine imported labels with current, avoiding duplicates
-          // A label is a duplicate if it has the same id OR the same name (case-insensitive)
-          const existingIds = new Set(currentLabels.map(l => l.id));
-          const existingNames = new Set(currentLabels.map(l => l.name.toLowerCase().trim()));
+          // === LABEL MERGE ===
+          // Build lookup maps for current labels (immutable approach)
+          const currentLabelById = new Map(currentLabels.map(l => [l.id, l]));
+          const currentLabelByName = new Map(currentLabels.map(l => [l.name.toLowerCase().trim(), l]));
 
-          const newLabels = importedLabels.filter((l: Label) => {
-            if (existingIds.has(l.id)) return false;
-            if (existingNames.has(l.name.toLowerCase().trim())) {
-              // Same name exists — merge user-enriched data into the existing label
-              const existingIdx = currentLabels.findIndex(
-                el => el.name.toLowerCase().trim() === l.name.toLowerCase().trim()
-              );
-              if (existingIdx !== -1) {
-                const existing = currentLabels[existingIdx];
-                // Merge: imported data takes priority for user-editable fields,
-                // but keep existing Beatport data if imported label lacks it
-                currentLabels[existingIdx] = {
-                  ...existing,
-                  emails: l.emails?.length ? l.emails : existing.emails,
-                  contactInfo: l.contactInfo || existing.contactInfo,
-                  website: l.website || existing.website,
-                  demoLink: l.demoLink || existing.demoLink,
-                  socialLink: l.socialLink || existing.socialLink,
-                  soundcloudLink: l.soundcloudLink || existing.soundcloudLink,
-                  notes: l.notes || existing.notes,
-                  genres: l.genres?.length ? l.genres : existing.genres,
-                  rankByGenre: Object.keys(l.rankByGenre || {}).length ? l.rankByGenre : existing.rankByGenre,
-                  pointsByGenre: Object.keys(l.pointsByGenre || {}).length ? l.pointsByGenre : existing.pointsByGenre,
-                };
-              }
-              return false;
+          const newLabels: Label[] = [];
+
+          for (const imported of importedLabels as Label[]) {
+            // 1) Same ID → merge user data into existing (imported enriches current)
+            if (currentLabelById.has(imported.id)) {
+              const existing = currentLabelById.get(imported.id)!;
+              currentLabelById.set(imported.id, {
+                ...existing,
+                emails: imported.emails?.length ? imported.emails : existing.emails,
+                contactInfo: imported.contactInfo || existing.contactInfo,
+                website: imported.website || existing.website,
+                demoLink: imported.demoLink || existing.demoLink,
+                socialLink: imported.socialLink || existing.socialLink,
+                soundcloudLink: imported.soundcloudLink || existing.soundcloudLink,
+                notes: imported.notes || existing.notes,
+                status: imported.status || existing.status,
+                genres: imported.genres?.length ? imported.genres : existing.genres,
+                rankByGenre: Object.keys(imported.rankByGenre || {}).length ? imported.rankByGenre : existing.rankByGenre,
+                pointsByGenre: Object.keys(imported.pointsByGenre || {}).length ? imported.pointsByGenre : existing.pointsByGenre,
+              });
+              continue;
             }
-            return true;
-          });
+
+            // 2) Same name (case-insensitive) → merge and keep existing ID
+            const nameKey = imported.name.toLowerCase().trim();
+            if (currentLabelByName.has(nameKey)) {
+              const existing = currentLabelByName.get(nameKey)!;
+              const mergedLabel: Label = {
+                ...existing,
+                emails: imported.emails?.length ? imported.emails : existing.emails,
+                contactInfo: imported.contactInfo || existing.contactInfo,
+                website: imported.website || existing.website,
+                demoLink: imported.demoLink || existing.demoLink,
+                socialLink: imported.socialLink || existing.socialLink,
+                soundcloudLink: imported.soundcloudLink || existing.soundcloudLink,
+                notes: imported.notes || existing.notes,
+                status: imported.status || existing.status,
+                genres: imported.genres?.length ? imported.genres : existing.genres,
+                rankByGenre: Object.keys(imported.rankByGenre || {}).length ? imported.rankByGenre : existing.rankByGenre,
+                pointsByGenre: Object.keys(imported.pointsByGenre || {}).length ? imported.pointsByGenre : existing.pointsByGenre,
+              };
+              // Update both maps to keep them in sync
+              currentLabelById.set(existing.id, mergedLabel);
+              currentLabelByName.set(nameKey, mergedLabel);
+              continue;
+            }
+
+            // 3) Brand new label → add it (assign new ID for safety)
+            newLabels.push({
+              ...imported,
+              id: imported.id || genId(),
+              createdAt: imported.createdAt || new Date().toISOString(),
+              isCustom: imported.isCustom ?? true,
+              genres: imported.genres || [],
+              rankByGenre: imported.rankByGenre || {},
+              pointsByGenre: imported.pointsByGenre || {},
+              trending: imported.trending || false,
+              trendingRankByGenre: imported.trendingRankByGenre || {},
+              trendingPointsByGenre: imported.trendingPointsByGenre || {},
+              emails: imported.emails || [],
+              website: imported.website || "",
+              demoLink: imported.demoLink || "",
+              socialLink: imported.socialLink || "",
+              soundcloudLink: imported.soundcloudLink || "",
+              contactInfo: imported.contactInfo || "",
+              notes: imported.notes || "",
+              status: imported.status || "open",
+              submissionType: imported.submissionType || "email",
+            });
+          }
+
+          // Rebuild labels: current (possibly merged) + genuinely new ones
+          const mergedLabels = [...currentLabelById.values(), ...newLabels];
+
+          // === DEMO MERGE ===
+          // Same logic: merge by ID or by (trackName + labelId) combo
+          const currentDemoById = new Map(currentDemos.map(d => [d.id, d]));
+          const currentDemoByKey = new Map(
+            currentDemos.map(d => [`${d.trackName.toLowerCase().trim()}||${d.labelId}`, d])
+          );
+
+          const newDemos: Demo[] = [];
+
+          for (const imported of importedDemos as Demo[]) {
+            if (currentDemoById.has(imported.id)) {
+              // Same ID → merge (imported enriches current)
+              const existing = currentDemoById.get(imported.id)!;
+              currentDemoById.set(imported.id, {
+                ...existing,
+                ...imported,
+                id: existing.id, // keep original ID
+              });
+              continue;
+            }
+
+            const key = `${imported.trackName?.toLowerCase().trim()}||${imported.labelId}`;
+            if (currentDemoByKey.has(key)) {
+              // Same track+label combo → merge into existing
+              const existing = currentDemoByKey.get(key)!;
+              const merged: Demo = {
+                ...existing,
+                ...imported,
+                id: existing.id,
+              };
+              currentDemoById.set(existing.id, merged);
+              currentDemoByKey.set(key, merged);
+              continue;
+            }
+
+            // Brand new demo
+            newDemos.push({
+              ...imported,
+              id: imported.id || genId(),
+              createdAt: imported.createdAt || new Date().toISOString(),
+            });
+          }
+
+          const mergedDemos = [...currentDemoById.values(), ...newDemos];
 
           set({
-            labels: [...currentLabels, ...newLabels],
-            demos: demos || [],
-            userProfile: userProfile || { artistName: "", scLink: "" },
-            locale: locale || "it",
+            labels: mergedLabels,
+            demos: mergedDemos,
+            userProfile: userProfile || get().userProfile,
+            locale: importedLocale || get().locale,
           });
           return true;
         } catch {
