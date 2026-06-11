@@ -29,9 +29,7 @@ import {
   Languages,
   ClipboardCheck,
   MailOpen,
-  Loader2,
 } from "lucide-react";
-import { useSession } from "next-auth/react";
 import { useToast } from "@/hooks/use-toast";
 import { Input } from "@/components/ui/input";
 import { Button } from "@/components/ui/button";
@@ -72,9 +70,7 @@ export function LabelFinder() {
   const { labels, demos, addLabel, updateLabel, deleteLabel, addDemo, locale, getGenres, setActiveTab, userProfile, setUserProfile } =
     useAppStore();
   const genres = getGenres();
-  const { data: session, status: authStatus } = useSession();
   const { toast } = useToast();
-  const isGmailConnected = authStatus === "authenticated" && !!session?.accessToken;
   const [search, setSearch] = useState("");
   const [genreFilter, setGenreFilter] = useState<string[]>([]);
   const [genrePopoverOpen, setGenrePopoverOpen] = useState(false);
@@ -108,7 +104,6 @@ export function LabelFinder() {
   const [pitchNote, setPitchNote] = useState("");
   const [pitchCopied, setPitchCopied] = useState(false);
   const [pitchDemoCreated, setPitchDemoCreated] = useState(false);
-  const [sendingGmailInline, setSendingGmailInline] = useState(false);
 
   // Add label form state
   const [formName, setFormName] = useState("");
@@ -367,58 +362,6 @@ export function LabelFinder() {
       setTimeout(() => setPitchCopied(false), 2000);
     }
   };
-
-  // Send via Gmail API (inline)
-  const handleSendViaGmailInline = useCallback(async () => {
-    if (!detailLabel || !pitchTrackName.trim() || !detailEmails.length) return;
-    const subject = generateSubject(pitchTrackName.trim(), pitchArtistName, pitchLanguage);
-    const body = generatePitchBody(detailLabel.name, pitchTrackName.trim(), pitchArtistName, pitchScLink, pitchTone, pitchNote, pitchLanguage);
-    if (!subject || !body) return;
-
-    setSendingGmailInline(true);
-    try {
-      const res = await fetch("/api/gmail/send", {
-        method: "POST",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({
-          to: detailEmails[0],
-          cc: detailEmails.length > 1 ? detailEmails.slice(1).join(",") : undefined,
-          subject,
-          body,
-        }),
-      });
-      const data = await res.json();
-      if (!res.ok) {
-        throw new Error(data.error || "Failed to send");
-      }
-      toast({
-        title: t(locale, "gmail.sent"),
-        description: subject,
-      });
-      // Auto-create demo as "sent"
-      if (!demoAlreadyExists) {
-        addDemo({
-          trackName: pitchTrackName.trim(),
-          labelId: detailLabel.id,
-          status: "sent",
-          sentDate: new Date().toISOString().split("T")[0],
-          link: pitchScLink.trim(),
-          notes: pitchNote.trim() ? `${pitchNote.trim()} (sent via Gmail)` : "sent via Gmail",
-          pitchText: pitchText,
-          artistName: pitchArtistName.trim(),
-        });
-        setPitchDemoCreated(true);
-      }
-    } catch (err) {
-      console.error("Gmail send error:", err);
-      toast({
-        title: t(locale, "gmail.sendError"),
-        variant: "destructive",
-      });
-    } finally {
-      setSendingGmailInline(false);
-    }
-  }, [detailLabel, pitchTrackName, pitchArtistName, pitchScLink, pitchTone, pitchNote, pitchLanguage, detailEmails, demoAlreadyExists, addDemo, pitchText, locale, toast]);
 
   const handleSave = () => {
     if (!formName.trim()) return;
@@ -923,24 +866,7 @@ export function LabelFinder() {
 
                           {/* Action buttons — Gmail always visible */}
                           <div className="flex flex-col gap-2">
-                            {/* Gmail API button — only when connected via OAuth and has email */}
-                            {isGmailConnected && detailEmails.length > 0 && (
-                              <Button
-                                onClick={handleSendViaGmailInline}
-                                className="w-full bg-emerald-600 hover:bg-emerald-700 text-white text-sm"
-                                disabled={!pitchTrackName.trim() || sendingGmailInline}
-                              >
-                                {sendingGmailInline ? (
-                                  <><Loader2 className="h-3.5 w-3.5 mr-1.5 animate-spin" />{t(locale, "gmail.sending")}</>
-                                ) : pitchDemoCreated ? (
-                                  <><Check className="h-3.5 w-3.5 mr-1" />{t(locale, "pitch.sentAndTracked")}</>
-                                ) : (
-                                  <><Mail className="h-3.5 w-3.5 mr-1.5" />{t(locale, "gmail.sendViaGmail")}</>
-                                )}
-                              </Button>
-                            )}
-
-                            {/* Gmail web button — ALWAYS visible */}
+                            {/* Gmail web button — primary send method */}
                             <Button
                               onClick={handleOpenGmail}
                               className="w-full glow-purple text-sm"

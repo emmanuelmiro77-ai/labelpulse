@@ -2,7 +2,6 @@ import type { Metadata, Viewport } from "next";
 import { Geist, Geist_Mono } from "next/font/google";
 import "./globals.css";
 import { Toaster } from "@/components/ui/toaster";
-import { AuthProvider } from "@/components/auth-provider";
 import { PWAInstall } from "@/components/pwa-install";
 import { SWUpdater } from "@/components/sw-updater";
 
@@ -35,7 +34,7 @@ export const metadata: Metadata = {
     "music production",
   ],
   authors: [{ name: "LabelPulse" }],
-  manifest: "/api/manifest",
+  manifest: "/manifest.webmanifest",
   icons: {
     icon: [
       { url: "/icons/favicon-32.png", sizes: "32x32", type: "image/png" },
@@ -69,12 +68,10 @@ export default function RootLayout({
       <body
         className={`${geistSans.variable} ${geistMono.variable} antialiased bg-background text-foreground`}
       >
-        <AuthProvider>
-          {children}
-          <Toaster />
-          <PWAInstall />
-          <SWUpdater />
-        </AuthProvider>
+        {children}
+        <Toaster />
+        <PWAInstall />
+        <SWUpdater />
       </body>
     </html>
   );

@@ -20,16 +20,7 @@
     "afterFiles": [],
     "fallback": []
   },
-  "dynamicRoutes": [
-    {
-      "page": "/api/auth/[...nextauth]",
-      "regex": "^/api/auth/(.+?)(?:/)?$",
-      "routeKeys": {
-        "nxtPnextauth": "nxtPnextauth"
-      },
-      "namedRegex": "^/api/auth/(?<nxtPnextauth>.+?)(?:/)?$"
-    }
-  ],
+  "dynamicRoutes": [],
   "staticRoutes": [
     {
       "page": "/",
@@ -48,24 +39,6 @@
       "regex": "^/_not\\-found(?:/)?$",
       "routeKeys": {},
       "namedRegex": "^/_not\\-found(?:/)?$"
-    },
-    {
-      "page": "/api",
-      "regex": "^/api(?:/)?$",
-      "routeKeys": {},
-      "namedRegex": "^/api(?:/)?$"
-    },
-    {
-      "page": "/api/gmail/send",
-      "regex": "^/api/gmail/send(?:/)?$",
-      "routeKeys": {},
-      "namedRegex": "^/api/gmail/send(?:/)?$"
-    },
-    {
-      "page": "/api/manifest",
-      "regex": "^/api/manifest(?:/)?$",
-      "routeKeys": {},
-      "namedRegex": "^/api/manifest(?:/)?$"
     }
   ],
   "dataRoutes": [],

@@ -1,9 +1,8 @@
 "use client"
 
-import { useSession, signIn, signOut } from "next-auth/react"
 import { useAppStore } from "@/lib/store"
 import { t } from "@/lib/i18n"
-import { Mail, LogOut, LogIn } from "lucide-react"
+import { Mail, Info } from "lucide-react"
 import { Button } from "@/components/ui/button"
 import {
   Popover,
@@ -12,10 +11,7 @@ import {
 } from "@/components/ui/popover"
 
 export function GmailSettings() {
-  const { data: session, status } = useSession()
   const locale = useAppStore((s) => s.locale)
-
-  const isConnected = status === "authenticated" && session?.user
 
   return (
     <Popover>
@@ -23,58 +19,50 @@ export function GmailSettings() {
         <Button
           variant="ghost"
           size="icon"
-          className={`relative text-muted-foreground hover:text-foreground ${isConnected ? "hover:text-emerald-400" : ""}`}
-          title={isConnected ? t(locale, "gmail.connected") : t(locale, "gmail.notConnected")}
+          className="relative text-muted-foreground hover:text-foreground hover:text-cyan-400"
+          title={t(locale, "gmail.emailOptions")}
         >
           <Mail className="h-5 w-5" />
-          {isConnected && (
-            <span className="absolute top-1.5 right-1.5 h-2 w-2 rounded-full bg-emerald-400 ring-1 ring-background" />
-          )}
         </Button>
       </PopoverTrigger>
-      <PopoverContent className="w-64 p-4" align="end">
-        {isConnected ? (
-          <div className="space-y-3">
-            <div className="flex items-center gap-2">
-              <span className="h-2 w-2 rounded-full bg-emerald-400" />
-              <span className="text-sm font-medium text-emerald-400">
-                {t(locale, "gmail.connected")}
-              </span>
-            </div>
-            <p className="text-xs text-muted-foreground font-mono truncate">
-              {t(locale, "gmail.as")} {session.user?.email}
-            </p>
-            <Button
-              variant="outline"
-              size="sm"
-              className="w-full border-border/50 text-muted-foreground hover:text-destructive"
-              onClick={() => signOut()}
-            >
-              <LogOut className="h-3.5 w-3.5 mr-1.5" />
-              {t(locale, "gmail.disconnect")}
-            </Button>
+      <PopoverContent className="w-72 p-4" align="end">
+        <div className="space-y-3">
+          <div className="flex items-center gap-2">
+            <Mail className="h-4 w-4 text-cyan-400" />
+            <span className="text-sm font-medium text-foreground">
+              {t(locale, "gmail.emailOptions")}
+            </span>
           </div>
-        ) : (
-          <div className="space-y-3">
-            <div className="flex items-center gap-2">
-              <Mail className="h-4 w-4 text-muted-foreground" />
-              <span className="text-sm font-medium text-muted-foreground">
-                {t(locale, "gmail.notConnected")}
-              </span>
+          <p className="text-xs text-muted-foreground/70 leading-relaxed">
+            {t(locale, "gmail.clientSideDesc")}
+          </p>
+          <div className="space-y-2 pt-1">
+            <div className="flex items-start gap-2 p-2 rounded-md bg-secondary/30 border border-border/20">
+              <div className="w-5 h-5 rounded-full bg-emerald-500/20 flex items-center justify-center shrink-0 mt-0.5">
+                <span className="text-[10px] text-emerald-400">1</span>
+              </div>
+              <div>
+                <p className="text-xs font-medium text-foreground">Gmail Web</p>
+                <p className="text-[10px] text-muted-foreground">{t(locale, "gmail.gmailWebDesc")}</p>
+              </div>
             </div>
-            <p className="text-xs text-muted-foreground/70 leading-relaxed">
-              {t(locale, "gmail.connectDesc")}
-            </p>
-            <Button
-              size="sm"
-              className="w-full bg-primary hover:bg-primary/90 text-primary-foreground"
-              onClick={() => signIn("google")}
-            >
-              <LogIn className="h-3.5 w-3.5 mr-1.5" />
-              {t(locale, "gmail.connect")}
-            </Button>
+            <div className="flex items-start gap-2 p-2 rounded-md bg-secondary/30 border border-border/20">
+              <div className="w-5 h-5 rounded-full bg-primary/20 flex items-center justify-center shrink-0 mt-0.5">
+                <span className="text-[10px] text-primary">2</span>
+              </div>
+              <div>
+                <p className="text-xs font-medium text-foreground">mailto:</p>
+                <p className="text-[10px] text-muted-foreground">{t(locale, "gmail.mailtoDesc")}</p>
+              </div>
+            </div>
           </div>
-        )}
+          <div className="flex items-start gap-2 p-2 rounded-md bg-cyan-500/10 border border-cyan-500/20">
+            <Info className="h-3.5 w-3.5 text-cyan-400 shrink-0 mt-0.5" />
+            <p className="text-[10px] text-cyan-300/80 leading-relaxed">
+              {t(locale, "gmail.autoTrack")}
+            </p>
+          </div>
+        </div>
       </PopoverContent>
     </Popover>
   )

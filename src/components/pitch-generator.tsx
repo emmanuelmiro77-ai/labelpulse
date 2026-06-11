@@ -2,12 +2,11 @@
 
 import { useAppStore, getLabelTier, type Label } from "@/lib/store";
 import { t } from "@/lib/i18n";
-import { useState, useMemo, useCallback, useEffect } from "react";
+import { useState, useMemo, useCallback } from "react";
 import {
   Zap,
   Mail,
   Check,
-  Loader2,
   Languages,
   Music2,
   AlertCircle,
@@ -15,8 +14,8 @@ import {
   ChevronUp,
   Send,
   Target,
-  TrendingUp,
-  Award,
+  Copy,
+  ExternalLink,
 } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent } from "@/components/ui/card";
@@ -35,20 +34,18 @@ import { Checkbox } from "@/components/ui/checkbox";
 import {
   generateSubject,
   generatePitchBody,
+  generateGmailLink,
+  generateMailtoLink,
   PITCH_LANGUAGES,
   type PitchTone,
   type PitchLanguage,
 } from "@/lib/pitch-utils";
-import { useSession } from "next-auth/react";
 import { useToast } from "@/hooks/use-toast";
 
 export function PitchGenerator() {
   const { labels, demos, addDemo, locale, userProfile, setUserProfile, getGenres } = useAppStore();
-  const { data: session, status: authStatus } = useSession();
   const { toast } = useToast();
   const genres = getGenres();
-
-  const isGmailConnected = authStatus === "authenticated" && !!session?.accessToken;
 
   // Pre-fill from user profile
   const initialArtistName = userProfile.artistName || "";
@@ -190,9 +187,9 @@ export function PitchGenerator() {
     setExpandedTiers((prev) => ({ ...prev, [tier]: !prev[tier] }));
   };
 
-  // Bulk send campaign via Gmail
+  // Bulk send campaign via Gmail Web Compose
   const handleSendCampaign = useCallback(async () => {
-    if (!selectedWithEmail.length) return;
+    if (!selectedWithEmail.length || !trackName.trim()) return;
     setSending(true);
     setCampaignComplete(false);
     setCampaignResults({ sent: 0, skipped: 0 });
@@ -213,44 +210,32 @@ export function PitchGenerator() {
 
       setSendProgress({ current: i + 1, total: toSend.length });
 
-      try {
-        const res = await fetch("/api/gmail/send", {
-          method: "POST",
-          headers: { "Content-Type": "application/json" },
-          body: JSON.stringify({
-            to: emails[0],
-            cc: emails.length > 1 ? emails.slice(1).join(",") : undefined,
-            subject,
-            body,
-          }),
+      // Open Gmail compose in new tab with pre-filled content
+      const gmailUrl = generateGmailLink(emails, subject, body);
+      window.open(gmailUrl, `_blank`, "noopener");
+
+      sentCount++;
+
+      // Auto-create demo entry
+      const demoAlreadyExists = demos.some(
+        (d) => d.labelId === label.id && d.trackName.toLowerCase() === trackName.trim().toLowerCase()
+      );
+      if (!demoAlreadyExists) {
+        addDemo({
+          trackName: trackName.trim(),
+          labelId: label.id,
+          status: "sent",
+          sentDate: new Date().toISOString().split("T")[0],
+          link: scLink.trim(),
+          notes: customNote.trim() ? `${customNote.trim()} (Campaign)` : "Campaign",
+          pitchText: `Subject: ${subject}\n\n${body}`,
+          artistName: artistName.trim(),
         });
+      }
 
-        if (!res.ok) {
-          const data = await res.json().catch(() => ({}));
-          console.error(`Failed to send to ${label.name}:`, data.error);
-          continue;
-        }
-
-        sentCount++;
-
-        // Auto-create demo entry
-        const demoAlreadyExists = demos.some(
-          (d) => d.labelId === label.id && d.trackName.toLowerCase() === trackName.trim().toLowerCase()
-        );
-        if (!demoAlreadyExists) {
-          addDemo({
-            trackName: trackName.trim(),
-            labelId: label.id,
-            status: "sent",
-            sentDate: new Date().toISOString().split("T")[0],
-            link: scLink.trim(),
-            notes: customNote.trim() ? `${customNote.trim()} (sent via Campaign)` : "sent via Campaign",
-            pitchText: `Subject: ${subject}\n\n${body}`,
-            artistName: artistName.trim(),
-          });
-        }
-      } catch (err) {
-        console.error(`Error sending to ${label.name}:`, err);
+      // Small delay between opens to avoid popup blocking
+      if (i < toSend.length - 1) {
+        await new Promise((r) => setTimeout(r, 800));
       }
     }
 
@@ -260,9 +245,27 @@ export function PitchGenerator() {
 
     toast({
       title: t(locale, "campaign.complete"),
-      description: `${sentCount} ${t(locale, "campaign.sentCount").replace("{count}", String(sentCount))}`,
+      description: t(locale, "campaign.reviewAndSend").replace("{count}", String(sentCount)),
     });
   }, [selectedWithEmail, selectedWithoutEmail, getLabelEmails, getPitchForLabel, demos, trackName, scLink, customNote, artistName, addDemo, locale, toast]);
+
+  // Copy all emails to clipboard
+  const handleCopyEmails = useCallback(async () => {
+    const emails = selectedWithEmail.flatMap((l) => getLabelEmails(l));
+    const emailText = emails.join(", ");
+    try {
+      await navigator.clipboard.writeText(emailText);
+      toast({ title: t(locale, "campaign.emailsCopied") });
+    } catch {
+      const textarea = document.createElement("textarea");
+      textarea.value = emailText;
+      document.body.appendChild(textarea);
+      textarea.select();
+      document.execCommand("copy");
+      document.body.removeChild(textarea);
+      toast({ title: t(locale, "campaign.emailsCopied") });
+    }
+  }, [selectedWithEmail, getLabelEmails, locale, toast]);
 
   // Track if campaign params changed (to reset completion state)
   const campaignParamsKey = `${selectedLabelIds.size}-${trackName}-${tone}-${language}-${customNote}`;
@@ -581,20 +584,30 @@ export function PitchGenerator() {
 
               {/* Send section */}
               <div className="space-y-3">
-                {/* Gmail not connected message */}
-                {!isGmailConnected && (
-                  <div className="flex items-center gap-2 p-3 rounded-lg bg-amber-500/10 border border-amber-500/20">
-                    <Mail className="h-4 w-4 text-amber-400 shrink-0" />
-                    <p className="text-xs text-amber-300">{t(locale, "campaign.connectToSend")}</p>
-                  </div>
+                {/* Info about how campaign works */}
+                <div className="flex items-start gap-2 p-3 rounded-lg bg-cyan-500/10 border border-cyan-500/20">
+                  <ExternalLink className="h-4 w-4 text-cyan-400 shrink-0 mt-0.5" />
+                  <p className="text-xs text-cyan-300">{t(locale, "campaign.howItWorks")}</p>
+                </div>
+
+                {/* Copy emails button */}
+                {selectedWithEmail.length > 0 && (
+                  <Button
+                    variant="outline"
+                    onClick={handleCopyEmails}
+                    className="w-full border-border/50 text-muted-foreground hover:text-foreground"
+                    disabled={!trackName.trim()}
+                  >
+                    <Copy className="h-4 w-4 mr-2" />
+                    {t(locale, "campaign.copyAllEmails")} ({selectedWithEmail.length})
+                  </Button>
                 )}
 
-                {/* Send button */}
+                {/* Send button - opens Gmail compose for each */}
                 <Button
                   onClick={handleSendCampaign}
                   className="w-full bg-gradient-to-r from-emerald-600 to-emerald-500 hover:from-emerald-700 hover:to-emerald-600 text-white h-12 text-base font-semibold"
                   disabled={
-                    !isGmailConnected ||
                     selectedWithEmail.length === 0 ||
                     sending ||
                     !trackName.trim()
@@ -602,8 +615,8 @@ export function PitchGenerator() {
                 >
                   {sending ? (
                     <>
-                      <Loader2 className="h-5 w-5 mr-2 animate-spin" />
-                      {t(locale, "campaign.sending")
+                      <ExternalLink className="h-5 w-5 mr-2" />
+                      {t(locale, "campaign.opening")
                         .replace("{current}", String(sendProgress.current))
                         .replace("{total}", String(sendProgress.total))}
                     </>

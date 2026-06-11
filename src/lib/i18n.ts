@@ -226,6 +226,11 @@ type TranslationKeys = {
   "gmail.sendError": string;
   "gmail.sendViaGmail": string;
   "gmail.as": string;
+  "gmail.emailOptions": string;
+  "gmail.clientSideDesc": string;
+  "gmail.gmailWebDesc": string;
+  "gmail.mailtoDesc": string;
+  "gmail.autoTrack": string;
 
   // Campaign Hub
   "campaign.title": string;
@@ -248,6 +253,11 @@ type TranslationKeys = {
   "campaign.preview": string;
   "campaign.selectGenreFirst": string;
   "campaign.noMatchingLabels": string;
+  "campaign.howItWorks": string;
+  "campaign.opening": string;
+  "campaign.reviewAndSend": string;
+  "campaign.copyAllEmails": string;
+  "campaign.emailsCopied": string;
 
   // Data backup
   "data.export": string;
@@ -475,6 +485,11 @@ const translations: Record<Locale, TranslationKeys> = {
     "gmail.sendError": "Errore nell'invio dell'email. Riprova.",
     "gmail.sendViaGmail": "Invia via Gmail",
     "gmail.as": "come",
+    "gmail.emailOptions": "Opzioni Email",
+    "gmail.clientSideDesc": "Le email vengono aperte nel tuo client (Gmail, Outlook, ecc.) con tutti i campi precompilati. Puoi rivedere e inviare manualmente.",
+    "gmail.gmailWebDesc": "Apre Gmail nel browser con destinatario, oggetto e testo precompilati",
+    "gmail.mailtoDesc": "Apre il tuo client email predefinito (Outlook, Thunderbird, ecc.)",
+    "gmail.autoTrack": "I demo vengono tracciati automaticamente quando apri l'email.",
     "campaign.title": "Campaign Hub",
     "campaign.subtitle": "Seleziona una traccia, trova le label giuste e invia pitch personalizzati a tutte in una volta.",
     "campaign.trackSetup": "Setup Traccia",
@@ -495,6 +510,11 @@ const translations: Record<Locale, TranslationKeys> = {
     "campaign.preview": "Anteprima Campagna",
     "campaign.selectGenreFirst": "Seleziona un genere per trovare le label",
     "campaign.noMatchingLabels": "Nessuna label trovata per questo genere",
+    "campaign.howItWorks": "Cliccando 'Invia Campagna' verrà aperta una finestra Gmail per ogni label selezionata, con destinatario, oggetto e pitch personalizzati già compilati. Rivedi ogni email e clicca Invia!",
+    "campaign.opening": "Apertura {current}/{total}...",
+    "campaign.reviewAndSend": "Rivedi e invia {count} email nella finestra Gmail",
+    "campaign.copyAllEmails": "Copia tutti gli indirizzi email",
+    "campaign.emailsCopied": "Indirizzi email copiati!",
     "data.export": "Esporta Dati",
     "data.import": "Importa Dati",
     "data.exportDesc": "Scarica tutti i tuoi dati (label, demo, profilo) come file JSON. Salvalo in un posto sicuro!",
@@ -712,6 +732,11 @@ const translations: Record<Locale, TranslationKeys> = {
     "gmail.sendError": "Error sending email. Please try again.",
     "gmail.sendViaGmail": "Send via Gmail",
     "gmail.as": "as",
+    "gmail.emailOptions": "Email Options",
+    "gmail.clientSideDesc": "Emails open in your client (Gmail, Outlook, etc.) with all fields pre-filled. Review and send manually.",
+    "gmail.gmailWebDesc": "Opens Gmail in browser with recipient, subject and body pre-filled",
+    "gmail.mailtoDesc": "Opens your default email client (Outlook, Thunderbird, etc.)",
+    "gmail.autoTrack": "Demos are tracked automatically when you open the email.",
     "campaign.title": "Campaign Hub",
     "campaign.subtitle": "Select a track, find the right labels, and send personalized pitches to all of them at once.",
     "campaign.trackSetup": "Track Setup",
@@ -732,6 +757,11 @@ const translations: Record<Locale, TranslationKeys> = {
     "campaign.preview": "Campaign Preview",
     "campaign.selectGenreFirst": "Select a genre to find labels",
     "campaign.noMatchingLabels": "No labels found for this genre",
+    "campaign.howItWorks": "Clicking 'Send Campaign' will open a Gmail compose window for each selected label with recipient, subject and personalized pitch pre-filled. Review each email and click Send!",
+    "campaign.opening": "Opening {current}/{total}...",
+    "campaign.reviewAndSend": "Review and send {count} emails in Gmail window",
+    "campaign.copyAllEmails": "Copy all email addresses",
+    "campaign.emailsCopied": "Email addresses copied!",
     "data.export": "Export Data",
     "data.import": "Import Data",
     "data.exportDesc": "Download all your data (labels, demos, profile) as a JSON file. Save it somewhere safe!",
@@ -949,6 +979,11 @@ const translations: Record<Locale, TranslationKeys> = {
     "gmail.sendError": "Error al enviar el email. Inténtalo de nuevo.",
     "gmail.sendViaGmail": "Enviar via Gmail",
     "gmail.as": "como",
+    "gmail.emailOptions": "Opciones de email",
+    "gmail.clientSideDesc": "Los emails se abren en tu cliente (Gmail, Outlook, etc.) con todos los campos pre-rellenados. Revisa y envía manualmente.",
+    "gmail.gmailWebDesc": "Abre Gmail en el navegador con destinatario, asunto y cuerpo pre-rellenados",
+    "gmail.mailtoDesc": "Abre tu cliente de email predeterminado (Outlook, Thunderbird, etc.)",
+    "gmail.autoTrack": "Los demos se rastrean automáticamente cuando abres el email.",
     "campaign.title": "Centro de Campañas",
     "campaign.subtitle": "Selecciona una pista, encuentra las labels adecuadas y envía pitches personalizados a todas a la vez.",
     "campaign.trackSetup": "Configurar Pista",
@@ -969,6 +1004,11 @@ const translations: Record<Locale, TranslationKeys> = {
     "campaign.preview": "Vista Previa de Campaña",
     "campaign.selectGenreFirst": "Selecciona un género para encontrar labels",
     "campaign.noMatchingLabels": "No se encontraron labels para este género",
+    "campaign.howItWorks": "Al hacer clic en 'Enviar Campaña' se abrirá una ventana de Gmail para cada label seleccionada con destinatario, asunto y pitch personalizado. ¡Revisa cada email y haz clic en Enviar!",
+    "campaign.opening": "Abriendo {current}/{total}...",
+    "campaign.reviewAndSend": "Revisa y envía {count} emails en la ventana de Gmail",
+    "campaign.copyAllEmails": "Copiar todas las direcciones de email",
+    "campaign.emailsCopied": "¡Direcciones de email copiadas!",
     "data.export": "Exportar Datos",
     "data.import": "Importar Datos",
     "data.exportDesc": "Descarga todos tus datos (labels, demos, perfil) como archivo JSON. ¡Guárdalo en un lugar seguro!",
@@ -1186,6 +1226,11 @@ const translations: Record<Locale, TranslationKeys> = {
     "gmail.sendError": "Erreur lors de l'envoi de l'email. Réessayez.",
     "gmail.sendViaGmail": "Envoyer via Gmail",
     "gmail.as": "comme",
+    "gmail.emailOptions": "Options Email",
+    "gmail.clientSideDesc": "Les emails s'ouvrent dans votre client (Gmail, Outlook, etc.) avec tous les champs pré-remplis. Vérifiez et envoyez manuellement.",
+    "gmail.gmailWebDesc": "Ouvre Gmail dans le navigateur avec destinataire, objet et corps pré-remplis",
+    "gmail.mailtoDesc": "Ouvre votre client email par défaut (Outlook, Thunderbird, etc.)",
+    "gmail.autoTrack": "Les demos sont suivis automatiquement quand vous ouvrez l'email.",
     "campaign.title": "Centre de Campagnes",
     "campaign.subtitle": "Sélectionnez un titre, trouvez les bons labels et envoyez des pitchs personnalisés à tous en une fois.",
     "campaign.trackSetup": "Configuration du Titre",
@@ -1206,6 +1251,11 @@ const translations: Record<Locale, TranslationKeys> = {
     "campaign.preview": "Aperçu de la Campagne",
     "campaign.selectGenreFirst": "Sélectionnez un genre pour trouver des labels",
     "campaign.noMatchingLabels": "Aucun label trouvé pour ce genre",
+    "campaign.howItWorks": "En cliquant sur 'Envoyer Campagne', une fenêtre Gmail s'ouvrira pour chaque label sélectionné avec destinataire, objet et pitch personnalisés. Vérifiez chaque email et cliquez Envoyer !",
+    "campaign.opening": "Ouverture {current}/{total}...",
+    "campaign.reviewAndSend": "Vérifiez et envoyez {count} emails dans Gmail",
+    "campaign.copyAllEmails": "Copier toutes les adresses email",
+    "campaign.emailsCopied": "Adresses email copiées !",
     "data.export": "Exporter les Données",
     "data.import": "Importer les Données",
     "data.exportDesc": "Téléchargez toutes vos données (labels, démos, profil) comme fichier JSON. Sauvegardez-le en lieu sûr !",
@@ -1423,6 +1473,11 @@ const translations: Record<Locale, TranslationKeys> = {
     "gmail.sendError": "Fehler beim Senden der E-Mail. Bitte versuchen Sie es erneut.",
     "gmail.sendViaGmail": "Über Gmail senden",
     "gmail.as": "als",
+    "gmail.emailOptions": "E-Mail-Optionen",
+    "gmail.clientSideDesc": "E-Mails werden in Ihrem Client (Gmail, Outlook, etc.) mit allen vorausgefüllten Feldern geöffnet. Prüfen und manuell senden.",
+    "gmail.gmailWebDesc": "Öffnet Gmail im Browser mit Empfänger, Betreff und Text vorausgefüllt",
+    "gmail.mailtoDesc": "Öffnet Ihren Standard-E-Mail-Client (Outlook, Thunderbird, etc.)",
+    "gmail.autoTrack": "Demos werden automatisch erfasst, wenn Sie die E-Mail öffnen.",
     "campaign.title": "Kampagnen-Zentrale",
     "campaign.subtitle": "Wähle einen Track, finde die passenden Labels und sende personalisierte Pitches an alle auf einmal.",
     "campaign.trackSetup": "Track-Einrichtung",
@@ -1443,6 +1498,11 @@ const translations: Record<Locale, TranslationKeys> = {
     "campaign.preview": "Kampagnen-Vorschau",
     "campaign.selectGenreFirst": "Wähle ein Genre um Labels zu finden",
     "campaign.noMatchingLabels": "Keine Labels für dieses Genre gefunden",
+    "campaign.howItWorks": "Beim Klick auf 'Kampagne senden' wird für jedes ausgewählte Label ein Gmail-Fenster mit Empfänger, Betreff und personalisiertem Pitch geöffnet. Prüfen Sie jede E-Mail und klicken Sie Senden!",
+    "campaign.opening": "Öffne {current}/{total}...",
+    "campaign.reviewAndSend": "Prüfen und senden Sie {count} E-Mails in Gmail",
+    "campaign.copyAllEmails": "Alle E-Mail-Adressen kopieren",
+    "campaign.emailsCopied": "E-Mail-Adressen kopiert!",
     "data.export": "Daten Exportieren",
     "data.import": "Daten Importieren",
     "data.exportDesc": "Laden Sie alle Ihre Daten (Labels, Demos, Profil) als JSON-Datei herunter. Speichern Sie sie sicher!",
@@ -1660,6 +1720,11 @@ const translations: Record<Locale, TranslationKeys> = {
     "gmail.sendError": "Erro ao enviar o email. Tente novamente.",
     "gmail.sendViaGmail": "Enviar via Gmail",
     "gmail.as": "como",
+    "gmail.emailOptions": "Opções de Email",
+    "gmail.clientSideDesc": "Os emails abrem no seu cliente (Gmail, Outlook, etc.) com todos os campos pré-preenchidos. Revise e envie manualmente.",
+    "gmail.gmailWebDesc": "Abre o Gmail no navegador com destinatário, assunto e corpo pré-preenchidos",
+    "gmail.mailtoDesc": "Abre seu cliente de email padrão (Outlook, Thunderbird, etc.)",
+    "gmail.autoTrack": "Os demos são rastreados automaticamente quando você abre o email.",
     "campaign.title": "Centro de Campanhas",
     "campaign.subtitle": "Selecione um track, encontre as labels certas e envie pitches personalizados para todas de uma vez.",
     "campaign.trackSetup": "Configurar Track",
@@ -1680,6 +1745,11 @@ const translations: Record<Locale, TranslationKeys> = {
     "campaign.preview": "Pré-visualização da Campanha",
     "campaign.selectGenreFirst": "Selecione um gênero para encontrar labels",
     "campaign.noMatchingLabels": "Nenhuma label encontrada para este gênero",
+    "campaign.howItWorks": "Ao clicar em 'Enviar Campanha', uma janela do Gmail será aberta para cada label selecionada com destinatário, assunto e pitch personalizado. Revise cada email e clique Enviar!",
+    "campaign.opening": "Abrindo {current}/{total}...",
+    "campaign.reviewAndSend": "Revise e envie {count} emails no Gmail",
+    "campaign.copyAllEmails": "Copiar todos os endereços de email",
+    "campaign.emailsCopied": "Endereços de email copiados!",
     "data.export": "Exportar Dados",
     "data.import": "Importar Dados",
     "data.exportDesc": "Baixe todos os seus dados (labels, demos, perfil) como arquivo JSON. Salve em um lugar seguro!",
