@@ -4,6 +4,7 @@ import "./globals.css";
 import { Toaster } from "@/components/ui/toaster";
 import { AuthProvider } from "@/components/auth-provider";
 import { PWAInstall } from "@/components/pwa-install";
+import { SWUpdater } from "@/components/sw-updater";
 
 const geistSans = Geist({
   variable: "--font-geist-sans",
@@ -72,6 +73,7 @@ export default function RootLayout({
           {children}
           <Toaster />
           <PWAInstall />
+          <SWUpdater />
         </AuthProvider>
       </body>
     </html>

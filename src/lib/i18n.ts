@@ -279,6 +279,10 @@ type TranslationKeys = {
   "autosave.saved": string;
   "autosave.error": string;
   "autosave.disabled": string;
+
+  // Update
+  "update.available": string;
+  "update.updateNow": string;
 };
 
 const translations: Record<Locale, TranslationKeys> = {
@@ -516,6 +520,8 @@ const translations: Record<Locale, TranslationKeys> = {
     "autosave.saved": "Backup salvato con successo!",
     "autosave.error": "Errore nel salvataggio del backup.",
     "autosave.disabled": "Auto-Save disattivato.",
+    "update.available": "Nuova versione disponibile!",
+    "update.updateNow": "Aggiorna",
   },
   en: {
     "nav.dashboard": "Dashboard",
@@ -751,6 +757,8 @@ const translations: Record<Locale, TranslationKeys> = {
     "autosave.saved": "Backup saved successfully!",
     "autosave.error": "Error saving backup.",
     "autosave.disabled": "Auto-Save disabled.",
+    "update.available": "New version available!",
+    "update.updateNow": "Update",
   },
   es: {
     "nav.dashboard": "Panel",
@@ -986,6 +994,8 @@ const translations: Record<Locale, TranslationKeys> = {
     "autosave.saved": "¡Backup guardado con éxito!",
     "autosave.error": "Error al guardar el backup.",
     "autosave.disabled": "Auto-Save desactivado.",
+    "update.available": "¡Nueva versión disponible!",
+    "update.updateNow": "Actualizar",
   },
   fr: {
     "nav.dashboard": "Tableau de bord",
@@ -1221,6 +1231,8 @@ const translations: Record<Locale, TranslationKeys> = {
     "autosave.saved": "Backup sauvegardé avec succès !",
     "autosave.error": "Erreur lors de la sauvegarde du backup.",
     "autosave.disabled": "Sauvegarde automatique désactivée.",
+    "update.available": "Nouvelle version disponible !",
+    "update.updateNow": "Mettre à jour",
   },
   de: {
     "nav.dashboard": "Übersicht",
@@ -1456,6 +1468,8 @@ const translations: Record<Locale, TranslationKeys> = {
     "autosave.saved": "Backup erfolgreich gespeichert!",
     "autosave.error": "Fehler beim Speichern des Backups.",
     "autosave.disabled": "Auto-Save deaktiviert.",
+    "update.available": "Neue Version verfügbar!",
+    "update.updateNow": "Aktualisieren",
   },
   pt: {
     "nav.dashboard": "Painel",
@@ -1691,6 +1705,8 @@ const translations: Record<Locale, TranslationKeys> = {
     "autosave.saved": "Backup salvo com sucesso!",
     "autosave.error": "Erro ao salvar o backup.",
     "autosave.disabled": "Auto-Save desativado.",
+    "update.available": "Nova versão disponível!",
+    "update.updateNow": "Atualizar",
   },
 };
 
