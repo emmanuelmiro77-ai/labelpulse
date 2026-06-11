@@ -1,3 +1,3 @@
 #!/bin/bash
 cd /home/z/my-project
-exec node .next/standalone/server.js
+exec ./node_modules/.bin/next dev -p 3000

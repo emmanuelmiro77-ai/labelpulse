@@ -208,7 +208,7 @@ const metadata = {
             name: "LabelPulse"
         }
     ],
-    manifest: "/manifest.webmanifest",
+    manifest: "/api/manifest",
     icons: {
         icon: [
             {
