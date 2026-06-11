@@ -85,14 +85,31 @@ async function getTokenClient(): Promise<any> {
  * Request Gmail access via popup.
  * Returns the auth state if successful, null if denied/cancelled.
  */
+const OAUTH_TIMEOUT_MS = 120_000; // 2 minutes — popup may stay open a while
+
 export async function requestGmailAccess(): Promise<GmailAuthState | null> {
   try {
     const client = await getTokenClient();
 
     return new Promise((resolve) => {
+      let resolved = false;
+
+      // Safety timeout: if Google's callback never fires (popup closed, error, etc.)
+      const timeout = setTimeout(() => {
+        if (!resolved) {
+          resolved = true;
+          console.warn("Gmail OAuth timed out — popup may have been closed or callback never fired");
+          resolve(null);
+        }
+      }, OAUTH_TIMEOUT_MS);
+
       client.callback = (response: any) => {
+        if (resolved) return; // Already timed out
+        resolved = true;
+        clearTimeout(timeout);
+
         if (response.error) {
-          console.error("Gmail OAuth error:", response.error);
+          console.error("Gmail OAuth error:", response.error, response.error_description || "");
           resolve(null);
           return;
         }

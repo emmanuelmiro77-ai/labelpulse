@@ -9,8 +9,8 @@ import {
   PopoverContent,
   PopoverTrigger,
 } from "@/components/ui/popover"
-import { requestGmailAccess, revokeGmailAccess } from "@/lib/gmail"
 import { useState } from "react"
+import { requestGmailAccess, revokeGmailAccess } from "@/lib/gmail"
 
 export function GmailSettings() {
   const locale = useAppStore((s) => s.locale)
@@ -18,16 +18,21 @@ export function GmailSettings() {
   const setGmailAuth = useAppStore((s) => s.setGmailAuth)
   const clearGmailAuth = useAppStore((s) => s.clearGmailAuth)
   const [connecting, setConnecting] = useState(false)
+  const [errorMsg, setErrorMsg] = useState("")
 
   const handleConnect = async () => {
     setConnecting(true)
+    setErrorMsg("")
     try {
       const auth = await requestGmailAccess()
       if (auth) {
         setGmailAuth(auth)
+      } else {
+        setErrorMsg("Connessione fallita. Verifica che l'app sia autorizzata su Google Cloud Console.")
       }
     } catch (err) {
       console.error("Gmail connection failed:", err)
+      setErrorMsg("Errore di connessione. Riprova.")
     } finally {
       setConnecting(false)
     }
@@ -118,6 +123,11 @@ export function GmailSettings() {
               <p className="text-[10px] text-muted-foreground/50 text-center">
                 Richiede solo il permesso di invio email. Non leggiamo la tua posta.
               </p>
+              {errorMsg && (
+                <p className="text-[10px] text-red-400 text-center mt-1">
+                  {errorMsg}
+                </p>
+              )}
             </>
           )}
         </div>
