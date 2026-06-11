@@ -5,6 +5,8 @@
   "scripts": {
     "dev": "node server.mjs",
     "build": "next build",
+    "build:static": "NEXT_EXPORT=true next build",
+    "prebuild-local": "NEXT_EXPORT=true next build",
     "start": "node server.mjs",
     "lint": "eslint ."
   },
