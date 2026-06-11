@@ -1,0 +1,618 @@
+Passa ai contenuti principali
+developers.google.com utilizza i cookie di Google per erogare i propri servizi, migliorarne la qualità e analizzare il traffico. Scopri di più
+
+Ok
+Google for Developers
+Authentication
+
+Autorizzazione
+
+Altro
+Cerca
+/
+
+Language
+
+Autorizzazione dell'Account Google
+Verifica dell'app per utilizzare le API di autorizzazione di Google
+Collegamento Account Google
+Risorse
+Filtra
+
+ Google uses AI technology to translate content into your preferred language. AI translations can contain errors.
+Switch to English
+Autorizzazione
+Questa pagina è stata utile?
+
+OAuth 2.0 per applicazioni web lato client
+
+
+
+
+
+Avviso:il flusso di concessione implicita OAuth 2.0 è considerato non sicuro per le applicazioni a pagina singola (SPA) basate su browser a causa del rischio di intercettazione dei token. Per le applicazioni web moderne, devi utilizzare il flusso del codice di autorizzazione con PKCE.
+
+Per istruzioni di implementazione dettagliate, consulta il flusso del codice di autorizzazione di Google Identity Services.
+
+Questo documento spiega come implementare l'autorizzazione OAuth 2.0 per accedere alle API di Google da un'applicazione web JavaScript. OAuth 2.0 consente agli utenti di condividere dati specifici con un'applicazione, mantenendo privati i propri nomi utente, le password e altre informazioni. Ad esempio, un'applicazione può utilizzare OAuth 2.0 per ottenere l'autorizzazione dagli utenti per archiviare i file nei loro Google Drive.
+
+Questo flusso OAuth 2.0 è chiamato flusso di concessione implicita. È progettato per applicazioni che accedono alle API solo quando l'utente è presente nell'applicazione. Queste applicazioni non sono in grado di memorizzare informazioni riservate.
+
+In questo flusso, la tua app apre un URL di Google che utilizza parametri di query per identificare la tua app e il tipo di accesso API richiesto. Puoi aprire l'URL nella finestra del browser corrente o in una finestra di dialogo. L'utente può autenticarsi con Google e concedere le autorizzazioni richieste. Google reindirizza quindi l'utente alla tua app. Il reindirizzamento include un token di accesso, che la tua app verifica e poi utilizza per effettuare richieste API.
+
+Libreria client delle API di Google e Servizi di identità Google
+Se utilizzi la libreria client delle API di Google per JavaScript per effettuare chiamate autorizzate a Google, devi utilizzare la libreria JavaScript dei Servizi di identità Google per gestire il flusso di autorizzazione. Ti consigliamo vivamente di utilizzare il modello di codice di Servizi di identità Google, che si basa sul flusso del codice di autorizzazione con PKCE più sicuro.
+
+Importante: l'interazione diretta con gli endpoint OAuth 2.0 di Google per implementare il flusso implicito è fortemente sconsigliata a causa di vulnerabilità di sicurezza. Per implementare in modo sicuro l'autorizzazione in un browser, devi utilizzare il flusso del codice di autorizzazione dei Servizi di identità Google.
+
+L'interazione diretta con gli endpoint di concessione implicita descritti in questa pagina viene fornita solo per il supporto e la risoluzione dei problemi legacy.
+
+Prerequisiti
+Abilitare le API per il progetto
+Qualsiasi applicazione che chiama le API di Google deve abilitarle nella console API.
+
+Per abilitare un'API per il tuo progetto:
+
+Apri la libreria API nella console API di Google.
+Se richiesto, seleziona un progetto o creane uno nuovo.
+La libreria API elenca tutte le API disponibili, raggruppate per famiglia di prodotti e popolarità. Se l'API che vuoi attivare non è visibile nell'elenco, usa la ricerca per trovarla o fai clic su Visualizza tutto nella famiglia di prodotti a cui appartiene.
+Seleziona l'API che vuoi abilitare, poi fai clic sul pulsante Abilita.
+Se richiesto, abilita la fatturazione.
+Se richiesto, leggi e accetta i Termini di servizio dell'API.
+Crea le credenziali di autorizzazione
+Qualsiasi applicazione che utilizza OAuth 2.0 per accedere alle API di Google deve disporre di credenziali di autorizzazione che identificano l'applicazione nel server OAuth 2.0 di Google. I passaggi seguenti spiegano come creare le credenziali per il tuo progetto. Le tue applicazioni possono quindi utilizzare le credenziali per accedere alle API che hai abilitato per quel progetto.
+
+Vai alla pagina Clienti.
+Fai clic su Crea cliente.
+Seleziona il tipo di applicazione Applicazione web.
+Compila il modulo. Le applicazioni che utilizzano JavaScript per effettuare richieste autorizzate alle API di Google devono specificare le origini JavaScript autorizzate. Le origini identificano i domini da cui la tua applicazione può inviare richieste al server OAuth 2.0. Queste origini devono rispettare le regole di convalida di Google.
+Identificare gli ambiti di accesso
+Gli ambiti consentono alla tua applicazione di richiedere l'accesso solo alle risorse di cui ha bisogno, consentendo al contempo agli utenti di controllare la quantità di accesso che concedono alla tua applicazione. Pertanto, potrebbe esserci una relazione inversa tra il numero di ambiti richiesti e la probabilità di ottenere il consenso dell'utente.
+
+Prima di iniziare a implementare l'autorizzazione OAuth 2.0, ti consigliamo di identificare gli ambiti a cui la tua app dovrà accedere.
+
+Il documento Ambiti API OAuth 2.0 contiene un elenco completo di ambiti che puoi utilizzare per accedere alle API di Google.
+
+Se la tua applicazione pubblica utilizza ambiti che consentono l'accesso a determinati dati utente, deve completare una procedura di verifica. Se durante il test dell'applicazione visualizzi la dicitura app non verificata sullo schermo, devi inviare una richiesta di verifica per rimuoverla. Scopri di più sulle app non verificate e trova le risposte alle domande frequenti sulla verifica app nel Centro assistenza.
+Ottenere token di accesso OAuth 2.0
+I passaggi seguenti mostrano come l'applicazione interagisce con il server OAuth 2.0 di Google per ottenere il consenso di un utente a eseguire una richiesta API per suo conto. La tua applicazione deve disporre di questo consenso prima di poter eseguire una richiesta API di Google che richiede l'autorizzazione dell'utente.
+
+Passaggio 1: reindirizza al server OAuth 2.0 di Google
+Per richiedere l'autorizzazione ad accedere ai dati di un utente, reindirizza l'utente al server OAuth 2.0 di Google.
+
+Endpoint OAuth 2.0
+Genera un URL per richiedere l'accesso dall'endpoint OAuth 2.0 di Google all'indirizzo https://accounts.google.com/o/oauth2/v2/auth. Questo endpoint è accessibile tramite HTTPS; le connessioni HTTP semplici vengono rifiutate.
+
+Il server di autorizzazione Google supporta i seguenti parametri della stringa di query per le applicazioni server web:
+
+Parametri
+client_id	Obbligatorio
+L'ID client della tua applicazione. Puoi trovare questo valore nella pagina Client della console Cloud.
+
+redirect_uri	Obbligatorio
+Determina dove il server API reindirizza l'utente dopo che ha completato il flusso di autorizzazione. Il valore deve corrispondere esattamente a uno degli URI di reindirizzamento autorizzati per il client OAuth 2.0, che hai configurato nella pagina Client della console Cloud del client. Se questo valore non corrisponde a un URI di reindirizzamento autorizzato per il client_id fornito, riceverai un errore redirect_uri_mismatch.
+
+Tieni presente che lo schema http o https, le maiuscole e minuscole e la barra finale ('/') devono corrispondere.
+
+response_type	Obbligatorio
+Le applicazioni JavaScript devono impostare il valore del parametro su token. Questo valore indica al server di autorizzazione Google di restituire il token di accesso come coppia name=value nell'identificatore di frammento dell'URI (#) a cui l'utente viene reindirizzato dopo aver completato la procedura di autorizzazione.
+
+scope	Obbligatorio
+Un elenco delimitato da spazi di ambiti che identificano le risorse a cui la tua applicazione potrebbe accedere per conto dell'utente. Questi valori informano la schermata per il consenso che Google mostra all'utente.
+
+Gli ambiti consentono alla tua applicazione di richiedere l'accesso solo alle risorse di cui ha bisogno, consentendo al contempo agli utenti di controllare la quantità di accesso che concedono alla tua applicazione. Pertanto, esiste una relazione inversa tra il numero di ambiti richiesti e la probabilità di ottenere il consenso dell'utente.
+
+Ti consigliamo di richiedere l'accesso agli ambiti di autorizzazione nel contesto ogni volta che è possibile. Se richiedi l'accesso ai dati utente nel contesto, utilizzando l'autorizzazione incrementale, aiuti gli utenti a capire perché la tua applicazione ha bisogno dell'accesso che sta richiedendo.
+
+state	Consigliato
+Specifica qualsiasi valore stringa utilizzato dall'applicazione per mantenere lo stato tra la richiesta di autorizzazione e la risposta del server di autorizzazione. Il server restituisce il valore esatto che invii come coppia name=value nell'identificatore di frammento di URL (#) dell'redirect_uri dopo che l'utente ha acconsentito o negato la richiesta di accesso della tua applicazione.
+
+Puoi utilizzare questo parametro per diversi scopi, ad esempio per indirizzare l'utente alla risorsa corretta nella tua applicazione, inviare nonce e mitigare la falsificazione delle richieste cross-site. Poiché il tuo redirect_uri può essere dedotto, l'utilizzo di un valore state può aumentare la certezza che una connessione in entrata sia il risultato di una richiesta di autenticazione. Se generi una stringa casuale o codifichi l'hash di un cookie o di un altro valore che acquisisce lo stato del client, puoi convalidare la risposta per assicurarti ulteriormente che la richiesta e la risposta abbiano avuto origine nello stesso browser, fornendo protezione da attacchi come la falsificazione di richieste cross-site. Consulta la documentazione di OpenID Connect per un esempio di come creare e confermare un token state.
+
+Importante:il client OAuth deve impedire gli attacchi CSRF come indicato nella specifica OAuth2 . Un modo per farlo è utilizzare il parametro state per mantenere lo stato tra la richiesta di autorizzazione e la risposta del server di autorizzazione.
+include_granted_scopes	Facoltativo
+Consente alle applicazioni di utilizzare l'autorizzazione incrementale per richiedere l'accesso ad ambiti aggiuntivi nel contesto. Se imposti il valore di questo parametro su true e la richiesta di autorizzazione viene concessa, il nuovo token di accesso coprirà anche tutti gli ambiti a cui l'utente ha precedentemente concesso l'accesso all'applicazione. Per esempi, consulta la sezione Autorizzazione incrementale.
+
+enable_granular_consent	Facoltativo
+Il valore predefinito è true. Se impostato su false, autorizzazioni più granulari per l'Account Google verranno disattivate per gli ID client OAuth creati prima del 2019. Nessun effetto per gli ID client OAuth più recenti, poiché le autorizzazioni più granulari sono sempre abilitate.
+
+Quando Google attiva le autorizzazioni granulari per un'applicazione, questo parametro non avrà più alcun effetto.
+
+login_hint	Facoltativo
+Se la tua applicazione sa quale utente sta tentando di autenticarsi, può utilizzare questo parametro per fornire un suggerimento al server di autenticazione Google. Il server utilizza il suggerimento per semplificare il flusso di accesso compilando automaticamente il campo email nel modulo di accesso o selezionando la sessione di accesso multiplo appropriata.
+
+Imposta il valore del parametro su un indirizzo email o un identificatore sub, che è equivalente all'ID Google dell'utente.
+
+prompt	Facoltativo
+Un elenco di prompt sensibili alle maiuscole e minuscole separati da spazi da presentare all'utente. Se non specifichi questo parametro, all'utente verrà chiesto l'accesso solo la prima volta che il tuo progetto lo richiede. Per saperne di più, consulta la sezione Richiesta di un nuovo consenso.
+
+I valori possibili sono:
+
+none	Non visualizzare schermate di autenticazione o consenso. Non deve essere specificato con altri valori.
+consent	Chiedere il consenso all'utente.
+select_account	Chiedi all'utente di selezionare un account.
+Esempio di reindirizzamento al server di autorizzazione di Google
+Di seguito è riportato un URL di esempio, con interruzioni di riga e spazi per una migliore leggibilità.
+
+https://accounts.google.com/o/oauth2/v2/auth?
+ scope=https%3A//www.googleapis.com/auth/drive.metadata.readonly%20https%3A//www.googleapis.com/auth/calendar.readonly&
+ include_granted_scopes=true&
+ response_type=token&
+ state=state_parameter_passthrough_value&
+ redirect_uri=https%3A//developers.google.com/oauthplayground&
+ client_id=client_id
+Dopo aver creato l'URL della richiesta, reindirizza l'utente.
+
+Codice campione JavaScript
+Il seguente snippet JavaScript mostra come avviare il flusso di autorizzazione in JavaScript senza utilizzare la libreria client delle API di Google per JavaScript. Poiché questo endpoint OAuth 2.0 non supporta la condivisione delle risorse tra origini (CORS), lo snippet crea un modulo che apre la richiesta a questo endpoint.
+
+/*
+ * Create form to request access token from Google's OAuth 2.0 server.
+ */
+function oauthSignIn() {
+  // Google's OAuth 2.0 endpoint for requesting an access token
+  var oauth2Endpoint = 'https://accounts.google.com/o/oauth2/v2/auth';
+
+  // Create <form> element to submit parameters to OAuth 2.0 endpoint.
+  var form = document.createElement('form');
+  form.setAttribute('method', 'GET'); // Send as a GET request.
+  form.setAttribute('action', oauth2Endpoint);
+
+  // Parameters to pass to OAuth 2.0 endpoint.
+  var params = {'client_id': 'YOUR_CLIENT_ID',
+                'redirect_uri': 'YOUR_REDIRECT_URI',
+                'response_type': 'token',
+                'scope': 'https://www.googleapis.com/auth/drive.metadata.readonly https://www.googleapis.com/auth/calendar.readonly',
+                'include_granted_scopes': 'true',
+                'state': 'pass-through value'};
+
+  // Add form parameters as hidden input values.
+  for (var p in params) {
+    var input = document.createElement('input');
+    input.setAttribute('type', 'hidden');
+    input.setAttribute('name', p);
+    input.setAttribute('value', params[p]);
+    form.appendChild(input);
+  }
+
+  // Add form to page and submit it to open the OAuth 2.0 endpoint.
+  document.body.appendChild(form);
+  form.submit();
+}
+Passaggio 2: Google chiede il consenso all'utente
+In questo passaggio, l'utente decide se concedere alla tua applicazione l'accesso richiesto. In questa fase, Google mostra una finestra di consenso che indica il nome dell'applicazione e i servizi dell'API di Google che sta richiedendo l'autorizzazione ad accedere con le credenziali di autorizzazione dell'utente, nonché un riepilogo degli ambiti di accesso da concedere. L'utente può quindi acconsentire a concedere l'accesso a uno o più ambiti richiesti dall'applicazione o rifiutare la richiesta.
+
+A questo punto, l'applicazione non deve fare nulla, ma attende la risposta dal server OAuth 2.0 di Google che indica se è stato concesso l'accesso. Questa risposta è spiegata nel passaggio successivo.
+
+Errori
+Le richieste all'endpoint di autorizzazione OAuth 2.0 di Google potrebbero mostrare messaggi di errore rivolti agli utenti anziché i flussi di autenticazione e autorizzazione previsti. I codici di errore comuni e le relative soluzioni sono:
+
+admin_policy_enforced
+L'Account Google non è in grado di autorizzare uno o più ambiti richiesti a causa delle norme del suo amministratore di Google Workspace. Per maggiori informazioni su come un amministratore di Google Workspace può limitare l'accesso a tutti gli ambiti o agli ambiti sensibili e con restrizioni finché l'accesso non viene concesso esplicitamente all'ID client OAuth, consulta l'articolo del Centro assistenza Google Workspace Admin Specificare quali app di terze parti e interne possono accedere ai dati di Google Workspace.
+
+disallowed_useragent
+L'endpoint di autorizzazione viene visualizzato all'interno di un user agent incorporato non consentito dai criteri OAuth 2.0 di Google.
+
+Gli sviluppatori di iOS e macOS potrebbero riscontrare questo errore quando aprono richieste di autorizzazione in WKWebView. Gli sviluppatori devono invece utilizzare librerie iOS come Accedi con Google per iOS o AppAuth per iOS di OpenID Foundation.
+
+Gli sviluppatori web potrebbero riscontrare questo errore quando un'app per iOS o macOS apre un link web generale in un user agent incorporato e un utente passa all'endpoint di autorizzazione OAuth 2.0 di Google dal tuo sito. Gli sviluppatori devono consentire l'apertura dei link generali nel gestore di link predefinito del sistema operativo, che include sia i gestori di link universali sia l'app browser predefinita. Anche la libreria SFSafariViewController è un'opzione supportata.
+
+org_internal
+L'ID client OAuth nella richiesta fa parte di un progetto che limita l'accesso agli Account Google in un' organizzazione Google Cloud specifica. Per saperne di più su questa opzione di configurazione, consulta la sezione Tipo di utente nell'articolo del Centro assistenza Configurare la schermata per il consenso OAuth.
+
+invalid_client
+L'origine da cui è stata effettuata la richiesta non è autorizzata per questo client. Vedi origin_mismatch.
+
+deleted_client
+Il client OAuth utilizzato per effettuare la richiesta è stato eliminato. L'eliminazione può avvenire manualmente o automaticamente nel caso di client non utilizzati . I clienti eliminati possono essere ripristinati entro 30 giorni dall'eliminazione. Scopri di più .
+
+invalid_grant
+Quando utilizzi l'autorizzazione incrementale, il token potrebbe essere scaduto o essere stato invalidato. Autentica di nuovo l'utente e chiedi il consenso dell'utente per ottenere nuovi token. Se continui a visualizzare questo errore, assicurati che la tua applicazione sia stata configurata correttamente e di utilizzare i token e i parametri corretti nella richiesta. In caso contrario, l'account utente potrebbe essere stato eliminato o disattivato.
+
+origin_mismatch
+Lo schema, il dominio e/o la porta di JavaScript che ha generato la richiesta di autorizzazione potrebbero non corrispondere a un URI di origine JavaScript autorizzato registrato per l'ID client OAuth. Esamina le origini JavaScript autorizzate nella console Google Cloud pagina Client.
+
+redirect_uri_mismatch
+redirect_uri passato nella richiesta di autorizzazione non corrisponde a un URI di reindirizzamento autorizzato per l'ID client OAuth. Esamina gli URI di reindirizzamento autorizzati nella console Google Cloud pagina Client.
+
+Lo schema, il dominio e/o la porta di JavaScript che ha generato la richiesta di autorizzazione potrebbero non corrispondere a un URI di origine JavaScript autorizzato registrato per l'ID client OAuth. Esamina le origini JavaScript autorizzate nella pagina Client della console Google Cloud.
+
+Il parametro redirect_uri potrebbe fare riferimento al flusso OAuth out-of-band (OOB) che è stato ritirato e non è più supportato. Consulta la guida alla migrazione per aggiornare l'integrazione.
+
+invalid_request
+Si è verificato un problema con la richiesta che hai effettuato. Ciò potrebbe essere dovuto a diversi motivi:
+
+La richiesta non è stata formattata correttamente
+Nella richiesta mancavano parametri obbligatori
+La richiesta utilizza un metodo di autorizzazione non supportato da Google. Verifica che l'integrazione OAuth utilizzi un metodo di integrazione consigliato
+Passaggio 3: gestisci la risposta del server OAuth 2.0
+Endpoint OAuth 2.0
+Importante: Prima di gestire la risposta OAuth 2.0, devi verificare che il state ricevuto da Google corrisponda al state inviato nella richiesta di autorizzazione. Questa verifica contribuisce a garantire che la richiesta venga effettuata dall'utente e non da uno script dannoso e riduce il rischio di attacchi CSRF.
+Il server OAuth 2.0 invia una risposta a redirect_uri specificato nella richiesta di token di accesso.
+
+Se l'utente approva la richiesta, la risposta contiene un token di accesso. Se l'utente non approva la richiesta, la risposta contiene un messaggio di errore. Il token di accesso o il messaggio di errore viene restituito nel frammento hash dell'URI di reindirizzamento, come mostrato negli esempi seguenti:
+
+Una risposta del token di accesso:
+
+https://oauth2.example.com/callback#access_token=4/P7q7W91&token_type=Bearer&expires_in=3600
+Oltre al parametro access_token, la stringa del frammento contiene anche il parametro token_type, che è sempre impostato su Bearer, e il parametro expires_in, che specifica la durata del token in secondi. Se il parametro state è stato specificato nella richiesta del token di accesso, il relativo valore è incluso anche nella risposta.
+
+Una risposta di errore:
+https://oauth2.example.com/callback#error=access_denied
+Nota:la tua applicazione deve ignorare eventuali campi aggiuntivi e non riconosciuti inclusi nella stringa di query.
+Esempio di risposta del server OAuth 2.0
+Puoi testare questo flusso facendo clic sul seguente URL di esempio, che richiede l'accesso di sola lettura per visualizzare i metadati dei file in Google Drive e l'accesso di sola lettura per visualizzare gli eventi di Google Calendar:
+
+https://accounts.google.com/o/oauth2/v2/auth?
+ scope=https%3A//www.googleapis.com/auth/drive.metadata.readonly%20https%3A//www.googleapis.com/auth/calendar.readonly&
+ include_granted_scopes=true&
+ response_type=token&
+ state=state_parameter_passthrough_value&
+ redirect_uri=https%3A//developers.google.com/oauthplayground&
+ client_id=client_id
+Dopo aver completato il flusso OAuth 2.0, il browser ti reindirizza a OAuth 2.0 Playground, uno strumento per testare i flussi OAuth. Vedrai che OAuth 2.0 Playground ha acquisito automaticamente il codice di autorizzazione.
+
+Passaggio 4: controlla quali ambiti sono stati concessi dagli utenti
+Quando richiedi più autorizzazioni (ambiti), gli utenti potrebbero non concedere alla tua app l'accesso a tutte. La tua app deve verificare quali ambiti sono stati effettivamente concessi e gestire in modo appropriato le situazioni in cui alcune autorizzazioni vengono negate, in genere disattivando le funzionalità che si basano su questi ambiti negati.
+
+Tuttavia, ci sono delle eccezioni. Le app Google Workspace Enterprise con delega dell'autorità a livello di dominio o le app contrassegnate come attendibili ignorano la schermata per il consenso alle autorizzazioni granulari. Per queste app, gli utenti non vedranno la schermata per il consenso delle autorizzazioni granulari. Invece, la tua app riceverà tutti gli ambiti richiesti o nessuno.
+
+Per informazioni più dettagliate, vedi Come gestire le autorizzazioni granulari.
+
+Endpoint OAuth 2.0
+Per verificare se l'utente ha concesso alla tua applicazione l'accesso a un ambito specifico, esamina il campo scope nella risposta del token di accesso. Gli ambiti di accesso concessi da access_token espressi come elenco di stringhe sensibili alle maiuscole e minuscole delimitate da spazi.
+
+Ad esempio, la seguente risposta di esempio del token di accesso indica che l'utente ha concesso alla tua applicazione l'accesso alle autorizzazioni di sola lettura per l'attività di Drive e gli eventi di Calendar:
+
+  {
+    "access_token": "1/fFAGRNJru1FTz70BzhT3Zg",
+    "expires_in": 3920,
+    "token_type": "Bearer",
+    "scope": "https://www.googleapis.com/auth/drive.metadata.readonly https://www.googleapis.com/auth/calendar.readonly",
+    "refresh_token": "1//xEoDL4iW3cxlI7yDbSRFYNG01kVKM2C-259HOF2aQbI"
+  }
+Chiamata alle API di Google
+Endpoint OAuth 2.0
+Dopo che l'applicazione ha ottenuto un token di accesso, puoi utilizzarlo per effettuare chiamate a un'API Google per conto di un determinato account utente se sono stati concessi gli ambiti di accesso richiesti dall'API. Per farlo, includi il token di accesso in una richiesta all'API includendo un parametro di query access_token o un valore di intestazione HTTP Authorization Bearer. Se possibile, è preferibile l'intestazione HTTP, perché le stringhe di query tendono a essere visibili nei log del server. Nella maggior parte dei casi puoi utilizzare una libreria client per configurare le chiamate alle API di Google (ad esempio, quando chiami l'API Drive Files).
+
+Puoi provare tutte le API di Google e visualizzare i relativi ambiti in OAuth 2.0 Playground.
+
+Esempi di HTTP GET
+Una chiamata all'endpoint drive.files (l'API Drive Files) utilizzando l'intestazione HTTP Authorization: Bearer potrebbe essere simile alla seguente. Tieni presente che devi specificare il tuo token di accesso:
+
+
+GET /drive/v2/files HTTP/1.1
+Host: www.googleapis.com
+Authorization: Bearer access_token
+Ecco una chiamata alla stessa API per l'utente autenticato utilizzando il parametro della stringa di query access_token:
+
+GET https://www.googleapis.com/drive/v2/files?access_token=access_token
+curl esempi
+Puoi testare questi comandi con l'applicazione a riga di comando curl. Ecco un esempio che utilizza l'opzione dell'intestazione HTTP (preferita):
+
+curl -H "Authorization: Bearer access_token" https://www.googleapis.com/drive/v2/files
+In alternativa, l'opzione del parametro stringa di query:
+
+curl https://www.googleapis.com/drive/v2/files?access_token=access_token
+Codice campione JavaScript
+Il seguente snippet di codice mostra come utilizzare CORS (condivisione delle risorse tra origini) per inviare una richiesta a un'API di Google. Questo esempio non utilizza la libreria client delle API di Google per JavaScript. Tuttavia, anche se non utilizzi la libreria client, la guida al supporto di CORS nella documentazione della libreria ti aiuterà probabilmente a comprendere meglio queste richieste.
+
+In questo snippet di codice, la variabile access_token rappresenta il token che hai ottenuto per effettuare richieste API per conto dell'utente autorizzato. L'esempio completo mostra come archiviare il token nello spazio di archiviazione locale del browser e recuperarlo quando si effettua una richiesta API.
+
+var xhr = new XMLHttpRequest();
+xhr.open('GET',
+    'https://www.googleapis.com/drive/v3/about?fields=user&' +
+    'access_token=' + params['access_token']);
+xhr.onreadystatechange = function (e) {
+  console.log(xhr.response);
+};
+xhr.send(null);
+Esempio completo
+Endpoint OAuth 2.0
+Questo esempio di codice mostra come completare il flusso OAuth 2.0 in JavaScript senza utilizzare la libreria client delle API di Google per JavaScript. Il codice è per una pagina HTML che mostra un pulsante per provare una richiesta API. Se fai clic sul pulsante, il codice verifica se la pagina ha memorizzato un token di accesso API nello spazio di archiviazione locale del browser. In questo caso, esegue la richiesta API. In caso contrario, avvia il flusso OAuth 2.0.
+
+Per il flusso OAuth 2.0, la pagina segue questi passaggi:
+
+Indirizza l'utente al server OAuth 2.0 di Google, che richiede l'accesso agli ambiti https://www.googleapis.com/auth/drive.metadata.readonly e https://www.googleapis.com/auth/calendar.readonly.
+Dopo aver concesso (o negato) l'accesso a uno o più ambiti richiesti, l'utente viene reindirizzato alla pagina originale, che analizza il token di accesso dalla stringa dell'identificatore di frammento.
+La pagina controlla a quali ambiti l'utente ha concesso l'accesso all'applicazione.
+Se l'utente ha concesso l'accesso agli ambiti richiesti, la pagina utilizza il token di accesso per effettuare la richiesta API di esempio.
+
+La richiesta API chiama il metodo about.get dell'API Drive per recuperare informazioni sull'account Google Drive dell'utente autorizzato.
+
+Se la richiesta viene eseguita correttamente, la risposta dell'API viene registrata nella console di debug del browser.
+Puoi revocare l'accesso all'app tramite la pagina Autorizzazioni del tuo Account Google. L'app è elencata come nome dell'applicazione fornito nella pagina del branding all'interno della schermata per il consenso OAuth durante la creazione dell'ID client.
+
+Per eseguire questo codice localmente, devi impostare i valori per le variabili YOUR_CLIENT_ID e YOUR_REDIRECT_URI che corrispondono alle tue credenziali di autorizzazione. La variabile YOUR_REDIRECT_URI deve essere impostata sullo stesso URL in cui viene pubblicata la pagina. Il valore deve corrispondere esattamente a uno degli URI di reindirizzamento autorizzati per il client OAuth 2.0, che hai configurato nella pagina Client della console Cloud. Se questo valore non corrisponde a un URI autorizzato, riceverai un errore redirect_uri_mismatch. Il progetto deve anche aver abilitato l'API appropriata per questa richiesta.
+
+<html><head></head><body>
+<script>
+  var YOUR_CLIENT_ID = 'REPLACE_THIS_VALUE';
+  var YOUR_REDIRECT_URI = 'REPLACE_THIS_VALUE';
+
+  // Parse query string to see if page request is coming from OAuth 2.0 server.
+  var fragmentString = location.hash.substring(1);
+  var params = {};
+  var regex = /([^&=]+)=([^&]*)/g, m;
+  while (m = regex.exec(fragmentString)) {
+    params[decodeURIComponent(m[1])] = decodeURIComponent(m[2]);
+  }
+  if (Object.keys(params).length > 0 && params['state']) {
+    if (params['state'] == localStorage.getItem('state')) {
+      localStorage.setItem('oauth2-test-params', JSON.stringify(params) );
+
+      trySampleRequest();
+    } else {
+      console.log('State mismatch. Possible CSRF attack');
+    }
+  }
+
+  // Function to generate a random state value
+  function generateCryptoRandomState() {
+    const randomValues = new Uint32Array(2);
+    window.crypto.getRandomValues(randomValues);
+
+    // Encode as UTF-8
+    const utf8Encoder = new TextEncoder();
+    const utf8Array = utf8Encoder.encode(
+      String.fromCharCode.apply(null, randomValues)
+    );
+
+    // Base64 encode the UTF-8 data
+    return btoa(String.fromCharCode.apply(null, utf8Array))
+      .replace(/\+/g, '-')
+      .replace(/\//g, '_')
+      .replace(/=+$/, '');
+  }
+
+  // If there's an access token, try an API request.
+  // Otherwise, start OAuth 2.0 flow.
+  function trySampleRequest() {
+    var params = JSON.parse(localStorage.getItem('oauth2-test-params'));
+    if (params && params['access_token']) { 
+      // User authorized the request. Now, check which scopes were granted.
+      if (params['scope'].includes('https://www.googleapis.com/auth/drive.metadata.readonly')) {
+        // User authorized read-only Drive activity permission.
+        // Calling the APIs, etc.
+        var xhr = new XMLHttpRequest();
+        xhr.open('GET',
+          'https://www.googleapis.com/drive/v3/about?fields=user&' +
+          'access_token=' + params['access_token']);
+        xhr.onreadystatechange = function (e) {
+          if (xhr.readyState === 4 && xhr.status === 200) {
+            console.log(xhr.response);
+          } else if (xhr.readyState === 4 && xhr.status === 401) {
+            // Token invalid, so prompt for user permission.
+            oauth2SignIn();
+          }
+        };
+        xhr.send(null);
+      }
+      else {
+        // User didn't authorize read-only Drive activity permission.
+        // Update UX and application accordingly
+        console.log('User did not authorize read-only Drive activity permission.');
+      }
+
+      // Check if user authorized Calendar read permission.
+      if (params['scope'].includes('https://www.googleapis.com/auth/calendar.readonly')) {
+        // User authorized Calendar read permission.
+        // Calling the APIs, etc.
+        console.log('User authorized Calendar read permission.');
+      }
+      else {
+        // User didn't authorize Calendar read permission.
+        // Update UX and application accordingly
+        console.log('User did not authorize Calendar read permission.');
+      } 
+    } else {
+      oauth2SignIn();
+    }
+  }
+
+  /*
+   * Create form to request access token from Google's OAuth 2.0 server.
+   */
+  function oauth2SignIn() {
+    // create random state value and store in local storage
+    var state = generateCryptoRandomState();
+    localStorage.setItem('state', state);
+
+    // Google's OAuth 2.0 endpoint for requesting an access token
+    var oauth2Endpoint = 'https://accounts.google.com/o/oauth2/v2/auth';
+
+    // Create element to open OAuth 2.0 endpoint in new window.
+    var form = document.createElement('form');
+    form.setAttribute('method', 'GET'); // Send as a GET request.
+    form.setAttribute('action', oauth2Endpoint);
+
+    // Parameters to pass to OAuth 2.0 endpoint.
+    var params = {'client_id': YOUR_CLIENT_ID,
+                  'redirect_uri': YOUR_REDIRECT_URI,
+                  'scope': 'https://www.googleapis.com/auth/drive.metadata.readonly https://www.googleapis.com/auth/calendar.readonly',
+                  'state': state,
+                  'include_granted_scopes': 'true',
+                  'response_type': 'token'};
+
+    // Add form parameters as hidden input values.
+    for (var p in params) {
+      var input = document.createElement('input');
+      input.setAttribute('type', 'hidden');
+      input.setAttribute('name', p);
+      input.setAttribute('value', params[p]);
+      form.appendChild(input);
+    }
+
+    // Add form to page and submit it to open the OAuth 2.0 endpoint.
+    document.body.appendChild(form);
+    form.submit();
+  }
+</script>
+
+<button onclick="trySampleRequest();">Try sample request</button>
+</body></html>
+Regole di convalida dell'origine JavaScript
+Google applica le seguenti regole di convalida alle origini JavaScript per aiutare gli sviluppatori a proteggere le loro applicazioni. Le origini JavaScript devono rispettare queste regole. Consulta la sezione 3 dell'RFC 3986 per la definizione di dominio, host e schema utilizzati in queste regole.
+
+Regole di convalida
+Schema	
+Le origini JavaScript devono utilizzare lo schema HTTPS, non HTTP semplice. Gli URI localhost (inclusi gli URI dell'indirizzo IP localhost) sono esenti da questa regola.
+
+Host	
+Gli host non possono essere indirizzi IP non elaborati. Gli indirizzi IP localhost sono esenti da questa regola.
+
+Dominio	
+I TLD host (domini di primo livello) devono appartenere all'elenco dei suffissi pubblici.
+I domini host non possono essere “googleusercontent.com”.
+Le origini JavaScript non possono contenere domini di abbreviazione degli URL (ad es. goo.gl) a meno che l'app non sia proprietaria del dominio.
+Userinfo	
+Le origini JavaScript non possono contenere il sottocomponente userinfo.
+
+Percorso	
+Le origini JavaScript non possono contenere il componente del percorso.
+
+Query	
+Le origini JavaScript non possono contenere il componente query.
+
+Frammento	
+Le origini JavaScript non possono contenere il componente frammento.
+
+Caratteri	Le origini JavaScript non possono contenere determinati caratteri, tra cui:
+Caratteri jolly ('*')
+Caratteri ASCII non stampabili
+Codifiche in percentuale non valide (qualsiasi codifica in percentuale che non segue la codifica URL di un segno percentuale seguito da due cifre esadecimali)
+Caratteri null (un carattere NULL codificato, ad es. %00, %C0%80)
+Autorizzazione incrementale
+Nel protocollo OAuth 2.0, la tua app richiede l'autorizzazione per accedere alle risorse, che sono identificate dagli ambiti. È considerata una best practice per l'esperienza utente richiedere l'autorizzazione per le risorse nel momento in cui ne hai bisogno. Per consentire questa pratica, il server di autorizzazione di Google supporta l'autorizzazione incrementale. Questa funzionalità ti consente di richiedere gli ambiti in base alle necessità e, se l'utente concede l'autorizzazione per il nuovo ambito, restituisce un codice di autorizzazione che può essere scambiato con un token contenente tutti gli ambiti che l'utente ha concesso al progetto.
+
+Ad esempio, un'app che consente alle persone di ascoltare campioni di brani musicali e creare mix potrebbe richiedere pochissime risorse al momento dell'accesso, forse solo il nome della persona che esegue l'accesso. Tuttavia, per salvare un mix completato è necessario l'accesso a Google Drive. La maggior parte delle persone troverebbe naturale se venisse chiesto l'accesso a Google Drive solo nel momento in cui l'app ne ha effettivamente bisogno.
+
+In questo caso, al momento dell'accesso l'app potrebbe richiedere gli ambiti openid e profile per eseguire l'accesso di base e poi richiedere l'ambito https://www.googleapis.com/auth/drive.file al momento della prima richiesta di salvataggio di un Mix.
+
+Le seguenti regole si applicano a un token di accesso ottenuto da un'autorizzazione incrementale:
+
+Il token può essere utilizzato per accedere alle risorse corrispondenti a uno qualsiasi degli ambiti inclusi nella nuova autorizzazione combinata.
+Quando utilizzi il token di aggiornamento per l'autorizzazione combinata per ottenere un token di accesso, quest'ultimo rappresenta l'autorizzazione combinata e può essere utilizzato per qualsiasi valore di scope incluso nella risposta.
+L'autorizzazione combinata include tutti gli ambiti che l'utente ha concesso al progetto API anche se le concessioni sono state richieste da client diversi. Ad esempio, se un utente ha concesso l'accesso a un ambito utilizzando il client desktop di un'applicazione e poi ha concesso un altro ambito alla stessa applicazione tramite un client mobile, l'autorizzazione combinata includerà entrambi gli ambiti.
+Se revochi un token che rappresenta un'autorizzazione combinata, l'accesso a tutti gli ambiti di questa autorizzazione per conto dell'utente associato viene revocato contemporaneamente.
+Attenzione:se scegli di includere gli ambiti concessi, questi verranno aggiunti automaticamente alla tua richiesta di autorizzazione. Se la tua app non è attualmente approvata per richiedere tutti gli ambiti che potrebbero essere restituiti nella risposta, potrebbe essere visualizzata una pagina di avviso o di errore. Per saperne di più, consulta App non verificate.
+Gli esempi di codice riportati di seguito mostrano come aggiungere ambiti a un token di accesso esistente. Questo approccio consente alla tua app di evitare di dover gestire più token di accesso.
+
+Endpoint OAuth 2.0
+Per aggiungere ambiti a un token di accesso esistente, includi il parametro include_granted_scopes nella richiesta al server OAuth 2.0 di Google.
+
+Il seguente snippet di codice mostra come farlo. Lo snippet presuppone che tu abbia memorizzato gli ambiti per cui il token di accesso è valido nello spazio di archiviazione locale del browser. Il codice dell'esempio completo memorizza un elenco di ambiti per i quali il token di accesso è valido impostando la proprietà oauth2-test-params.scope nello spazio di archiviazione locale del browser.
+
+Lo snippet confronta gli ambiti per i quali il token di accesso è valido con l'ambito che vuoi utilizzare per una query specifica. Se il token di accesso non copre questo ambito, viene avviato il flusso OAuth 2.0. Qui, la funzione oauth2SignIn è la stessa fornita nel passaggio 2 (e fornita più avanti nell'esempio completo).
+
+var SCOPE = 'https://www.googleapis.com/auth/drive.metadata.readonly';
+var params = JSON.parse(localStorage.getItem('oauth2-test-params'));
+
+var current_scope_granted = false;
+if (params.hasOwnProperty('scope')) {
+  var scopes = params['scope'].split(' ');
+  for (var s = 0; s < scopes.length; s++) {
+    if (SCOPE == scopes[s]) {
+      current_scope_granted = true;
+    }
+  }
+}
+
+if (!current_scope_granted) {
+  oauth2SignIn(); // This function is defined elsewhere in this document.
+} else {
+  // Since you already have access, you can proceed with the API request.
+}
+Revoca del token
+In alcuni casi, un utente potrebbe voler revocare l'accesso concesso a un'applicazione. Un utente può revocare l'accesso visitando le impostazioni dell'account. Per saperne di più, consulta la sezione Rimuovere l'accesso di un sito o di un'app del documento di assistenza App e siti di terze parti con accesso al tuo account.
+
+È anche possibile che un'applicazione revochi programmaticamente l'accesso che le è stato concesso. La revoca programmatica è importante nei casi in cui un utente annulla l'iscrizione, rimuove un'applicazione o le risorse API richieste da un'app sono cambiate in modo significativo. In altre parole, parte della procedura di rimozione può includere una richiesta API per garantire che le autorizzazioni precedentemente concesse all'applicazione vengano rimosse.
+
+Endpoint OAuth 2.0
+Per revocare un token in modo programmatico, la tua applicazione invia una richiesta a https://oauth2.googleapis.com/revoke e include il token come parametro:
+
+curl -d -X -POST --header "Content-type:application/x-www-form-urlencoded" \
+        https://oauth2.googleapis.com/revoke?token={token}
+Il token può essere un token di accesso o un token di aggiornamento. Se il token è un token di accesso e ha un token di aggiornamento corrispondente, verrà revocato anche il token di aggiornamento.
+
+Nota:l'endpoint OAuth 2.0 di Google per la revoca dei token supporta JSONP e l'invio di moduli. Non supporta la condivisione delle risorse tra origini (CORS).
+Se la revoca viene elaborata correttamente, il codice di stato HTTP della risposta è 200. Per le condizioni di errore, viene restituito un codice di stato HTTP 400 insieme a un codice di errore.
+
+Lo snippet JavaScript seguente mostra come revocare un token in JavaScript senza utilizzare la libreria client delle API di Google per JavaScript. Poiché l'endpoint OAuth 2.0 di Google per la revoca dei token non supporta la condivisione delle risorse tra origini (CORS), il codice crea un modulo e lo invia all'endpoint anziché utilizzare il metodo XMLHttpRequest() per pubblicare la richiesta.
+
+function revokeAccess(accessToken) {
+  // Google's OAuth 2.0 endpoint for revoking access tokens.
+  var revokeTokenEndpoint = 'https://oauth2.googleapis.com/revoke';
+
+  // Create <form> element to use to POST data to the OAuth 2.0 endpoint.
+  var form = document.createElement('form');
+  form.setAttribute('method', 'post');
+  form.setAttribute('action', revokeTokenEndpoint);
+
+  // Add access token to the form so it is set as value of 'token' parameter.
+  // This corresponds to the sample curl request, where the URL is:
+  //      https://oauth2.googleapis.com/revoke?token={token}
+  var tokenField = document.createElement('input');
+  tokenField.setAttribute('type', 'hidden');
+  tokenField.setAttribute('name', 'token');
+  tokenField.setAttribute('value', accessToken);
+  form.appendChild(tokenField);
+
+  // Add form to page and submit it to actually revoke the token.
+  document.body.appendChild(form);
+  form.submit();
+}
+Punto chiave: la revoca rimuove tutti gli ambiti OAuth 2.0 precedentemente concessi a un progetto, invalidando tutti i token di accesso o di aggiornamento emessi per tutti i client registrati nel progetto.
+Nota: dopo una risposta di revoca riuscita, potrebbe essere necessario del tempo prima che la revoca abbia effetto completo.
+Implementare la Protezione su più account
+Un ulteriore passaggio da intraprendere per proteggere gli account dei tuoi utenti è l'implementazione della Protezione su più account utilizzando il servizio Protezione su più account di Google. Questo servizio ti consente di abbonarti alle notifiche degli eventi di sicurezza, che forniscono alla tua applicazione informazioni sulle modifiche principali all'account utente. Puoi quindi utilizzare le informazioni per intraprendere azioni a seconda di come decidi di rispondere agli eventi.
+
+Ecco alcuni esempi dei tipi di eventi inviati alla tua app dal servizio di Protezione su più account di Google:
+
+https://schemas.openid.net/secevent/risc/event-type/sessions-revoked
+https://schemas.openid.net/secevent/oauth/event-type/token-revoked
+https://schemas.openid.net/secevent/risc/event-type/account-disabled
+Per ulteriori informazioni su come implementare la protezione su più account e per l'elenco completo degli eventi disponibili, consulta la pagina Proteggere gli account utente con la protezione su più account .
+
+Questa pagina è stata utile?
+
+Salvo quando diversamente specificato, i contenuti di questa pagina sono concessi in base alla licenza Creative Commons Attribution 4.0, mentre gli esempi di codice sono concessi in base alla licenza Apache 2.0. Per ulteriori dettagli, consulta le norme del sito di Google Developers. Java è un marchio registrato di Oracle e/o delle sue consociate.
+
+Ultimo aggiornamento 2026-05-26 UTC.
+
+Connect
+Blog
+Bluesky
+Instagram
+LinkedIn
+X (Twitter)
+YouTube
+Programmi
+Google Developer Program
+Google Developer Groups
+Google Developer Experts
+Accelerators
+Google Cloud & NVIDIA
+Developer Console
+Google API Console
+Google Cloud Platform Console
+Google Play Console
+Firebase Console
+Actions on Google Console
+Cast SDK Developer Console
+Chrome Web Store Dashboard
+Google Home Developer Console
+Google Developers
+Android
+Chrome
+Firebase
+Google Cloud Platform
+Google AI
+Tutti i prodotti
+Termini
+Privacy
+
+Language
+Finestra di dialogo Partecipa al programma per sviluppatori Google aperta
+SimplyCodes
+
