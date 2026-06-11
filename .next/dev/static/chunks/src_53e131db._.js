@@ -5467,7 +5467,8 @@ const STATUS_TKEYS = {
 };
 function DemoTracker() {
     _s();
-    const { labels, demos, addDemo, updateDemo, deleteDemo, advanceDemoStatus, locale, getGenres } = (0, __TURBOPACK__imported__module__$5b$project$5d2f$src$2f$lib$2f$store$2e$ts__$5b$app$2d$client$5d$__$28$ecmascript$29$__["useAppStore"])();
+    const { labels, demos, addDemo, updateDemo, deleteDemo, advanceDemoStatus, locale: _locale, getGenres } = (0, __TURBOPACK__imported__module__$5b$project$5d2f$src$2f$lib$2f$store$2e$ts__$5b$app$2d$client$5d$__$28$ecmascript$29$__["useAppStore"])();
+    const locale = _locale;
     const genres = getGenres();
     const [viewMode, setViewMode] = (0, __TURBOPACK__imported__module__$5b$project$5d2f$node_modules$2f$next$2f$dist$2f$compiled$2f$react$2f$index$2e$js__$5b$app$2d$client$5d$__$28$ecmascript$29$__["useState"])("kanban");
     const [search, setSearch] = (0, __TURBOPACK__imported__module__$5b$project$5d2f$node_modules$2f$next$2f$dist$2f$compiled$2f$react$2f$index$2e$js__$5b$app$2d$client$5d$__$28$ecmascript$29$__["useState"])("");
@@ -5589,19 +5590,19 @@ function DemoTracker() {
                                 className: "h-4 w-4 mr-1.5"
                             }, void 0, false, {
                                 fileName: "[project]/src/components/demo-tracker.tsx",
-                                lineNumber: 192,
+                                lineNumber: 193,
                                 columnNumber: 13
                             }, this),
                             (0, __TURBOPACK__imported__module__$5b$project$5d2f$src$2f$lib$2f$i18n$2e$ts__$5b$app$2d$client$5d$__$28$ecmascript$29$__["t"])(locale, "demos.backToTracker")
                         ]
                     }, void 0, true, {
                         fileName: "[project]/src/components/demo-tracker.tsx",
-                        lineNumber: 191,
+                        lineNumber: 192,
                         columnNumber: 11
                     }, this)
                 }, void 0, false, {
                     fileName: "[project]/src/components/demo-tracker.tsx",
-                    lineNumber: 190,
+                    lineNumber: 191,
                     columnNumber: 9
                 }, this),
                 /*#__PURE__*/ (0, __TURBOPACK__imported__module__$5b$project$5d2f$node_modules$2f$next$2f$dist$2f$compiled$2f$react$2f$jsx$2d$dev$2d$runtime$2e$js__$5b$app$2d$client$5d$__$28$ecmascript$29$__["jsxDEV"])("div", {
@@ -5611,7 +5612,7 @@ function DemoTracker() {
                             className: "h-5 w-5 text-primary"
                         }, void 0, false, {
                             fileName: "[project]/src/components/demo-tracker.tsx",
-                            lineNumber: 198,
+                            lineNumber: 199,
                             columnNumber: 11
                         }, this),
                         /*#__PURE__*/ (0, __TURBOPACK__imported__module__$5b$project$5d2f$node_modules$2f$next$2f$dist$2f$compiled$2f$react$2f$jsx$2d$dev$2d$runtime$2e$js__$5b$app$2d$client$5d$__$28$ecmascript$29$__["jsxDEV"])("h3", {
@@ -5619,7 +5620,7 @@ function DemoTracker() {
                             children: labelHistoryName
                         }, void 0, false, {
                             fileName: "[project]/src/components/demo-tracker.tsx",
-                            lineNumber: 199,
+                            lineNumber: 200,
                             columnNumber: 11
                         }, this),
                         /*#__PURE__*/ (0, __TURBOPACK__imported__module__$5b$project$5d2f$node_modules$2f$next$2f$dist$2f$compiled$2f$react$2f$jsx$2d$dev$2d$runtime$2e$js__$5b$app$2d$client$5d$__$28$ecmascript$29$__["jsxDEV"])(__TURBOPACK__imported__module__$5b$project$5d2f$src$2f$components$2f$ui$2f$badge$2e$tsx__$5b$app$2d$client$5d$__$28$ecmascript$29$__["Badge"], {
@@ -5632,13 +5633,13 @@ function DemoTracker() {
                             ]
                         }, void 0, true, {
                             fileName: "[project]/src/components/demo-tracker.tsx",
-                            lineNumber: 200,
+                            lineNumber: 201,
                             columnNumber: 11
                         }, this)
                     ]
                 }, void 0, true, {
                     fileName: "[project]/src/components/demo-tracker.tsx",
-                    lineNumber: 197,
+                    lineNumber: 198,
                     columnNumber: 9
                 }, this),
                 labelHistoryDemos.length === 0 ? /*#__PURE__*/ (0, __TURBOPACK__imported__module__$5b$project$5d2f$node_modules$2f$next$2f$dist$2f$compiled$2f$react$2f$jsx$2d$dev$2d$runtime$2e$js__$5b$app$2d$client$5d$__$28$ecmascript$29$__["jsxDEV"])("div", {
@@ -5648,7 +5649,7 @@ function DemoTracker() {
                             className: "h-10 w-10 mx-auto mb-2 opacity-30"
                         }, void 0, false, {
                             fileName: "[project]/src/components/demo-tracker.tsx",
-                            lineNumber: 205,
+                            lineNumber: 206,
                             columnNumber: 13
                         }, this),
                         /*#__PURE__*/ (0, __TURBOPACK__imported__module__$5b$project$5d2f$node_modules$2f$next$2f$dist$2f$compiled$2f$react$2f$jsx$2d$dev$2d$runtime$2e$js__$5b$app$2d$client$5d$__$28$ecmascript$29$__["jsxDEV"])("p", {
@@ -5656,13 +5657,13 @@ function DemoTracker() {
                             children: (0, __TURBOPACK__imported__module__$5b$project$5d2f$src$2f$lib$2f$i18n$2e$ts__$5b$app$2d$client$5d$__$28$ecmascript$29$__["t"])(locale, "demos.noDemos")
                         }, void 0, false, {
                             fileName: "[project]/src/components/demo-tracker.tsx",
-                            lineNumber: 206,
+                            lineNumber: 207,
                             columnNumber: 13
                         }, this)
                     ]
                 }, void 0, true, {
                     fileName: "[project]/src/components/demo-tracker.tsx",
-                    lineNumber: 204,
+                    lineNumber: 205,
                     columnNumber: 11
                 }, this) : /*#__PURE__*/ (0, __TURBOPACK__imported__module__$5b$project$5d2f$node_modules$2f$next$2f$dist$2f$compiled$2f$react$2f$jsx$2d$dev$2d$runtime$2e$js__$5b$app$2d$client$5d$__$28$ecmascript$29$__["jsxDEV"])("div", {
                     className: "space-y-2",
@@ -5688,7 +5689,7 @@ function DemoTracker() {
                                                             children: demo.trackName
                                                         }, void 0, false, {
                                                             fileName: "[project]/src/components/demo-tracker.tsx",
-                                                            lineNumber: 223,
+                                                            lineNumber: 224,
                                                             columnNumber: 27
                                                         }, this),
                                                         /*#__PURE__*/ (0, __TURBOPACK__imported__module__$5b$project$5d2f$node_modules$2f$next$2f$dist$2f$compiled$2f$react$2f$jsx$2d$dev$2d$runtime$2e$js__$5b$app$2d$client$5d$__$28$ecmascript$29$__["jsxDEV"])(__TURBOPACK__imported__module__$5b$project$5d2f$src$2f$components$2f$ui$2f$badge$2e$tsx__$5b$app$2d$client$5d$__$28$ecmascript$29$__["Badge"], {
@@ -5701,13 +5702,13 @@ function DemoTracker() {
                                                                     children: (0, __TURBOPACK__imported__module__$5b$project$5d2f$src$2f$lib$2f$i18n$2e$ts__$5b$app$2d$client$5d$__$28$ecmascript$29$__["t"])(locale, STATUS_TKEYS[demo.status])
                                                                 }, void 0, false, {
                                                                     fileName: "[project]/src/components/demo-tracker.tsx",
-                                                                    lineNumber: 226,
+                                                                    lineNumber: 227,
                                                                     columnNumber: 29
                                                                 }, this)
                                                             ]
                                                         }, void 0, true, {
                                                             fileName: "[project]/src/components/demo-tracker.tsx",
-                                                            lineNumber: 224,
+                                                            lineNumber: 225,
                                                             columnNumber: 27
                                                         }, this),
                                                         demo.artistName && /*#__PURE__*/ (0, __TURBOPACK__imported__module__$5b$project$5d2f$node_modules$2f$next$2f$dist$2f$compiled$2f$react$2f$jsx$2d$dev$2d$runtime$2e$js__$5b$app$2d$client$5d$__$28$ecmascript$29$__["jsxDEV"])("span", {
@@ -5717,7 +5718,7 @@ function DemoTracker() {
                                                                     className: "h-2.5 w-2.5"
                                                                 }, void 0, false, {
                                                                     fileName: "[project]/src/components/demo-tracker.tsx",
-                                                                    lineNumber: 230,
+                                                                    lineNumber: 231,
                                                                     columnNumber: 31
                                                                 }, this),
                                                                 " ",
@@ -5725,13 +5726,13 @@ function DemoTracker() {
                                                             ]
                                                         }, void 0, true, {
                                                             fileName: "[project]/src/components/demo-tracker.tsx",
-                                                            lineNumber: 229,
+                                                            lineNumber: 230,
                                                             columnNumber: 29
                                                         }, this)
                                                     ]
                                                 }, void 0, true, {
                                                     fileName: "[project]/src/components/demo-tracker.tsx",
-                                                    lineNumber: 222,
+                                                    lineNumber: 223,
                                                     columnNumber: 25
                                                 }, this),
                                                 /*#__PURE__*/ (0, __TURBOPACK__imported__module__$5b$project$5d2f$node_modules$2f$next$2f$dist$2f$compiled$2f$react$2f$jsx$2d$dev$2d$runtime$2e$js__$5b$app$2d$client$5d$__$28$ecmascript$29$__["jsxDEV"])("div", {
@@ -5744,7 +5745,7 @@ function DemoTracker() {
                                                                     className: "h-3 w-3"
                                                                 }, void 0, false, {
                                                                     fileName: "[project]/src/components/demo-tracker.tsx",
-                                                                    lineNumber: 237,
+                                                                    lineNumber: 238,
                                                                     columnNumber: 31
                                                                 }, this),
                                                                 " ",
@@ -5759,13 +5760,13 @@ function DemoTracker() {
                                                                     ]
                                                                 }, void 0, true, {
                                                                     fileName: "[project]/src/components/demo-tracker.tsx",
-                                                                    lineNumber: 238,
+                                                                    lineNumber: 239,
                                                                     columnNumber: 54
                                                                 }, this)
                                                             ]
                                                         }, void 0, true, {
                                                             fileName: "[project]/src/components/demo-tracker.tsx",
-                                                            lineNumber: 236,
+                                                            lineNumber: 237,
                                                             columnNumber: 29
                                                         }, this),
                                                         demo.link && /*#__PURE__*/ (0, __TURBOPACK__imported__module__$5b$project$5d2f$node_modules$2f$next$2f$dist$2f$compiled$2f$react$2f$jsx$2d$dev$2d$runtime$2e$js__$5b$app$2d$client$5d$__$28$ecmascript$29$__["jsxDEV"])("span", {
@@ -5775,7 +5776,7 @@ function DemoTracker() {
                                                                     className: "h-3 w-3"
                                                                 }, void 0, false, {
                                                                     fileName: "[project]/src/components/demo-tracker.tsx",
-                                                                    lineNumber: 243,
+                                                                    lineNumber: 244,
                                                                     columnNumber: 31
                                                                 }, this),
                                                                 " ",
@@ -5783,7 +5784,7 @@ function DemoTracker() {
                                                             ]
                                                         }, void 0, true, {
                                                             fileName: "[project]/src/components/demo-tracker.tsx",
-                                                            lineNumber: 242,
+                                                            lineNumber: 243,
                                                             columnNumber: 29
                                                         }, this),
                                                         demo.pitchText && /*#__PURE__*/ (0, __TURBOPACK__imported__module__$5b$project$5d2f$node_modules$2f$next$2f$dist$2f$compiled$2f$react$2f$jsx$2d$dev$2d$runtime$2e$js__$5b$app$2d$client$5d$__$28$ecmascript$29$__["jsxDEV"])("span", {
@@ -5793,7 +5794,7 @@ function DemoTracker() {
                                                                     className: "h-3 w-3"
                                                                 }, void 0, false, {
                                                                     fileName: "[project]/src/components/demo-tracker.tsx",
-                                                                    lineNumber: 248,
+                                                                    lineNumber: 249,
                                                                     columnNumber: 31
                                                                 }, this),
                                                                 " ",
@@ -5801,19 +5802,19 @@ function DemoTracker() {
                                                             ]
                                                         }, void 0, true, {
                                                             fileName: "[project]/src/components/demo-tracker.tsx",
-                                                            lineNumber: 247,
+                                                            lineNumber: 248,
                                                             columnNumber: 29
                                                         }, this)
                                                     ]
                                                 }, void 0, true, {
                                                     fileName: "[project]/src/components/demo-tracker.tsx",
-                                                    lineNumber: 234,
+                                                    lineNumber: 235,
                                                     columnNumber: 25
                                                 }, this)
                                             ]
                                         }, void 0, true, {
                                             fileName: "[project]/src/components/demo-tracker.tsx",
-                                            lineNumber: 221,
+                                            lineNumber: 222,
                                             columnNumber: 23
                                         }, this),
                                         /*#__PURE__*/ (0, __TURBOPACK__imported__module__$5b$project$5d2f$node_modules$2f$next$2f$dist$2f$compiled$2f$react$2f$jsx$2d$dev$2d$runtime$2e$js__$5b$app$2d$client$5d$__$28$ecmascript$29$__["jsxDEV"])("div", {
@@ -5832,12 +5833,12 @@ function DemoTracker() {
                                                         className: "h-3.5 w-3.5"
                                                     }, void 0, false, {
                                                         fileName: "[project]/src/components/demo-tracker.tsx",
-                                                        lineNumber: 255,
+                                                        lineNumber: 256,
                                                         columnNumber: 27
                                                     }, this)
                                                 }, void 0, false, {
                                                     fileName: "[project]/src/components/demo-tracker.tsx",
-                                                    lineNumber: 254,
+                                                    lineNumber: 255,
                                                     columnNumber: 25
                                                 }, this),
                                                 canAdvance(demo.status) && /*#__PURE__*/ (0, __TURBOPACK__imported__module__$5b$project$5d2f$node_modules$2f$next$2f$dist$2f$compiled$2f$react$2f$jsx$2d$dev$2d$runtime$2e$js__$5b$app$2d$client$5d$__$28$ecmascript$29$__["jsxDEV"])(__TURBOPACK__imported__module__$5b$project$5d2f$src$2f$components$2f$ui$2f$button$2e$tsx__$5b$app$2d$client$5d$__$28$ecmascript$29$__["Button"], {
@@ -5853,12 +5854,12 @@ function DemoTracker() {
                                                         className: "h-3.5 w-3.5"
                                                     }, void 0, false, {
                                                         fileName: "[project]/src/components/demo-tracker.tsx",
-                                                        lineNumber: 259,
+                                                        lineNumber: 260,
                                                         columnNumber: 29
                                                     }, this)
                                                 }, void 0, false, {
                                                     fileName: "[project]/src/components/demo-tracker.tsx",
-                                                    lineNumber: 258,
+                                                    lineNumber: 259,
                                                     columnNumber: 27
                                                 }, this),
                                                 /*#__PURE__*/ (0, __TURBOPACK__imported__module__$5b$project$5d2f$node_modules$2f$next$2f$dist$2f$compiled$2f$react$2f$jsx$2d$dev$2d$runtime$2e$js__$5b$app$2d$client$5d$__$28$ecmascript$29$__["jsxDEV"])(__TURBOPACK__imported__module__$5b$project$5d2f$src$2f$components$2f$ui$2f$button$2e$tsx__$5b$app$2d$client$5d$__$28$ecmascript$29$__["Button"], {
@@ -5873,40 +5874,40 @@ function DemoTracker() {
                                                         className: "h-3.5 w-3.5"
                                                     }, void 0, false, {
                                                         fileName: "[project]/src/components/demo-tracker.tsx",
-                                                        lineNumber: 263,
+                                                        lineNumber: 264,
                                                         columnNumber: 27
                                                     }, this)
                                                 }, void 0, false, {
                                                     fileName: "[project]/src/components/demo-tracker.tsx",
-                                                    lineNumber: 262,
+                                                    lineNumber: 263,
                                                     columnNumber: 25
                                                 }, this)
                                             ]
                                         }, void 0, true, {
                                             fileName: "[project]/src/components/demo-tracker.tsx",
-                                            lineNumber: 253,
+                                            lineNumber: 254,
                                             columnNumber: 23
                                         }, this)
                                     ]
                                 }, void 0, true, {
                                     fileName: "[project]/src/components/demo-tracker.tsx",
-                                    lineNumber: 220,
+                                    lineNumber: 221,
                                     columnNumber: 21
                                 }, this)
                             }, void 0, false, {
                                 fileName: "[project]/src/components/demo-tracker.tsx",
-                                lineNumber: 219,
+                                lineNumber: 220,
                                 columnNumber: 19
                             }, this)
                         }, demo.id, false, {
                             fileName: "[project]/src/components/demo-tracker.tsx",
-                            lineNumber: 214,
+                            lineNumber: 215,
                             columnNumber: 17
                         }, this);
                     })
                 }, void 0, false, {
                     fileName: "[project]/src/components/demo-tracker.tsx",
-                    lineNumber: 209,
+                    lineNumber: 210,
                     columnNumber: 11
                 }, this),
                 /*#__PURE__*/ (0, __TURBOPACK__imported__module__$5b$project$5d2f$node_modules$2f$next$2f$dist$2f$compiled$2f$react$2f$jsx$2d$dev$2d$runtime$2e$js__$5b$app$2d$client$5d$__$28$ecmascript$29$__["jsxDEV"])(DemoDetailDialog, {
@@ -5916,13 +5917,13 @@ function DemoTracker() {
                     getLabelName: getLabelName
                 }, void 0, false, {
                     fileName: "[project]/src/components/demo-tracker.tsx",
-                    lineNumber: 275,
+                    lineNumber: 276,
                     columnNumber: 9
                 }, this)
             ]
         }, void 0, true, {
             fileName: "[project]/src/components/demo-tracker.tsx",
-            lineNumber: 189,
+            lineNumber: 190,
             columnNumber: 7
         }, this);
     }
@@ -5939,7 +5940,7 @@ function DemoTracker() {
                                 className: "absolute left-3 top-1/2 -translate-y-1/2 h-4 w-4 text-muted-foreground"
                             }, void 0, false, {
                                 fileName: "[project]/src/components/demo-tracker.tsx",
-                                lineNumber: 285,
+                                lineNumber: 286,
                                 columnNumber: 11
                             }, this),
                             /*#__PURE__*/ (0, __TURBOPACK__imported__module__$5b$project$5d2f$node_modules$2f$next$2f$dist$2f$compiled$2f$react$2f$jsx$2d$dev$2d$runtime$2e$js__$5b$app$2d$client$5d$__$28$ecmascript$29$__["jsxDEV"])(__TURBOPACK__imported__module__$5b$project$5d2f$src$2f$components$2f$ui$2f$input$2e$tsx__$5b$app$2d$client$5d$__$28$ecmascript$29$__["Input"], {
@@ -5949,13 +5950,13 @@ function DemoTracker() {
                                 className: "pl-9 bg-secondary/50 border-border/50"
                             }, void 0, false, {
                                 fileName: "[project]/src/components/demo-tracker.tsx",
-                                lineNumber: 286,
+                                lineNumber: 287,
                                 columnNumber: 11
                             }, this)
                         ]
                     }, void 0, true, {
                         fileName: "[project]/src/components/demo-tracker.tsx",
-                        lineNumber: 284,
+                        lineNumber: 285,
                         columnNumber: 9
                     }, this),
                     /*#__PURE__*/ (0, __TURBOPACK__imported__module__$5b$project$5d2f$node_modules$2f$next$2f$dist$2f$compiled$2f$react$2f$jsx$2d$dev$2d$runtime$2e$js__$5b$app$2d$client$5d$__$28$ecmascript$29$__["jsxDEV"])(__TURBOPACK__imported__module__$5b$project$5d2f$src$2f$components$2f$ui$2f$select$2e$tsx__$5b$app$2d$client$5d$__$28$ecmascript$29$__["Select"], {
@@ -5968,12 +5969,12 @@ function DemoTracker() {
                                     placeholder: (0, __TURBOPACK__imported__module__$5b$project$5d2f$src$2f$lib$2f$i18n$2e$ts__$5b$app$2d$client$5d$__$28$ecmascript$29$__["t"])(locale, "demos.allStatuses")
                                 }, void 0, false, {
                                     fileName: "[project]/src/components/demo-tracker.tsx",
-                                    lineNumber: 295,
+                                    lineNumber: 296,
                                     columnNumber: 13
                                 }, this)
                             }, void 0, false, {
                                 fileName: "[project]/src/components/demo-tracker.tsx",
-                                lineNumber: 294,
+                                lineNumber: 295,
                                 columnNumber: 11
                             }, this),
                             /*#__PURE__*/ (0, __TURBOPACK__imported__module__$5b$project$5d2f$node_modules$2f$next$2f$dist$2f$compiled$2f$react$2f$jsx$2d$dev$2d$runtime$2e$js__$5b$app$2d$client$5d$__$28$ecmascript$29$__["jsxDEV"])(__TURBOPACK__imported__module__$5b$project$5d2f$src$2f$components$2f$ui$2f$select$2e$tsx__$5b$app$2d$client$5d$__$28$ecmascript$29$__["SelectContent"], {
@@ -5983,7 +5984,7 @@ function DemoTracker() {
                                         children: (0, __TURBOPACK__imported__module__$5b$project$5d2f$src$2f$lib$2f$i18n$2e$ts__$5b$app$2d$client$5d$__$28$ecmascript$29$__["t"])(locale, "demos.allStatuses")
                                     }, void 0, false, {
                                         fileName: "[project]/src/components/demo-tracker.tsx",
-                                        lineNumber: 298,
+                                        lineNumber: 299,
                                         columnNumber: 13
                                     }, this),
                                     STATUS_KEYS.map((s)=>/*#__PURE__*/ (0, __TURBOPACK__imported__module__$5b$project$5d2f$node_modules$2f$next$2f$dist$2f$compiled$2f$react$2f$jsx$2d$dev$2d$runtime$2e$js__$5b$app$2d$client$5d$__$28$ecmascript$29$__["jsxDEV"])(__TURBOPACK__imported__module__$5b$project$5d2f$src$2f$components$2f$ui$2f$select$2e$tsx__$5b$app$2d$client$5d$__$28$ecmascript$29$__["SelectItem"], {
@@ -5991,19 +5992,19 @@ function DemoTracker() {
                                             children: (0, __TURBOPACK__imported__module__$5b$project$5d2f$src$2f$lib$2f$i18n$2e$ts__$5b$app$2d$client$5d$__$28$ecmascript$29$__["t"])(locale, STATUS_TKEYS[s])
                                         }, s, false, {
                                             fileName: "[project]/src/components/demo-tracker.tsx",
-                                            lineNumber: 300,
+                                            lineNumber: 301,
                                             columnNumber: 15
                                         }, this))
                                 ]
                             }, void 0, true, {
                                 fileName: "[project]/src/components/demo-tracker.tsx",
-                                lineNumber: 297,
+                                lineNumber: 298,
                                 columnNumber: 11
                             }, this)
                         ]
                     }, void 0, true, {
                         fileName: "[project]/src/components/demo-tracker.tsx",
-                        lineNumber: 293,
+                        lineNumber: 294,
                         columnNumber: 9
                     }, this),
                     /*#__PURE__*/ (0, __TURBOPACK__imported__module__$5b$project$5d2f$node_modules$2f$next$2f$dist$2f$compiled$2f$react$2f$jsx$2d$dev$2d$runtime$2e$js__$5b$app$2d$client$5d$__$28$ecmascript$29$__["jsxDEV"])("div", {
@@ -6017,7 +6018,7 @@ function DemoTracker() {
                                 children: (0, __TURBOPACK__imported__module__$5b$project$5d2f$src$2f$lib$2f$i18n$2e$ts__$5b$app$2d$client$5d$__$28$ecmascript$29$__["t"])(locale, "demos.kanban")
                             }, void 0, false, {
                                 fileName: "[project]/src/components/demo-tracker.tsx",
-                                lineNumber: 307,
+                                lineNumber: 308,
                                 columnNumber: 11
                             }, this),
                             /*#__PURE__*/ (0, __TURBOPACK__imported__module__$5b$project$5d2f$node_modules$2f$next$2f$dist$2f$compiled$2f$react$2f$jsx$2d$dev$2d$runtime$2e$js__$5b$app$2d$client$5d$__$28$ecmascript$29$__["jsxDEV"])(__TURBOPACK__imported__module__$5b$project$5d2f$src$2f$components$2f$ui$2f$button$2e$tsx__$5b$app$2d$client$5d$__$28$ecmascript$29$__["Button"], {
@@ -6028,13 +6029,13 @@ function DemoTracker() {
                                 children: (0, __TURBOPACK__imported__module__$5b$project$5d2f$src$2f$lib$2f$i18n$2e$ts__$5b$app$2d$client$5d$__$28$ecmascript$29$__["t"])(locale, "demos.table")
                             }, void 0, false, {
                                 fileName: "[project]/src/components/demo-tracker.tsx",
-                                lineNumber: 310,
+                                lineNumber: 311,
                                 columnNumber: 11
                             }, this)
                         ]
                     }, void 0, true, {
                         fileName: "[project]/src/components/demo-tracker.tsx",
-                        lineNumber: 306,
+                        lineNumber: 307,
                         columnNumber: 9
                     }, this),
                     /*#__PURE__*/ (0, __TURBOPACK__imported__module__$5b$project$5d2f$node_modules$2f$next$2f$dist$2f$compiled$2f$react$2f$jsx$2d$dev$2d$runtime$2e$js__$5b$app$2d$client$5d$__$28$ecmascript$29$__["jsxDEV"])(__TURBOPACK__imported__module__$5b$project$5d2f$src$2f$components$2f$ui$2f$button$2e$tsx__$5b$app$2d$client$5d$__$28$ecmascript$29$__["Button"], {
@@ -6045,20 +6046,20 @@ function DemoTracker() {
                                 className: "h-4 w-4 mr-1.5"
                             }, void 0, false, {
                                 fileName: "[project]/src/components/demo-tracker.tsx",
-                                lineNumber: 315,
+                                lineNumber: 316,
                                 columnNumber: 11
                             }, this),
                             (0, __TURBOPACK__imported__module__$5b$project$5d2f$src$2f$lib$2f$i18n$2e$ts__$5b$app$2d$client$5d$__$28$ecmascript$29$__["t"])(locale, "demos.addDemo")
                         ]
                     }, void 0, true, {
                         fileName: "[project]/src/components/demo-tracker.tsx",
-                        lineNumber: 314,
+                        lineNumber: 315,
                         columnNumber: 9
                     }, this)
                 ]
             }, void 0, true, {
                 fileName: "[project]/src/components/demo-tracker.tsx",
-                lineNumber: 283,
+                lineNumber: 284,
                 columnNumber: 7
             }, this),
             viewMode === "kanban" && /*#__PURE__*/ (0, __TURBOPACK__imported__module__$5b$project$5d2f$node_modules$2f$next$2f$dist$2f$compiled$2f$react$2f$jsx$2d$dev$2d$runtime$2e$js__$5b$app$2d$client$5d$__$28$ecmascript$29$__["jsxDEV"])("div", {
@@ -6077,7 +6078,7 @@ function DemoTracker() {
                                         children: STATUS_ICONS[status]
                                     }, void 0, false, {
                                         fileName: "[project]/src/components/demo-tracker.tsx",
-                                        lineNumber: 329,
+                                        lineNumber: 330,
                                         columnNumber: 19
                                     }, this),
                                     /*#__PURE__*/ (0, __TURBOPACK__imported__module__$5b$project$5d2f$node_modules$2f$next$2f$dist$2f$compiled$2f$react$2f$jsx$2d$dev$2d$runtime$2e$js__$5b$app$2d$client$5d$__$28$ecmascript$29$__["jsxDEV"])("span", {
@@ -6085,7 +6086,7 @@ function DemoTracker() {
                                         children: (0, __TURBOPACK__imported__module__$5b$project$5d2f$src$2f$lib$2f$i18n$2e$ts__$5b$app$2d$client$5d$__$28$ecmascript$29$__["t"])(locale, STATUS_TKEYS[status])
                                     }, void 0, false, {
                                         fileName: "[project]/src/components/demo-tracker.tsx",
-                                        lineNumber: 330,
+                                        lineNumber: 331,
                                         columnNumber: 19
                                     }, this),
                                     /*#__PURE__*/ (0, __TURBOPACK__imported__module__$5b$project$5d2f$node_modules$2f$next$2f$dist$2f$compiled$2f$react$2f$jsx$2d$dev$2d$runtime$2e$js__$5b$app$2d$client$5d$__$28$ecmascript$29$__["jsxDEV"])("span", {
@@ -6093,13 +6094,13 @@ function DemoTracker() {
                                         children: columnDemos.length
                                     }, void 0, false, {
                                         fileName: "[project]/src/components/demo-tracker.tsx",
-                                        lineNumber: 333,
+                                        lineNumber: 334,
                                         columnNumber: 19
                                     }, this)
                                 ]
                             }, void 0, true, {
                                 fileName: "[project]/src/components/demo-tracker.tsx",
-                                lineNumber: 328,
+                                lineNumber: 329,
                                 columnNumber: 17
                             }, this),
                             columnDemos.map((demo)=>{
@@ -6119,7 +6120,7 @@ function DemoTracker() {
                                                         children: demo.trackName
                                                     }, void 0, false, {
                                                         fileName: "[project]/src/components/demo-tracker.tsx",
-                                                        lineNumber: 348,
+                                                        lineNumber: 349,
                                                         columnNumber: 27
                                                     }, this),
                                                     /*#__PURE__*/ (0, __TURBOPACK__imported__module__$5b$project$5d2f$node_modules$2f$next$2f$dist$2f$compiled$2f$react$2f$jsx$2d$dev$2d$runtime$2e$js__$5b$app$2d$client$5d$__$28$ecmascript$29$__["jsxDEV"])("div", {
@@ -6138,12 +6139,12 @@ function DemoTracker() {
                                                                     className: "h-3 w-3"
                                                                 }, void 0, false, {
                                                                     fileName: "[project]/src/components/demo-tracker.tsx",
-                                                                    lineNumber: 351,
+                                                                    lineNumber: 352,
                                                                     columnNumber: 31
                                                                 }, this)
                                                             }, void 0, false, {
                                                                 fileName: "[project]/src/components/demo-tracker.tsx",
-                                                                lineNumber: 350,
+                                                                lineNumber: 351,
                                                                 columnNumber: 29
                                                             }, this),
                                                             canAdvance(demo.status) && /*#__PURE__*/ (0, __TURBOPACK__imported__module__$5b$project$5d2f$node_modules$2f$next$2f$dist$2f$compiled$2f$react$2f$jsx$2d$dev$2d$runtime$2e$js__$5b$app$2d$client$5d$__$28$ecmascript$29$__["jsxDEV"])(__TURBOPACK__imported__module__$5b$project$5d2f$src$2f$components$2f$ui$2f$button$2e$tsx__$5b$app$2d$client$5d$__$28$ecmascript$29$__["Button"], {
@@ -6159,12 +6160,12 @@ function DemoTracker() {
                                                                     className: "h-3 w-3"
                                                                 }, void 0, false, {
                                                                     fileName: "[project]/src/components/demo-tracker.tsx",
-                                                                    lineNumber: 355,
+                                                                    lineNumber: 356,
                                                                     columnNumber: 33
                                                                 }, this)
                                                             }, void 0, false, {
                                                                 fileName: "[project]/src/components/demo-tracker.tsx",
-                                                                lineNumber: 354,
+                                                                lineNumber: 355,
                                                                 columnNumber: 31
                                                             }, this),
                                                             /*#__PURE__*/ (0, __TURBOPACK__imported__module__$5b$project$5d2f$node_modules$2f$next$2f$dist$2f$compiled$2f$react$2f$jsx$2d$dev$2d$runtime$2e$js__$5b$app$2d$client$5d$__$28$ecmascript$29$__["jsxDEV"])(__TURBOPACK__imported__module__$5b$project$5d2f$src$2f$components$2f$ui$2f$button$2e$tsx__$5b$app$2d$client$5d$__$28$ecmascript$29$__["Button"], {
@@ -6179,12 +6180,12 @@ function DemoTracker() {
                                                                     className: "h-3 w-3"
                                                                 }, void 0, false, {
                                                                     fileName: "[project]/src/components/demo-tracker.tsx",
-                                                                    lineNumber: 359,
+                                                                    lineNumber: 360,
                                                                     columnNumber: 31
                                                                 }, this)
                                                             }, void 0, false, {
                                                                 fileName: "[project]/src/components/demo-tracker.tsx",
-                                                                lineNumber: 358,
+                                                                lineNumber: 359,
                                                                 columnNumber: 29
                                                             }, this),
                                                             /*#__PURE__*/ (0, __TURBOPACK__imported__module__$5b$project$5d2f$node_modules$2f$next$2f$dist$2f$compiled$2f$react$2f$jsx$2d$dev$2d$runtime$2e$js__$5b$app$2d$client$5d$__$28$ecmascript$29$__["jsxDEV"])(__TURBOPACK__imported__module__$5b$project$5d2f$src$2f$components$2f$ui$2f$button$2e$tsx__$5b$app$2d$client$5d$__$28$ecmascript$29$__["Button"], {
@@ -6199,24 +6200,24 @@ function DemoTracker() {
                                                                     className: "h-3 w-3"
                                                                 }, void 0, false, {
                                                                     fileName: "[project]/src/components/demo-tracker.tsx",
-                                                                    lineNumber: 362,
+                                                                    lineNumber: 363,
                                                                     columnNumber: 31
                                                                 }, this)
                                                             }, void 0, false, {
                                                                 fileName: "[project]/src/components/demo-tracker.tsx",
-                                                                lineNumber: 361,
+                                                                lineNumber: 362,
                                                                 columnNumber: 29
                                                             }, this)
                                                         ]
                                                     }, void 0, true, {
                                                         fileName: "[project]/src/components/demo-tracker.tsx",
-                                                        lineNumber: 349,
+                                                        lineNumber: 350,
                                                         columnNumber: 27
                                                     }, this)
                                                 ]
                                             }, void 0, true, {
                                                 fileName: "[project]/src/components/demo-tracker.tsx",
-                                                lineNumber: 347,
+                                                lineNumber: 348,
                                                 columnNumber: 25
                                             }, this),
                                             /*#__PURE__*/ (0, __TURBOPACK__imported__module__$5b$project$5d2f$node_modules$2f$next$2f$dist$2f$compiled$2f$react$2f$jsx$2d$dev$2d$runtime$2e$js__$5b$app$2d$client$5d$__$28$ecmascript$29$__["jsxDEV"])("p", {
@@ -6228,7 +6229,7 @@ function DemoTracker() {
                                                 children: getLabelName(demo.labelId)
                                             }, void 0, false, {
                                                 fileName: "[project]/src/components/demo-tracker.tsx",
-                                                lineNumber: 366,
+                                                lineNumber: 367,
                                                 columnNumber: 25
                                             }, this),
                                             demo.sentDate && /*#__PURE__*/ (0, __TURBOPACK__imported__module__$5b$project$5d2f$node_modules$2f$next$2f$dist$2f$compiled$2f$react$2f$jsx$2d$dev$2d$runtime$2e$js__$5b$app$2d$client$5d$__$28$ecmascript$29$__["jsxDEV"])("div", {
@@ -6238,7 +6239,7 @@ function DemoTracker() {
                                                         className: "h-3 w-3"
                                                     }, void 0, false, {
                                                         fileName: "[project]/src/components/demo-tracker.tsx",
-                                                        lineNumber: 374,
+                                                        lineNumber: 375,
                                                         columnNumber: 29
                                                     }, this),
                                                     /*#__PURE__*/ (0, __TURBOPACK__imported__module__$5b$project$5d2f$node_modules$2f$next$2f$dist$2f$compiled$2f$react$2f$jsx$2d$dev$2d$runtime$2e$js__$5b$app$2d$client$5d$__$28$ecmascript$29$__["jsxDEV"])("span", {
@@ -6254,19 +6255,19 @@ function DemoTracker() {
                                                                 ]
                                                             }, void 0, true, {
                                                                 fileName: "[project]/src/components/demo-tracker.tsx",
-                                                                lineNumber: 375,
+                                                                lineNumber: 376,
                                                                 columnNumber: 73
                                                             }, this)
                                                         ]
                                                     }, void 0, true, {
                                                         fileName: "[project]/src/components/demo-tracker.tsx",
-                                                        lineNumber: 375,
+                                                        lineNumber: 376,
                                                         columnNumber: 29
                                                     }, this)
                                                 ]
                                             }, void 0, true, {
                                                 fileName: "[project]/src/components/demo-tracker.tsx",
-                                                lineNumber: 373,
+                                                lineNumber: 374,
                                                 columnNumber: 27
                                             }, this),
                                             demo.pitchText && /*#__PURE__*/ (0, __TURBOPACK__imported__module__$5b$project$5d2f$node_modules$2f$next$2f$dist$2f$compiled$2f$react$2f$jsx$2d$dev$2d$runtime$2e$js__$5b$app$2d$client$5d$__$28$ecmascript$29$__["jsxDEV"])("div", {
@@ -6276,7 +6277,7 @@ function DemoTracker() {
                                                         className: "h-2.5 w-2.5"
                                                     }, void 0, false, {
                                                         fileName: "[project]/src/components/demo-tracker.tsx",
-                                                        lineNumber: 380,
+                                                        lineNumber: 381,
                                                         columnNumber: 29
                                                     }, this),
                                                     " ",
@@ -6284,7 +6285,7 @@ function DemoTracker() {
                                                 ]
                                             }, void 0, true, {
                                                 fileName: "[project]/src/components/demo-tracker.tsx",
-                                                lineNumber: 379,
+                                                lineNumber: 380,
                                                 columnNumber: 27
                                             }, this),
                                             isOverdue && /*#__PURE__*/ (0, __TURBOPACK__imported__module__$5b$project$5d2f$node_modules$2f$next$2f$dist$2f$compiled$2f$react$2f$jsx$2d$dev$2d$runtime$2e$js__$5b$app$2d$client$5d$__$28$ecmascript$29$__["jsxDEV"])("div", {
@@ -6294,25 +6295,25 @@ function DemoTracker() {
                                                         className: "h-3 w-3"
                                                     }, void 0, false, {
                                                         fileName: "[project]/src/components/demo-tracker.tsx",
-                                                        lineNumber: 385,
+                                                        lineNumber: 386,
                                                         columnNumber: 29
                                                     }, this),
                                                     (0, __TURBOPACK__imported__module__$5b$project$5d2f$src$2f$lib$2f$i18n$2e$ts__$5b$app$2d$client$5d$__$28$ecmascript$29$__["t"])(locale, "demos.followUp")
                                                 ]
                                             }, void 0, true, {
                                                 fileName: "[project]/src/components/demo-tracker.tsx",
-                                                lineNumber: 384,
+                                                lineNumber: 385,
                                                 columnNumber: 27
                                             }, this)
                                         ]
                                     }, void 0, true, {
                                         fileName: "[project]/src/components/demo-tracker.tsx",
-                                        lineNumber: 346,
+                                        lineNumber: 347,
                                         columnNumber: 23
                                     }, this)
                                 }, demo.id, false, {
                                     fileName: "[project]/src/components/demo-tracker.tsx",
-                                    lineNumber: 341,
+                                    lineNumber: 342,
                                     columnNumber: 21
                                 }, this);
                             }),
@@ -6321,19 +6322,19 @@ function DemoTracker() {
                                 children: "—"
                             }, void 0, false, {
                                 fileName: "[project]/src/components/demo-tracker.tsx",
-                                lineNumber: 393,
+                                lineNumber: 394,
                                 columnNumber: 46
                             }, this)
                         ]
                     }, status, true, {
                         fileName: "[project]/src/components/demo-tracker.tsx",
-                        lineNumber: 327,
+                        lineNumber: 328,
                         columnNumber: 15
                     }, this);
                 })
             }, void 0, false, {
                 fileName: "[project]/src/components/demo-tracker.tsx",
-                lineNumber: 322,
+                lineNumber: 323,
                 columnNumber: 9
             }, this),
             viewMode === "table" && /*#__PURE__*/ (0, __TURBOPACK__imported__module__$5b$project$5d2f$node_modules$2f$next$2f$dist$2f$compiled$2f$react$2f$jsx$2d$dev$2d$runtime$2e$js__$5b$app$2d$client$5d$__$28$ecmascript$29$__["jsxDEV"])("div", {
@@ -6353,7 +6354,7 @@ function DemoTracker() {
                                             children: (0, __TURBOPACK__imported__module__$5b$project$5d2f$src$2f$lib$2f$i18n$2e$ts__$5b$app$2d$client$5d$__$28$ecmascript$29$__["t"])(locale, "demos.trackName")
                                         }, void 0, false, {
                                             fileName: "[project]/src/components/demo-tracker.tsx",
-                                            lineNumber: 407,
+                                            lineNumber: 408,
                                             columnNumber: 19
                                         }, this),
                                         /*#__PURE__*/ (0, __TURBOPACK__imported__module__$5b$project$5d2f$node_modules$2f$next$2f$dist$2f$compiled$2f$react$2f$jsx$2d$dev$2d$runtime$2e$js__$5b$app$2d$client$5d$__$28$ecmascript$29$__["jsxDEV"])("th", {
@@ -6361,7 +6362,7 @@ function DemoTracker() {
                                             children: (0, __TURBOPACK__imported__module__$5b$project$5d2f$src$2f$lib$2f$i18n$2e$ts__$5b$app$2d$client$5d$__$28$ecmascript$29$__["t"])(locale, "demos.targetLabel")
                                         }, void 0, false, {
                                             fileName: "[project]/src/components/demo-tracker.tsx",
-                                            lineNumber: 408,
+                                            lineNumber: 409,
                                             columnNumber: 19
                                         }, this),
                                         /*#__PURE__*/ (0, __TURBOPACK__imported__module__$5b$project$5d2f$node_modules$2f$next$2f$dist$2f$compiled$2f$react$2f$jsx$2d$dev$2d$runtime$2e$js__$5b$app$2d$client$5d$__$28$ecmascript$29$__["jsxDEV"])("th", {
@@ -6369,7 +6370,7 @@ function DemoTracker() {
                                             children: (0, __TURBOPACK__imported__module__$5b$project$5d2f$src$2f$lib$2f$i18n$2e$ts__$5b$app$2d$client$5d$__$28$ecmascript$29$__["t"])(locale, "labels.status")
                                         }, void 0, false, {
                                             fileName: "[project]/src/components/demo-tracker.tsx",
-                                            lineNumber: 409,
+                                            lineNumber: 410,
                                             columnNumber: 19
                                         }, this),
                                         /*#__PURE__*/ (0, __TURBOPACK__imported__module__$5b$project$5d2f$node_modules$2f$next$2f$dist$2f$compiled$2f$react$2f$jsx$2d$dev$2d$runtime$2e$js__$5b$app$2d$client$5d$__$28$ecmascript$29$__["jsxDEV"])("th", {
@@ -6377,7 +6378,7 @@ function DemoTracker() {
                                             children: (0, __TURBOPACK__imported__module__$5b$project$5d2f$src$2f$lib$2f$i18n$2e$ts__$5b$app$2d$client$5d$__$28$ecmascript$29$__["t"])(locale, "demos.sentDate")
                                         }, void 0, false, {
                                             fileName: "[project]/src/components/demo-tracker.tsx",
-                                            lineNumber: 410,
+                                            lineNumber: 411,
                                             columnNumber: 19
                                         }, this),
                                         /*#__PURE__*/ (0, __TURBOPACK__imported__module__$5b$project$5d2f$node_modules$2f$next$2f$dist$2f$compiled$2f$react$2f$jsx$2d$dev$2d$runtime$2e$js__$5b$app$2d$client$5d$__$28$ecmascript$29$__["jsxDEV"])("th", {
@@ -6385,7 +6386,7 @@ function DemoTracker() {
                                             children: (0, __TURBOPACK__imported__module__$5b$project$5d2f$src$2f$lib$2f$i18n$2e$ts__$5b$app$2d$client$5d$__$28$ecmascript$29$__["t"])(locale, "demos.daysSince")
                                         }, void 0, false, {
                                             fileName: "[project]/src/components/demo-tracker.tsx",
-                                            lineNumber: 411,
+                                            lineNumber: 412,
                                             columnNumber: 19
                                         }, this),
                                         /*#__PURE__*/ (0, __TURBOPACK__imported__module__$5b$project$5d2f$node_modules$2f$next$2f$dist$2f$compiled$2f$react$2f$jsx$2d$dev$2d$runtime$2e$js__$5b$app$2d$client$5d$__$28$ecmascript$29$__["jsxDEV"])("th", {
@@ -6393,18 +6394,18 @@ function DemoTracker() {
                                             children: (0, __TURBOPACK__imported__module__$5b$project$5d2f$src$2f$lib$2f$i18n$2e$ts__$5b$app$2d$client$5d$__$28$ecmascript$29$__["t"])(locale, "demos.actions")
                                         }, void 0, false, {
                                             fileName: "[project]/src/components/demo-tracker.tsx",
-                                            lineNumber: 412,
+                                            lineNumber: 413,
                                             columnNumber: 19
                                         }, this)
                                     ]
                                 }, void 0, true, {
                                     fileName: "[project]/src/components/demo-tracker.tsx",
-                                    lineNumber: 406,
+                                    lineNumber: 407,
                                     columnNumber: 17
                                 }, this)
                             }, void 0, false, {
                                 fileName: "[project]/src/components/demo-tracker.tsx",
-                                lineNumber: 405,
+                                lineNumber: 406,
                                 columnNumber: 15
                             }, this),
                             /*#__PURE__*/ (0, __TURBOPACK__imported__module__$5b$project$5d2f$node_modules$2f$next$2f$dist$2f$compiled$2f$react$2f$jsx$2d$dev$2d$runtime$2e$js__$5b$app$2d$client$5d$__$28$ecmascript$29$__["jsxDEV"])("tbody", {
@@ -6426,7 +6427,7 @@ function DemoTracker() {
                                                             children: demo.trackName
                                                         }, void 0, false, {
                                                             fileName: "[project]/src/components/demo-tracker.tsx",
-                                                            lineNumber: 427,
+                                                            lineNumber: 428,
                                                             columnNumber: 25
                                                         }, this),
                                                         demo.artistName && /*#__PURE__*/ (0, __TURBOPACK__imported__module__$5b$project$5d2f$node_modules$2f$next$2f$dist$2f$compiled$2f$react$2f$jsx$2d$dev$2d$runtime$2e$js__$5b$app$2d$client$5d$__$28$ecmascript$29$__["jsxDEV"])("div", {
@@ -6434,7 +6435,7 @@ function DemoTracker() {
                                                             children: demo.artistName
                                                         }, void 0, false, {
                                                             fileName: "[project]/src/components/demo-tracker.tsx",
-                                                            lineNumber: 428,
+                                                            lineNumber: 429,
                                                             columnNumber: 45
                                                         }, this),
                                                         demo.notes && /*#__PURE__*/ (0, __TURBOPACK__imported__module__$5b$project$5d2f$node_modules$2f$next$2f$dist$2f$compiled$2f$react$2f$jsx$2d$dev$2d$runtime$2e$js__$5b$app$2d$client$5d$__$28$ecmascript$29$__["jsxDEV"])("div", {
@@ -6442,13 +6443,13 @@ function DemoTracker() {
                                                             children: demo.notes
                                                         }, void 0, false, {
                                                             fileName: "[project]/src/components/demo-tracker.tsx",
-                                                            lineNumber: 429,
+                                                            lineNumber: 430,
                                                             columnNumber: 40
                                                         }, this)
                                                     ]
                                                 }, void 0, true, {
                                                     fileName: "[project]/src/components/demo-tracker.tsx",
-                                                    lineNumber: 426,
+                                                    lineNumber: 427,
                                                     columnNumber: 23
                                                 }, this),
                                                 /*#__PURE__*/ (0, __TURBOPACK__imported__module__$5b$project$5d2f$node_modules$2f$next$2f$dist$2f$compiled$2f$react$2f$jsx$2d$dev$2d$runtime$2e$js__$5b$app$2d$client$5d$__$28$ecmascript$29$__["jsxDEV"])("td", {
@@ -6462,12 +6463,12 @@ function DemoTracker() {
                                                         children: getLabelName(demo.labelId)
                                                     }, void 0, false, {
                                                         fileName: "[project]/src/components/demo-tracker.tsx",
-                                                        lineNumber: 432,
+                                                        lineNumber: 433,
                                                         columnNumber: 25
                                                     }, this)
                                                 }, void 0, false, {
                                                     fileName: "[project]/src/components/demo-tracker.tsx",
-                                                    lineNumber: 431,
+                                                    lineNumber: 432,
                                                     columnNumber: 23
                                                 }, this),
                                                 /*#__PURE__*/ (0, __TURBOPACK__imported__module__$5b$project$5d2f$node_modules$2f$next$2f$dist$2f$compiled$2f$react$2f$jsx$2d$dev$2d$runtime$2e$js__$5b$app$2d$client$5d$__$28$ecmascript$29$__["jsxDEV"])("td", {
@@ -6482,18 +6483,18 @@ function DemoTracker() {
                                                                 children: (0, __TURBOPACK__imported__module__$5b$project$5d2f$src$2f$lib$2f$i18n$2e$ts__$5b$app$2d$client$5d$__$28$ecmascript$29$__["t"])(locale, STATUS_TKEYS[demo.status])
                                                             }, void 0, false, {
                                                                 fileName: "[project]/src/components/demo-tracker.tsx",
-                                                                lineNumber: 442,
+                                                                lineNumber: 443,
                                                                 columnNumber: 27
                                                             }, this)
                                                         ]
                                                     }, void 0, true, {
                                                         fileName: "[project]/src/components/demo-tracker.tsx",
-                                                        lineNumber: 440,
+                                                        lineNumber: 441,
                                                         columnNumber: 25
                                                     }, this)
                                                 }, void 0, false, {
                                                     fileName: "[project]/src/components/demo-tracker.tsx",
-                                                    lineNumber: 439,
+                                                    lineNumber: 440,
                                                     columnNumber: 23
                                                 }, this),
                                                 /*#__PURE__*/ (0, __TURBOPACK__imported__module__$5b$project$5d2f$node_modules$2f$next$2f$dist$2f$compiled$2f$react$2f$jsx$2d$dev$2d$runtime$2e$js__$5b$app$2d$client$5d$__$28$ecmascript$29$__["jsxDEV"])("td", {
@@ -6501,7 +6502,7 @@ function DemoTracker() {
                                                     children: demo.sentDate ?? "—"
                                                 }, void 0, false, {
                                                     fileName: "[project]/src/components/demo-tracker.tsx",
-                                                    lineNumber: 445,
+                                                    lineNumber: 446,
                                                     columnNumber: 23
                                                 }, this),
                                                 /*#__PURE__*/ (0, __TURBOPACK__imported__module__$5b$project$5d2f$node_modules$2f$next$2f$dist$2f$compiled$2f$react$2f$jsx$2d$dev$2d$runtime$2e$js__$5b$app$2d$client$5d$__$28$ecmascript$29$__["jsxDEV"])("td", {
@@ -6514,19 +6515,19 @@ function DemoTracker() {
                                                         ]
                                                     }, void 0, true, {
                                                         fileName: "[project]/src/components/demo-tracker.tsx",
-                                                        lineNumber: 448,
+                                                        lineNumber: 449,
                                                         columnNumber: 27
                                                     }, this) : /*#__PURE__*/ (0, __TURBOPACK__imported__module__$5b$project$5d2f$node_modules$2f$next$2f$dist$2f$compiled$2f$react$2f$jsx$2d$dev$2d$runtime$2e$js__$5b$app$2d$client$5d$__$28$ecmascript$29$__["jsxDEV"])("span", {
                                                         className: "text-muted-foreground",
                                                         children: "—"
                                                     }, void 0, false, {
                                                         fileName: "[project]/src/components/demo-tracker.tsx",
-                                                        lineNumber: 451,
+                                                        lineNumber: 452,
                                                         columnNumber: 29
                                                     }, this)
                                                 }, void 0, false, {
                                                     fileName: "[project]/src/components/demo-tracker.tsx",
-                                                    lineNumber: 446,
+                                                    lineNumber: 447,
                                                     columnNumber: 23
                                                 }, this),
                                                 /*#__PURE__*/ (0, __TURBOPACK__imported__module__$5b$project$5d2f$node_modules$2f$next$2f$dist$2f$compiled$2f$react$2f$jsx$2d$dev$2d$runtime$2e$js__$5b$app$2d$client$5d$__$28$ecmascript$29$__["jsxDEV"])("td", {
@@ -6547,12 +6548,12 @@ function DemoTracker() {
                                                                     className: "h-3.5 w-3.5"
                                                                 }, void 0, false, {
                                                                     fileName: "[project]/src/components/demo-tracker.tsx",
-                                                                    lineNumber: 456,
+                                                                    lineNumber: 457,
                                                                     columnNumber: 29
                                                                 }, this)
                                                             }, void 0, false, {
                                                                 fileName: "[project]/src/components/demo-tracker.tsx",
-                                                                lineNumber: 455,
+                                                                lineNumber: 456,
                                                                 columnNumber: 27
                                                             }, this),
                                                             canAdvance(demo.status) && /*#__PURE__*/ (0, __TURBOPACK__imported__module__$5b$project$5d2f$node_modules$2f$next$2f$dist$2f$compiled$2f$react$2f$jsx$2d$dev$2d$runtime$2e$js__$5b$app$2d$client$5d$__$28$ecmascript$29$__["jsxDEV"])(__TURBOPACK__imported__module__$5b$project$5d2f$src$2f$components$2f$ui$2f$button$2e$tsx__$5b$app$2d$client$5d$__$28$ecmascript$29$__["Button"], {
@@ -6568,12 +6569,12 @@ function DemoTracker() {
                                                                     className: "h-3.5 w-3.5"
                                                                 }, void 0, false, {
                                                                     fileName: "[project]/src/components/demo-tracker.tsx",
-                                                                    lineNumber: 460,
+                                                                    lineNumber: 461,
                                                                     columnNumber: 31
                                                                 }, this)
                                                             }, void 0, false, {
                                                                 fileName: "[project]/src/components/demo-tracker.tsx",
-                                                                lineNumber: 459,
+                                                                lineNumber: 460,
                                                                 columnNumber: 29
                                                             }, this),
                                                             /*#__PURE__*/ (0, __TURBOPACK__imported__module__$5b$project$5d2f$node_modules$2f$next$2f$dist$2f$compiled$2f$react$2f$jsx$2d$dev$2d$runtime$2e$js__$5b$app$2d$client$5d$__$28$ecmascript$29$__["jsxDEV"])(__TURBOPACK__imported__module__$5b$project$5d2f$src$2f$components$2f$ui$2f$button$2e$tsx__$5b$app$2d$client$5d$__$28$ecmascript$29$__["Button"], {
@@ -6588,12 +6589,12 @@ function DemoTracker() {
                                                                     className: "h-3.5 w-3.5"
                                                                 }, void 0, false, {
                                                                     fileName: "[project]/src/components/demo-tracker.tsx",
-                                                                    lineNumber: 464,
+                                                                    lineNumber: 465,
                                                                     columnNumber: 29
                                                                 }, this)
                                                             }, void 0, false, {
                                                                 fileName: "[project]/src/components/demo-tracker.tsx",
-                                                                lineNumber: 463,
+                                                                lineNumber: 464,
                                                                 columnNumber: 27
                                                             }, this),
                                                             /*#__PURE__*/ (0, __TURBOPACK__imported__module__$5b$project$5d2f$node_modules$2f$next$2f$dist$2f$compiled$2f$react$2f$jsx$2d$dev$2d$runtime$2e$js__$5b$app$2d$client$5d$__$28$ecmascript$29$__["jsxDEV"])(__TURBOPACK__imported__module__$5b$project$5d2f$src$2f$components$2f$ui$2f$button$2e$tsx__$5b$app$2d$client$5d$__$28$ecmascript$29$__["Button"], {
@@ -6608,29 +6609,29 @@ function DemoTracker() {
                                                                     className: "h-3.5 w-3.5"
                                                                 }, void 0, false, {
                                                                     fileName: "[project]/src/components/demo-tracker.tsx",
-                                                                    lineNumber: 467,
+                                                                    lineNumber: 468,
                                                                     columnNumber: 29
                                                                 }, this)
                                                             }, void 0, false, {
                                                                 fileName: "[project]/src/components/demo-tracker.tsx",
-                                                                lineNumber: 466,
+                                                                lineNumber: 467,
                                                                 columnNumber: 27
                                                             }, this)
                                                         ]
                                                     }, void 0, true, {
                                                         fileName: "[project]/src/components/demo-tracker.tsx",
-                                                        lineNumber: 454,
+                                                        lineNumber: 455,
                                                         columnNumber: 25
                                                     }, this)
                                                 }, void 0, false, {
                                                     fileName: "[project]/src/components/demo-tracker.tsx",
-                                                    lineNumber: 453,
+                                                    lineNumber: 454,
                                                     columnNumber: 23
                                                 }, this)
                                             ]
                                         }, demo.id, true, {
                                             fileName: "[project]/src/components/demo-tracker.tsx",
-                                            lineNumber: 421,
+                                            lineNumber: 422,
                                             columnNumber: 21
                                         }, this);
                                     }),
@@ -6643,7 +6644,7 @@ function DemoTracker() {
                                                     className: "h-10 w-10 mx-auto mb-2 opacity-30"
                                                 }, void 0, false, {
                                                     fileName: "[project]/src/components/demo-tracker.tsx",
-                                                    lineNumber: 476,
+                                                    lineNumber: 477,
                                                     columnNumber: 21
                                                 }, this),
                                                 /*#__PURE__*/ (0, __TURBOPACK__imported__module__$5b$project$5d2f$node_modules$2f$next$2f$dist$2f$compiled$2f$react$2f$jsx$2d$dev$2d$runtime$2e$js__$5b$app$2d$client$5d$__$28$ecmascript$29$__["jsxDEV"])("p", {
@@ -6651,40 +6652,40 @@ function DemoTracker() {
                                                     children: (0, __TURBOPACK__imported__module__$5b$project$5d2f$src$2f$lib$2f$i18n$2e$ts__$5b$app$2d$client$5d$__$28$ecmascript$29$__["t"])(locale, "demos.noDemos")
                                                 }, void 0, false, {
                                                     fileName: "[project]/src/components/demo-tracker.tsx",
-                                                    lineNumber: 477,
+                                                    lineNumber: 478,
                                                     columnNumber: 21
                                                 }, this)
                                             ]
                                         }, void 0, true, {
                                             fileName: "[project]/src/components/demo-tracker.tsx",
-                                            lineNumber: 475,
+                                            lineNumber: 476,
                                             columnNumber: 23
                                         }, this)
                                     }, void 0, false, {
                                         fileName: "[project]/src/components/demo-tracker.tsx",
-                                        lineNumber: 475,
+                                        lineNumber: 476,
                                         columnNumber: 19
                                     }, this)
                                 ]
                             }, void 0, true, {
                                 fileName: "[project]/src/components/demo-tracker.tsx",
-                                lineNumber: 415,
+                                lineNumber: 416,
                                 columnNumber: 15
                             }, this)
                         ]
                     }, void 0, true, {
                         fileName: "[project]/src/components/demo-tracker.tsx",
-                        lineNumber: 404,
+                        lineNumber: 405,
                         columnNumber: 13
                     }, this)
                 }, void 0, false, {
                     fileName: "[project]/src/components/demo-tracker.tsx",
-                    lineNumber: 403,
+                    lineNumber: 404,
                     columnNumber: 11
                 }, this)
             }, void 0, false, {
                 fileName: "[project]/src/components/demo-tracker.tsx",
-                lineNumber: 402,
+                lineNumber: 403,
                 columnNumber: 9
             }, this),
             /*#__PURE__*/ (0, __TURBOPACK__imported__module__$5b$project$5d2f$node_modules$2f$next$2f$dist$2f$compiled$2f$react$2f$jsx$2d$dev$2d$runtime$2e$js__$5b$app$2d$client$5d$__$28$ecmascript$29$__["jsxDEV"])(DemoDetailDialog, {
@@ -6694,7 +6695,7 @@ function DemoTracker() {
                 getLabelName: getLabelName
             }, void 0, false, {
                 fileName: "[project]/src/components/demo-tracker.tsx",
-                lineNumber: 487,
+                lineNumber: 488,
                 columnNumber: 7
             }, this),
             /*#__PURE__*/ (0, __TURBOPACK__imported__module__$5b$project$5d2f$node_modules$2f$next$2f$dist$2f$compiled$2f$react$2f$jsx$2d$dev$2d$runtime$2e$js__$5b$app$2d$client$5d$__$28$ecmascript$29$__["jsxDEV"])(__TURBOPACK__imported__module__$5b$project$5d2f$src$2f$components$2f$ui$2f$dialog$2e$tsx__$5b$app$2d$client$5d$__$28$ecmascript$29$__["Dialog"], {
@@ -6708,12 +6709,12 @@ function DemoTracker() {
                                 children: editingDemo ? (0, __TURBOPACK__imported__module__$5b$project$5d2f$src$2f$lib$2f$i18n$2e$ts__$5b$app$2d$client$5d$__$28$ecmascript$29$__["t"])(locale, "demos.editDemo") : (0, __TURBOPACK__imported__module__$5b$project$5d2f$src$2f$lib$2f$i18n$2e$ts__$5b$app$2d$client$5d$__$28$ecmascript$29$__["t"])(locale, "demos.addDemo")
                             }, void 0, false, {
                                 fileName: "[project]/src/components/demo-tracker.tsx",
-                                lineNumber: 493,
+                                lineNumber: 494,
                                 columnNumber: 13
                             }, this)
                         }, void 0, false, {
                             fileName: "[project]/src/components/demo-tracker.tsx",
-                            lineNumber: 492,
+                            lineNumber: 493,
                             columnNumber: 11
                         }, this),
                         /*#__PURE__*/ (0, __TURBOPACK__imported__module__$5b$project$5d2f$node_modules$2f$next$2f$dist$2f$compiled$2f$react$2f$jsx$2d$dev$2d$runtime$2e$js__$5b$app$2d$client$5d$__$28$ecmascript$29$__["jsxDEV"])("div", {
@@ -6727,7 +6728,7 @@ function DemoTracker() {
                                             children: (0, __TURBOPACK__imported__module__$5b$project$5d2f$src$2f$lib$2f$i18n$2e$ts__$5b$app$2d$client$5d$__$28$ecmascript$29$__["t"])(locale, "demos.trackName")
                                         }, void 0, false, {
                                             fileName: "[project]/src/components/demo-tracker.tsx",
-                                            lineNumber: 497,
+                                            lineNumber: 498,
                                             columnNumber: 15
                                         }, this),
                                         /*#__PURE__*/ (0, __TURBOPACK__imported__module__$5b$project$5d2f$node_modules$2f$next$2f$dist$2f$compiled$2f$react$2f$jsx$2d$dev$2d$runtime$2e$js__$5b$app$2d$client$5d$__$28$ecmascript$29$__["jsxDEV"])(__TURBOPACK__imported__module__$5b$project$5d2f$src$2f$components$2f$ui$2f$input$2e$tsx__$5b$app$2d$client$5d$__$28$ecmascript$29$__["Input"], {
@@ -6737,13 +6738,13 @@ function DemoTracker() {
                                             className: "bg-secondary/50"
                                         }, void 0, false, {
                                             fileName: "[project]/src/components/demo-tracker.tsx",
-                                            lineNumber: 498,
+                                            lineNumber: 499,
                                             columnNumber: 15
                                         }, this)
                                     ]
                                 }, void 0, true, {
                                     fileName: "[project]/src/components/demo-tracker.tsx",
-                                    lineNumber: 496,
+                                    lineNumber: 497,
                                     columnNumber: 13
                                 }, this),
                                 /*#__PURE__*/ (0, __TURBOPACK__imported__module__$5b$project$5d2f$node_modules$2f$next$2f$dist$2f$compiled$2f$react$2f$jsx$2d$dev$2d$runtime$2e$js__$5b$app$2d$client$5d$__$28$ecmascript$29$__["jsxDEV"])("div", {
@@ -6757,7 +6758,7 @@ function DemoTracker() {
                                                     children: (0, __TURBOPACK__imported__module__$5b$project$5d2f$src$2f$lib$2f$i18n$2e$ts__$5b$app$2d$client$5d$__$28$ecmascript$29$__["t"])(locale, "demos.targetLabel")
                                                 }, void 0, false, {
                                                     fileName: "[project]/src/components/demo-tracker.tsx",
-                                                    lineNumber: 502,
+                                                    lineNumber: 503,
                                                     columnNumber: 17
                                                 }, this),
                                                 /*#__PURE__*/ (0, __TURBOPACK__imported__module__$5b$project$5d2f$node_modules$2f$next$2f$dist$2f$compiled$2f$react$2f$jsx$2d$dev$2d$runtime$2e$js__$5b$app$2d$client$5d$__$28$ecmascript$29$__["jsxDEV"])(__TURBOPACK__imported__module__$5b$project$5d2f$src$2f$components$2f$ui$2f$select$2e$tsx__$5b$app$2d$client$5d$__$28$ecmascript$29$__["Select"], {
@@ -6770,12 +6771,12 @@ function DemoTracker() {
                                                                 placeholder: (0, __TURBOPACK__imported__module__$5b$project$5d2f$src$2f$lib$2f$i18n$2e$ts__$5b$app$2d$client$5d$__$28$ecmascript$29$__["t"])(locale, "demos.selectLabel")
                                                             }, void 0, false, {
                                                                 fileName: "[project]/src/components/demo-tracker.tsx",
-                                                                lineNumber: 504,
+                                                                lineNumber: 505,
                                                                 columnNumber: 62
                                                             }, this)
                                                         }, void 0, false, {
                                                             fileName: "[project]/src/components/demo-tracker.tsx",
-                                                            lineNumber: 504,
+                                                            lineNumber: 505,
                                                             columnNumber: 19
                                                         }, this),
                                                         /*#__PURE__*/ (0, __TURBOPACK__imported__module__$5b$project$5d2f$node_modules$2f$next$2f$dist$2f$compiled$2f$react$2f$jsx$2d$dev$2d$runtime$2e$js__$5b$app$2d$client$5d$__$28$ecmascript$29$__["jsxDEV"])(__TURBOPACK__imported__module__$5b$project$5d2f$src$2f$components$2f$ui$2f$select$2e$tsx__$5b$app$2d$client$5d$__$28$ecmascript$29$__["SelectContent"], {
@@ -6784,24 +6785,24 @@ function DemoTracker() {
                                                                     children: l.name
                                                                 }, l.id, false, {
                                                                     fileName: "[project]/src/components/demo-tracker.tsx",
-                                                                    lineNumber: 507,
+                                                                    lineNumber: 508,
                                                                     columnNumber: 23
                                                                 }, this))
                                                         }, void 0, false, {
                                                             fileName: "[project]/src/components/demo-tracker.tsx",
-                                                            lineNumber: 505,
+                                                            lineNumber: 506,
                                                             columnNumber: 19
                                                         }, this)
                                                     ]
                                                 }, void 0, true, {
                                                     fileName: "[project]/src/components/demo-tracker.tsx",
-                                                    lineNumber: 503,
+                                                    lineNumber: 504,
                                                     columnNumber: 17
                                                 }, this)
                                             ]
                                         }, void 0, true, {
                                             fileName: "[project]/src/components/demo-tracker.tsx",
-                                            lineNumber: 501,
+                                            lineNumber: 502,
                                             columnNumber: 15
                                         }, this),
                                         /*#__PURE__*/ (0, __TURBOPACK__imported__module__$5b$project$5d2f$node_modules$2f$next$2f$dist$2f$compiled$2f$react$2f$jsx$2d$dev$2d$runtime$2e$js__$5b$app$2d$client$5d$__$28$ecmascript$29$__["jsxDEV"])("div", {
@@ -6812,7 +6813,7 @@ function DemoTracker() {
                                                     children: (0, __TURBOPACK__imported__module__$5b$project$5d2f$src$2f$lib$2f$i18n$2e$ts__$5b$app$2d$client$5d$__$28$ecmascript$29$__["t"])(locale, "labels.status")
                                                 }, void 0, false, {
                                                     fileName: "[project]/src/components/demo-tracker.tsx",
-                                                    lineNumber: 513,
+                                                    lineNumber: 514,
                                                     columnNumber: 17
                                                 }, this),
                                                 /*#__PURE__*/ (0, __TURBOPACK__imported__module__$5b$project$5d2f$node_modules$2f$next$2f$dist$2f$compiled$2f$react$2f$jsx$2d$dev$2d$runtime$2e$js__$5b$app$2d$client$5d$__$28$ecmascript$29$__["jsxDEV"])(__TURBOPACK__imported__module__$5b$project$5d2f$src$2f$components$2f$ui$2f$select$2e$tsx__$5b$app$2d$client$5d$__$28$ecmascript$29$__["Select"], {
@@ -6823,12 +6824,12 @@ function DemoTracker() {
                                                             className: "bg-secondary/50",
                                                             children: /*#__PURE__*/ (0, __TURBOPACK__imported__module__$5b$project$5d2f$node_modules$2f$next$2f$dist$2f$compiled$2f$react$2f$jsx$2d$dev$2d$runtime$2e$js__$5b$app$2d$client$5d$__$28$ecmascript$29$__["jsxDEV"])(__TURBOPACK__imported__module__$5b$project$5d2f$src$2f$components$2f$ui$2f$select$2e$tsx__$5b$app$2d$client$5d$__$28$ecmascript$29$__["SelectValue"], {}, void 0, false, {
                                                                 fileName: "[project]/src/components/demo-tracker.tsx",
-                                                                lineNumber: 515,
+                                                                lineNumber: 516,
                                                                 columnNumber: 62
                                                             }, this)
                                                         }, void 0, false, {
                                                             fileName: "[project]/src/components/demo-tracker.tsx",
-                                                            lineNumber: 515,
+                                                            lineNumber: 516,
                                                             columnNumber: 19
                                                         }, this),
                                                         /*#__PURE__*/ (0, __TURBOPACK__imported__module__$5b$project$5d2f$node_modules$2f$next$2f$dist$2f$compiled$2f$react$2f$jsx$2d$dev$2d$runtime$2e$js__$5b$app$2d$client$5d$__$28$ecmascript$29$__["jsxDEV"])(__TURBOPACK__imported__module__$5b$project$5d2f$src$2f$components$2f$ui$2f$select$2e$tsx__$5b$app$2d$client$5d$__$28$ecmascript$29$__["SelectContent"], {
@@ -6837,30 +6838,30 @@ function DemoTracker() {
                                                                     children: (0, __TURBOPACK__imported__module__$5b$project$5d2f$src$2f$lib$2f$i18n$2e$ts__$5b$app$2d$client$5d$__$28$ecmascript$29$__["t"])(locale, STATUS_TKEYS[s])
                                                                 }, s, false, {
                                                                     fileName: "[project]/src/components/demo-tracker.tsx",
-                                                                    lineNumber: 517,
+                                                                    lineNumber: 518,
                                                                     columnNumber: 46
                                                                 }, this))
                                                         }, void 0, false, {
                                                             fileName: "[project]/src/components/demo-tracker.tsx",
-                                                            lineNumber: 516,
+                                                            lineNumber: 517,
                                                             columnNumber: 19
                                                         }, this)
                                                     ]
                                                 }, void 0, true, {
                                                     fileName: "[project]/src/components/demo-tracker.tsx",
-                                                    lineNumber: 514,
+                                                    lineNumber: 515,
                                                     columnNumber: 17
                                                 }, this)
                                             ]
                                         }, void 0, true, {
                                             fileName: "[project]/src/components/demo-tracker.tsx",
-                                            lineNumber: 512,
+                                            lineNumber: 513,
                                             columnNumber: 15
                                         }, this)
                                     ]
                                 }, void 0, true, {
                                     fileName: "[project]/src/components/demo-tracker.tsx",
-                                    lineNumber: 500,
+                                    lineNumber: 501,
                                     columnNumber: 13
                                 }, this),
                                 /*#__PURE__*/ (0, __TURBOPACK__imported__module__$5b$project$5d2f$node_modules$2f$next$2f$dist$2f$compiled$2f$react$2f$jsx$2d$dev$2d$runtime$2e$js__$5b$app$2d$client$5d$__$28$ecmascript$29$__["jsxDEV"])("div", {
@@ -6871,7 +6872,7 @@ function DemoTracker() {
                                             children: (0, __TURBOPACK__imported__module__$5b$project$5d2f$src$2f$lib$2f$i18n$2e$ts__$5b$app$2d$client$5d$__$28$ecmascript$29$__["t"])(locale, "demos.scLink")
                                         }, void 0, false, {
                                             fileName: "[project]/src/components/demo-tracker.tsx",
-                                            lineNumber: 523,
+                                            lineNumber: 524,
                                             columnNumber: 15
                                         }, this),
                                         /*#__PURE__*/ (0, __TURBOPACK__imported__module__$5b$project$5d2f$node_modules$2f$next$2f$dist$2f$compiled$2f$react$2f$jsx$2d$dev$2d$runtime$2e$js__$5b$app$2d$client$5d$__$28$ecmascript$29$__["jsxDEV"])(__TURBOPACK__imported__module__$5b$project$5d2f$src$2f$components$2f$ui$2f$input$2e$tsx__$5b$app$2d$client$5d$__$28$ecmascript$29$__["Input"], {
@@ -6881,13 +6882,13 @@ function DemoTracker() {
                                             className: "bg-secondary/50"
                                         }, void 0, false, {
                                             fileName: "[project]/src/components/demo-tracker.tsx",
-                                            lineNumber: 524,
+                                            lineNumber: 525,
                                             columnNumber: 15
                                         }, this)
                                     ]
                                 }, void 0, true, {
                                     fileName: "[project]/src/components/demo-tracker.tsx",
-                                    lineNumber: 522,
+                                    lineNumber: 523,
                                     columnNumber: 13
                                 }, this),
                                 /*#__PURE__*/ (0, __TURBOPACK__imported__module__$5b$project$5d2f$node_modules$2f$next$2f$dist$2f$compiled$2f$react$2f$jsx$2d$dev$2d$runtime$2e$js__$5b$app$2d$client$5d$__$28$ecmascript$29$__["jsxDEV"])("div", {
@@ -6900,7 +6901,7 @@ function DemoTracker() {
                                                 children: (0, __TURBOPACK__imported__module__$5b$project$5d2f$src$2f$lib$2f$i18n$2e$ts__$5b$app$2d$client$5d$__$28$ecmascript$29$__["t"])(locale, "demos.dateSent")
                                             }, void 0, false, {
                                                 fileName: "[project]/src/components/demo-tracker.tsx",
-                                                lineNumber: 528,
+                                                lineNumber: 529,
                                                 columnNumber: 17
                                             }, this),
                                             /*#__PURE__*/ (0, __TURBOPACK__imported__module__$5b$project$5d2f$node_modules$2f$next$2f$dist$2f$compiled$2f$react$2f$jsx$2d$dev$2d$runtime$2e$js__$5b$app$2d$client$5d$__$28$ecmascript$29$__["jsxDEV"])(__TURBOPACK__imported__module__$5b$project$5d2f$src$2f$components$2f$ui$2f$input$2e$tsx__$5b$app$2d$client$5d$__$28$ecmascript$29$__["Input"], {
@@ -6910,18 +6911,18 @@ function DemoTracker() {
                                                 className: "bg-secondary/50"
                                             }, void 0, false, {
                                                 fileName: "[project]/src/components/demo-tracker.tsx",
-                                                lineNumber: 529,
+                                                lineNumber: 530,
                                                 columnNumber: 17
                                             }, this)
                                         ]
                                     }, void 0, true, {
                                         fileName: "[project]/src/components/demo-tracker.tsx",
-                                        lineNumber: 527,
+                                        lineNumber: 528,
                                         columnNumber: 15
                                     }, this)
                                 }, void 0, false, {
                                     fileName: "[project]/src/components/demo-tracker.tsx",
-                                    lineNumber: 526,
+                                    lineNumber: 527,
                                     columnNumber: 13
                                 }, this),
                                 /*#__PURE__*/ (0, __TURBOPACK__imported__module__$5b$project$5d2f$node_modules$2f$next$2f$dist$2f$compiled$2f$react$2f$jsx$2d$dev$2d$runtime$2e$js__$5b$app$2d$client$5d$__$28$ecmascript$29$__["jsxDEV"])("div", {
@@ -6932,7 +6933,7 @@ function DemoTracker() {
                                             children: (0, __TURBOPACK__imported__module__$5b$project$5d2f$src$2f$lib$2f$i18n$2e$ts__$5b$app$2d$client$5d$__$28$ecmascript$29$__["t"])(locale, "labels.notes")
                                         }, void 0, false, {
                                             fileName: "[project]/src/components/demo-tracker.tsx",
-                                            lineNumber: 533,
+                                            lineNumber: 534,
                                             columnNumber: 15
                                         }, this),
                                         /*#__PURE__*/ (0, __TURBOPACK__imported__module__$5b$project$5d2f$node_modules$2f$next$2f$dist$2f$compiled$2f$react$2f$jsx$2d$dev$2d$runtime$2e$js__$5b$app$2d$client$5d$__$28$ecmascript$29$__["jsxDEV"])(__TURBOPACK__imported__module__$5b$project$5d2f$src$2f$components$2f$ui$2f$textarea$2e$tsx__$5b$app$2d$client$5d$__$28$ecmascript$29$__["Textarea"], {
@@ -6943,19 +6944,19 @@ function DemoTracker() {
                                             className: "bg-secondary/50 resize-none"
                                         }, void 0, false, {
                                             fileName: "[project]/src/components/demo-tracker.tsx",
-                                            lineNumber: 534,
+                                            lineNumber: 535,
                                             columnNumber: 15
                                         }, this)
                                     ]
                                 }, void 0, true, {
                                     fileName: "[project]/src/components/demo-tracker.tsx",
-                                    lineNumber: 532,
+                                    lineNumber: 533,
                                     columnNumber: 13
                                 }, this)
                             ]
                         }, void 0, true, {
                             fileName: "[project]/src/components/demo-tracker.tsx",
-                            lineNumber: 495,
+                            lineNumber: 496,
                             columnNumber: 11
                         }, this),
                         /*#__PURE__*/ (0, __TURBOPACK__imported__module__$5b$project$5d2f$node_modules$2f$next$2f$dist$2f$compiled$2f$react$2f$jsx$2d$dev$2d$runtime$2e$js__$5b$app$2d$client$5d$__$28$ecmascript$29$__["jsxDEV"])(__TURBOPACK__imported__module__$5b$project$5d2f$src$2f$components$2f$ui$2f$dialog$2e$tsx__$5b$app$2d$client$5d$__$28$ecmascript$29$__["DialogFooter"], {
@@ -6966,7 +6967,7 @@ function DemoTracker() {
                                     children: (0, __TURBOPACK__imported__module__$5b$project$5d2f$src$2f$lib$2f$i18n$2e$ts__$5b$app$2d$client$5d$__$28$ecmascript$29$__["t"])(locale, "labels.cancel")
                                 }, void 0, false, {
                                     fileName: "[project]/src/components/demo-tracker.tsx",
-                                    lineNumber: 538,
+                                    lineNumber: 539,
                                     columnNumber: 13
                                 }, this),
                                 /*#__PURE__*/ (0, __TURBOPACK__imported__module__$5b$project$5d2f$node_modules$2f$next$2f$dist$2f$compiled$2f$react$2f$jsx$2d$dev$2d$runtime$2e$js__$5b$app$2d$client$5d$__$28$ecmascript$29$__["jsxDEV"])(__TURBOPACK__imported__module__$5b$project$5d2f$src$2f$components$2f$ui$2f$button$2e$tsx__$5b$app$2d$client$5d$__$28$ecmascript$29$__["Button"], {
@@ -6975,24 +6976,24 @@ function DemoTracker() {
                                     children: editingDemo ? (0, __TURBOPACK__imported__module__$5b$project$5d2f$src$2f$lib$2f$i18n$2e$ts__$5b$app$2d$client$5d$__$28$ecmascript$29$__["t"])(locale, "labels.update") : (0, __TURBOPACK__imported__module__$5b$project$5d2f$src$2f$lib$2f$i18n$2e$ts__$5b$app$2d$client$5d$__$28$ecmascript$29$__["t"])(locale, "labels.save")
                                 }, void 0, false, {
                                     fileName: "[project]/src/components/demo-tracker.tsx",
-                                    lineNumber: 539,
+                                    lineNumber: 540,
                                     columnNumber: 13
                                 }, this)
                             ]
                         }, void 0, true, {
                             fileName: "[project]/src/components/demo-tracker.tsx",
-                            lineNumber: 537,
+                            lineNumber: 538,
                             columnNumber: 11
                         }, this)
                     ]
                 }, void 0, true, {
                     fileName: "[project]/src/components/demo-tracker.tsx",
-                    lineNumber: 491,
+                    lineNumber: 492,
                     columnNumber: 9
                 }, this)
             }, void 0, false, {
                 fileName: "[project]/src/components/demo-tracker.tsx",
-                lineNumber: 490,
+                lineNumber: 491,
                 columnNumber: 7
             }, this),
             /*#__PURE__*/ (0, __TURBOPACK__imported__module__$5b$project$5d2f$node_modules$2f$next$2f$dist$2f$compiled$2f$react$2f$jsx$2d$dev$2d$runtime$2e$js__$5b$app$2d$client$5d$__$28$ecmascript$29$__["jsxDEV"])(__TURBOPACK__imported__module__$5b$project$5d2f$src$2f$components$2f$ui$2f$dialog$2e$tsx__$5b$app$2d$client$5d$__$28$ecmascript$29$__["Dialog"], {
@@ -7006,12 +7007,12 @@ function DemoTracker() {
                                 children: (0, __TURBOPACK__imported__module__$5b$project$5d2f$src$2f$lib$2f$i18n$2e$ts__$5b$app$2d$client$5d$__$28$ecmascript$29$__["t"])(locale, "demos.deleteConfirm")
                             }, void 0, false, {
                                 fileName: "[project]/src/components/demo-tracker.tsx",
-                                lineNumber: 549,
+                                lineNumber: 550,
                                 columnNumber: 25
                             }, this)
                         }, void 0, false, {
                             fileName: "[project]/src/components/demo-tracker.tsx",
-                            lineNumber: 549,
+                            lineNumber: 550,
                             columnNumber: 11
                         }, this),
                         /*#__PURE__*/ (0, __TURBOPACK__imported__module__$5b$project$5d2f$node_modules$2f$next$2f$dist$2f$compiled$2f$react$2f$jsx$2d$dev$2d$runtime$2e$js__$5b$app$2d$client$5d$__$28$ecmascript$29$__["jsxDEV"])("p", {
@@ -7019,7 +7020,7 @@ function DemoTracker() {
                             children: (0, __TURBOPACK__imported__module__$5b$project$5d2f$src$2f$lib$2f$i18n$2e$ts__$5b$app$2d$client$5d$__$28$ecmascript$29$__["t"])(locale, "demos.deleteConfirmMsg")
                         }, void 0, false, {
                             fileName: "[project]/src/components/demo-tracker.tsx",
-                            lineNumber: 550,
+                            lineNumber: 551,
                             columnNumber: 11
                         }, this),
                         /*#__PURE__*/ (0, __TURBOPACK__imported__module__$5b$project$5d2f$node_modules$2f$next$2f$dist$2f$compiled$2f$react$2f$jsx$2d$dev$2d$runtime$2e$js__$5b$app$2d$client$5d$__$28$ecmascript$29$__["jsxDEV"])(__TURBOPACK__imported__module__$5b$project$5d2f$src$2f$components$2f$ui$2f$dialog$2e$tsx__$5b$app$2d$client$5d$__$28$ecmascript$29$__["DialogFooter"], {
@@ -7030,7 +7031,7 @@ function DemoTracker() {
                                     children: (0, __TURBOPACK__imported__module__$5b$project$5d2f$src$2f$lib$2f$i18n$2e$ts__$5b$app$2d$client$5d$__$28$ecmascript$29$__["t"])(locale, "labels.cancel")
                                 }, void 0, false, {
                                     fileName: "[project]/src/components/demo-tracker.tsx",
-                                    lineNumber: 552,
+                                    lineNumber: 553,
                                     columnNumber: 13
                                 }, this),
                                 /*#__PURE__*/ (0, __TURBOPACK__imported__module__$5b$project$5d2f$node_modules$2f$next$2f$dist$2f$compiled$2f$react$2f$jsx$2d$dev$2d$runtime$2e$js__$5b$app$2d$client$5d$__$28$ecmascript$29$__["jsxDEV"])(__TURBOPACK__imported__module__$5b$project$5d2f$src$2f$components$2f$ui$2f$button$2e$tsx__$5b$app$2d$client$5d$__$28$ecmascript$29$__["Button"], {
@@ -7044,34 +7045,34 @@ function DemoTracker() {
                                     children: (0, __TURBOPACK__imported__module__$5b$project$5d2f$src$2f$lib$2f$i18n$2e$ts__$5b$app$2d$client$5d$__$28$ecmascript$29$__["t"])(locale, "labels.delete")
                                 }, void 0, false, {
                                     fileName: "[project]/src/components/demo-tracker.tsx",
-                                    lineNumber: 553,
+                                    lineNumber: 554,
                                     columnNumber: 13
                                 }, this)
                             ]
                         }, void 0, true, {
                             fileName: "[project]/src/components/demo-tracker.tsx",
-                            lineNumber: 551,
+                            lineNumber: 552,
                             columnNumber: 11
                         }, this)
                     ]
                 }, void 0, true, {
                     fileName: "[project]/src/components/demo-tracker.tsx",
-                    lineNumber: 548,
+                    lineNumber: 549,
                     columnNumber: 9
                 }, this)
             }, void 0, false, {
                 fileName: "[project]/src/components/demo-tracker.tsx",
-                lineNumber: 547,
+                lineNumber: 548,
                 columnNumber: 7
             }, this)
         ]
     }, void 0, true, {
         fileName: "[project]/src/components/demo-tracker.tsx",
-        lineNumber: 281,
+        lineNumber: 282,
         columnNumber: 5
     }, this);
 }
-_s(DemoTracker, "kH3MUTf+rw5agtOYBKmE7JmcrPU=", false, function() {
+_s(DemoTracker, "11yRlUeO9kCViqj5urAJfV45a8g=", false, function() {
     return [
         __TURBOPACK__imported__module__$5b$project$5d2f$src$2f$lib$2f$store$2e$ts__$5b$app$2d$client$5d$__$28$ecmascript$29$__["useAppStore"]
     ];
@@ -7099,14 +7100,14 @@ function DemoDetailDialog({ demo, onClose, locale, getLabelName }) {
                                 className: "h-5 w-5 text-primary"
                             }, void 0, false, {
                                 fileName: "[project]/src/components/demo-tracker.tsx",
-                                lineNumber: 587,
+                                lineNumber: 588,
                                 columnNumber: 13
                             }, this),
                             /*#__PURE__*/ (0, __TURBOPACK__imported__module__$5b$project$5d2f$node_modules$2f$next$2f$dist$2f$compiled$2f$react$2f$jsx$2d$dev$2d$runtime$2e$js__$5b$app$2d$client$5d$__$28$ecmascript$29$__["jsxDEV"])("span", {
                                 children: demo.trackName
                             }, void 0, false, {
                                 fileName: "[project]/src/components/demo-tracker.tsx",
-                                lineNumber: 588,
+                                lineNumber: 589,
                                 columnNumber: 13
                             }, this),
                             /*#__PURE__*/ (0, __TURBOPACK__imported__module__$5b$project$5d2f$node_modules$2f$next$2f$dist$2f$compiled$2f$react$2f$jsx$2d$dev$2d$runtime$2e$js__$5b$app$2d$client$5d$__$28$ecmascript$29$__["jsxDEV"])(__TURBOPACK__imported__module__$5b$project$5d2f$src$2f$components$2f$ui$2f$badge$2e$tsx__$5b$app$2d$client$5d$__$28$ecmascript$29$__["Badge"], {
@@ -7119,24 +7120,24 @@ function DemoDetailDialog({ demo, onClose, locale, getLabelName }) {
                                         children: (0, __TURBOPACK__imported__module__$5b$project$5d2f$src$2f$lib$2f$i18n$2e$ts__$5b$app$2d$client$5d$__$28$ecmascript$29$__["t"])(locale, STATUS_TKEYS[demo.status])
                                     }, void 0, false, {
                                         fileName: "[project]/src/components/demo-tracker.tsx",
-                                        lineNumber: 591,
+                                        lineNumber: 592,
                                         columnNumber: 15
                                     }, this)
                                 ]
                             }, void 0, true, {
                                 fileName: "[project]/src/components/demo-tracker.tsx",
-                                lineNumber: 589,
+                                lineNumber: 590,
                                 columnNumber: 13
                             }, this)
                         ]
                     }, void 0, true, {
                         fileName: "[project]/src/components/demo-tracker.tsx",
-                        lineNumber: 586,
+                        lineNumber: 587,
                         columnNumber: 11
                     }, this)
                 }, void 0, false, {
                     fileName: "[project]/src/components/demo-tracker.tsx",
-                    lineNumber: 585,
+                    lineNumber: 586,
                     columnNumber: 9
                 }, this),
                 /*#__PURE__*/ (0, __TURBOPACK__imported__module__$5b$project$5d2f$node_modules$2f$next$2f$dist$2f$compiled$2f$react$2f$jsx$2d$dev$2d$runtime$2e$js__$5b$app$2d$client$5d$__$28$ecmascript$29$__["jsxDEV"])("div", {
@@ -7155,7 +7156,7 @@ function DemoDetailDialog({ demo, onClose, locale, getLabelName }) {
                                                     className: "h-3 w-3"
                                                 }, void 0, false, {
                                                     fileName: "[project]/src/components/demo-tracker.tsx",
-                                                    lineNumber: 600,
+                                                    lineNumber: 601,
                                                     columnNumber: 98
                                                 }, this),
                                                 " ",
@@ -7163,7 +7164,7 @@ function DemoDetailDialog({ demo, onClose, locale, getLabelName }) {
                                             ]
                                         }, void 0, true, {
                                             fileName: "[project]/src/components/demo-tracker.tsx",
-                                            lineNumber: 600,
+                                            lineNumber: 601,
                                             columnNumber: 15
                                         }, this),
                                         /*#__PURE__*/ (0, __TURBOPACK__imported__module__$5b$project$5d2f$node_modules$2f$next$2f$dist$2f$compiled$2f$react$2f$jsx$2d$dev$2d$runtime$2e$js__$5b$app$2d$client$5d$__$28$ecmascript$29$__["jsxDEV"])("p", {
@@ -7171,13 +7172,13 @@ function DemoDetailDialog({ demo, onClose, locale, getLabelName }) {
                                             children: labelName
                                         }, void 0, false, {
                                             fileName: "[project]/src/components/demo-tracker.tsx",
-                                            lineNumber: 601,
+                                            lineNumber: 602,
                                             columnNumber: 15
                                         }, this)
                                     ]
                                 }, void 0, true, {
                                     fileName: "[project]/src/components/demo-tracker.tsx",
-                                    lineNumber: 599,
+                                    lineNumber: 600,
                                     columnNumber: 13
                                 }, this),
                                 demo.sentDate && /*#__PURE__*/ (0, __TURBOPACK__imported__module__$5b$project$5d2f$node_modules$2f$next$2f$dist$2f$compiled$2f$react$2f$jsx$2d$dev$2d$runtime$2e$js__$5b$app$2d$client$5d$__$28$ecmascript$29$__["jsxDEV"])("div", {
@@ -7190,7 +7191,7 @@ function DemoDetailDialog({ demo, onClose, locale, getLabelName }) {
                                                     className: "h-3 w-3"
                                                 }, void 0, false, {
                                                     fileName: "[project]/src/components/demo-tracker.tsx",
-                                                    lineNumber: 605,
+                                                    lineNumber: 606,
                                                     columnNumber: 100
                                                 }, this),
                                                 " ",
@@ -7198,7 +7199,7 @@ function DemoDetailDialog({ demo, onClose, locale, getLabelName }) {
                                             ]
                                         }, void 0, true, {
                                             fileName: "[project]/src/components/demo-tracker.tsx",
-                                            lineNumber: 605,
+                                            lineNumber: 606,
                                             columnNumber: 17
                                         }, this),
                                         /*#__PURE__*/ (0, __TURBOPACK__imported__module__$5b$project$5d2f$node_modules$2f$next$2f$dist$2f$compiled$2f$react$2f$jsx$2d$dev$2d$runtime$2e$js__$5b$app$2d$client$5d$__$28$ecmascript$29$__["jsxDEV"])("p", {
@@ -7206,7 +7207,7 @@ function DemoDetailDialog({ demo, onClose, locale, getLabelName }) {
                                             children: demo.sentDate
                                         }, void 0, false, {
                                             fileName: "[project]/src/components/demo-tracker.tsx",
-                                            lineNumber: 606,
+                                            lineNumber: 607,
                                             columnNumber: 17
                                         }, this),
                                         daysSince !== null && /*#__PURE__*/ (0, __TURBOPACK__imported__module__$5b$project$5d2f$node_modules$2f$next$2f$dist$2f$compiled$2f$react$2f$jsx$2d$dev$2d$runtime$2e$js__$5b$app$2d$client$5d$__$28$ecmascript$29$__["jsxDEV"])("p", {
@@ -7218,13 +7219,13 @@ function DemoDetailDialog({ demo, onClose, locale, getLabelName }) {
                                             ]
                                         }, void 0, true, {
                                             fileName: "[project]/src/components/demo-tracker.tsx",
-                                            lineNumber: 607,
+                                            lineNumber: 608,
                                             columnNumber: 40
                                         }, this)
                                     ]
                                 }, void 0, true, {
                                     fileName: "[project]/src/components/demo-tracker.tsx",
-                                    lineNumber: 604,
+                                    lineNumber: 605,
                                     columnNumber: 15
                                 }, this),
                                 demo.artistName && /*#__PURE__*/ (0, __TURBOPACK__imported__module__$5b$project$5d2f$node_modules$2f$next$2f$dist$2f$compiled$2f$react$2f$jsx$2d$dev$2d$runtime$2e$js__$5b$app$2d$client$5d$__$28$ecmascript$29$__["jsxDEV"])("div", {
@@ -7237,7 +7238,7 @@ function DemoDetailDialog({ demo, onClose, locale, getLabelName }) {
                                                     className: "h-3 w-3"
                                                 }, void 0, false, {
                                                     fileName: "[project]/src/components/demo-tracker.tsx",
-                                                    lineNumber: 612,
+                                                    lineNumber: 613,
                                                     columnNumber: 100
                                                 }, this),
                                                 " ",
@@ -7245,7 +7246,7 @@ function DemoDetailDialog({ demo, onClose, locale, getLabelName }) {
                                             ]
                                         }, void 0, true, {
                                             fileName: "[project]/src/components/demo-tracker.tsx",
-                                            lineNumber: 612,
+                                            lineNumber: 613,
                                             columnNumber: 17
                                         }, this),
                                         /*#__PURE__*/ (0, __TURBOPACK__imported__module__$5b$project$5d2f$node_modules$2f$next$2f$dist$2f$compiled$2f$react$2f$jsx$2d$dev$2d$runtime$2e$js__$5b$app$2d$client$5d$__$28$ecmascript$29$__["jsxDEV"])("p", {
@@ -7253,13 +7254,13 @@ function DemoDetailDialog({ demo, onClose, locale, getLabelName }) {
                                             children: demo.artistName
                                         }, void 0, false, {
                                             fileName: "[project]/src/components/demo-tracker.tsx",
-                                            lineNumber: 613,
+                                            lineNumber: 614,
                                             columnNumber: 17
                                         }, this)
                                     ]
                                 }, void 0, true, {
                                     fileName: "[project]/src/components/demo-tracker.tsx",
-                                    lineNumber: 611,
+                                    lineNumber: 612,
                                     columnNumber: 15
                                 }, this),
                                 /*#__PURE__*/ (0, __TURBOPACK__imported__module__$5b$project$5d2f$node_modules$2f$next$2f$dist$2f$compiled$2f$react$2f$jsx$2d$dev$2d$runtime$2e$js__$5b$app$2d$client$5d$__$28$ecmascript$29$__["jsxDEV"])("div", {
@@ -7270,7 +7271,7 @@ function DemoDetailDialog({ demo, onClose, locale, getLabelName }) {
                                             children: (0, __TURBOPACK__imported__module__$5b$project$5d2f$src$2f$lib$2f$i18n$2e$ts__$5b$app$2d$client$5d$__$28$ecmascript$29$__["t"])(locale, "labels.status")
                                         }, void 0, false, {
                                             fileName: "[project]/src/components/demo-tracker.tsx",
-                                            lineNumber: 617,
+                                            lineNumber: 618,
                                             columnNumber: 15
                                         }, this),
                                         /*#__PURE__*/ (0, __TURBOPACK__imported__module__$5b$project$5d2f$node_modules$2f$next$2f$dist$2f$compiled$2f$react$2f$jsx$2d$dev$2d$runtime$2e$js__$5b$app$2d$client$5d$__$28$ecmascript$29$__["jsxDEV"])("p", {
@@ -7278,19 +7279,19 @@ function DemoDetailDialog({ demo, onClose, locale, getLabelName }) {
                                             children: (0, __TURBOPACK__imported__module__$5b$project$5d2f$src$2f$lib$2f$i18n$2e$ts__$5b$app$2d$client$5d$__$28$ecmascript$29$__["t"])(locale, STATUS_TKEYS[demo.status])
                                         }, void 0, false, {
                                             fileName: "[project]/src/components/demo-tracker.tsx",
-                                            lineNumber: 618,
+                                            lineNumber: 619,
                                             columnNumber: 15
                                         }, this)
                                     ]
                                 }, void 0, true, {
                                     fileName: "[project]/src/components/demo-tracker.tsx",
-                                    lineNumber: 616,
+                                    lineNumber: 617,
                                     columnNumber: 13
                                 }, this)
                             ]
                         }, void 0, true, {
                             fileName: "[project]/src/components/demo-tracker.tsx",
-                            lineNumber: 598,
+                            lineNumber: 599,
                             columnNumber: 11
                         }, this),
                         demo.link && /*#__PURE__*/ (0, __TURBOPACK__imported__module__$5b$project$5d2f$node_modules$2f$next$2f$dist$2f$compiled$2f$react$2f$jsx$2d$dev$2d$runtime$2e$js__$5b$app$2d$client$5d$__$28$ecmascript$29$__["jsxDEV"])("div", {
@@ -7303,7 +7304,7 @@ function DemoDetailDialog({ demo, onClose, locale, getLabelName }) {
                                             className: "h-3 w-3"
                                         }, void 0, false, {
                                             fileName: "[project]/src/components/demo-tracker.tsx",
-                                            lineNumber: 626,
+                                            lineNumber: 627,
                                             columnNumber: 17
                                         }, this),
                                         " ",
@@ -7311,7 +7312,7 @@ function DemoDetailDialog({ demo, onClose, locale, getLabelName }) {
                                     ]
                                 }, void 0, true, {
                                     fileName: "[project]/src/components/demo-tracker.tsx",
-                                    lineNumber: 625,
+                                    lineNumber: 626,
                                     columnNumber: 15
                                 }, this),
                                 /*#__PURE__*/ (0, __TURBOPACK__imported__module__$5b$project$5d2f$node_modules$2f$next$2f$dist$2f$compiled$2f$react$2f$jsx$2d$dev$2d$runtime$2e$js__$5b$app$2d$client$5d$__$28$ecmascript$29$__["jsxDEV"])("a", {
@@ -7322,13 +7323,13 @@ function DemoDetailDialog({ demo, onClose, locale, getLabelName }) {
                                     children: demo.link
                                 }, void 0, false, {
                                     fileName: "[project]/src/components/demo-tracker.tsx",
-                                    lineNumber: 628,
+                                    lineNumber: 629,
                                     columnNumber: 15
                                 }, this)
                             ]
                         }, void 0, true, {
                             fileName: "[project]/src/components/demo-tracker.tsx",
-                            lineNumber: 624,
+                            lineNumber: 625,
                             columnNumber: 13
                         }, this),
                         demo.notes && /*#__PURE__*/ (0, __TURBOPACK__imported__module__$5b$project$5d2f$node_modules$2f$next$2f$dist$2f$compiled$2f$react$2f$jsx$2d$dev$2d$runtime$2e$js__$5b$app$2d$client$5d$__$28$ecmascript$29$__["jsxDEV"])("div", {
@@ -7339,7 +7340,7 @@ function DemoDetailDialog({ demo, onClose, locale, getLabelName }) {
                                     children: (0, __TURBOPACK__imported__module__$5b$project$5d2f$src$2f$lib$2f$i18n$2e$ts__$5b$app$2d$client$5d$__$28$ecmascript$29$__["t"])(locale, "labels.notes")
                                 }, void 0, false, {
                                     fileName: "[project]/src/components/demo-tracker.tsx",
-                                    lineNumber: 637,
+                                    lineNumber: 638,
                                     columnNumber: 15
                                 }, this),
                                 /*#__PURE__*/ (0, __TURBOPACK__imported__module__$5b$project$5d2f$node_modules$2f$next$2f$dist$2f$compiled$2f$react$2f$jsx$2d$dev$2d$runtime$2e$js__$5b$app$2d$client$5d$__$28$ecmascript$29$__["jsxDEV"])("p", {
@@ -7347,13 +7348,13 @@ function DemoDetailDialog({ demo, onClose, locale, getLabelName }) {
                                     children: demo.notes
                                 }, void 0, false, {
                                     fileName: "[project]/src/components/demo-tracker.tsx",
-                                    lineNumber: 638,
+                                    lineNumber: 639,
                                     columnNumber: 15
                                 }, this)
                             ]
                         }, void 0, true, {
                             fileName: "[project]/src/components/demo-tracker.tsx",
-                            lineNumber: 636,
+                            lineNumber: 637,
                             columnNumber: 13
                         }, this),
                         demo.pitchText && /*#__PURE__*/ (0, __TURBOPACK__imported__module__$5b$project$5d2f$node_modules$2f$next$2f$dist$2f$compiled$2f$react$2f$jsx$2d$dev$2d$runtime$2e$js__$5b$app$2d$client$5d$__$28$ecmascript$29$__["jsxDEV"])("div", {
@@ -7366,7 +7367,7 @@ function DemoDetailDialog({ demo, onClose, locale, getLabelName }) {
                                             className: "h-3 w-3"
                                         }, void 0, false, {
                                             fileName: "[project]/src/components/demo-tracker.tsx",
-                                            lineNumber: 646,
+                                            lineNumber: 647,
                                             columnNumber: 17
                                         }, this),
                                         " ",
@@ -7374,7 +7375,7 @@ function DemoDetailDialog({ demo, onClose, locale, getLabelName }) {
                                     ]
                                 }, void 0, true, {
                                     fileName: "[project]/src/components/demo-tracker.tsx",
-                                    lineNumber: 645,
+                                    lineNumber: 646,
                                     columnNumber: 15
                                 }, this),
                                 /*#__PURE__*/ (0, __TURBOPACK__imported__module__$5b$project$5d2f$node_modules$2f$next$2f$dist$2f$compiled$2f$react$2f$jsx$2d$dev$2d$runtime$2e$js__$5b$app$2d$client$5d$__$28$ecmascript$29$__["jsxDEV"])(__TURBOPACK__imported__module__$5b$project$5d2f$src$2f$components$2f$ui$2f$card$2e$tsx__$5b$app$2d$client$5d$__$28$ecmascript$29$__["Card"], {
@@ -7386,23 +7387,23 @@ function DemoDetailDialog({ demo, onClose, locale, getLabelName }) {
                                             children: demo.pitchText
                                         }, void 0, false, {
                                             fileName: "[project]/src/components/demo-tracker.tsx",
-                                            lineNumber: 650,
+                                            lineNumber: 651,
                                             columnNumber: 19
                                         }, this)
                                     }, void 0, false, {
                                         fileName: "[project]/src/components/demo-tracker.tsx",
-                                        lineNumber: 649,
+                                        lineNumber: 650,
                                         columnNumber: 17
                                     }, this)
                                 }, void 0, false, {
                                     fileName: "[project]/src/components/demo-tracker.tsx",
-                                    lineNumber: 648,
+                                    lineNumber: 649,
                                     columnNumber: 15
                                 }, this)
                             ]
                         }, void 0, true, {
                             fileName: "[project]/src/components/demo-tracker.tsx",
-                            lineNumber: 644,
+                            lineNumber: 645,
                             columnNumber: 13
                         }, this),
                         /*#__PURE__*/ (0, __TURBOPACK__imported__module__$5b$project$5d2f$node_modules$2f$next$2f$dist$2f$compiled$2f$react$2f$jsx$2d$dev$2d$runtime$2e$js__$5b$app$2d$client$5d$__$28$ecmascript$29$__["jsxDEV"])("div", {
@@ -7414,13 +7415,13 @@ function DemoDetailDialog({ demo, onClose, locale, getLabelName }) {
                             ]
                         }, void 0, true, {
                             fileName: "[project]/src/components/demo-tracker.tsx",
-                            lineNumber: 657,
+                            lineNumber: 658,
                             columnNumber: 11
                         }, this)
                     ]
                 }, void 0, true, {
                     fileName: "[project]/src/components/demo-tracker.tsx",
-                    lineNumber: 596,
+                    lineNumber: 597,
                     columnNumber: 9
                 }, this),
                 /*#__PURE__*/ (0, __TURBOPACK__imported__module__$5b$project$5d2f$node_modules$2f$next$2f$dist$2f$compiled$2f$react$2f$jsx$2d$dev$2d$runtime$2e$js__$5b$app$2d$client$5d$__$28$ecmascript$29$__["jsxDEV"])(__TURBOPACK__imported__module__$5b$project$5d2f$src$2f$components$2f$ui$2f$dialog$2e$tsx__$5b$app$2d$client$5d$__$28$ecmascript$29$__["DialogFooter"], {
@@ -7430,23 +7431,23 @@ function DemoDetailDialog({ demo, onClose, locale, getLabelName }) {
                         children: (0, __TURBOPACK__imported__module__$5b$project$5d2f$src$2f$lib$2f$i18n$2e$ts__$5b$app$2d$client$5d$__$28$ecmascript$29$__["t"])(locale, "labels.close")
                     }, void 0, false, {
                         fileName: "[project]/src/components/demo-tracker.tsx",
-                        lineNumber: 663,
+                        lineNumber: 664,
                         columnNumber: 11
                     }, this)
                 }, void 0, false, {
                     fileName: "[project]/src/components/demo-tracker.tsx",
-                    lineNumber: 662,
+                    lineNumber: 663,
                     columnNumber: 9
                 }, this)
             ]
         }, void 0, true, {
             fileName: "[project]/src/components/demo-tracker.tsx",
-            lineNumber: 584,
+            lineNumber: 585,
             columnNumber: 7
         }, this)
     }, void 0, false, {
         fileName: "[project]/src/components/demo-tracker.tsx",
-        lineNumber: 583,
+        lineNumber: 584,
         columnNumber: 5
     }, this);
 }
@@ -9840,7 +9841,7 @@ async function removeHandleFromIDB() {
 // Write data to a file handle
 async function writeToFileHandle(handle, content) {
     try {
-        // Check if we need permission
+        // Check if we need permission (using any because TS doesn't have these methods typed)
         const perm = await handle.queryPermission({
             mode: "readwrite"
         });

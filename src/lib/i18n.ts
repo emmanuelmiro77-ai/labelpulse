@@ -1712,6 +1712,6 @@ const translations: Record<Locale, TranslationKeys> = {
 
 export type TransKey = keyof TranslationKeys;
 
-export function t(locale: Locale, key: TransKey): string {
+export function t(locale: Locale | string, key: TransKey): string {
   return translations[locale]?.[key] ?? translations.en[key] ?? key;
 }

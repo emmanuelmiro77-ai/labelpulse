@@ -1,7 +1,7 @@
 "use client";
 
 import { useAppStore, type Demo, type DemoStatus } from "@/lib/store";
-import { t } from "@/lib/i18n";
+import { t, type Locale } from "@/lib/i18n";
 import { useState, useMemo } from "react";
 import {
   Plus,
@@ -90,8 +90,9 @@ const STATUS_TKEYS: Record<DemoStatus, "demos.ready" | "demos.sent" | "demos.rev
 };
 
 export function DemoTracker() {
-  const { labels, demos, addDemo, updateDemo, deleteDemo, advanceDemoStatus, locale, getGenres } =
+  const { labels, demos, addDemo, updateDemo, deleteDemo, advanceDemoStatus, locale: _locale, getGenres } =
     useAppStore();
+  const locale = _locale as Locale;
   const genres = getGenres();
   const [viewMode, setViewMode] = useState<"kanban" | "table">("kanban");
   const [search, setSearch] = useState("");

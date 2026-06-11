@@ -72,11 +72,11 @@ async function writeToFileHandle(
   content: string
 ): Promise<boolean> {
   try {
-    // Check if we need permission
-    const perm = await handle.queryPermission({ mode: "readwrite" });
+    // Check if we need permission (using any because TS doesn't have these methods typed)
+    const perm = await (handle as any).queryPermission({ mode: "readwrite" });
     if (perm !== "granted") {
       // Request permission (may fail without user gesture)
-      const req = await handle.requestPermission({ mode: "readwrite" });
+      const req = await (handle as any).requestPermission({ mode: "readwrite" });
       if (req !== "granted") return false;
     }
     const writable = await handle.createWritable();

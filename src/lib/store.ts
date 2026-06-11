@@ -76,11 +76,11 @@ function buildLabelsFromData(): Label[] {
     socialLink: "",
     soundcloudLink: "",
     genres: l.genres,
-    rankByGenre: l.rankByGenre || {},
-    pointsByGenre: l.pointsByGenre || {},
+    rankByGenre: (l.rankByGenre || {}) as Record<string, number>,
+    pointsByGenre: (l.pointsByGenre || {}) as Record<string, number>,
     trending: l.trending || false,
-    trendingRankByGenre: l.trendingRankByGenre || {},
-    trendingPointsByGenre: l.trendingPointsByGenre || {},
+    trendingRankByGenre: (l.trendingRankByGenre || {}) as Record<string, number>,
+    trendingPointsByGenre: (l.trendingPointsByGenre || {}) as Record<string, number>,
     isCustom: false,
   }));
 }
@@ -103,7 +103,7 @@ interface AppState {
   userProfile: UserProfile;
 
   // Label actions
-  addLabel: (label: Omit<Label, "id" | "createdAt">) => void;
+  addLabel: (label: Partial<Omit<Label, "id" | "createdAt">> & { name: string }) => void;
   updateLabel: (id: string, updates: Partial<Label>) => void;
   deleteLabel: (id: string) => void;
 
@@ -148,12 +148,17 @@ export const useAppStore = create<AppState>()(
               id: genId(),
               createdAt: new Date().toISOString(),
               isCustom: true,
-              genres: label.genre ? [label.genre] : [],
-              rankByGenre: {},
-              pointsByGenre: {},
-              trending: false,
-              trendingRankByGenre: {},
-              trendingPointsByGenre: {},
+              genre: label.genre || "",
+              contactInfo: label.contactInfo || "",
+              status: label.status || "open",
+              notes: label.notes || "",
+              submissionType: label.submissionType || "email",
+              genres: label.genres || (label.genre ? [label.genre] : []),
+              rankByGenre: label.rankByGenre || {},
+              pointsByGenre: label.pointsByGenre || {},
+              trending: label.trending || false,
+              trendingRankByGenre: label.trendingRankByGenre || {},
+              trendingPointsByGenre: label.trendingPointsByGenre || {},
               website: label.website || "",
               demoLink: label.demoLink || "",
               socialLink: label.socialLink || "",

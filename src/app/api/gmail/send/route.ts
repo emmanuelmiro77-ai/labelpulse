@@ -4,8 +4,8 @@ import { authOptions } from "../../auth/[...nextauth]/route"
 
 export async function POST(req: NextRequest) {
   try {
-    const session = await getServerSession(authOptions)
-    if (!session?.accessToken) {
+    const session = await getServerSession({ ...authOptions } as any)
+    if (!(session as any)?.accessToken) {
       return NextResponse.json({ error: "Not authenticated" }, { status: 401 })
     }
 
@@ -31,7 +31,7 @@ export async function POST(req: NextRequest) {
     const response = await fetch("https://gmail.googleapis.com/gmail/v1/users/me/messages/send", {
       method: "POST",
       headers: {
-        Authorization: `Bearer ${session.accessToken}`,
+        Authorization: `Bearer ${(session as any).accessToken}`,
         "Content-Type": "application/json",
       },
       body: JSON.stringify({ raw: base64Email }),
