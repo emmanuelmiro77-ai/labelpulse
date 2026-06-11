@@ -3,6 +3,7 @@
 import { useAppStore, getLabelTier, type Label } from "@/lib/store";
 import { t } from "@/lib/i18n";
 import { useState, useMemo, useCallback, useEffect } from "react";
+import { sendEmail, ensureValidToken } from "@/lib/gmail";
 import {
   Search,
   Plus,
@@ -29,6 +30,9 @@ import {
   Languages,
   ClipboardCheck,
   MailOpen,
+  SendHorizonal,
+  CheckCircle2,
+  Loader2,
 } from "lucide-react";
 import { useToast } from "@/hooks/use-toast";
 import { Input } from "@/components/ui/input";
@@ -67,10 +71,12 @@ import {
 const SUBMISSION_TYPES = ["email", "webform", "platform"] as const;
 
 export function LabelFinder() {
-  const { labels, demos, addLabel, updateLabel, deleteLabel, addDemo, locale, getGenres, setActiveTab, userProfile, setUserProfile } =
+  const { labels, demos, addLabel, updateLabel, deleteLabel, addDemo, locale, getGenres, setActiveTab, userProfile, setUserProfile, gmailAuth, setGmailAuth } =
     useAppStore();
   const genres = getGenres();
   const { toast } = useToast();
+  const [sendingEmail, setSendingEmail] = useState(false);
+  const [emailSent, setEmailSent] = useState(false);
   const [search, setSearch] = useState("");
   const [genreFilter, setGenreFilter] = useState<string[]>([]);
   const [genrePopoverOpen, setGenrePopoverOpen] = useState(false);
@@ -361,6 +367,72 @@ export function LabelFinder() {
       setPitchDemoCreated(true);
     }
   }, [detailLabel, pitchTrackName, pitchScLink, pitchNote, pitchMailtoLink, demoAlreadyExists, addDemo, pitchText, pitchArtistName]);
+
+  // Send email directly via Gmail API (no browser open needed!)
+  const handleDirectSend = useCallback(async () => {
+    if (!detailLabel || !pitchTrackName.trim() || !gmailAuth.isConnected) return;
+
+    setSendingEmail(true);
+    setEmailSent(false);
+
+    try {
+      // Ensure token is still valid
+      const validAuth = await ensureValidToken(gmailAuth);
+      if (!validAuth) {
+        toast({ title: "Sessione Gmail scaduta", description: "Riconnetti il tuo account Gmail", variant: "destructive" });
+        setSendingEmail(false);
+        return;
+      }
+      // Update auth if refreshed
+      if (validAuth.accessToken !== gmailAuth.accessToken) {
+        setGmailAuth(validAuth);
+      }
+
+      const subject = generateSubject(pitchTrackName.trim(), pitchArtistName, pitchLanguage);
+      const body = generatePitchBody(
+        detailLabel.name,
+        pitchTrackName.trim(),
+        pitchArtistName,
+        pitchScLink,
+        pitchTone,
+        pitchNote,
+        pitchLanguage
+      );
+
+      const result = await sendEmail(
+        validAuth.accessToken,
+        detailEmails,
+        subject,
+        body
+      );
+
+      if (result.success) {
+        setEmailSent(true);
+        toast({ title: "Email inviata! ✉️", description: `Demo inviato a ${detailLabel.name}` });
+        // Auto-create demo tracking
+        if (!demoAlreadyExists) {
+          addDemo({
+            trackName: pitchTrackName.trim(),
+            labelId: detailLabel.id,
+            status: "sent",
+            sentDate: new Date().toISOString().split("T")[0],
+            link: pitchScLink.trim(),
+            notes: pitchNote.trim(),
+            pitchText: pitchText,
+            artistName: pitchArtistName.trim(),
+          });
+          setPitchDemoCreated(true);
+        }
+        setTimeout(() => setEmailSent(false), 4000);
+      } else {
+        toast({ title: "Errore invio", description: result.error || "Errore sconosciuto", variant: "destructive" });
+      }
+    } catch (err: any) {
+      toast({ title: "Errore invio", description: err.message || "Errore di connessione", variant: "destructive" });
+    } finally {
+      setSendingEmail(false);
+    }
+  }, [detailLabel, pitchTrackName, pitchArtistName, pitchScLink, pitchTone, pitchNote, pitchLanguage, detailEmails, gmailAuth, demoAlreadyExists, addDemo, pitchText, setGmailAuth, toast]);
 
   const handlePitchCopy = async () => {
     try {
@@ -880,22 +952,41 @@ export function LabelFinder() {
                             </CardContent>
                           </Card>
 
-                          {/* Action buttons — Gmail always visible */}
+                          {/* Action buttons */}
                           <div className="flex flex-col gap-2">
-                            {/* Gmail web button — primary send method */}
-                            <Button
-                              onClick={handleOpenGmail}
-                              className="w-full glow-purple text-sm"
-                              disabled={!pitchTrackName.trim()}
-                            >
-                              <MailOpen className="h-3.5 w-3.5 mr-1.5" />
-                              {pitchDemoCreated
-                                ? <><Check className="h-3.5 w-3.5 mr-1" />{t(locale, "pitch.sentAndTracked")}</>
-                                : detailEmails.length > 0
-                                  ? t(locale, "pitch.openGmail")
-                                  : t(locale, "pitch.openGmailNoEmail")
-                              }
-                            </Button>
+                            {/* Direct Gmail send — PRIMARY if connected */}
+                            {gmailAuth.isConnected ? (
+                              <Button
+                                onClick={handleDirectSend}
+                                className="w-full text-sm bg-emerald-600 hover:bg-emerald-500 text-white"
+                                disabled={!pitchTrackName.trim() || !detailEmails.length || sendingEmail}
+                              >
+                                {emailSent ? (
+                                  <><CheckCircle2 className="h-3.5 w-3.5 mr-1.5" />Email inviata!</>
+                                ) : sendingEmail ? (
+                                  <><Loader2 className="h-3.5 w-3.5 mr-1.5 animate-spin" />Invio in corso...</>
+                                ) : pitchDemoCreated ? (
+                                  <><Check className="h-3.5 w-3.5 mr-1" />{t(locale, "pitch.sentAndTracked")}</>
+                                ) : (
+                                  <><SendHorizonal className="h-3.5 w-3.5 mr-1.5" />Invia direttamente da Gmail</>
+                                )}
+                              </Button>
+                            ) : (
+                              /* Fallback: open Gmail in browser if not connected */
+                              <Button
+                                onClick={handleOpenGmail}
+                                className="w-full glow-purple text-sm"
+                                disabled={!pitchTrackName.trim()}
+                              >
+                                <MailOpen className="h-3.5 w-3.5 mr-1.5" />
+                                {pitchDemoCreated
+                                  ? <><Check className="h-3.5 w-3.5 mr-1" />{t(locale, "pitch.sentAndTracked")}</>
+                                  : detailEmails.length > 0
+                                    ? t(locale, "pitch.openGmail")
+                                    : t(locale, "pitch.openGmailNoEmail")
+                                }
+                              </Button>
+                            )}
 
                             {/* Secondary actions row */}
                             <div className="flex flex-col sm:flex-row gap-2">

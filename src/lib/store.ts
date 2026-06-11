@@ -95,12 +95,20 @@ interface UserProfile {
   scLink: string;
 }
 
+interface GmailAuth {
+  isConnected: boolean;
+  email: string;
+  accessToken: string;
+  expiresAt: number;
+}
+
 interface AppState {
   labels: Label[];
   demos: Demo[];
   activeTab: "dashboard" | "labels" | "demos" | "pitch";
   locale: Locale;
   userProfile: UserProfile;
+  gmailAuth: GmailAuth;
 
   // Label actions
   addLabel: (label: Partial<Omit<Label, "id" | "createdAt">> & { name: string }) => void;
@@ -125,6 +133,10 @@ interface AppState {
   // Available genres
   getGenres: () => string[];
 
+  // Gmail
+  setGmailAuth: (auth: GmailAuth) => void;
+  clearGmailAuth: () => void;
+
   // Data backup
   exportData: () => string;
   importData: (jsonString: string) => boolean;
@@ -138,6 +150,7 @@ export const useAppStore = create<AppState>()(
       activeTab: "dashboard" as const,
       locale: "it" as Locale,
       userProfile: { artistName: "", scLink: "" } as UserProfile,
+      gmailAuth: { isConnected: false, email: "", accessToken: "", expiresAt: 0 } as GmailAuth,
 
       addLabel: (label) =>
         set((state) => ({
@@ -229,6 +242,9 @@ export const useAppStore = create<AppState>()(
       setUserProfile: (profile) => set((state) => ({ userProfile: { ...state.userProfile, ...profile } })),
 
       getGenres: () => labelData.genres,
+
+      setGmailAuth: (auth) => set({ gmailAuth: auth }),
+      clearGmailAuth: () => set({ gmailAuth: { isConnected: false, email: "", accessToken: "", expiresAt: 0 } }),
 
       exportData: () => {
         const state = get();
@@ -393,8 +409,14 @@ export const useAppStore = create<AppState>()(
     }),
     {
       name: "labelpulse-storage",
-      version: 5,
+      version: 6,
       migrate: (persisted: any, version: number) => {
+        if (version < 6) {
+          // v6: add gmailAuth
+          if (!persisted.gmailAuth) {
+            persisted.gmailAuth = { isConnected: false, email: "", accessToken: "", expiresAt: 0 };
+          }
+        }
         if (version < 5) {
           // v5: add emails array, website, demoLink, socialLink + remove seed demos
           if (persisted.demos) {
@@ -445,6 +467,7 @@ export const useAppStore = create<AppState>()(
         activeTab: state.activeTab,
         locale: state.locale,
         userProfile: state.userProfile,
+        gmailAuth: state.gmailAuth,
       }),
       merge: (persistedState: any, currentState: any) => {
         // Deep merge: ensure all labels from currentState have defaults
