@@ -2,7 +2,7 @@
 
 import { useAppStore, getLabelTier, type Label } from "@/lib/store";
 import { t } from "@/lib/i18n";
-import { useState, useMemo, useCallback } from "react";
+import { useState, useMemo, useCallback, useEffect } from "react";
 import {
   Search,
   Plus,
@@ -202,15 +202,31 @@ export function LabelFinder() {
     setPitchDemoCreated(false);
   }, [userProfile]);
 
-  // Auto-save detail changes
+  // Keep detailLabel in sync with store (in case store changes externally)
+  useEffect(() => {
+    if (!detailLabel) return;
+    const fresh = labels.find(l => l.id === detailLabel.id);
+    if (!fresh) {
+      // Label was deleted — close dialog
+      setDetailLabel(null);
+    } else if (fresh !== detailLabel) {
+      // Store version changed — update snapshot
+      setDetailLabel(fresh);
+    }
+  }, [labels, detailLabel]);
+
+  // Auto-save detail changes (with safety check)
   const saveDetailField = useCallback(
     (field: string, value: any) => {
       if (!detailLabel) return;
+      // Double-check the label still exists in the store
+      const exists = labels.find(l => l.id === detailLabel.id);
+      if (!exists) return;
       updateLabel(detailLabel.id, { [field]: value });
       setDetailSaved(true);
       setTimeout(() => setDetailSaved(false), 1500);
     },
-    [detailLabel, updateLabel]
+    [detailLabel, updateLabel, labels]
   );
 
   // Email management
