@@ -30,6 +30,7 @@ export interface Label {
   website: string;
   demoLink: string;
   socialLink: string;
+  soundcloudLink: string;
   // Real Beatport data
   genres: string[];
   rankByGenre: Record<string, number>;
@@ -73,6 +74,7 @@ function buildLabelsFromData(): Label[] {
     website: "",
     demoLink: "",
     socialLink: "",
+    soundcloudLink: "",
     genres: l.genres,
     rankByGenre: l.rankByGenre || {},
     pointsByGenre: l.pointsByGenre || {},
@@ -155,6 +157,7 @@ export const useAppStore = create<AppState>()(
               website: label.website || "",
               demoLink: label.demoLink || "",
               socialLink: label.socialLink || "",
+              soundcloudLink: label.soundcloudLink || "",
               emails: label.emails || [],
             },
           ],
@@ -282,6 +285,7 @@ export const useAppStore = create<AppState>()(
               website: l.website || "",
               demoLink: l.demoLink || "",
               socialLink: l.socialLink || "",
+              soundcloudLink: l.soundcloudLink || "",
               emails: Array.isArray(l.emails) ? l.emails : (l.contactInfo ? [l.contactInfo] : []),
             }));
           }
@@ -326,6 +330,7 @@ export const useAppStore = create<AppState>()(
             website: "",
             demoLink: "",
             socialLink: "",
+            soundcloudLink: "",
             emails: [],
             ...l,
           }));

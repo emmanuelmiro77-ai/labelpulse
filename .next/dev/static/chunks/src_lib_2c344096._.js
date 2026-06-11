@@ -35,6 +35,7 @@ function buildLabelsFromData() {
             website: "",
             demoLink: "",
             socialLink: "",
+            soundcloudLink: "",
             genres: l.genres,
             rankByGenre: l.rankByGenre || {},
             pointsByGenre: l.pointsByGenre || {},
@@ -72,6 +73,7 @@ const useAppStore = (0, __TURBOPACK__imported__module__$5b$project$5d2f$node_mod
                             website: label.website || "",
                             demoLink: label.demoLink || "",
                             socialLink: label.socialLink || "",
+                            soundcloudLink: label.soundcloudLink || "",
                             emails: label.emails || []
                         }
                     ]
@@ -209,6 +211,7 @@ const useAppStore = (0, __TURBOPACK__imported__module__$5b$project$5d2f$node_mod
                         website: l.website || "",
                         demoLink: l.demoLink || "",
                         socialLink: l.socialLink || "",
+                        soundcloudLink: l.soundcloudLink || "",
                         emails: Array.isArray(l.emails) ? l.emails : l.contactInfo ? [
                             l.contactInfo
                         ] : []
@@ -261,6 +264,7 @@ const useAppStore = (0, __TURBOPACK__imported__module__$5b$project$5d2f$node_mod
                     website: "",
                     demoLink: "",
                     socialLink: "",
+                    soundcloudLink: "",
                     emails: [],
                     ...l
                 }));
@@ -528,7 +532,22 @@ const translations = {
         "data.importDesc": "Carica un file JSON di backup per ripristinare i tuoi dati. ATTENZIONE: sostituirà tutti i dati attuali!",
         "data.exportButton": "Scarica Backup",
         "data.importButton": "Carica Backup",
-        "data.title": "Backup Dati"
+        "data.title": "Backup Dati",
+        "labels.soundcloudLink": "SoundCloud",
+        "autosave.title": "Salvataggio Automatico",
+        "autosave.description": "Scegli una cartella del tuo PC dove salvare il backup in automatico ogni volta che chiudi l'app. Nessun dato verrà perso!",
+        "autosave.saveNow": "Salva",
+        "autosave.choosePath": "Scegli Percorso Backup",
+        "autosave.configured": "Auto-Save Configurato!",
+        "autosave.configuredDesc": "Il backup verrà salvato in automatico quando chiudi l'app.",
+        "autosave.active": "Auto-Save Attivo",
+        "autosave.lastSaved": "Ultimo salvataggio: ",
+        "autosave.disable": "Disattiva",
+        "autosave.notSupported": "Browser Non Supportato",
+        "autosave.notSupportedDesc": "Il salvataggio automatico richiede Chrome o Edge. Usa il pulsante 'Salva' per il backup manuale.",
+        "autosave.saved": "Backup salvato con successo!",
+        "autosave.error": "Errore nel salvataggio del backup.",
+        "autosave.disabled": "Auto-Save disattivato."
     },
     en: {
         "nav.dashboard": "Dashboard",
@@ -748,7 +767,22 @@ const translations = {
         "data.importDesc": "Upload a JSON backup file to restore your data. WARNING: this will replace all current data!",
         "data.exportButton": "Download Backup",
         "data.importButton": "Upload Backup",
-        "data.title": "Data Backup"
+        "data.title": "Data Backup",
+        "labels.soundcloudLink": "SoundCloud",
+        "autosave.title": "Auto-Save",
+        "autosave.description": "Choose a folder on your PC to automatically save a backup every time you close the app. No data will be lost!",
+        "autosave.saveNow": "Save",
+        "autosave.choosePath": "Choose Backup Path",
+        "autosave.configured": "Auto-Save Configured!",
+        "autosave.configuredDesc": "Backup will be saved automatically when you close the app.",
+        "autosave.active": "Auto-Save Active",
+        "autosave.lastSaved": "Last saved: ",
+        "autosave.disable": "Disable",
+        "autosave.notSupported": "Browser Not Supported",
+        "autosave.notSupportedDesc": "Auto-save requires Chrome or Edge. Use the 'Save' button for manual backup.",
+        "autosave.saved": "Backup saved successfully!",
+        "autosave.error": "Error saving backup.",
+        "autosave.disabled": "Auto-Save disabled."
     },
     es: {
         "nav.dashboard": "Panel",
@@ -968,7 +1002,22 @@ const translations = {
         "data.importDesc": "Sube un archivo JSON de backup para restaurar tus datos. ¡ATENCIÓN: reemplazará todos los datos actuales!",
         "data.exportButton": "Descargar Backup",
         "data.importButton": "Cargar Backup",
-        "data.title": "Copia de Seguridad"
+        "data.title": "Copia de Seguridad",
+        "labels.soundcloudLink": "SoundCloud",
+        "autosave.title": "Guardado Automático",
+        "autosave.description": "Elige una carpeta en tu PC para guardar un backup automáticamente cada vez que cierres la app. ¡No se perderán datos!",
+        "autosave.saveNow": "Guardar",
+        "autosave.choosePath": "Elegir Ruta de Backup",
+        "autosave.configured": "¡Auto-Save Configurado!",
+        "autosave.configuredDesc": "El backup se guardará automáticamente cuando cierres la app.",
+        "autosave.active": "Auto-Save Activo",
+        "autosave.lastSaved": "Último guardado: ",
+        "autosave.disable": "Desactivar",
+        "autosave.notSupported": "Navegador No Soportado",
+        "autosave.notSupportedDesc": "El guardado automático requiere Chrome o Edge. Usa el botón 'Guardar' para backup manual.",
+        "autosave.saved": "¡Backup guardado con éxito!",
+        "autosave.error": "Error al guardar el backup.",
+        "autosave.disabled": "Auto-Save desactivado."
     },
     fr: {
         "nav.dashboard": "Tableau de bord",
@@ -1188,7 +1237,22 @@ const translations = {
         "data.importDesc": "Chargez un fichier JSON de sauvegarde pour restaurer vos données. ATTENTION : cela remplacera toutes les données actuelles !",
         "data.exportButton": "Télécharger la Sauvegarde",
         "data.importButton": "Charger la Sauvegarde",
-        "data.title": "Sauvegarde des Données"
+        "data.title": "Sauvegarde des Données",
+        "labels.soundcloudLink": "SoundCloud",
+        "autosave.title": "Sauvegarde Automatique",
+        "autosave.description": "Choisissez un dossier sur votre PC pour sauvegarder automatiquement un backup à chaque fermeture de l'app. Aucune donnée ne sera perdue !",
+        "autosave.saveNow": "Sauvegarder",
+        "autosave.choosePath": "Choisir le Chemin de Backup",
+        "autosave.configured": "Sauvegarde Automatique Configurée !",
+        "autosave.configuredDesc": "Le backup sera sauvegardé automatiquement lorsque vous fermerez l'app.",
+        "autosave.active": "Sauvegarde Automatique Active",
+        "autosave.lastSaved": "Dernière sauvegarde : ",
+        "autosave.disable": "Désactiver",
+        "autosave.notSupported": "Navigateur Non Supporté",
+        "autosave.notSupportedDesc": "La sauvegarde automatique nécessite Chrome ou Edge. Utilisez le bouton 'Sauvegarder' pour un backup manuel.",
+        "autosave.saved": "Backup sauvegardé avec succès !",
+        "autosave.error": "Erreur lors de la sauvegarde du backup.",
+        "autosave.disabled": "Sauvegarde automatique désactivée."
     },
     de: {
         "nav.dashboard": "Übersicht",
@@ -1408,7 +1472,22 @@ const translations = {
         "data.importDesc": "Laden Sie eine JSON-Backupdatei hoch, um Ihre Daten wiederherzustellen. ACHTUNG: Dies ersetzt alle aktuellen Daten!",
         "data.exportButton": "Backup Herunterladen",
         "data.importButton": "Backup Hochladen",
-        "data.title": "Datensicherung"
+        "data.title": "Datensicherung",
+        "labels.soundcloudLink": "SoundCloud",
+        "autosave.title": "Automatisches Speichern",
+        "autosave.description": "Wählen Sie einen Ordner auf Ihrem PC, um bei jedem Schließen der App automatisch ein Backup zu speichern. Keine Daten gehen verloren!",
+        "autosave.saveNow": "Speichern",
+        "autosave.choosePath": "Backup-Pfad Wählen",
+        "autosave.configured": "Auto-Save Konfiguriert!",
+        "autosave.configuredDesc": "Das Backup wird automatisch gespeichert, wenn Sie die App schließen.",
+        "autosave.active": "Auto-Save Aktiv",
+        "autosave.lastSaved": "Zuletzt gespeichert: ",
+        "autosave.disable": "Deaktivieren",
+        "autosave.notSupported": "Browser Nicht Unterstützt",
+        "autosave.notSupportedDesc": "Automatisches Speichern erfordert Chrome oder Edge. Verwenden Sie die Schaltfläche 'Speichern' für manuelles Backup.",
+        "autosave.saved": "Backup erfolgreich gespeichert!",
+        "autosave.error": "Fehler beim Speichern des Backups.",
+        "autosave.disabled": "Auto-Save deaktiviert."
     },
     pt: {
         "nav.dashboard": "Painel",
@@ -1628,7 +1707,22 @@ const translations = {
         "data.importDesc": "Carregue um arquivo JSON de backup para restaurar seus dados. ATENÇÃO: isso substituirá todos os dados atuais!",
         "data.exportButton": "Baixar Backup",
         "data.importButton": "Carregar Backup",
-        "data.title": "Backup de Dados"
+        "data.title": "Backup de Dados",
+        "labels.soundcloudLink": "SoundCloud",
+        "autosave.title": "Salvamento Automático",
+        "autosave.description": "Escolha uma pasta no seu PC para salvar um backup automaticamente toda vez que fechar o app. Nenhum dado será perdido!",
+        "autosave.saveNow": "Salvar",
+        "autosave.choosePath": "Escolher Caminho do Backup",
+        "autosave.configured": "Auto-Save Configurado!",
+        "autosave.configuredDesc": "O backup será salvo automaticamente quando você fechar o app.",
+        "autosave.active": "Auto-Save Ativo",
+        "autosave.lastSaved": "Último salvamento: ",
+        "autosave.disable": "Desativar",
+        "autosave.notSupported": "Navegador Não Suportado",
+        "autosave.notSupportedDesc": "O salvamento automático requer Chrome ou Edge. Use o botão 'Salvar' para backup manual.",
+        "autosave.saved": "Backup salvo com sucesso!",
+        "autosave.error": "Erro ao salvar o backup.",
+        "autosave.disabled": "Auto-Save desativado."
     }
 };
 function t(locale, key) {

@@ -4,7 +4,7 @@ globalThis.__BUILD_MANIFEST = {
   },
   "devFiles": [],
   "polyfillFiles": [
-    "static/chunks/a6dad97d9634a72d.js"
+    "static/chunks/664adc71bc2617c2.js"
   ],
   "lowPriorityFiles": [],
   "rootMainFiles": [

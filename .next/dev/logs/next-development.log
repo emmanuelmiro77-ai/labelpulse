@@ -1,2 +1,19 @@
 [00:00:00.741] Server  LOG     ✓ Ready in 559ms
 [00:00:08.660] Server  LOG     ○ Compiling / ...
+[00:00:08.584] Browser LOG     SW registered: https://preview-chat-ca358832-13f8-4aec-a4b9-11f697c4db66.space-z.ai/
+[00:00:08.913] Server  WARN    ⚠ Blocked cross-origin request from preview-chat-ca358832-13f8-4aec-a4b9-11f697c4db66.space-z.ai to /_next/* resource. To allow this, configure "allowedDevOrigins" in next.config
+Read more: https://nextjs.org/docs/app/api-reference/config/next-config-js/allowedDevOrigins
+[00:00:13.877] Browser LOG     SW registered: https://preview-chat-ca358832-13f8-4aec-a4b9-11f697c4db66.space-z.ai/
+[00:00:28.759] Browser LOG     SW registered: https://preview-chat-ca358832-13f8-4aec-a4b9-11f697c4db66.space-z.ai/
+[00:01:11.891] Browser LOG     SW registered: https://preview-chat-ca358832-13f8-4aec-a4b9-11f697c4db66.space-z.ai/
+[00:01:25.575] Browser LOG     SW registered: https://preview-chat-ca358832-13f8-4aec-a4b9-11f697c4db66.space-z.ai/
+[00:12:09.086] Server  LOG     ✓ Compiled in 21ms
+[00:12:14.642] Server  LOG     ✓ Compiled in 8ms
+[00:12:27.090] Server  LOG     ✓ Compiled in 7ms
+[00:12:31.839] Server  LOG     ✓ Compiled in 7ms
+[00:12:51.722] Server  LOG     ✓ Compiled in 61ms
+[00:14:16.190] Server  LOG     ✓ Compiled in 9ms
+[00:14:41.860] Server  LOG     ✓ Compiled in 10ms
+[00:15:33.529] Server  LOG     ✓ Compiled in 10ms
+[00:15:37.551] Server  LOG     ✓ Compiled in 9ms
+[00:15:41.479] Server  LOG     ✓ Compiled in 176ms

@@ -28,6 +28,7 @@ import { PitchGenerator } from "@/components/pitch-generator";
 import { HelpModal } from "@/components/help-modal";
 import { GmailSettings } from "@/components/gmail-settings";
 import { DataBackup } from "@/components/data-backup";
+import { AutoSave } from "@/components/auto-save";
 
 const NAV_KEYS = [
   { id: "dashboard" as const, labelKey: "nav.dashboard" as const, icon: LayoutDashboard },
@@ -158,6 +159,9 @@ export default function Home() {
 
             {/* Data Backup */}
             <DataBackup />
+
+            {/* Auto-Save */}
+            <AutoSave />
 
             {/* Help Button */}
             <Button

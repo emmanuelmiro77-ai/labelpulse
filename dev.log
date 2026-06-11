@@ -1,0 +1,41 @@
+▲ Next.js 16.1.3 (Turbopack)
+- Local:         http://localhost:3000
+- Network:       http://21.0.3.50:3000
+- Environments: .env
+
+✓ Starting...
+✓ Ready in 631ms
+○ Compiling / ...
+ GET / 200 in 3.8s (compile: 3.6s, render: 195ms)
+ GET / 200 in 3.6s (compile: 3.4s, render: 248ms)
+ GET / 200 in 24ms (compile: 1977µs, render: 22ms)
+  Reload env: .env
+ GET / 200 in 193ms (compile: 32ms, render: 161ms)
+⚠ Blocked cross-origin request from preview-chat-ca358832-13f8-4aec-a4b9-11f697c4db66.space-z.ai to /_next/* resource. To allow this, configure "allowedDevOrigins" in next.config
+Read more: https://nextjs.org/docs/app/api-reference/config/next-config-js/allowedDevOrigins
+ GET /api/auth/session 200 in 1500ms (compile: 1481ms, render: 19ms)
+ GET / 200 in 167ms (compile: 142ms, render: 25ms)
+ GET / 200 in 25ms (compile: 1984µs, render: 23ms)
+ GET /api/auth/session 200 in 198ms (compile: 190ms, render: 7ms)
+ GET / 200 in 35ms (compile: 4ms, render: 31ms)
+ GET / 200 in 26ms (compile: 2ms, render: 24ms)
+ GET /api/auth/session 200 in 31ms (compile: 24ms, render: 7ms)
+ GET / 200 in 30ms (compile: 2ms, render: 28ms)
+ GET / 200 in 27ms (compile: 2ms, render: 25ms)
+ GET /api/auth/session 200 in 31ms (compile: 23ms, render: 7ms)
+ GET / 200 in 31ms (compile: 2ms, render: 29ms)
+ GET / 200 in 25ms (compile: 1897µs, render: 23ms)
+ GET /api/auth/session 200 in 31ms (compile: 25ms, render: 6ms)
+✓ Compiled in 21ms
+✓ Compiled in 8ms
+✓ Compiled in 7ms
+✓ Compiled in 7ms
+✓ Compiled in 61ms
+✓ Compiled in 9ms
+✓ Compiled in 10ms
+✓ Compiled in 10ms
+✓ Compiled in 9ms
+✓ Compiled in 176ms
+ GET / 200 in 47ms (compile: 30ms, render: 18ms)
+ GET / 200 in 139ms (compile: 3ms, render: 136ms)
+ GET / 200 in 32ms (compile: 3ms, render: 30ms)

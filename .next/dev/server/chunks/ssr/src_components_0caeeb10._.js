@@ -1757,6 +1757,7 @@ function LabelFinder() {
     const [detailWebsite, setDetailWebsite] = (0, __TURBOPACK__imported__module__$5b$project$5d2f$node_modules$2f$next$2f$dist$2f$server$2f$route$2d$modules$2f$app$2d$page$2f$vendored$2f$ssr$2f$react$2e$js__$5b$app$2d$ssr$5d$__$28$ecmascript$29$__["useState"])("");
     const [detailDemoLink, setDetailDemoLink] = (0, __TURBOPACK__imported__module__$5b$project$5d2f$node_modules$2f$next$2f$dist$2f$server$2f$route$2d$modules$2f$app$2d$page$2f$vendored$2f$ssr$2f$react$2e$js__$5b$app$2d$ssr$5d$__$28$ecmascript$29$__["useState"])("");
     const [detailSocialLink, setDetailSocialLink] = (0, __TURBOPACK__imported__module__$5b$project$5d2f$node_modules$2f$next$2f$dist$2f$server$2f$route$2d$modules$2f$app$2d$page$2f$vendored$2f$ssr$2f$react$2e$js__$5b$app$2d$ssr$5d$__$28$ecmascript$29$__["useState"])("");
+    const [detailSoundcloudLink, setDetailSoundcloudLink] = (0, __TURBOPACK__imported__module__$5b$project$5d2f$node_modules$2f$next$2f$dist$2f$server$2f$route$2d$modules$2f$app$2d$page$2f$vendored$2f$ssr$2f$react$2e$js__$5b$app$2d$ssr$5d$__$28$ecmascript$29$__["useState"])("");
     const [detailNotes, setDetailNotes] = (0, __TURBOPACK__imported__module__$5b$project$5d2f$node_modules$2f$next$2f$dist$2f$server$2f$route$2d$modules$2f$app$2d$page$2f$vendored$2f$ssr$2f$react$2e$js__$5b$app$2d$ssr$5d$__$28$ecmascript$29$__["useState"])("");
     const [detailStatus, setDetailStatus] = (0, __TURBOPACK__imported__module__$5b$project$5d2f$node_modules$2f$next$2f$dist$2f$server$2f$route$2d$modules$2f$app$2d$page$2f$vendored$2f$ssr$2f$react$2e$js__$5b$app$2d$ssr$5d$__$28$ecmascript$29$__["useState"])("open");
     const [detailSubmissionType, setDetailSubmissionType] = (0, __TURBOPACK__imported__module__$5b$project$5d2f$node_modules$2f$next$2f$dist$2f$server$2f$route$2d$modules$2f$app$2d$page$2f$vendored$2f$ssr$2f$react$2e$js__$5b$app$2d$ssr$5d$__$28$ecmascript$29$__["useState"])("email");
@@ -1846,6 +1847,7 @@ function LabelFinder() {
         setDetailWebsite(label.website || "");
         setDetailDemoLink(label.demoLink || "");
         setDetailSocialLink(label.socialLink || "");
+        setDetailSoundcloudLink(label.soundcloudLink || "");
         setDetailNotes(label.notes || "");
         setDetailStatus(label.status);
         setDetailSubmissionType(label.submissionType);
@@ -2177,7 +2179,7 @@ function LabelFinder() {
             ]
         }, void 0, true, {
             fileName: "[project]/src/components/label-finder.tsx",
-            lineNumber: 462,
+            lineNumber: 464,
             columnNumber: 9
         }, this);
         if (tier === "mid") return /*#__PURE__*/ (0, __TURBOPACK__imported__module__$5b$project$5d2f$node_modules$2f$next$2f$dist$2f$server$2f$route$2d$modules$2f$app$2d$page$2f$vendored$2f$ssr$2f$react$2d$jsx$2d$dev$2d$runtime$2e$js__$5b$app$2d$ssr$5d$__$28$ecmascript$29$__["jsxDEV"])(__TURBOPACK__imported__module__$5b$project$5d2f$src$2f$components$2f$ui$2f$badge$2e$tsx__$5b$app$2d$ssr$5d$__$28$ecmascript$29$__["Badge"], {
@@ -2188,7 +2190,7 @@ function LabelFinder() {
             ]
         }, void 0, true, {
             fileName: "[project]/src/components/label-finder.tsx",
-            lineNumber: 468,
+            lineNumber: 470,
             columnNumber: 9
         }, this);
         return /*#__PURE__*/ (0, __TURBOPACK__imported__module__$5b$project$5d2f$node_modules$2f$next$2f$dist$2f$server$2f$route$2d$modules$2f$app$2d$page$2f$vendored$2f$ssr$2f$react$2d$jsx$2d$dev$2d$runtime$2e$js__$5b$app$2d$ssr$5d$__$28$ecmascript$29$__["jsxDEV"])(__TURBOPACK__imported__module__$5b$project$5d2f$src$2f$components$2f$ui$2f$badge$2e$tsx__$5b$app$2d$ssr$5d$__$28$ecmascript$29$__["Badge"], {
@@ -2199,7 +2201,7 @@ function LabelFinder() {
             ]
         }, void 0, true, {
             fileName: "[project]/src/components/label-finder.tsx",
-            lineNumber: 473,
+            lineNumber: 475,
             columnNumber: 7
         }, this);
     };
@@ -2210,7 +2212,7 @@ function LabelFinder() {
         return `#${Math.min(...ranks)}`;
     };
     const hasUserData = (label)=>{
-        return !!(label.contactInfo || label.emails && label.emails.length > 0 || label.website || label.demoLink || label.socialLink || label.notes);
+        return !!(label.contactInfo || label.emails && label.emails.length > 0 || label.website || label.demoLink || label.socialLink || label.soundcloudLink || label.notes);
     };
     return /*#__PURE__*/ (0, __TURBOPACK__imported__module__$5b$project$5d2f$node_modules$2f$next$2f$dist$2f$server$2f$route$2d$modules$2f$app$2d$page$2f$vendored$2f$ssr$2f$react$2d$jsx$2d$dev$2d$runtime$2e$js__$5b$app$2d$ssr$5d$__$28$ecmascript$29$__["jsxDEV"])("div", {
         className: "space-y-4",
@@ -2225,7 +2227,7 @@ function LabelFinder() {
                                 className: "absolute left-3 top-1/2 -translate-y-1/2 h-4 w-4 text-muted-foreground"
                             }, void 0, false, {
                                 fileName: "[project]/src/components/label-finder.tsx",
-                                lineNumber: 502,
+                                lineNumber: 505,
                                 columnNumber: 11
                             }, this),
                             /*#__PURE__*/ (0, __TURBOPACK__imported__module__$5b$project$5d2f$node_modules$2f$next$2f$dist$2f$server$2f$route$2d$modules$2f$app$2d$page$2f$vendored$2f$ssr$2f$react$2d$jsx$2d$dev$2d$runtime$2e$js__$5b$app$2d$ssr$5d$__$28$ecmascript$29$__["jsxDEV"])(__TURBOPACK__imported__module__$5b$project$5d2f$src$2f$components$2f$ui$2f$input$2e$tsx__$5b$app$2d$ssr$5d$__$28$ecmascript$29$__["Input"], {
@@ -2235,13 +2237,13 @@ function LabelFinder() {
                                 className: "pl-9 bg-secondary/50 border-border/50"
                             }, void 0, false, {
                                 fileName: "[project]/src/components/label-finder.tsx",
-                                lineNumber: 503,
+                                lineNumber: 506,
                                 columnNumber: 11
                             }, this)
                         ]
                     }, void 0, true, {
                         fileName: "[project]/src/components/label-finder.tsx",
-                        lineNumber: 501,
+                        lineNumber: 504,
                         columnNumber: 9
                     }, this),
                     /*#__PURE__*/ (0, __TURBOPACK__imported__module__$5b$project$5d2f$node_modules$2f$next$2f$dist$2f$server$2f$route$2d$modules$2f$app$2d$page$2f$vendored$2f$ssr$2f$react$2d$jsx$2d$dev$2d$runtime$2e$js__$5b$app$2d$ssr$5d$__$28$ecmascript$29$__["jsxDEV"])(__TURBOPACK__imported__module__$5b$project$5d2f$src$2f$components$2f$ui$2f$popover$2e$tsx__$5b$app$2d$ssr$5d$__$28$ecmascript$29$__["Popover"], {
@@ -2258,7 +2260,7 @@ function LabelFinder() {
                                             className: "h-3.5 w-3.5 mr-1.5 shrink-0"
                                         }, void 0, false, {
                                             fileName: "[project]/src/components/label-finder.tsx",
-                                            lineNumber: 513,
+                                            lineNumber: 516,
                                             columnNumber: 15
                                         }, this),
                                         genreFilter.length === 0 ? /*#__PURE__*/ (0, __TURBOPACK__imported__module__$5b$project$5d2f$node_modules$2f$next$2f$dist$2f$server$2f$route$2d$modules$2f$app$2d$page$2f$vendored$2f$ssr$2f$react$2d$jsx$2d$dev$2d$runtime$2e$js__$5b$app$2d$ssr$5d$__$28$ecmascript$29$__["jsxDEV"])("span", {
@@ -2266,7 +2268,7 @@ function LabelFinder() {
                                             children: (0, __TURBOPACK__imported__module__$5b$project$5d2f$src$2f$lib$2f$i18n$2e$ts__$5b$app$2d$ssr$5d$__$28$ecmascript$29$__["t"])(locale, "labels.allGenres")
                                         }, void 0, false, {
                                             fileName: "[project]/src/components/label-finder.tsx",
-                                            lineNumber: 515,
+                                            lineNumber: 518,
                                             columnNumber: 17
                                         }, this) : /*#__PURE__*/ (0, __TURBOPACK__imported__module__$5b$project$5d2f$node_modules$2f$next$2f$dist$2f$server$2f$route$2d$modules$2f$app$2d$page$2f$vendored$2f$ssr$2f$react$2d$jsx$2d$dev$2d$runtime$2e$js__$5b$app$2d$ssr$5d$__$28$ecmascript$29$__["jsxDEV"])("span", {
                                             className: "truncate flex items-center gap-1",
@@ -2277,7 +2279,7 @@ function LabelFinder() {
                                                             children: g
                                                         }, g, false, {
                                                             fileName: "[project]/src/components/label-finder.tsx",
-                                                            lineNumber: 521,
+                                                            lineNumber: 524,
                                                             columnNumber: 25
                                                         }, this)),
                                                     genreFilter.length > 2 && /*#__PURE__*/ (0, __TURBOPACK__imported__module__$5b$project$5d2f$node_modules$2f$next$2f$dist$2f$server$2f$route$2d$modules$2f$app$2d$page$2f$vendored$2f$ssr$2f$react$2d$jsx$2d$dev$2d$runtime$2e$js__$5b$app$2d$ssr$5d$__$28$ecmascript$29$__["jsxDEV"])("span", {
@@ -2288,32 +2290,32 @@ function LabelFinder() {
                                                         ]
                                                     }, void 0, true, {
                                                         fileName: "[project]/src/components/label-finder.tsx",
-                                                        lineNumber: 523,
+                                                        lineNumber: 526,
                                                         columnNumber: 50
                                                     }, this)
                                                 ]
                                             }, void 0, true)
                                         }, void 0, false, {
                                             fileName: "[project]/src/components/label-finder.tsx",
-                                            lineNumber: 517,
+                                            lineNumber: 520,
                                             columnNumber: 17
                                         }, this),
                                         /*#__PURE__*/ (0, __TURBOPACK__imported__module__$5b$project$5d2f$node_modules$2f$next$2f$dist$2f$server$2f$route$2d$modules$2f$app$2d$page$2f$vendored$2f$ssr$2f$react$2d$jsx$2d$dev$2d$runtime$2e$js__$5b$app$2d$ssr$5d$__$28$ecmascript$29$__["jsxDEV"])(__TURBOPACK__imported__module__$5b$project$5d2f$node_modules$2f$lucide$2d$react$2f$dist$2f$esm$2f$icons$2f$chevron$2d$down$2e$js__$5b$app$2d$ssr$5d$__$28$ecmascript$29$__$3c$export__default__as__ChevronDown$3e$__["ChevronDown"], {
                                             className: "h-3 w-3 ml-auto shrink-0 opacity-50"
                                         }, void 0, false, {
                                             fileName: "[project]/src/components/label-finder.tsx",
-                                            lineNumber: 528,
+                                            lineNumber: 531,
                                             columnNumber: 15
                                         }, this)
                                     ]
                                 }, void 0, true, {
                                     fileName: "[project]/src/components/label-finder.tsx",
-                                    lineNumber: 512,
+                                    lineNumber: 515,
                                     columnNumber: 13
                                 }, this)
                             }, void 0, false, {
                                 fileName: "[project]/src/components/label-finder.tsx",
-                                lineNumber: 511,
+                                lineNumber: 514,
                                 columnNumber: 11
                             }, this),
                             /*#__PURE__*/ (0, __TURBOPACK__imported__module__$5b$project$5d2f$node_modules$2f$next$2f$dist$2f$server$2f$route$2d$modules$2f$app$2d$page$2f$vendored$2f$ssr$2f$react$2d$jsx$2d$dev$2d$runtime$2e$js__$5b$app$2d$ssr$5d$__$28$ecmascript$29$__["jsxDEV"])(__TURBOPACK__imported__module__$5b$project$5d2f$src$2f$components$2f$ui$2f$popover$2e$tsx__$5b$app$2d$ssr$5d$__$28$ecmascript$29$__["PopoverContent"], {
@@ -2331,7 +2333,7 @@ function LabelFinder() {
                                                         children: (0, __TURBOPACK__imported__module__$5b$project$5d2f$src$2f$lib$2f$i18n$2e$ts__$5b$app$2d$ssr$5d$__$28$ecmascript$29$__["t"])(locale, "labels.filterByGenre")
                                                     }, void 0, false, {
                                                         fileName: "[project]/src/components/label-finder.tsx",
-                                                        lineNumber: 534,
+                                                        lineNumber: 537,
                                                         columnNumber: 17
                                                     }, this),
                                                     genreFilter.length > 0 && /*#__PURE__*/ (0, __TURBOPACK__imported__module__$5b$project$5d2f$node_modules$2f$next$2f$dist$2f$server$2f$route$2d$modules$2f$app$2d$page$2f$vendored$2f$ssr$2f$react$2d$jsx$2d$dev$2d$runtime$2e$js__$5b$app$2d$ssr$5d$__$28$ecmascript$29$__["jsxDEV"])(__TURBOPACK__imported__module__$5b$project$5d2f$src$2f$components$2f$ui$2f$button$2e$tsx__$5b$app$2d$ssr$5d$__$28$ecmascript$29$__["Button"], {
@@ -2344,20 +2346,20 @@ function LabelFinder() {
                                                                 className: "h-2.5 w-2.5 mr-0.5"
                                                             }, void 0, false, {
                                                                 fileName: "[project]/src/components/label-finder.tsx",
-                                                                lineNumber: 537,
+                                                                lineNumber: 540,
                                                                 columnNumber: 21
                                                             }, this),
                                                             (0, __TURBOPACK__imported__module__$5b$project$5d2f$src$2f$lib$2f$i18n$2e$ts__$5b$app$2d$ssr$5d$__$28$ecmascript$29$__["t"])(locale, "labels.clearFilter")
                                                         ]
                                                     }, void 0, true, {
                                                         fileName: "[project]/src/components/label-finder.tsx",
-                                                        lineNumber: 536,
+                                                        lineNumber: 539,
                                                         columnNumber: 19
                                                     }, this)
                                                 ]
                                             }, void 0, true, {
                                                 fileName: "[project]/src/components/label-finder.tsx",
-                                                lineNumber: 533,
+                                                lineNumber: 536,
                                                 columnNumber: 15
                                             }, this),
                                             genreFilter.length > 0 && /*#__PURE__*/ (0, __TURBOPACK__imported__module__$5b$project$5d2f$node_modules$2f$next$2f$dist$2f$server$2f$route$2d$modules$2f$app$2d$page$2f$vendored$2f$ssr$2f$react$2d$jsx$2d$dev$2d$runtime$2e$js__$5b$app$2d$ssr$5d$__$28$ecmascript$29$__["jsxDEV"])("p", {
@@ -2372,13 +2374,13 @@ function LabelFinder() {
                                                 ]
                                             }, void 0, true, {
                                                 fileName: "[project]/src/components/label-finder.tsx",
-                                                lineNumber: 542,
+                                                lineNumber: 545,
                                                 columnNumber: 17
                                             }, this)
                                         ]
                                     }, void 0, true, {
                                         fileName: "[project]/src/components/label-finder.tsx",
-                                        lineNumber: 532,
+                                        lineNumber: 535,
                                         columnNumber: 13
                                     }, this),
                                     /*#__PURE__*/ (0, __TURBOPACK__imported__module__$5b$project$5d2f$node_modules$2f$next$2f$dist$2f$server$2f$route$2d$modules$2f$app$2d$page$2f$vendored$2f$ssr$2f$react$2d$jsx$2d$dev$2d$runtime$2e$js__$5b$app$2d$ssr$5d$__$28$ecmascript$29$__["jsxDEV"])("div", {
@@ -2394,7 +2396,7 @@ function LabelFinder() {
                                                         className: "pointer-events-none"
                                                     }, void 0, false, {
                                                         fileName: "[project]/src/components/label-finder.tsx",
-                                                        lineNumber: 552,
+                                                        lineNumber: 555,
                                                         columnNumber: 21
                                                     }, this),
                                                     /*#__PURE__*/ (0, __TURBOPACK__imported__module__$5b$project$5d2f$node_modules$2f$next$2f$dist$2f$server$2f$route$2d$modules$2f$app$2d$page$2f$vendored$2f$ssr$2f$react$2d$jsx$2d$dev$2d$runtime$2e$js__$5b$app$2d$ssr$5d$__$28$ecmascript$29$__["jsxDEV"])("span", {
@@ -2402,38 +2404,38 @@ function LabelFinder() {
                                                         children: g
                                                     }, void 0, false, {
                                                         fileName: "[project]/src/components/label-finder.tsx",
-                                                        lineNumber: 553,
+                                                        lineNumber: 556,
                                                         columnNumber: 21
                                                     }, this),
                                                     isSelected && /*#__PURE__*/ (0, __TURBOPACK__imported__module__$5b$project$5d2f$node_modules$2f$next$2f$dist$2f$server$2f$route$2d$modules$2f$app$2d$page$2f$vendored$2f$ssr$2f$react$2d$jsx$2d$dev$2d$runtime$2e$js__$5b$app$2d$ssr$5d$__$28$ecmascript$29$__["jsxDEV"])(__TURBOPACK__imported__module__$5b$project$5d2f$node_modules$2f$lucide$2d$react$2f$dist$2f$esm$2f$icons$2f$check$2e$js__$5b$app$2d$ssr$5d$__$28$ecmascript$29$__$3c$export__default__as__Check$3e$__["Check"], {
                                                         className: "h-3 w-3 ml-auto text-primary"
                                                     }, void 0, false, {
                                                         fileName: "[project]/src/components/label-finder.tsx",
-                                                        lineNumber: 554,
+                                                        lineNumber: 557,
                                                         columnNumber: 36
                                                     }, this)
                                                 ]
                                             }, g, true, {
                                                 fileName: "[project]/src/components/label-finder.tsx",
-                                                lineNumber: 551,
+                                                lineNumber: 554,
                                                 columnNumber: 19
                                             }, this);
                                         })
                                     }, void 0, false, {
                                         fileName: "[project]/src/components/label-finder.tsx",
-                                        lineNumber: 547,
+                                        lineNumber: 550,
                                         columnNumber: 13
                                     }, this)
                                 ]
                             }, void 0, true, {
                                 fileName: "[project]/src/components/label-finder.tsx",
-                                lineNumber: 531,
+                                lineNumber: 534,
                                 columnNumber: 11
                             }, this)
                         ]
                     }, void 0, true, {
                         fileName: "[project]/src/components/label-finder.tsx",
-                        lineNumber: 510,
+                        lineNumber: 513,
                         columnNumber: 9
                     }, this),
                     /*#__PURE__*/ (0, __TURBOPACK__imported__module__$5b$project$5d2f$node_modules$2f$next$2f$dist$2f$server$2f$route$2d$modules$2f$app$2d$page$2f$vendored$2f$ssr$2f$react$2d$jsx$2d$dev$2d$runtime$2e$js__$5b$app$2d$ssr$5d$__$28$ecmascript$29$__["jsxDEV"])(__TURBOPACK__imported__module__$5b$project$5d2f$src$2f$components$2f$ui$2f$select$2e$tsx__$5b$app$2d$ssr$5d$__$28$ecmascript$29$__["Select"], {
@@ -2447,20 +2449,20 @@ function LabelFinder() {
                                         className: "h-3.5 w-3.5 mr-1.5 shrink-0"
                                     }, void 0, false, {
                                         fileName: "[project]/src/components/label-finder.tsx",
-                                        lineNumber: 563,
+                                        lineNumber: 566,
                                         columnNumber: 13
                                     }, this),
                                     /*#__PURE__*/ (0, __TURBOPACK__imported__module__$5b$project$5d2f$node_modules$2f$next$2f$dist$2f$server$2f$route$2d$modules$2f$app$2d$page$2f$vendored$2f$ssr$2f$react$2d$jsx$2d$dev$2d$runtime$2e$js__$5b$app$2d$ssr$5d$__$28$ecmascript$29$__["jsxDEV"])(__TURBOPACK__imported__module__$5b$project$5d2f$src$2f$components$2f$ui$2f$select$2e$tsx__$5b$app$2d$ssr$5d$__$28$ecmascript$29$__["SelectValue"], {
                                         placeholder: (0, __TURBOPACK__imported__module__$5b$project$5d2f$src$2f$lib$2f$i18n$2e$ts__$5b$app$2d$ssr$5d$__$28$ecmascript$29$__["t"])(locale, "labels.allStatus")
                                     }, void 0, false, {
                                         fileName: "[project]/src/components/label-finder.tsx",
-                                        lineNumber: 564,
+                                        lineNumber: 567,
                                         columnNumber: 13
                                     }, this)
                                 ]
                             }, void 0, true, {
                                 fileName: "[project]/src/components/label-finder.tsx",
-                                lineNumber: 562,
+                                lineNumber: 565,
                                 columnNumber: 11
                             }, this),
                             /*#__PURE__*/ (0, __TURBOPACK__imported__module__$5b$project$5d2f$node_modules$2f$next$2f$dist$2f$server$2f$route$2d$modules$2f$app$2d$page$2f$vendored$2f$ssr$2f$react$2d$jsx$2d$dev$2d$runtime$2e$js__$5b$app$2d$ssr$5d$__$28$ecmascript$29$__["jsxDEV"])(__TURBOPACK__imported__module__$5b$project$5d2f$src$2f$components$2f$ui$2f$select$2e$tsx__$5b$app$2d$ssr$5d$__$28$ecmascript$29$__["SelectContent"], {
@@ -2470,7 +2472,7 @@ function LabelFinder() {
                                         children: (0, __TURBOPACK__imported__module__$5b$project$5d2f$src$2f$lib$2f$i18n$2e$ts__$5b$app$2d$ssr$5d$__$28$ecmascript$29$__["t"])(locale, "labels.allStatus")
                                     }, void 0, false, {
                                         fileName: "[project]/src/components/label-finder.tsx",
-                                        lineNumber: 567,
+                                        lineNumber: 570,
                                         columnNumber: 13
                                     }, this),
                                     /*#__PURE__*/ (0, __TURBOPACK__imported__module__$5b$project$5d2f$node_modules$2f$next$2f$dist$2f$server$2f$route$2d$modules$2f$app$2d$page$2f$vendored$2f$ssr$2f$react$2d$jsx$2d$dev$2d$runtime$2e$js__$5b$app$2d$ssr$5d$__$28$ecmascript$29$__["jsxDEV"])(__TURBOPACK__imported__module__$5b$project$5d2f$src$2f$components$2f$ui$2f$select$2e$tsx__$5b$app$2d$ssr$5d$__$28$ecmascript$29$__["SelectItem"], {
@@ -2478,7 +2480,7 @@ function LabelFinder() {
                                         children: (0, __TURBOPACK__imported__module__$5b$project$5d2f$src$2f$lib$2f$i18n$2e$ts__$5b$app$2d$ssr$5d$__$28$ecmascript$29$__["t"])(locale, "labels.open")
                                     }, void 0, false, {
                                         fileName: "[project]/src/components/label-finder.tsx",
-                                        lineNumber: 568,
+                                        lineNumber: 571,
                                         columnNumber: 13
                                     }, this),
                                     /*#__PURE__*/ (0, __TURBOPACK__imported__module__$5b$project$5d2f$node_modules$2f$next$2f$dist$2f$server$2f$route$2d$modules$2f$app$2d$page$2f$vendored$2f$ssr$2f$react$2d$jsx$2d$dev$2d$runtime$2e$js__$5b$app$2d$ssr$5d$__$28$ecmascript$29$__["jsxDEV"])(__TURBOPACK__imported__module__$5b$project$5d2f$src$2f$components$2f$ui$2f$select$2e$tsx__$5b$app$2d$ssr$5d$__$28$ecmascript$29$__["SelectItem"], {
@@ -2486,19 +2488,19 @@ function LabelFinder() {
                                         children: (0, __TURBOPACK__imported__module__$5b$project$5d2f$src$2f$lib$2f$i18n$2e$ts__$5b$app$2d$ssr$5d$__$28$ecmascript$29$__["t"])(locale, "labels.closed")
                                     }, void 0, false, {
                                         fileName: "[project]/src/components/label-finder.tsx",
-                                        lineNumber: 569,
+                                        lineNumber: 572,
                                         columnNumber: 13
                                     }, this)
                                 ]
                             }, void 0, true, {
                                 fileName: "[project]/src/components/label-finder.tsx",
-                                lineNumber: 566,
+                                lineNumber: 569,
                                 columnNumber: 11
                             }, this)
                         ]
                     }, void 0, true, {
                         fileName: "[project]/src/components/label-finder.tsx",
-                        lineNumber: 561,
+                        lineNumber: 564,
                         columnNumber: 9
                     }, this),
                     /*#__PURE__*/ (0, __TURBOPACK__imported__module__$5b$project$5d2f$node_modules$2f$next$2f$dist$2f$server$2f$route$2d$modules$2f$app$2d$page$2f$vendored$2f$ssr$2f$react$2d$jsx$2d$dev$2d$runtime$2e$js__$5b$app$2d$ssr$5d$__$28$ecmascript$29$__["jsxDEV"])(__TURBOPACK__imported__module__$5b$project$5d2f$src$2f$components$2f$ui$2f$button$2e$tsx__$5b$app$2d$ssr$5d$__$28$ecmascript$29$__["Button"], {
@@ -2510,14 +2512,14 @@ function LabelFinder() {
                                 className: "h-4 w-4 mr-1.5"
                             }, void 0, false, {
                                 fileName: "[project]/src/components/label-finder.tsx",
-                                lineNumber: 573,
+                                lineNumber: 576,
                                 columnNumber: 11
                             }, this),
                             (0, __TURBOPACK__imported__module__$5b$project$5d2f$src$2f$lib$2f$i18n$2e$ts__$5b$app$2d$ssr$5d$__$28$ecmascript$29$__["t"])(locale, "labels.smartMatch")
                         ]
                     }, void 0, true, {
                         fileName: "[project]/src/components/label-finder.tsx",
-                        lineNumber: 572,
+                        lineNumber: 575,
                         columnNumber: 9
                     }, this),
                     /*#__PURE__*/ (0, __TURBOPACK__imported__module__$5b$project$5d2f$node_modules$2f$next$2f$dist$2f$server$2f$route$2d$modules$2f$app$2d$page$2f$vendored$2f$ssr$2f$react$2d$jsx$2d$dev$2d$runtime$2e$js__$5b$app$2d$ssr$5d$__$28$ecmascript$29$__["jsxDEV"])(__TURBOPACK__imported__module__$5b$project$5d2f$src$2f$components$2f$ui$2f$button$2e$tsx__$5b$app$2d$ssr$5d$__$28$ecmascript$29$__["Button"], {
@@ -2528,20 +2530,20 @@ function LabelFinder() {
                                 className: "h-4 w-4 mr-1.5"
                             }, void 0, false, {
                                 fileName: "[project]/src/components/label-finder.tsx",
-                                lineNumber: 576,
+                                lineNumber: 579,
                                 columnNumber: 11
                             }, this),
                             (0, __TURBOPACK__imported__module__$5b$project$5d2f$src$2f$lib$2f$i18n$2e$ts__$5b$app$2d$ssr$5d$__$28$ecmascript$29$__["t"])(locale, "labels.addLabel")
                         ]
                     }, void 0, true, {
                         fileName: "[project]/src/components/label-finder.tsx",
-                        lineNumber: 575,
+                        lineNumber: 578,
                         columnNumber: 9
                     }, this)
                 ]
             }, void 0, true, {
                 fileName: "[project]/src/components/label-finder.tsx",
-                lineNumber: 500,
+                lineNumber: 503,
                 columnNumber: 7
             }, this),
             /*#__PURE__*/ (0, __TURBOPACK__imported__module__$5b$project$5d2f$node_modules$2f$next$2f$dist$2f$server$2f$route$2d$modules$2f$app$2d$page$2f$vendored$2f$ssr$2f$react$2d$jsx$2d$dev$2d$runtime$2e$js__$5b$app$2d$ssr$5d$__$28$ecmascript$29$__["jsxDEV"])("p", {
@@ -2553,7 +2555,7 @@ function LabelFinder() {
                 ]
             }, void 0, true, {
                 fileName: "[project]/src/components/label-finder.tsx",
-                lineNumber: 581,
+                lineNumber: 584,
                 columnNumber: 7
             }, this),
             /*#__PURE__*/ (0, __TURBOPACK__imported__module__$5b$project$5d2f$node_modules$2f$next$2f$dist$2f$server$2f$route$2d$modules$2f$app$2d$page$2f$vendored$2f$ssr$2f$react$2d$jsx$2d$dev$2d$runtime$2e$js__$5b$app$2d$ssr$5d$__$28$ecmascript$29$__["jsxDEV"])("div", {
@@ -2581,7 +2583,7 @@ function LabelFinder() {
                                                             className: "h-3.5 w-3.5 text-primary shrink-0"
                                                         }, void 0, false, {
                                                             fileName: "[project]/src/components/label-finder.tsx",
-                                                            lineNumber: 597,
+                                                            lineNumber: 600,
                                                             columnNumber: 23
                                                         }, this),
                                                         /*#__PURE__*/ (0, __TURBOPACK__imported__module__$5b$project$5d2f$node_modules$2f$next$2f$dist$2f$server$2f$route$2d$modules$2f$app$2d$page$2f$vendored$2f$ssr$2f$react$2d$jsx$2d$dev$2d$runtime$2e$js__$5b$app$2d$ssr$5d$__$28$ecmascript$29$__["jsxDEV"])("h3", {
@@ -2589,7 +2591,7 @@ function LabelFinder() {
                                                             children: label.name
                                                         }, void 0, false, {
                                                             fileName: "[project]/src/components/label-finder.tsx",
-                                                            lineNumber: 598,
+                                                            lineNumber: 601,
                                                             columnNumber: 23
                                                         }, this),
                                                         enriched && /*#__PURE__*/ (0, __TURBOPACK__imported__module__$5b$project$5d2f$node_modules$2f$next$2f$dist$2f$server$2f$route$2d$modules$2f$app$2d$page$2f$vendored$2f$ssr$2f$react$2d$jsx$2d$dev$2d$runtime$2e$js__$5b$app$2d$ssr$5d$__$28$ecmascript$29$__["jsxDEV"])(__TURBOPACK__imported__module__$5b$project$5d2f$src$2f$components$2f$ui$2f$badge$2e$tsx__$5b$app$2d$ssr$5d$__$28$ecmascript$29$__["Badge"], {
@@ -2599,14 +2601,14 @@ function LabelFinder() {
                                                                     className: "h-2.5 w-2.5 mr-0.5"
                                                                 }, void 0, false, {
                                                                     fileName: "[project]/src/components/label-finder.tsx",
-                                                                    lineNumber: 601,
+                                                                    lineNumber: 604,
                                                                     columnNumber: 27
                                                                 }, this),
                                                                 (0, __TURBOPACK__imported__module__$5b$project$5d2f$src$2f$lib$2f$i18n$2e$ts__$5b$app$2d$ssr$5d$__$28$ecmascript$29$__["t"])(locale, "labels.enriched")
                                                             ]
                                                         }, void 0, true, {
                                                             fileName: "[project]/src/components/label-finder.tsx",
-                                                            lineNumber: 600,
+                                                            lineNumber: 603,
                                                             columnNumber: 25
                                                         }, this),
                                                         label.trending && /*#__PURE__*/ (0, __TURBOPACK__imported__module__$5b$project$5d2f$node_modules$2f$next$2f$dist$2f$server$2f$route$2d$modules$2f$app$2d$page$2f$vendored$2f$ssr$2f$react$2d$jsx$2d$dev$2d$runtime$2e$js__$5b$app$2d$ssr$5d$__$28$ecmascript$29$__["jsxDEV"])(__TURBOPACK__imported__module__$5b$project$5d2f$src$2f$components$2f$ui$2f$badge$2e$tsx__$5b$app$2d$ssr$5d$__$28$ecmascript$29$__["Badge"], {
@@ -2616,14 +2618,14 @@ function LabelFinder() {
                                                                     className: "h-2.5 w-2.5 mr-0.5"
                                                                 }, void 0, false, {
                                                                     fileName: "[project]/src/components/label-finder.tsx",
-                                                                    lineNumber: 606,
+                                                                    lineNumber: 609,
                                                                     columnNumber: 27
                                                                 }, this),
                                                                 "🔥"
                                                             ]
                                                         }, void 0, true, {
                                                             fileName: "[project]/src/components/label-finder.tsx",
-                                                            lineNumber: 605,
+                                                            lineNumber: 608,
                                                             columnNumber: 25
                                                         }, this),
                                                         rank && /*#__PURE__*/ (0, __TURBOPACK__imported__module__$5b$project$5d2f$node_modules$2f$next$2f$dist$2f$server$2f$route$2d$modules$2f$app$2d$page$2f$vendored$2f$ssr$2f$react$2d$jsx$2d$dev$2d$runtime$2e$js__$5b$app$2d$ssr$5d$__$28$ecmascript$29$__["jsxDEV"])("span", {
@@ -2635,7 +2637,7 @@ function LabelFinder() {
                                                             ]
                                                         }, void 0, true, {
                                                             fileName: "[project]/src/components/label-finder.tsx",
-                                                            lineNumber: 610,
+                                                            lineNumber: 613,
                                                             columnNumber: 25
                                                         }, this),
                                                         getTierBadge(label),
@@ -2645,13 +2647,13 @@ function LabelFinder() {
                                                             children: label.status === "open" ? (0, __TURBOPACK__imported__module__$5b$project$5d2f$src$2f$lib$2f$i18n$2e$ts__$5b$app$2d$ssr$5d$__$28$ecmascript$29$__["t"])(locale, "labels.open") : (0, __TURBOPACK__imported__module__$5b$project$5d2f$src$2f$lib$2f$i18n$2e$ts__$5b$app$2d$ssr$5d$__$28$ecmascript$29$__["t"])(locale, "labels.closed")
                                                         }, void 0, false, {
                                                             fileName: "[project]/src/components/label-finder.tsx",
-                                                            lineNumber: 615,
+                                                            lineNumber: 618,
                                                             columnNumber: 23
                                                         }, this)
                                                     ]
                                                 }, void 0, true, {
                                                     fileName: "[project]/src/components/label-finder.tsx",
-                                                    lineNumber: 596,
+                                                    lineNumber: 599,
                                                     columnNumber: 21
                                                 }, this),
                                                 /*#__PURE__*/ (0, __TURBOPACK__imported__module__$5b$project$5d2f$node_modules$2f$next$2f$dist$2f$server$2f$route$2d$modules$2f$app$2d$page$2f$vendored$2f$ssr$2f$react$2d$jsx$2d$dev$2d$runtime$2e$js__$5b$app$2d$ssr$5d$__$28$ecmascript$29$__["jsxDEV"])("div", {
@@ -2662,7 +2664,7 @@ function LabelFinder() {
                                                             children: bestGenre || label.genre
                                                         }, void 0, false, {
                                                             fileName: "[project]/src/components/label-finder.tsx",
-                                                            lineNumber: 621,
+                                                            lineNumber: 624,
                                                             columnNumber: 23
                                                         }, this),
                                                         label.emails && label.emails.length > 0 && /*#__PURE__*/ (0, __TURBOPACK__imported__module__$5b$project$5d2f$node_modules$2f$next$2f$dist$2f$server$2f$route$2d$modules$2f$app$2d$page$2f$vendored$2f$ssr$2f$react$2d$jsx$2d$dev$2d$runtime$2e$js__$5b$app$2d$ssr$5d$__$28$ecmascript$29$__["jsxDEV"])("span", {
@@ -2672,7 +2674,7 @@ function LabelFinder() {
                                                                     className: "h-2.5 w-2.5"
                                                                 }, void 0, false, {
                                                                     fileName: "[project]/src/components/label-finder.tsx",
-                                                                    lineNumber: 624,
+                                                                    lineNumber: 627,
                                                                     columnNumber: 27
                                                                 }, this),
                                                                 " ",
@@ -2681,7 +2683,7 @@ function LabelFinder() {
                                                             ]
                                                         }, void 0, true, {
                                                             fileName: "[project]/src/components/label-finder.tsx",
-                                                            lineNumber: 623,
+                                                            lineNumber: 626,
                                                             columnNumber: 25
                                                         }, this),
                                                         !label.emails?.length && label.contactInfo && /*#__PURE__*/ (0, __TURBOPACK__imported__module__$5b$project$5d2f$node_modules$2f$next$2f$dist$2f$server$2f$route$2d$modules$2f$app$2d$page$2f$vendored$2f$ssr$2f$react$2d$jsx$2d$dev$2d$runtime$2e$js__$5b$app$2d$ssr$5d$__$28$ecmascript$29$__["jsxDEV"])("span", {
@@ -2691,7 +2693,7 @@ function LabelFinder() {
                                                                     className: "h-2.5 w-2.5"
                                                                 }, void 0, false, {
                                                                     fileName: "[project]/src/components/label-finder.tsx",
-                                                                    lineNumber: 629,
+                                                                    lineNumber: 632,
                                                                     columnNumber: 27
                                                                 }, this),
                                                                 " ",
@@ -2699,7 +2701,7 @@ function LabelFinder() {
                                                             ]
                                                         }, void 0, true, {
                                                             fileName: "[project]/src/components/label-finder.tsx",
-                                                            lineNumber: 628,
+                                                            lineNumber: 631,
                                                             columnNumber: 25
                                                         }, this),
                                                         label.website && /*#__PURE__*/ (0, __TURBOPACK__imported__module__$5b$project$5d2f$node_modules$2f$next$2f$dist$2f$server$2f$route$2d$modules$2f$app$2d$page$2f$vendored$2f$ssr$2f$react$2d$jsx$2d$dev$2d$runtime$2e$js__$5b$app$2d$ssr$5d$__$28$ecmascript$29$__["jsxDEV"])("span", {
@@ -2709,7 +2711,7 @@ function LabelFinder() {
                                                                     className: "h-2.5 w-2.5"
                                                                 }, void 0, false, {
                                                                     fileName: "[project]/src/components/label-finder.tsx",
-                                                                    lineNumber: 634,
+                                                                    lineNumber: 637,
                                                                     columnNumber: 27
                                                                 }, this),
                                                                 " ",
@@ -2717,7 +2719,7 @@ function LabelFinder() {
                                                             ]
                                                         }, void 0, true, {
                                                             fileName: "[project]/src/components/label-finder.tsx",
-                                                            lineNumber: 633,
+                                                            lineNumber: 636,
                                                             columnNumber: 25
                                                         }, this),
                                                         bestGenre && label.pointsByGenre?.[bestGenre] && /*#__PURE__*/ (0, __TURBOPACK__imported__module__$5b$project$5d2f$node_modules$2f$next$2f$dist$2f$server$2f$route$2d$modules$2f$app$2d$page$2f$vendored$2f$ssr$2f$react$2d$jsx$2d$dev$2d$runtime$2e$js__$5b$app$2d$ssr$5d$__$28$ecmascript$29$__["jsxDEV"])("span", {
@@ -2729,19 +2731,19 @@ function LabelFinder() {
                                                             ]
                                                         }, void 0, true, {
                                                             fileName: "[project]/src/components/label-finder.tsx",
-                                                            lineNumber: 638,
+                                                            lineNumber: 641,
                                                             columnNumber: 25
                                                         }, this)
                                                     ]
                                                 }, void 0, true, {
                                                     fileName: "[project]/src/components/label-finder.tsx",
-                                                    lineNumber: 620,
+                                                    lineNumber: 623,
                                                     columnNumber: 21
                                                 }, this)
                                             ]
                                         }, void 0, true, {
                                             fileName: "[project]/src/components/label-finder.tsx",
-                                            lineNumber: 595,
+                                            lineNumber: 598,
                                             columnNumber: 19
                                         }, this),
                                         label.isCustom && /*#__PURE__*/ (0, __TURBOPACK__imported__module__$5b$project$5d2f$node_modules$2f$next$2f$dist$2f$server$2f$route$2d$modules$2f$app$2d$page$2f$vendored$2f$ssr$2f$react$2d$jsx$2d$dev$2d$runtime$2e$js__$5b$app$2d$ssr$5d$__$28$ecmascript$29$__["jsxDEV"])("div", {
@@ -2758,33 +2760,33 @@ function LabelFinder() {
                                                     className: "h-3 w-3"
                                                 }, void 0, false, {
                                                     fileName: "[project]/src/components/label-finder.tsx",
-                                                    lineNumber: 648,
+                                                    lineNumber: 651,
                                                     columnNumber: 25
                                                 }, this)
                                             }, void 0, false, {
                                                 fileName: "[project]/src/components/label-finder.tsx",
-                                                lineNumber: 646,
+                                                lineNumber: 649,
                                                 columnNumber: 23
                                             }, this)
                                         }, void 0, false, {
                                             fileName: "[project]/src/components/label-finder.tsx",
-                                            lineNumber: 645,
+                                            lineNumber: 648,
                                             columnNumber: 21
                                         }, this)
                                     ]
                                 }, void 0, true, {
                                     fileName: "[project]/src/components/label-finder.tsx",
-                                    lineNumber: 594,
+                                    lineNumber: 597,
                                     columnNumber: 17
                                 }, this)
                             }, void 0, false, {
                                 fileName: "[project]/src/components/label-finder.tsx",
-                                lineNumber: 593,
+                                lineNumber: 596,
                                 columnNumber: 15
                             }, this)
                         }, label.id, false, {
                             fileName: "[project]/src/components/label-finder.tsx",
-                            lineNumber: 592,
+                            lineNumber: 595,
                             columnNumber: 13
                         }, this);
                     }),
@@ -2802,7 +2804,7 @@ function LabelFinder() {
                         ]
                     }, void 0, true, {
                         fileName: "[project]/src/components/label-finder.tsx",
-                        lineNumber: 659,
+                        lineNumber: 662,
                         columnNumber: 11
                     }, this),
                     filteredLabels.length === 0 && /*#__PURE__*/ (0, __TURBOPACK__imported__module__$5b$project$5d2f$node_modules$2f$next$2f$dist$2f$server$2f$route$2d$modules$2f$app$2d$page$2f$vendored$2f$ssr$2f$react$2d$jsx$2d$dev$2d$runtime$2e$js__$5b$app$2d$ssr$5d$__$28$ecmascript$29$__["jsxDEV"])("div", {
@@ -2812,7 +2814,7 @@ function LabelFinder() {
                                 className: "h-12 w-12 mx-auto mb-3 opacity-30"
                             }, void 0, false, {
                                 fileName: "[project]/src/components/label-finder.tsx",
-                                lineNumber: 665,
+                                lineNumber: 668,
                                 columnNumber: 13
                             }, this),
                             /*#__PURE__*/ (0, __TURBOPACK__imported__module__$5b$project$5d2f$node_modules$2f$next$2f$dist$2f$server$2f$route$2d$modules$2f$app$2d$page$2f$vendored$2f$ssr$2f$react$2d$jsx$2d$dev$2d$runtime$2e$js__$5b$app$2d$ssr$5d$__$28$ecmascript$29$__["jsxDEV"])("p", {
@@ -2820,19 +2822,19 @@ function LabelFinder() {
                                 children: (0, __TURBOPACK__imported__module__$5b$project$5d2f$src$2f$lib$2f$i18n$2e$ts__$5b$app$2d$ssr$5d$__$28$ecmascript$29$__["t"])(locale, "labels.noLabels")
                             }, void 0, false, {
                                 fileName: "[project]/src/components/label-finder.tsx",
-                                lineNumber: 666,
+                                lineNumber: 669,
                                 columnNumber: 13
                             }, this)
                         ]
                     }, void 0, true, {
                         fileName: "[project]/src/components/label-finder.tsx",
-                        lineNumber: 664,
+                        lineNumber: 667,
                         columnNumber: 11
                     }, this)
                 ]
             }, void 0, true, {
                 fileName: "[project]/src/components/label-finder.tsx",
-                lineNumber: 586,
+                lineNumber: 589,
                 columnNumber: 7
             }, this),
             /*#__PURE__*/ (0, __TURBOPACK__imported__module__$5b$project$5d2f$node_modules$2f$next$2f$dist$2f$server$2f$route$2d$modules$2f$app$2d$page$2f$vendored$2f$ssr$2f$react$2d$jsx$2d$dev$2d$runtime$2e$js__$5b$app$2d$ssr$5d$__$28$ecmascript$29$__["jsxDEV"])(__TURBOPACK__imported__module__$5b$project$5d2f$src$2f$components$2f$ui$2f$dialog$2e$tsx__$5b$app$2d$ssr$5d$__$28$ecmascript$29$__["Dialog"], {
@@ -2855,14 +2857,14 @@ function LabelFinder() {
                                                 className: "h-5 w-5 text-primary"
                                             }, void 0, false, {
                                                 fileName: "[project]/src/components/label-finder.tsx",
-                                                lineNumber: 681,
+                                                lineNumber: 684,
                                                 columnNumber: 21
                                             }, this),
                                             /*#__PURE__*/ (0, __TURBOPACK__imported__module__$5b$project$5d2f$node_modules$2f$next$2f$dist$2f$server$2f$route$2d$modules$2f$app$2d$page$2f$vendored$2f$ssr$2f$react$2d$jsx$2d$dev$2d$runtime$2e$js__$5b$app$2d$ssr$5d$__$28$ecmascript$29$__["jsxDEV"])("span", {
                                                 children: detailLabel.name
                                             }, void 0, false, {
                                                 fileName: "[project]/src/components/label-finder.tsx",
-                                                lineNumber: 682,
+                                                lineNumber: 685,
                                                 columnNumber: 21
                                             }, this),
                                             rank && /*#__PURE__*/ (0, __TURBOPACK__imported__module__$5b$project$5d2f$node_modules$2f$next$2f$dist$2f$server$2f$route$2d$modules$2f$app$2d$page$2f$vendored$2f$ssr$2f$react$2d$jsx$2d$dev$2d$runtime$2e$js__$5b$app$2d$ssr$5d$__$28$ecmascript$29$__["jsxDEV"])("span", {
@@ -2874,7 +2876,7 @@ function LabelFinder() {
                                                 ]
                                             }, void 0, true, {
                                                 fileName: "[project]/src/components/label-finder.tsx",
-                                                lineNumber: 683,
+                                                lineNumber: 686,
                                                 columnNumber: 30
                                             }, this),
                                             getTierBadge(detailLabel),
@@ -2883,18 +2885,18 @@ function LabelFinder() {
                                                 children: "🔥 Trending"
                                             }, void 0, false, {
                                                 fileName: "[project]/src/components/label-finder.tsx",
-                                                lineNumber: 685,
+                                                lineNumber: 688,
                                                 columnNumber: 46
                                             }, this)
                                         ]
                                     }, void 0, true, {
                                         fileName: "[project]/src/components/label-finder.tsx",
-                                        lineNumber: 680,
+                                        lineNumber: 683,
                                         columnNumber: 19
                                     }, this)
                                 }, void 0, false, {
                                     fileName: "[project]/src/components/label-finder.tsx",
-                                    lineNumber: 679,
+                                    lineNumber: 682,
                                     columnNumber: 17
                                 }, this),
                                 /*#__PURE__*/ (0, __TURBOPACK__imported__module__$5b$project$5d2f$node_modules$2f$next$2f$dist$2f$server$2f$route$2d$modules$2f$app$2d$page$2f$vendored$2f$ssr$2f$react$2d$jsx$2d$dev$2d$runtime$2e$js__$5b$app$2d$ssr$5d$__$28$ecmascript$29$__["jsxDEV"])("div", {
@@ -2905,7 +2907,7 @@ function LabelFinder() {
                                             children: (0, __TURBOPACK__imported__module__$5b$project$5d2f$src$2f$lib$2f$i18n$2e$ts__$5b$app$2d$ssr$5d$__$28$ecmascript$29$__["t"])(locale, "labels.beatportData")
                                         }, void 0, false, {
                                             fileName: "[project]/src/components/label-finder.tsx",
-                                            lineNumber: 691,
+                                            lineNumber: 694,
                                             columnNumber: 19
                                         }, this),
                                         /*#__PURE__*/ (0, __TURBOPACK__imported__module__$5b$project$5d2f$node_modules$2f$next$2f$dist$2f$server$2f$route$2d$modules$2f$app$2d$page$2f$vendored$2f$ssr$2f$react$2d$jsx$2d$dev$2d$runtime$2e$js__$5b$app$2d$ssr$5d$__$28$ecmascript$29$__["jsxDEV"])("div", {
@@ -2923,18 +2925,18 @@ function LabelFinder() {
                                                             ]
                                                         }, void 0, true, {
                                                             fileName: "[project]/src/components/label-finder.tsx",
-                                                            lineNumber: 695,
+                                                            lineNumber: 698,
                                                             columnNumber: 61
                                                         }, this)
                                                     ]
                                                 }, g, true, {
                                                     fileName: "[project]/src/components/label-finder.tsx",
-                                                    lineNumber: 694,
+                                                    lineNumber: 697,
                                                     columnNumber: 23
                                                 }, this))
                                         }, void 0, false, {
                                             fileName: "[project]/src/components/label-finder.tsx",
-                                            lineNumber: 692,
+                                            lineNumber: 695,
                                             columnNumber: 19
                                         }, this),
                                         /*#__PURE__*/ (0, __TURBOPACK__imported__module__$5b$project$5d2f$node_modules$2f$next$2f$dist$2f$server$2f$route$2d$modules$2f$app$2d$page$2f$vendored$2f$ssr$2f$react$2d$jsx$2d$dev$2d$runtime$2e$js__$5b$app$2d$ssr$5d$__$28$ecmascript$29$__["jsxDEV"])("div", {
@@ -2948,7 +2950,7 @@ function LabelFinder() {
                                                             children: (0, __TURBOPACK__imported__module__$5b$project$5d2f$src$2f$lib$2f$i18n$2e$ts__$5b$app$2d$ssr$5d$__$28$ecmascript$29$__["t"])(locale, "labels.rank")
                                                         }, void 0, false, {
                                                             fileName: "[project]/src/components/label-finder.tsx",
-                                                            lineNumber: 702,
+                                                            lineNumber: 705,
                                                             columnNumber: 25
                                                         }, this),
                                                         /*#__PURE__*/ (0, __TURBOPACK__imported__module__$5b$project$5d2f$node_modules$2f$next$2f$dist$2f$server$2f$route$2d$modules$2f$app$2d$page$2f$vendored$2f$ssr$2f$react$2d$jsx$2d$dev$2d$runtime$2e$js__$5b$app$2d$ssr$5d$__$28$ecmascript$29$__["jsxDEV"])("p", {
@@ -2959,13 +2961,13 @@ function LabelFinder() {
                                                             ]
                                                         }, void 0, true, {
                                                             fileName: "[project]/src/components/label-finder.tsx",
-                                                            lineNumber: 703,
+                                                            lineNumber: 706,
                                                             columnNumber: 25
                                                         }, this)
                                                     ]
                                                 }, void 0, true, {
                                                     fileName: "[project]/src/components/label-finder.tsx",
-                                                    lineNumber: 701,
+                                                    lineNumber: 704,
                                                     columnNumber: 23
                                                 }, this),
                                                 bestGenre && detailLabel.pointsByGenre?.[bestGenre] && /*#__PURE__*/ (0, __TURBOPACK__imported__module__$5b$project$5d2f$node_modules$2f$next$2f$dist$2f$server$2f$route$2d$modules$2f$app$2d$page$2f$vendored$2f$ssr$2f$react$2d$jsx$2d$dev$2d$runtime$2e$js__$5b$app$2d$ssr$5d$__$28$ecmascript$29$__["jsxDEV"])("div", {
@@ -2976,7 +2978,7 @@ function LabelFinder() {
                                                             children: (0, __TURBOPACK__imported__module__$5b$project$5d2f$src$2f$lib$2f$i18n$2e$ts__$5b$app$2d$ssr$5d$__$28$ecmascript$29$__["t"])(locale, "labels.points")
                                                         }, void 0, false, {
                                                             fileName: "[project]/src/components/label-finder.tsx",
-                                                            lineNumber: 708,
+                                                            lineNumber: 711,
                                                             columnNumber: 25
                                                         }, this),
                                                         /*#__PURE__*/ (0, __TURBOPACK__imported__module__$5b$project$5d2f$node_modules$2f$next$2f$dist$2f$server$2f$route$2d$modules$2f$app$2d$page$2f$vendored$2f$ssr$2f$react$2d$jsx$2d$dev$2d$runtime$2e$js__$5b$app$2d$ssr$5d$__$28$ecmascript$29$__["jsxDEV"])("p", {
@@ -2984,13 +2986,13 @@ function LabelFinder() {
                                                             children: detailLabel.pointsByGenre[bestGenre].toLocaleString()
                                                         }, void 0, false, {
                                                             fileName: "[project]/src/components/label-finder.tsx",
-                                                            lineNumber: 709,
+                                                            lineNumber: 712,
                                                             columnNumber: 25
                                                         }, this)
                                                     ]
                                                 }, void 0, true, {
                                                     fileName: "[project]/src/components/label-finder.tsx",
-                                                    lineNumber: 707,
+                                                    lineNumber: 710,
                                                     columnNumber: 23
                                                 }, this),
                                                 /*#__PURE__*/ (0, __TURBOPACK__imported__module__$5b$project$5d2f$node_modules$2f$next$2f$dist$2f$server$2f$route$2d$modules$2f$app$2d$page$2f$vendored$2f$ssr$2f$react$2d$jsx$2d$dev$2d$runtime$2e$js__$5b$app$2d$ssr$5d$__$28$ecmascript$29$__["jsxDEV"])("div", {
@@ -3001,7 +3003,7 @@ function LabelFinder() {
                                                             children: (0, __TURBOPACK__imported__module__$5b$project$5d2f$src$2f$lib$2f$i18n$2e$ts__$5b$app$2d$ssr$5d$__$28$ecmascript$29$__["t"])(locale, "labels.status")
                                                         }, void 0, false, {
                                                             fileName: "[project]/src/components/label-finder.tsx",
-                                                            lineNumber: 713,
+                                                            lineNumber: 716,
                                                             columnNumber: 23
                                                         }, this),
                                                         /*#__PURE__*/ (0, __TURBOPACK__imported__module__$5b$project$5d2f$node_modules$2f$next$2f$dist$2f$server$2f$route$2d$modules$2f$app$2d$page$2f$vendored$2f$ssr$2f$react$2d$jsx$2d$dev$2d$runtime$2e$js__$5b$app$2d$ssr$5d$__$28$ecmascript$29$__["jsxDEV"])("p", {
@@ -3009,25 +3011,25 @@ function LabelFinder() {
                                                             children: detailLabel.status === "open" ? (0, __TURBOPACK__imported__module__$5b$project$5d2f$src$2f$lib$2f$i18n$2e$ts__$5b$app$2d$ssr$5d$__$28$ecmascript$29$__["t"])(locale, "labels.open") : (0, __TURBOPACK__imported__module__$5b$project$5d2f$src$2f$lib$2f$i18n$2e$ts__$5b$app$2d$ssr$5d$__$28$ecmascript$29$__["t"])(locale, "labels.closed")
                                                         }, void 0, false, {
                                                             fileName: "[project]/src/components/label-finder.tsx",
-                                                            lineNumber: 714,
+                                                            lineNumber: 717,
                                                             columnNumber: 23
                                                         }, this)
                                                     ]
                                                 }, void 0, true, {
                                                     fileName: "[project]/src/components/label-finder.tsx",
-                                                    lineNumber: 712,
+                                                    lineNumber: 715,
                                                     columnNumber: 21
                                                 }, this)
                                             ]
                                         }, void 0, true, {
                                             fileName: "[project]/src/components/label-finder.tsx",
-                                            lineNumber: 699,
+                                            lineNumber: 702,
                                             columnNumber: 19
                                         }, this)
                                     ]
                                 }, void 0, true, {
                                     fileName: "[project]/src/components/label-finder.tsx",
-                                    lineNumber: 690,
+                                    lineNumber: 693,
                                     columnNumber: 17
                                 }, this),
                                 /*#__PURE__*/ (0, __TURBOPACK__imported__module__$5b$project$5d2f$node_modules$2f$next$2f$dist$2f$server$2f$route$2d$modules$2f$app$2d$page$2f$vendored$2f$ssr$2f$react$2d$jsx$2d$dev$2d$runtime$2e$js__$5b$app$2d$ssr$5d$__$28$ecmascript$29$__["jsxDEV"])("div", {
@@ -3041,7 +3043,7 @@ function LabelFinder() {
                                                     children: (0, __TURBOPACK__imported__module__$5b$project$5d2f$src$2f$lib$2f$i18n$2e$ts__$5b$app$2d$ssr$5d$__$28$ecmascript$29$__["t"])(locale, "labels.yourData")
                                                 }, void 0, false, {
                                                     fileName: "[project]/src/components/label-finder.tsx",
-                                                    lineNumber: 724,
+                                                    lineNumber: 727,
                                                     columnNumber: 21
                                                 }, this),
                                                 detailSaved && /*#__PURE__*/ (0, __TURBOPACK__imported__module__$5b$project$5d2f$node_modules$2f$next$2f$dist$2f$server$2f$route$2d$modules$2f$app$2d$page$2f$vendored$2f$ssr$2f$react$2d$jsx$2d$dev$2d$runtime$2e$js__$5b$app$2d$ssr$5d$__$28$ecmascript$29$__["jsxDEV"])("span", {
@@ -3051,7 +3053,7 @@ function LabelFinder() {
                                                             className: "h-2.5 w-2.5"
                                                         }, void 0, false, {
                                                             fileName: "[project]/src/components/label-finder.tsx",
-                                                            lineNumber: 727,
+                                                            lineNumber: 730,
                                                             columnNumber: 25
                                                         }, this),
                                                         " ",
@@ -3059,13 +3061,13 @@ function LabelFinder() {
                                                     ]
                                                 }, void 0, true, {
                                                     fileName: "[project]/src/components/label-finder.tsx",
-                                                    lineNumber: 726,
+                                                    lineNumber: 729,
                                                     columnNumber: 23
                                                 }, this)
                                             ]
                                         }, void 0, true, {
                                             fileName: "[project]/src/components/label-finder.tsx",
-                                            lineNumber: 723,
+                                            lineNumber: 726,
                                             columnNumber: 19
                                         }, this),
                                         /*#__PURE__*/ (0, __TURBOPACK__imported__module__$5b$project$5d2f$node_modules$2f$next$2f$dist$2f$server$2f$route$2d$modules$2f$app$2d$page$2f$vendored$2f$ssr$2f$react$2d$jsx$2d$dev$2d$runtime$2e$js__$5b$app$2d$ssr$5d$__$28$ecmascript$29$__["jsxDEV"])("div", {
@@ -3078,7 +3080,7 @@ function LabelFinder() {
                                                             className: "h-3 w-3"
                                                         }, void 0, false, {
                                                             fileName: "[project]/src/components/label-finder.tsx",
-                                                            lineNumber: 735,
+                                                            lineNumber: 738,
                                                             columnNumber: 23
                                                         }, this),
                                                         " ",
@@ -3086,7 +3088,7 @@ function LabelFinder() {
                                                     ]
                                                 }, void 0, true, {
                                                     fileName: "[project]/src/components/label-finder.tsx",
-                                                    lineNumber: 734,
+                                                    lineNumber: 737,
                                                     columnNumber: 21
                                                 }, this),
                                                 /*#__PURE__*/ (0, __TURBOPACK__imported__module__$5b$project$5d2f$node_modules$2f$next$2f$dist$2f$server$2f$route$2d$modules$2f$app$2d$page$2f$vendored$2f$ssr$2f$react$2d$jsx$2d$dev$2d$runtime$2e$js__$5b$app$2d$ssr$5d$__$28$ecmascript$29$__["jsxDEV"])("div", {
@@ -3103,7 +3105,7 @@ function LabelFinder() {
                                                                                 children: email
                                                                             }, void 0, false, {
                                                                                 fileName: "[project]/src/components/label-finder.tsx",
-                                                                                lineNumber: 741,
+                                                                                lineNumber: 744,
                                                                                 columnNumber: 29
                                                                             }, this),
                                                                             /*#__PURE__*/ (0, __TURBOPACK__imported__module__$5b$project$5d2f$node_modules$2f$next$2f$dist$2f$server$2f$route$2d$modules$2f$app$2d$page$2f$vendored$2f$ssr$2f$react$2d$jsx$2d$dev$2d$runtime$2e$js__$5b$app$2d$ssr$5d$__$28$ecmascript$29$__["jsxDEV"])("button", {
@@ -3113,18 +3115,18 @@ function LabelFinder() {
                                                                                     className: "h-3 w-3"
                                                                                 }, void 0, false, {
                                                                                     fileName: "[project]/src/components/label-finder.tsx",
-                                                                                    lineNumber: 746,
+                                                                                    lineNumber: 749,
                                                                                     columnNumber: 31
                                                                                 }, this)
                                                                             }, void 0, false, {
                                                                                 fileName: "[project]/src/components/label-finder.tsx",
-                                                                                lineNumber: 742,
+                                                                                lineNumber: 745,
                                                                                 columnNumber: 29
                                                                             }, this)
                                                                         ]
                                                                     }, void 0, true, {
                                                                         fileName: "[project]/src/components/label-finder.tsx",
-                                                                        lineNumber: 740,
+                                                                        lineNumber: 743,
                                                                         columnNumber: 27
                                                                     }, this),
                                                                     idx === 0 && detailEmails.length > 1 && /*#__PURE__*/ (0, __TURBOPACK__imported__module__$5b$project$5d2f$node_modules$2f$next$2f$dist$2f$server$2f$route$2d$modules$2f$app$2d$page$2f$vendored$2f$ssr$2f$react$2d$jsx$2d$dev$2d$runtime$2e$js__$5b$app$2d$ssr$5d$__$28$ecmascript$29$__["jsxDEV"])(__TURBOPACK__imported__module__$5b$project$5d2f$src$2f$components$2f$ui$2f$badge$2e$tsx__$5b$app$2d$ssr$5d$__$28$ecmascript$29$__["Badge"], {
@@ -3132,7 +3134,7 @@ function LabelFinder() {
                                                                         children: "TO"
                                                                     }, void 0, false, {
                                                                         fileName: "[project]/src/components/label-finder.tsx",
-                                                                        lineNumber: 750,
+                                                                        lineNumber: 753,
                                                                         columnNumber: 29
                                                                     }, this),
                                                                     idx > 0 && /*#__PURE__*/ (0, __TURBOPACK__imported__module__$5b$project$5d2f$node_modules$2f$next$2f$dist$2f$server$2f$route$2d$modules$2f$app$2d$page$2f$vendored$2f$ssr$2f$react$2d$jsx$2d$dev$2d$runtime$2e$js__$5b$app$2d$ssr$5d$__$28$ecmascript$29$__["jsxDEV"])(__TURBOPACK__imported__module__$5b$project$5d2f$src$2f$components$2f$ui$2f$badge$2e$tsx__$5b$app$2d$ssr$5d$__$28$ecmascript$29$__["Badge"], {
@@ -3140,13 +3142,13 @@ function LabelFinder() {
                                                                         children: "CC"
                                                                     }, void 0, false, {
                                                                         fileName: "[project]/src/components/label-finder.tsx",
-                                                                        lineNumber: 753,
+                                                                        lineNumber: 756,
                                                                         columnNumber: 29
                                                                     }, this)
                                                                 ]
                                                             }, idx, true, {
                                                                 fileName: "[project]/src/components/label-finder.tsx",
-                                                                lineNumber: 739,
+                                                                lineNumber: 742,
                                                                 columnNumber: 25
                                                             }, this)),
                                                         /*#__PURE__*/ (0, __TURBOPACK__imported__module__$5b$project$5d2f$node_modules$2f$next$2f$dist$2f$server$2f$route$2d$modules$2f$app$2d$page$2f$vendored$2f$ssr$2f$react$2d$jsx$2d$dev$2d$runtime$2e$js__$5b$app$2d$ssr$5d$__$28$ecmascript$29$__["jsxDEV"])("div", {
@@ -3165,7 +3167,7 @@ function LabelFinder() {
                                                                     className: "bg-secondary/50 text-sm"
                                                                 }, void 0, false, {
                                                                     fileName: "[project]/src/components/label-finder.tsx",
-                                                                    lineNumber: 758,
+                                                                    lineNumber: 761,
                                                                     columnNumber: 25
                                                                 }, this),
                                                                 /*#__PURE__*/ (0, __TURBOPACK__imported__module__$5b$project$5d2f$node_modules$2f$next$2f$dist$2f$server$2f$route$2d$modules$2f$app$2d$page$2f$vendored$2f$ssr$2f$react$2d$jsx$2d$dev$2d$runtime$2e$js__$5b$app$2d$ssr$5d$__$28$ecmascript$29$__["jsxDEV"])(__TURBOPACK__imported__module__$5b$project$5d2f$src$2f$components$2f$ui$2f$button$2e$tsx__$5b$app$2d$ssr$5d$__$28$ecmascript$29$__["Button"], {
@@ -3178,30 +3180,30 @@ function LabelFinder() {
                                                                         className: "h-3 w-3"
                                                                     }, void 0, false, {
                                                                         fileName: "[project]/src/components/label-finder.tsx",
-                                                                        lineNumber: 766,
+                                                                        lineNumber: 769,
                                                                         columnNumber: 27
                                                                     }, this)
                                                                 }, void 0, false, {
                                                                     fileName: "[project]/src/components/label-finder.tsx",
-                                                                    lineNumber: 765,
+                                                                    lineNumber: 768,
                                                                     columnNumber: 25
                                                                 }, this)
                                                             ]
                                                         }, void 0, true, {
                                                             fileName: "[project]/src/components/label-finder.tsx",
-                                                            lineNumber: 757,
+                                                            lineNumber: 760,
                                                             columnNumber: 23
                                                         }, this)
                                                     ]
                                                 }, void 0, true, {
                                                     fileName: "[project]/src/components/label-finder.tsx",
-                                                    lineNumber: 737,
+                                                    lineNumber: 740,
                                                     columnNumber: 21
                                                 }, this)
                                             ]
                                         }, void 0, true, {
                                             fileName: "[project]/src/components/label-finder.tsx",
-                                            lineNumber: 733,
+                                            lineNumber: 736,
                                             columnNumber: 19
                                         }, this),
                                         /*#__PURE__*/ (0, __TURBOPACK__imported__module__$5b$project$5d2f$node_modules$2f$next$2f$dist$2f$server$2f$route$2d$modules$2f$app$2d$page$2f$vendored$2f$ssr$2f$react$2d$jsx$2d$dev$2d$runtime$2e$js__$5b$app$2d$ssr$5d$__$28$ecmascript$29$__["jsxDEV"])("div", {
@@ -3214,7 +3216,7 @@ function LabelFinder() {
                                                             className: "h-3 w-3"
                                                         }, void 0, false, {
                                                             fileName: "[project]/src/components/label-finder.tsx",
-                                                            lineNumber: 774,
+                                                            lineNumber: 777,
                                                             columnNumber: 23
                                                         }, this),
                                                         " ",
@@ -3222,7 +3224,7 @@ function LabelFinder() {
                                                     ]
                                                 }, void 0, true, {
                                                     fileName: "[project]/src/components/label-finder.tsx",
-                                                    lineNumber: 773,
+                                                    lineNumber: 776,
                                                     columnNumber: 21
                                                 }, this),
                                                 /*#__PURE__*/ (0, __TURBOPACK__imported__module__$5b$project$5d2f$node_modules$2f$next$2f$dist$2f$server$2f$route$2d$modules$2f$app$2d$page$2f$vendored$2f$ssr$2f$react$2d$jsx$2d$dev$2d$runtime$2e$js__$5b$app$2d$ssr$5d$__$28$ecmascript$29$__["jsxDEV"])(__TURBOPACK__imported__module__$5b$project$5d2f$src$2f$components$2f$ui$2f$input$2e$tsx__$5b$app$2d$ssr$5d$__$28$ecmascript$29$__["Input"], {
@@ -3233,13 +3235,13 @@ function LabelFinder() {
                                                     className: "bg-secondary/50"
                                                 }, void 0, false, {
                                                     fileName: "[project]/src/components/label-finder.tsx",
-                                                    lineNumber: 776,
+                                                    lineNumber: 779,
                                                     columnNumber: 21
                                                 }, this)
                                             ]
                                         }, void 0, true, {
                                             fileName: "[project]/src/components/label-finder.tsx",
-                                            lineNumber: 772,
+                                            lineNumber: 775,
                                             columnNumber: 19
                                         }, this),
                                         /*#__PURE__*/ (0, __TURBOPACK__imported__module__$5b$project$5d2f$node_modules$2f$next$2f$dist$2f$server$2f$route$2d$modules$2f$app$2d$page$2f$vendored$2f$ssr$2f$react$2d$jsx$2d$dev$2d$runtime$2e$js__$5b$app$2d$ssr$5d$__$28$ecmascript$29$__["jsxDEV"])("div", {
@@ -3252,7 +3254,7 @@ function LabelFinder() {
                                                             className: "h-3 w-3"
                                                         }, void 0, false, {
                                                             fileName: "[project]/src/components/label-finder.tsx",
-                                                            lineNumber: 782,
+                                                            lineNumber: 785,
                                                             columnNumber: 23
                                                         }, this),
                                                         " ",
@@ -3260,7 +3262,7 @@ function LabelFinder() {
                                                     ]
                                                 }, void 0, true, {
                                                     fileName: "[project]/src/components/label-finder.tsx",
-                                                    lineNumber: 781,
+                                                    lineNumber: 784,
                                                     columnNumber: 21
                                                 }, this),
                                                 /*#__PURE__*/ (0, __TURBOPACK__imported__module__$5b$project$5d2f$node_modules$2f$next$2f$dist$2f$server$2f$route$2d$modules$2f$app$2d$page$2f$vendored$2f$ssr$2f$react$2d$jsx$2d$dev$2d$runtime$2e$js__$5b$app$2d$ssr$5d$__$28$ecmascript$29$__["jsxDEV"])(__TURBOPACK__imported__module__$5b$project$5d2f$src$2f$components$2f$ui$2f$input$2e$tsx__$5b$app$2d$ssr$5d$__$28$ecmascript$29$__["Input"], {
@@ -3271,13 +3273,13 @@ function LabelFinder() {
                                                     className: "bg-secondary/50"
                                                 }, void 0, false, {
                                                     fileName: "[project]/src/components/label-finder.tsx",
-                                                    lineNumber: 784,
+                                                    lineNumber: 787,
                                                     columnNumber: 21
                                                 }, this)
                                             ]
                                         }, void 0, true, {
                                             fileName: "[project]/src/components/label-finder.tsx",
-                                            lineNumber: 780,
+                                            lineNumber: 783,
                                             columnNumber: 19
                                         }, this),
                                         /*#__PURE__*/ (0, __TURBOPACK__imported__module__$5b$project$5d2f$node_modules$2f$next$2f$dist$2f$server$2f$route$2d$modules$2f$app$2d$page$2f$vendored$2f$ssr$2f$react$2d$jsx$2d$dev$2d$runtime$2e$js__$5b$app$2d$ssr$5d$__$28$ecmascript$29$__["jsxDEV"])("div", {
@@ -3290,7 +3292,7 @@ function LabelFinder() {
                                                             className: "h-3 w-3"
                                                         }, void 0, false, {
                                                             fileName: "[project]/src/components/label-finder.tsx",
-                                                            lineNumber: 790,
+                                                            lineNumber: 793,
                                                             columnNumber: 23
                                                         }, this),
                                                         " ",
@@ -3298,7 +3300,7 @@ function LabelFinder() {
                                                     ]
                                                 }, void 0, true, {
                                                     fileName: "[project]/src/components/label-finder.tsx",
-                                                    lineNumber: 789,
+                                                    lineNumber: 792,
                                                     columnNumber: 21
                                                 }, this),
                                                 /*#__PURE__*/ (0, __TURBOPACK__imported__module__$5b$project$5d2f$node_modules$2f$next$2f$dist$2f$server$2f$route$2d$modules$2f$app$2d$page$2f$vendored$2f$ssr$2f$react$2d$jsx$2d$dev$2d$runtime$2e$js__$5b$app$2d$ssr$5d$__$28$ecmascript$29$__["jsxDEV"])(__TURBOPACK__imported__module__$5b$project$5d2f$src$2f$components$2f$ui$2f$input$2e$tsx__$5b$app$2d$ssr$5d$__$28$ecmascript$29$__["Input"], {
@@ -3309,13 +3311,51 @@ function LabelFinder() {
                                                     className: "bg-secondary/50"
                                                 }, void 0, false, {
                                                     fileName: "[project]/src/components/label-finder.tsx",
-                                                    lineNumber: 792,
+                                                    lineNumber: 795,
                                                     columnNumber: 21
                                                 }, this)
                                             ]
                                         }, void 0, true, {
                                             fileName: "[project]/src/components/label-finder.tsx",
-                                            lineNumber: 788,
+                                            lineNumber: 791,
+                                            columnNumber: 19
+                                        }, this),
+                                        /*#__PURE__*/ (0, __TURBOPACK__imported__module__$5b$project$5d2f$node_modules$2f$next$2f$dist$2f$server$2f$route$2d$modules$2f$app$2d$page$2f$vendored$2f$ssr$2f$react$2d$jsx$2d$dev$2d$runtime$2e$js__$5b$app$2d$ssr$5d$__$28$ecmascript$29$__["jsxDEV"])("div", {
+                                            className: "space-y-1.5",
+                                            children: [
+                                                /*#__PURE__*/ (0, __TURBOPACK__imported__module__$5b$project$5d2f$node_modules$2f$next$2f$dist$2f$server$2f$route$2d$modules$2f$app$2d$page$2f$vendored$2f$ssr$2f$react$2d$jsx$2d$dev$2d$runtime$2e$js__$5b$app$2d$ssr$5d$__$28$ecmascript$29$__["jsxDEV"])(__TURBOPACK__imported__module__$5b$project$5d2f$src$2f$components$2f$ui$2f$label$2e$tsx__$5b$app$2d$ssr$5d$__$28$ecmascript$29$__["Label"], {
+                                                    className: "text-xs font-mono uppercase text-muted-foreground flex items-center gap-1.5",
+                                                    children: [
+                                                        /*#__PURE__*/ (0, __TURBOPACK__imported__module__$5b$project$5d2f$node_modules$2f$next$2f$dist$2f$server$2f$route$2d$modules$2f$app$2d$page$2f$vendored$2f$ssr$2f$react$2d$jsx$2d$dev$2d$runtime$2e$js__$5b$app$2d$ssr$5d$__$28$ecmascript$29$__["jsxDEV"])(__TURBOPACK__imported__module__$5b$project$5d2f$node_modules$2f$lucide$2d$react$2f$dist$2f$esm$2f$icons$2f$music$2d$2$2e$js__$5b$app$2d$ssr$5d$__$28$ecmascript$29$__$3c$export__default__as__Music2$3e$__["Music2"], {
+                                                            className: "h-3 w-3"
+                                                        }, void 0, false, {
+                                                            fileName: "[project]/src/components/label-finder.tsx",
+                                                            lineNumber: 801,
+                                                            columnNumber: 23
+                                                        }, this),
+                                                        " ",
+                                                        (0, __TURBOPACK__imported__module__$5b$project$5d2f$src$2f$lib$2f$i18n$2e$ts__$5b$app$2d$ssr$5d$__$28$ecmascript$29$__["t"])(locale, "labels.soundcloudLink")
+                                                    ]
+                                                }, void 0, true, {
+                                                    fileName: "[project]/src/components/label-finder.tsx",
+                                                    lineNumber: 800,
+                                                    columnNumber: 21
+                                                }, this),
+                                                /*#__PURE__*/ (0, __TURBOPACK__imported__module__$5b$project$5d2f$node_modules$2f$next$2f$dist$2f$server$2f$route$2d$modules$2f$app$2d$page$2f$vendored$2f$ssr$2f$react$2d$jsx$2d$dev$2d$runtime$2e$js__$5b$app$2d$ssr$5d$__$28$ecmascript$29$__["jsxDEV"])(__TURBOPACK__imported__module__$5b$project$5d2f$src$2f$components$2f$ui$2f$input$2e$tsx__$5b$app$2d$ssr$5d$__$28$ecmascript$29$__["Input"], {
+                                                    value: detailSoundcloudLink,
+                                                    onChange: (e)=>setDetailSoundcloudLink(e.target.value),
+                                                    onBlur: ()=>saveDetailField("soundcloudLink", detailSoundcloudLink),
+                                                    placeholder: "https://soundcloud.com/label",
+                                                    className: "bg-secondary/50"
+                                                }, void 0, false, {
+                                                    fileName: "[project]/src/components/label-finder.tsx",
+                                                    lineNumber: 803,
+                                                    columnNumber: 21
+                                                }, this)
+                                            ]
+                                        }, void 0, true, {
+                                            fileName: "[project]/src/components/label-finder.tsx",
+                                            lineNumber: 799,
                                             columnNumber: 19
                                         }, this),
                                         /*#__PURE__*/ (0, __TURBOPACK__imported__module__$5b$project$5d2f$node_modules$2f$next$2f$dist$2f$server$2f$route$2d$modules$2f$app$2d$page$2f$vendored$2f$ssr$2f$react$2d$jsx$2d$dev$2d$runtime$2e$js__$5b$app$2d$ssr$5d$__$28$ecmascript$29$__["jsxDEV"])("div", {
@@ -3329,7 +3369,7 @@ function LabelFinder() {
                                                             children: (0, __TURBOPACK__imported__module__$5b$project$5d2f$src$2f$lib$2f$i18n$2e$ts__$5b$app$2d$ssr$5d$__$28$ecmascript$29$__["t"])(locale, "labels.submissionType")
                                                         }, void 0, false, {
                                                             fileName: "[project]/src/components/label-finder.tsx",
-                                                            lineNumber: 798,
+                                                            lineNumber: 809,
                                                             columnNumber: 23
                                                         }, this),
                                                         /*#__PURE__*/ (0, __TURBOPACK__imported__module__$5b$project$5d2f$node_modules$2f$next$2f$dist$2f$server$2f$route$2d$modules$2f$app$2d$page$2f$vendored$2f$ssr$2f$react$2d$jsx$2d$dev$2d$runtime$2e$js__$5b$app$2d$ssr$5d$__$28$ecmascript$29$__["jsxDEV"])(__TURBOPACK__imported__module__$5b$project$5d2f$src$2f$components$2f$ui$2f$select$2e$tsx__$5b$app$2d$ssr$5d$__$28$ecmascript$29$__["Select"], {
@@ -3348,12 +3388,12 @@ function LabelFinder() {
                                                                     className: "bg-secondary/50",
                                                                     children: /*#__PURE__*/ (0, __TURBOPACK__imported__module__$5b$project$5d2f$node_modules$2f$next$2f$dist$2f$server$2f$route$2d$modules$2f$app$2d$page$2f$vendored$2f$ssr$2f$react$2d$jsx$2d$dev$2d$runtime$2e$js__$5b$app$2d$ssr$5d$__$28$ecmascript$29$__["jsxDEV"])(__TURBOPACK__imported__module__$5b$project$5d2f$src$2f$components$2f$ui$2f$select$2e$tsx__$5b$app$2d$ssr$5d$__$28$ecmascript$29$__["SelectValue"], {}, void 0, false, {
                                                                         fileName: "[project]/src/components/label-finder.tsx",
-                                                                        lineNumber: 805,
+                                                                        lineNumber: 816,
                                                                         columnNumber: 68
                                                                     }, this)
                                                                 }, void 0, false, {
                                                                     fileName: "[project]/src/components/label-finder.tsx",
-                                                                    lineNumber: 805,
+                                                                    lineNumber: 816,
                                                                     columnNumber: 25
                                                                 }, this),
                                                                 /*#__PURE__*/ (0, __TURBOPACK__imported__module__$5b$project$5d2f$node_modules$2f$next$2f$dist$2f$server$2f$route$2d$modules$2f$app$2d$page$2f$vendored$2f$ssr$2f$react$2d$jsx$2d$dev$2d$runtime$2e$js__$5b$app$2d$ssr$5d$__$28$ecmascript$29$__["jsxDEV"])(__TURBOPACK__imported__module__$5b$project$5d2f$src$2f$components$2f$ui$2f$select$2e$tsx__$5b$app$2d$ssr$5d$__$28$ecmascript$29$__["SelectContent"], {
@@ -3362,24 +3402,24 @@ function LabelFinder() {
                                                                             children: getSubmissionLabel(type)
                                                                         }, type, false, {
                                                                             fileName: "[project]/src/components/label-finder.tsx",
-                                                                            lineNumber: 807,
+                                                                            lineNumber: 818,
                                                                             columnNumber: 60
                                                                         }, this))
                                                                 }, void 0, false, {
                                                                     fileName: "[project]/src/components/label-finder.tsx",
-                                                                    lineNumber: 806,
+                                                                    lineNumber: 817,
                                                                     columnNumber: 25
                                                                 }, this)
                                                             ]
                                                         }, void 0, true, {
                                                             fileName: "[project]/src/components/label-finder.tsx",
-                                                            lineNumber: 799,
+                                                            lineNumber: 810,
                                                             columnNumber: 23
                                                         }, this)
                                                     ]
                                                 }, void 0, true, {
                                                     fileName: "[project]/src/components/label-finder.tsx",
-                                                    lineNumber: 797,
+                                                    lineNumber: 808,
                                                     columnNumber: 21
                                                 }, this),
                                                 /*#__PURE__*/ (0, __TURBOPACK__imported__module__$5b$project$5d2f$node_modules$2f$next$2f$dist$2f$server$2f$route$2d$modules$2f$app$2d$page$2f$vendored$2f$ssr$2f$react$2d$jsx$2d$dev$2d$runtime$2e$js__$5b$app$2d$ssr$5d$__$28$ecmascript$29$__["jsxDEV"])("div", {
@@ -3390,7 +3430,7 @@ function LabelFinder() {
                                                             children: (0, __TURBOPACK__imported__module__$5b$project$5d2f$src$2f$lib$2f$i18n$2e$ts__$5b$app$2d$ssr$5d$__$28$ecmascript$29$__["t"])(locale, "labels.status")
                                                         }, void 0, false, {
                                                             fileName: "[project]/src/components/label-finder.tsx",
-                                                            lineNumber: 812,
+                                                            lineNumber: 823,
                                                             columnNumber: 23
                                                         }, this),
                                                         /*#__PURE__*/ (0, __TURBOPACK__imported__module__$5b$project$5d2f$node_modules$2f$next$2f$dist$2f$server$2f$route$2d$modules$2f$app$2d$page$2f$vendored$2f$ssr$2f$react$2d$jsx$2d$dev$2d$runtime$2e$js__$5b$app$2d$ssr$5d$__$28$ecmascript$29$__["jsxDEV"])(__TURBOPACK__imported__module__$5b$project$5d2f$src$2f$components$2f$ui$2f$select$2e$tsx__$5b$app$2d$ssr$5d$__$28$ecmascript$29$__["Select"], {
@@ -3409,12 +3449,12 @@ function LabelFinder() {
                                                                     className: "bg-secondary/50",
                                                                     children: /*#__PURE__*/ (0, __TURBOPACK__imported__module__$5b$project$5d2f$node_modules$2f$next$2f$dist$2f$server$2f$route$2d$modules$2f$app$2d$page$2f$vendored$2f$ssr$2f$react$2d$jsx$2d$dev$2d$runtime$2e$js__$5b$app$2d$ssr$5d$__$28$ecmascript$29$__["jsxDEV"])(__TURBOPACK__imported__module__$5b$project$5d2f$src$2f$components$2f$ui$2f$select$2e$tsx__$5b$app$2d$ssr$5d$__$28$ecmascript$29$__["SelectValue"], {}, void 0, false, {
                                                                         fileName: "[project]/src/components/label-finder.tsx",
-                                                                        lineNumber: 819,
+                                                                        lineNumber: 830,
                                                                         columnNumber: 68
                                                                     }, this)
                                                                 }, void 0, false, {
                                                                     fileName: "[project]/src/components/label-finder.tsx",
-                                                                    lineNumber: 819,
+                                                                    lineNumber: 830,
                                                                     columnNumber: 25
                                                                 }, this),
                                                                 /*#__PURE__*/ (0, __TURBOPACK__imported__module__$5b$project$5d2f$node_modules$2f$next$2f$dist$2f$server$2f$route$2d$modules$2f$app$2d$page$2f$vendored$2f$ssr$2f$react$2d$jsx$2d$dev$2d$runtime$2e$js__$5b$app$2d$ssr$5d$__$28$ecmascript$29$__["jsxDEV"])(__TURBOPACK__imported__module__$5b$project$5d2f$src$2f$components$2f$ui$2f$select$2e$tsx__$5b$app$2d$ssr$5d$__$28$ecmascript$29$__["SelectContent"], {
@@ -3424,7 +3464,7 @@ function LabelFinder() {
                                                                             children: (0, __TURBOPACK__imported__module__$5b$project$5d2f$src$2f$lib$2f$i18n$2e$ts__$5b$app$2d$ssr$5d$__$28$ecmascript$29$__["t"])(locale, "labels.open")
                                                                         }, void 0, false, {
                                                                             fileName: "[project]/src/components/label-finder.tsx",
-                                                                            lineNumber: 821,
+                                                                            lineNumber: 832,
                                                                             columnNumber: 27
                                                                         }, this),
                                                                         /*#__PURE__*/ (0, __TURBOPACK__imported__module__$5b$project$5d2f$node_modules$2f$next$2f$dist$2f$server$2f$route$2d$modules$2f$app$2d$page$2f$vendored$2f$ssr$2f$react$2d$jsx$2d$dev$2d$runtime$2e$js__$5b$app$2d$ssr$5d$__$28$ecmascript$29$__["jsxDEV"])(__TURBOPACK__imported__module__$5b$project$5d2f$src$2f$components$2f$ui$2f$select$2e$tsx__$5b$app$2d$ssr$5d$__$28$ecmascript$29$__["SelectItem"], {
@@ -3432,31 +3472,31 @@ function LabelFinder() {
                                                                             children: (0, __TURBOPACK__imported__module__$5b$project$5d2f$src$2f$lib$2f$i18n$2e$ts__$5b$app$2d$ssr$5d$__$28$ecmascript$29$__["t"])(locale, "labels.closed")
                                                                         }, void 0, false, {
                                                                             fileName: "[project]/src/components/label-finder.tsx",
-                                                                            lineNumber: 822,
+                                                                            lineNumber: 833,
                                                                             columnNumber: 27
                                                                         }, this)
                                                                     ]
                                                                 }, void 0, true, {
                                                                     fileName: "[project]/src/components/label-finder.tsx",
-                                                                    lineNumber: 820,
+                                                                    lineNumber: 831,
                                                                     columnNumber: 25
                                                                 }, this)
                                                             ]
                                                         }, void 0, true, {
                                                             fileName: "[project]/src/components/label-finder.tsx",
-                                                            lineNumber: 813,
+                                                            lineNumber: 824,
                                                             columnNumber: 23
                                                         }, this)
                                                     ]
                                                 }, void 0, true, {
                                                     fileName: "[project]/src/components/label-finder.tsx",
-                                                    lineNumber: 811,
+                                                    lineNumber: 822,
                                                     columnNumber: 21
                                                 }, this)
                                             ]
                                         }, void 0, true, {
                                             fileName: "[project]/src/components/label-finder.tsx",
-                                            lineNumber: 796,
+                                            lineNumber: 807,
                                             columnNumber: 19
                                         }, this),
                                         /*#__PURE__*/ (0, __TURBOPACK__imported__module__$5b$project$5d2f$node_modules$2f$next$2f$dist$2f$server$2f$route$2d$modules$2f$app$2d$page$2f$vendored$2f$ssr$2f$react$2d$jsx$2d$dev$2d$runtime$2e$js__$5b$app$2d$ssr$5d$__$28$ecmascript$29$__["jsxDEV"])("div", {
@@ -3467,7 +3507,7 @@ function LabelFinder() {
                                                     children: (0, __TURBOPACK__imported__module__$5b$project$5d2f$src$2f$lib$2f$i18n$2e$ts__$5b$app$2d$ssr$5d$__$28$ecmascript$29$__["t"])(locale, "labels.notes")
                                                 }, void 0, false, {
                                                     fileName: "[project]/src/components/label-finder.tsx",
-                                                    lineNumber: 829,
+                                                    lineNumber: 840,
                                                     columnNumber: 21
                                                 }, this),
                                                 /*#__PURE__*/ (0, __TURBOPACK__imported__module__$5b$project$5d2f$node_modules$2f$next$2f$dist$2f$server$2f$route$2d$modules$2f$app$2d$page$2f$vendored$2f$ssr$2f$react$2d$jsx$2d$dev$2d$runtime$2e$js__$5b$app$2d$ssr$5d$__$28$ecmascript$29$__["jsxDEV"])(__TURBOPACK__imported__module__$5b$project$5d2f$src$2f$components$2f$ui$2f$textarea$2e$tsx__$5b$app$2d$ssr$5d$__$28$ecmascript$29$__["Textarea"], {
@@ -3479,19 +3519,19 @@ function LabelFinder() {
                                                     className: "bg-secondary/50 resize-none"
                                                 }, void 0, false, {
                                                     fileName: "[project]/src/components/label-finder.tsx",
-                                                    lineNumber: 830,
+                                                    lineNumber: 841,
                                                     columnNumber: 21
                                                 }, this)
                                             ]
                                         }, void 0, true, {
                                             fileName: "[project]/src/components/label-finder.tsx",
-                                            lineNumber: 828,
+                                            lineNumber: 839,
                                             columnNumber: 19
                                         }, this)
                                     ]
                                 }, void 0, true, {
                                     fileName: "[project]/src/components/label-finder.tsx",
-                                    lineNumber: 722,
+                                    lineNumber: 725,
                                     columnNumber: 17
                                 }, this),
                                 /*#__PURE__*/ (0, __TURBOPACK__imported__module__$5b$project$5d2f$node_modules$2f$next$2f$dist$2f$server$2f$route$2d$modules$2f$app$2d$page$2f$vendored$2f$ssr$2f$react$2d$jsx$2d$dev$2d$runtime$2e$js__$5b$app$2d$ssr$5d$__$28$ecmascript$29$__["jsxDEV"])("div", {
@@ -3506,14 +3546,14 @@ function LabelFinder() {
                                                     className: "h-4 w-4 mr-1.5"
                                                 }, void 0, false, {
                                                     fileName: "[project]/src/components/label-finder.tsx",
-                                                    lineNumber: 842,
+                                                    lineNumber: 853,
                                                     columnNumber: 21
                                                 }, this),
                                                 showPitch ? (0, __TURBOPACK__imported__module__$5b$project$5d2f$src$2f$lib$2f$i18n$2e$ts__$5b$app$2d$ssr$5d$__$28$ecmascript$29$__["t"])(locale, "labels.hidePitch") : (0, __TURBOPACK__imported__module__$5b$project$5d2f$src$2f$lib$2f$i18n$2e$ts__$5b$app$2d$ssr$5d$__$28$ecmascript$29$__["t"])(locale, "labels.generatePitch")
                                             ]
                                         }, void 0, true, {
                                             fileName: "[project]/src/components/label-finder.tsx",
-                                            lineNumber: 837,
+                                            lineNumber: 848,
                                             columnNumber: 19
                                         }, this),
                                         showPitch && /*#__PURE__*/ (0, __TURBOPACK__imported__module__$5b$project$5d2f$node_modules$2f$next$2f$dist$2f$server$2f$route$2d$modules$2f$app$2d$page$2f$vendored$2f$ssr$2f$react$2d$jsx$2d$dev$2d$runtime$2e$js__$5b$app$2d$ssr$5d$__$28$ecmascript$29$__["jsxDEV"])("div", {
@@ -3530,7 +3570,7 @@ function LabelFinder() {
                                                                     children: (0, __TURBOPACK__imported__module__$5b$project$5d2f$src$2f$lib$2f$i18n$2e$ts__$5b$app$2d$ssr$5d$__$28$ecmascript$29$__["t"])(locale, "pitch.trackName")
                                                                 }, void 0, false, {
                                                                     fileName: "[project]/src/components/label-finder.tsx",
-                                                                    lineNumber: 850,
+                                                                    lineNumber: 861,
                                                                     columnNumber: 27
                                                                 }, this),
                                                                 /*#__PURE__*/ (0, __TURBOPACK__imported__module__$5b$project$5d2f$node_modules$2f$next$2f$dist$2f$server$2f$route$2d$modules$2f$app$2d$page$2f$vendored$2f$ssr$2f$react$2d$jsx$2d$dev$2d$runtime$2e$js__$5b$app$2d$ssr$5d$__$28$ecmascript$29$__["jsxDEV"])(__TURBOPACK__imported__module__$5b$project$5d2f$src$2f$components$2f$ui$2f$input$2e$tsx__$5b$app$2d$ssr$5d$__$28$ecmascript$29$__["Input"], {
@@ -3543,13 +3583,13 @@ function LabelFinder() {
                                                                     className: "bg-secondary/50 text-sm"
                                                                 }, void 0, false, {
                                                                     fileName: "[project]/src/components/label-finder.tsx",
-                                                                    lineNumber: 851,
+                                                                    lineNumber: 862,
                                                                     columnNumber: 27
                                                                 }, this)
                                                             ]
                                                         }, void 0, true, {
                                                             fileName: "[project]/src/components/label-finder.tsx",
-                                                            lineNumber: 849,
+                                                            lineNumber: 860,
                                                             columnNumber: 25
                                                         }, this),
                                                         /*#__PURE__*/ (0, __TURBOPACK__imported__module__$5b$project$5d2f$node_modules$2f$next$2f$dist$2f$server$2f$route$2d$modules$2f$app$2d$page$2f$vendored$2f$ssr$2f$react$2d$jsx$2d$dev$2d$runtime$2e$js__$5b$app$2d$ssr$5d$__$28$ecmascript$29$__["jsxDEV"])("div", {
@@ -3560,7 +3600,7 @@ function LabelFinder() {
                                                                     children: (0, __TURBOPACK__imported__module__$5b$project$5d2f$src$2f$lib$2f$i18n$2e$ts__$5b$app$2d$ssr$5d$__$28$ecmascript$29$__["t"])(locale, "pitch.artistName")
                                                                 }, void 0, false, {
                                                                     fileName: "[project]/src/components/label-finder.tsx",
-                                                                    lineNumber: 854,
+                                                                    lineNumber: 865,
                                                                     columnNumber: 27
                                                                 }, this),
                                                                 /*#__PURE__*/ (0, __TURBOPACK__imported__module__$5b$project$5d2f$node_modules$2f$next$2f$dist$2f$server$2f$route$2d$modules$2f$app$2d$page$2f$vendored$2f$ssr$2f$react$2d$jsx$2d$dev$2d$runtime$2e$js__$5b$app$2d$ssr$5d$__$28$ecmascript$29$__["jsxDEV"])(__TURBOPACK__imported__module__$5b$project$5d2f$src$2f$components$2f$ui$2f$input$2e$tsx__$5b$app$2d$ssr$5d$__$28$ecmascript$29$__["Input"], {
@@ -3571,19 +3611,19 @@ function LabelFinder() {
                                                                     className: "bg-secondary/50 text-sm"
                                                                 }, void 0, false, {
                                                                     fileName: "[project]/src/components/label-finder.tsx",
-                                                                    lineNumber: 855,
+                                                                    lineNumber: 866,
                                                                     columnNumber: 27
                                                                 }, this)
                                                             ]
                                                         }, void 0, true, {
                                                             fileName: "[project]/src/components/label-finder.tsx",
-                                                            lineNumber: 853,
+                                                            lineNumber: 864,
                                                             columnNumber: 25
                                                         }, this)
                                                     ]
                                                 }, void 0, true, {
                                                     fileName: "[project]/src/components/label-finder.tsx",
-                                                    lineNumber: 848,
+                                                    lineNumber: 859,
                                                     columnNumber: 23
                                                 }, this),
                                                 /*#__PURE__*/ (0, __TURBOPACK__imported__module__$5b$project$5d2f$node_modules$2f$next$2f$dist$2f$server$2f$route$2d$modules$2f$app$2d$page$2f$vendored$2f$ssr$2f$react$2d$jsx$2d$dev$2d$runtime$2e$js__$5b$app$2d$ssr$5d$__$28$ecmascript$29$__["jsxDEV"])("div", {
@@ -3597,7 +3637,7 @@ function LabelFinder() {
                                                                     children: (0, __TURBOPACK__imported__module__$5b$project$5d2f$src$2f$lib$2f$i18n$2e$ts__$5b$app$2d$ssr$5d$__$28$ecmascript$29$__["t"])(locale, "pitch.scLink")
                                                                 }, void 0, false, {
                                                                     fileName: "[project]/src/components/label-finder.tsx",
-                                                                    lineNumber: 860,
+                                                                    lineNumber: 871,
                                                                     columnNumber: 27
                                                                 }, this),
                                                                 /*#__PURE__*/ (0, __TURBOPACK__imported__module__$5b$project$5d2f$node_modules$2f$next$2f$dist$2f$server$2f$route$2d$modules$2f$app$2d$page$2f$vendored$2f$ssr$2f$react$2d$jsx$2d$dev$2d$runtime$2e$js__$5b$app$2d$ssr$5d$__$28$ecmascript$29$__["jsxDEV"])(__TURBOPACK__imported__module__$5b$project$5d2f$src$2f$components$2f$ui$2f$input$2e$tsx__$5b$app$2d$ssr$5d$__$28$ecmascript$29$__["Input"], {
@@ -3608,13 +3648,13 @@ function LabelFinder() {
                                                                     className: "bg-secondary/50 text-sm"
                                                                 }, void 0, false, {
                                                                     fileName: "[project]/src/components/label-finder.tsx",
-                                                                    lineNumber: 861,
+                                                                    lineNumber: 872,
                                                                     columnNumber: 27
                                                                 }, this)
                                                             ]
                                                         }, void 0, true, {
                                                             fileName: "[project]/src/components/label-finder.tsx",
-                                                            lineNumber: 859,
+                                                            lineNumber: 870,
                                                             columnNumber: 25
                                                         }, this),
                                                         /*#__PURE__*/ (0, __TURBOPACK__imported__module__$5b$project$5d2f$node_modules$2f$next$2f$dist$2f$server$2f$route$2d$modules$2f$app$2d$page$2f$vendored$2f$ssr$2f$react$2d$jsx$2d$dev$2d$runtime$2e$js__$5b$app$2d$ssr$5d$__$28$ecmascript$29$__["jsxDEV"])("div", {
@@ -3625,7 +3665,7 @@ function LabelFinder() {
                                                                     children: (0, __TURBOPACK__imported__module__$5b$project$5d2f$src$2f$lib$2f$i18n$2e$ts__$5b$app$2d$ssr$5d$__$28$ecmascript$29$__["t"])(locale, "pitch.tone")
                                                                 }, void 0, false, {
                                                                     fileName: "[project]/src/components/label-finder.tsx",
-                                                                    lineNumber: 864,
+                                                                    lineNumber: 875,
                                                                     columnNumber: 27
                                                                 }, this),
                                                                 /*#__PURE__*/ (0, __TURBOPACK__imported__module__$5b$project$5d2f$node_modules$2f$next$2f$dist$2f$server$2f$route$2d$modules$2f$app$2d$page$2f$vendored$2f$ssr$2f$react$2d$jsx$2d$dev$2d$runtime$2e$js__$5b$app$2d$ssr$5d$__$28$ecmascript$29$__["jsxDEV"])(__TURBOPACK__imported__module__$5b$project$5d2f$src$2f$components$2f$ui$2f$select$2e$tsx__$5b$app$2d$ssr$5d$__$28$ecmascript$29$__["Select"], {
@@ -3636,12 +3676,12 @@ function LabelFinder() {
                                                                             className: "bg-secondary/50 text-sm",
                                                                             children: /*#__PURE__*/ (0, __TURBOPACK__imported__module__$5b$project$5d2f$node_modules$2f$next$2f$dist$2f$server$2f$route$2d$modules$2f$app$2d$page$2f$vendored$2f$ssr$2f$react$2d$jsx$2d$dev$2d$runtime$2e$js__$5b$app$2d$ssr$5d$__$28$ecmascript$29$__["jsxDEV"])(__TURBOPACK__imported__module__$5b$project$5d2f$src$2f$components$2f$ui$2f$select$2e$tsx__$5b$app$2d$ssr$5d$__$28$ecmascript$29$__["SelectValue"], {}, void 0, false, {
                                                                                 fileName: "[project]/src/components/label-finder.tsx",
-                                                                                lineNumber: 866,
+                                                                                lineNumber: 877,
                                                                                 columnNumber: 80
                                                                             }, this)
                                                                         }, void 0, false, {
                                                                             fileName: "[project]/src/components/label-finder.tsx",
-                                                                            lineNumber: 866,
+                                                                            lineNumber: 877,
                                                                             columnNumber: 29
                                                                         }, this),
                                                                         /*#__PURE__*/ (0, __TURBOPACK__imported__module__$5b$project$5d2f$node_modules$2f$next$2f$dist$2f$server$2f$route$2d$modules$2f$app$2d$page$2f$vendored$2f$ssr$2f$react$2d$jsx$2d$dev$2d$runtime$2e$js__$5b$app$2d$ssr$5d$__$28$ecmascript$29$__["jsxDEV"])(__TURBOPACK__imported__module__$5b$project$5d2f$src$2f$components$2f$ui$2f$select$2e$tsx__$5b$app$2d$ssr$5d$__$28$ecmascript$29$__["SelectContent"], {
@@ -3651,7 +3691,7 @@ function LabelFinder() {
                                                                                     children: (0, __TURBOPACK__imported__module__$5b$project$5d2f$src$2f$lib$2f$i18n$2e$ts__$5b$app$2d$ssr$5d$__$28$ecmascript$29$__["t"])(locale, "pitch.toneProfessional")
                                                                                 }, void 0, false, {
                                                                                     fileName: "[project]/src/components/label-finder.tsx",
-                                                                                    lineNumber: 868,
+                                                                                    lineNumber: 879,
                                                                                     columnNumber: 31
                                                                                 }, this),
                                                                                 /*#__PURE__*/ (0, __TURBOPACK__imported__module__$5b$project$5d2f$node_modules$2f$next$2f$dist$2f$server$2f$route$2d$modules$2f$app$2d$page$2f$vendored$2f$ssr$2f$react$2d$jsx$2d$dev$2d$runtime$2e$js__$5b$app$2d$ssr$5d$__$28$ecmascript$29$__["jsxDEV"])(__TURBOPACK__imported__module__$5b$project$5d2f$src$2f$components$2f$ui$2f$select$2e$tsx__$5b$app$2d$ssr$5d$__$28$ecmascript$29$__["SelectItem"], {
@@ -3659,7 +3699,7 @@ function LabelFinder() {
                                                                                     children: (0, __TURBOPACK__imported__module__$5b$project$5d2f$src$2f$lib$2f$i18n$2e$ts__$5b$app$2d$ssr$5d$__$28$ecmascript$29$__["t"])(locale, "pitch.toneConfident")
                                                                                 }, void 0, false, {
                                                                                     fileName: "[project]/src/components/label-finder.tsx",
-                                                                                    lineNumber: 869,
+                                                                                    lineNumber: 880,
                                                                                     columnNumber: 31
                                                                                 }, this),
                                                                                 /*#__PURE__*/ (0, __TURBOPACK__imported__module__$5b$project$5d2f$node_modules$2f$next$2f$dist$2f$server$2f$route$2d$modules$2f$app$2d$page$2f$vendored$2f$ssr$2f$react$2d$jsx$2d$dev$2d$runtime$2e$js__$5b$app$2d$ssr$5d$__$28$ecmascript$29$__["jsxDEV"])(__TURBOPACK__imported__module__$5b$project$5d2f$src$2f$components$2f$ui$2f$select$2e$tsx__$5b$app$2d$ssr$5d$__$28$ecmascript$29$__["SelectItem"], {
@@ -3667,7 +3707,7 @@ function LabelFinder() {
                                                                                     children: (0, __TURBOPACK__imported__module__$5b$project$5d2f$src$2f$lib$2f$i18n$2e$ts__$5b$app$2d$ssr$5d$__$28$ecmascript$29$__["t"])(locale, "pitch.toneFriendly")
                                                                                 }, void 0, false, {
                                                                                     fileName: "[project]/src/components/label-finder.tsx",
-                                                                                    lineNumber: 870,
+                                                                                    lineNumber: 881,
                                                                                     columnNumber: 31
                                                                                 }, this),
                                                                                 /*#__PURE__*/ (0, __TURBOPACK__imported__module__$5b$project$5d2f$node_modules$2f$next$2f$dist$2f$server$2f$route$2d$modules$2f$app$2d$page$2f$vendored$2f$ssr$2f$react$2d$jsx$2d$dev$2d$runtime$2e$js__$5b$app$2d$ssr$5d$__$28$ecmascript$29$__["jsxDEV"])(__TURBOPACK__imported__module__$5b$project$5d2f$src$2f$components$2f$ui$2f$select$2e$tsx__$5b$app$2d$ssr$5d$__$28$ecmascript$29$__["SelectItem"], {
@@ -3675,25 +3715,25 @@ function LabelFinder() {
                                                                                     children: (0, __TURBOPACK__imported__module__$5b$project$5d2f$src$2f$lib$2f$i18n$2e$ts__$5b$app$2d$ssr$5d$__$28$ecmascript$29$__["t"])(locale, "pitch.toneStorytelling")
                                                                                 }, void 0, false, {
                                                                                     fileName: "[project]/src/components/label-finder.tsx",
-                                                                                    lineNumber: 871,
+                                                                                    lineNumber: 882,
                                                                                     columnNumber: 31
                                                                                 }, this)
                                                                             ]
                                                                         }, void 0, true, {
                                                                             fileName: "[project]/src/components/label-finder.tsx",
-                                                                            lineNumber: 867,
+                                                                            lineNumber: 878,
                                                                             columnNumber: 29
                                                                         }, this)
                                                                     ]
                                                                 }, void 0, true, {
                                                                     fileName: "[project]/src/components/label-finder.tsx",
-                                                                    lineNumber: 865,
+                                                                    lineNumber: 876,
                                                                     columnNumber: 27
                                                                 }, this)
                                                             ]
                                                         }, void 0, true, {
                                                             fileName: "[project]/src/components/label-finder.tsx",
-                                                            lineNumber: 863,
+                                                            lineNumber: 874,
                                                             columnNumber: 25
                                                         }, this),
                                                         /*#__PURE__*/ (0, __TURBOPACK__imported__module__$5b$project$5d2f$node_modules$2f$next$2f$dist$2f$server$2f$route$2d$modules$2f$app$2d$page$2f$vendored$2f$ssr$2f$react$2d$jsx$2d$dev$2d$runtime$2e$js__$5b$app$2d$ssr$5d$__$28$ecmascript$29$__["jsxDEV"])("div", {
@@ -3706,7 +3746,7 @@ function LabelFinder() {
                                                                             className: "h-3 w-3"
                                                                         }, void 0, false, {
                                                                             fileName: "[project]/src/components/label-finder.tsx",
-                                                                            lineNumber: 877,
+                                                                            lineNumber: 888,
                                                                             columnNumber: 29
                                                                         }, this),
                                                                         " ",
@@ -3714,7 +3754,7 @@ function LabelFinder() {
                                                                     ]
                                                                 }, void 0, true, {
                                                                     fileName: "[project]/src/components/label-finder.tsx",
-                                                                    lineNumber: 876,
+                                                                    lineNumber: 887,
                                                                     columnNumber: 27
                                                                 }, this),
                                                                 /*#__PURE__*/ (0, __TURBOPACK__imported__module__$5b$project$5d2f$node_modules$2f$next$2f$dist$2f$server$2f$route$2d$modules$2f$app$2d$page$2f$vendored$2f$ssr$2f$react$2d$jsx$2d$dev$2d$runtime$2e$js__$5b$app$2d$ssr$5d$__$28$ecmascript$29$__["jsxDEV"])(__TURBOPACK__imported__module__$5b$project$5d2f$src$2f$components$2f$ui$2f$select$2e$tsx__$5b$app$2d$ssr$5d$__$28$ecmascript$29$__["Select"], {
@@ -3725,12 +3765,12 @@ function LabelFinder() {
                                                                             className: "bg-secondary/50 text-sm",
                                                                             children: /*#__PURE__*/ (0, __TURBOPACK__imported__module__$5b$project$5d2f$node_modules$2f$next$2f$dist$2f$server$2f$route$2d$modules$2f$app$2d$page$2f$vendored$2f$ssr$2f$react$2d$jsx$2d$dev$2d$runtime$2e$js__$5b$app$2d$ssr$5d$__$28$ecmascript$29$__["jsxDEV"])(__TURBOPACK__imported__module__$5b$project$5d2f$src$2f$components$2f$ui$2f$select$2e$tsx__$5b$app$2d$ssr$5d$__$28$ecmascript$29$__["SelectValue"], {}, void 0, false, {
                                                                                 fileName: "[project]/src/components/label-finder.tsx",
-                                                                                lineNumber: 880,
+                                                                                lineNumber: 891,
                                                                                 columnNumber: 80
                                                                             }, this)
                                                                         }, void 0, false, {
                                                                             fileName: "[project]/src/components/label-finder.tsx",
-                                                                            lineNumber: 880,
+                                                                            lineNumber: 891,
                                                                             columnNumber: 29
                                                                         }, this),
                                                                         /*#__PURE__*/ (0, __TURBOPACK__imported__module__$5b$project$5d2f$node_modules$2f$next$2f$dist$2f$server$2f$route$2d$modules$2f$app$2d$page$2f$vendored$2f$ssr$2f$react$2d$jsx$2d$dev$2d$runtime$2e$js__$5b$app$2d$ssr$5d$__$28$ecmascript$29$__["jsxDEV"])(__TURBOPACK__imported__module__$5b$project$5d2f$src$2f$components$2f$ui$2f$select$2e$tsx__$5b$app$2d$ssr$5d$__$28$ecmascript$29$__["SelectContent"], {
@@ -3739,30 +3779,30 @@ function LabelFinder() {
                                                                                     children: __TURBOPACK__imported__module__$5b$project$5d2f$src$2f$lib$2f$pitch$2d$utils$2e$ts__$5b$app$2d$ssr$5d$__$28$ecmascript$29$__["PITCH_LANGUAGES"][lang]
                                                                                 }, lang, false, {
                                                                                     fileName: "[project]/src/components/label-finder.tsx",
-                                                                                    lineNumber: 883,
+                                                                                    lineNumber: 894,
                                                                                     columnNumber: 33
                                                                                 }, this))
                                                                         }, void 0, false, {
                                                                             fileName: "[project]/src/components/label-finder.tsx",
-                                                                            lineNumber: 881,
+                                                                            lineNumber: 892,
                                                                             columnNumber: 29
                                                                         }, this)
                                                                     ]
                                                                 }, void 0, true, {
                                                                     fileName: "[project]/src/components/label-finder.tsx",
-                                                                    lineNumber: 879,
+                                                                    lineNumber: 890,
                                                                     columnNumber: 27
                                                                 }, this)
                                                             ]
                                                         }, void 0, true, {
                                                             fileName: "[project]/src/components/label-finder.tsx",
-                                                            lineNumber: 875,
+                                                            lineNumber: 886,
                                                             columnNumber: 25
                                                         }, this)
                                                     ]
                                                 }, void 0, true, {
                                                     fileName: "[project]/src/components/label-finder.tsx",
-                                                    lineNumber: 858,
+                                                    lineNumber: 869,
                                                     columnNumber: 23
                                                 }, this),
                                                 /*#__PURE__*/ (0, __TURBOPACK__imported__module__$5b$project$5d2f$node_modules$2f$next$2f$dist$2f$server$2f$route$2d$modules$2f$app$2d$page$2f$vendored$2f$ssr$2f$react$2d$jsx$2d$dev$2d$runtime$2e$js__$5b$app$2d$ssr$5d$__$28$ecmascript$29$__["jsxDEV"])("div", {
@@ -3773,7 +3813,7 @@ function LabelFinder() {
                                                             children: (0, __TURBOPACK__imported__module__$5b$project$5d2f$src$2f$lib$2f$i18n$2e$ts__$5b$app$2d$ssr$5d$__$28$ecmascript$29$__["t"])(locale, "pitch.additionalNote")
                                                         }, void 0, false, {
                                                             fileName: "[project]/src/components/label-finder.tsx",
-                                                            lineNumber: 890,
+                                                            lineNumber: 901,
                                                             columnNumber: 25
                                                         }, this),
                                                         /*#__PURE__*/ (0, __TURBOPACK__imported__module__$5b$project$5d2f$node_modules$2f$next$2f$dist$2f$server$2f$route$2d$modules$2f$app$2d$page$2f$vendored$2f$ssr$2f$react$2d$jsx$2d$dev$2d$runtime$2e$js__$5b$app$2d$ssr$5d$__$28$ecmascript$29$__["jsxDEV"])(__TURBOPACK__imported__module__$5b$project$5d2f$src$2f$components$2f$ui$2f$input$2e$tsx__$5b$app$2d$ssr$5d$__$28$ecmascript$29$__["Input"], {
@@ -3783,13 +3823,13 @@ function LabelFinder() {
                                                             className: "bg-secondary/50 text-sm"
                                                         }, void 0, false, {
                                                             fileName: "[project]/src/components/label-finder.tsx",
-                                                            lineNumber: 891,
+                                                            lineNumber: 902,
                                                             columnNumber: 25
                                                         }, this)
                                                     ]
                                                 }, void 0, true, {
                                                     fileName: "[project]/src/components/label-finder.tsx",
-                                                    lineNumber: 889,
+                                                    lineNumber: 900,
                                                     columnNumber: 23
                                                 }, this),
                                                 pitchText && /*#__PURE__*/ (0, __TURBOPACK__imported__module__$5b$project$5d2f$node_modules$2f$next$2f$dist$2f$server$2f$route$2d$modules$2f$app$2d$page$2f$vendored$2f$ssr$2f$react$2d$jsx$2d$dev$2d$runtime$2e$js__$5b$app$2d$ssr$5d$__$28$ecmascript$29$__["jsxDEV"])("div", {
@@ -3805,7 +3845,7 @@ function LabelFinder() {
                                                                             className: "h-3 w-3 text-primary"
                                                                         }, void 0, false, {
                                                                             fileName: "[project]/src/components/label-finder.tsx",
-                                                                            lineNumber: 899,
+                                                                            lineNumber: 910,
                                                                             columnNumber: 31
                                                                         }, this),
                                                                         " ",
@@ -3813,7 +3853,7 @@ function LabelFinder() {
                                                                     ]
                                                                 }, void 0, true, {
                                                                     fileName: "[project]/src/components/label-finder.tsx",
-                                                                    lineNumber: 898,
+                                                                    lineNumber: 909,
                                                                     columnNumber: 29
                                                                 }, this),
                                                                 /*#__PURE__*/ (0, __TURBOPACK__imported__module__$5b$project$5d2f$node_modules$2f$next$2f$dist$2f$server$2f$route$2d$modules$2f$app$2d$page$2f$vendored$2f$ssr$2f$react$2d$jsx$2d$dev$2d$runtime$2e$js__$5b$app$2d$ssr$5d$__$28$ecmascript$29$__["jsxDEV"])("div", {
@@ -3829,7 +3869,7 @@ function LabelFinder() {
                                                                                     className: "h-3 w-3 mr-1"
                                                                                 }, void 0, false, {
                                                                                     fileName: "[project]/src/components/label-finder.tsx",
-                                                                                    lineNumber: 903,
+                                                                                    lineNumber: 914,
                                                                                     columnNumber: 50
                                                                                 }, this),
                                                                                 (0, __TURBOPACK__imported__module__$5b$project$5d2f$src$2f$lib$2f$i18n$2e$ts__$5b$app$2d$ssr$5d$__$28$ecmascript$29$__["t"])(locale, "pitch.copied")
@@ -3840,7 +3880,7 @@ function LabelFinder() {
                                                                                     className: "h-3 w-3 mr-1"
                                                                                 }, void 0, false, {
                                                                                     fileName: "[project]/src/components/label-finder.tsx",
-                                                                                    lineNumber: 903,
+                                                                                    lineNumber: 914,
                                                                                     columnNumber: 119
                                                                                 }, this),
                                                                                 (0, __TURBOPACK__imported__module__$5b$project$5d2f$src$2f$lib$2f$i18n$2e$ts__$5b$app$2d$ssr$5d$__$28$ecmascript$29$__["t"])(locale, "pitch.copyToClipboard")
@@ -3848,18 +3888,18 @@ function LabelFinder() {
                                                                         }, void 0, true)
                                                                     }, void 0, false, {
                                                                         fileName: "[project]/src/components/label-finder.tsx",
-                                                                        lineNumber: 902,
+                                                                        lineNumber: 913,
                                                                         columnNumber: 31
                                                                     }, this)
                                                                 }, void 0, false, {
                                                                     fileName: "[project]/src/components/label-finder.tsx",
-                                                                    lineNumber: 901,
+                                                                    lineNumber: 912,
                                                                     columnNumber: 29
                                                                 }, this)
                                                             ]
                                                         }, void 0, true, {
                                                             fileName: "[project]/src/components/label-finder.tsx",
-                                                            lineNumber: 897,
+                                                            lineNumber: 908,
                                                             columnNumber: 27
                                                         }, this),
                                                         /*#__PURE__*/ (0, __TURBOPACK__imported__module__$5b$project$5d2f$node_modules$2f$next$2f$dist$2f$server$2f$route$2d$modules$2f$app$2d$page$2f$vendored$2f$ssr$2f$react$2d$jsx$2d$dev$2d$runtime$2e$js__$5b$app$2d$ssr$5d$__$28$ecmascript$29$__["jsxDEV"])(__TURBOPACK__imported__module__$5b$project$5d2f$src$2f$components$2f$ui$2f$card$2e$tsx__$5b$app$2d$ssr$5d$__$28$ecmascript$29$__["Card"], {
@@ -3871,17 +3911,17 @@ function LabelFinder() {
                                                                     children: pitchText
                                                                 }, void 0, false, {
                                                                     fileName: "[project]/src/components/label-finder.tsx",
-                                                                    lineNumber: 909,
+                                                                    lineNumber: 920,
                                                                     columnNumber: 31
                                                                 }, this)
                                                             }, void 0, false, {
                                                                 fileName: "[project]/src/components/label-finder.tsx",
-                                                                lineNumber: 908,
+                                                                lineNumber: 919,
                                                                 columnNumber: 29
                                                             }, this)
                                                         }, void 0, false, {
                                                             fileName: "[project]/src/components/label-finder.tsx",
-                                                            lineNumber: 907,
+                                                            lineNumber: 918,
                                                             columnNumber: 27
                                                         }, this),
                                                         /*#__PURE__*/ (0, __TURBOPACK__imported__module__$5b$project$5d2f$node_modules$2f$next$2f$dist$2f$server$2f$route$2d$modules$2f$app$2d$page$2f$vendored$2f$ssr$2f$react$2d$jsx$2d$dev$2d$runtime$2e$js__$5b$app$2d$ssr$5d$__$28$ecmascript$29$__["jsxDEV"])("div", {
@@ -3897,7 +3937,7 @@ function LabelFinder() {
                                                                                 className: "h-3.5 w-3.5 mr-1.5 animate-spin"
                                                                             }, void 0, false, {
                                                                                 fileName: "[project]/src/components/label-finder.tsx",
-                                                                                lineNumber: 923,
+                                                                                lineNumber: 934,
                                                                                 columnNumber: 37
                                                                             }, this),
                                                                             (0, __TURBOPACK__imported__module__$5b$project$5d2f$src$2f$lib$2f$i18n$2e$ts__$5b$app$2d$ssr$5d$__$28$ecmascript$29$__["t"])(locale, "gmail.sending")
@@ -3908,7 +3948,7 @@ function LabelFinder() {
                                                                                 className: "h-3.5 w-3.5 mr-1"
                                                                             }, void 0, false, {
                                                                                 fileName: "[project]/src/components/label-finder.tsx",
-                                                                                lineNumber: 925,
+                                                                                lineNumber: 936,
                                                                                 columnNumber: 37
                                                                             }, this),
                                                                             (0, __TURBOPACK__imported__module__$5b$project$5d2f$src$2f$lib$2f$i18n$2e$ts__$5b$app$2d$ssr$5d$__$28$ecmascript$29$__["t"])(locale, "pitch.sentAndTracked")
@@ -3919,7 +3959,7 @@ function LabelFinder() {
                                                                                 className: "h-3.5 w-3.5 mr-1.5"
                                                                             }, void 0, false, {
                                                                                 fileName: "[project]/src/components/label-finder.tsx",
-                                                                                lineNumber: 927,
+                                                                                lineNumber: 938,
                                                                                 columnNumber: 37
                                                                             }, this),
                                                                             (0, __TURBOPACK__imported__module__$5b$project$5d2f$src$2f$lib$2f$i18n$2e$ts__$5b$app$2d$ssr$5d$__$28$ecmascript$29$__["t"])(locale, "gmail.sendViaGmail")
@@ -3927,7 +3967,7 @@ function LabelFinder() {
                                                                     }, void 0, true)
                                                                 }, void 0, false, {
                                                                     fileName: "[project]/src/components/label-finder.tsx",
-                                                                    lineNumber: 917,
+                                                                    lineNumber: 928,
                                                                     columnNumber: 31
                                                                 }, this),
                                                                 /*#__PURE__*/ (0, __TURBOPACK__imported__module__$5b$project$5d2f$node_modules$2f$next$2f$dist$2f$server$2f$route$2d$modules$2f$app$2d$page$2f$vendored$2f$ssr$2f$react$2d$jsx$2d$dev$2d$runtime$2e$js__$5b$app$2d$ssr$5d$__$28$ecmascript$29$__["jsxDEV"])(__TURBOPACK__imported__module__$5b$project$5d2f$src$2f$components$2f$ui$2f$button$2e$tsx__$5b$app$2d$ssr$5d$__$28$ecmascript$29$__["Button"], {
@@ -3939,7 +3979,7 @@ function LabelFinder() {
                                                                             className: "h-3.5 w-3.5 mr-1.5"
                                                                         }, void 0, false, {
                                                                             fileName: "[project]/src/components/label-finder.tsx",
-                                                                            lineNumber: 938,
+                                                                            lineNumber: 949,
                                                                             columnNumber: 31
                                                                         }, this),
                                                                         pitchDemoCreated ? /*#__PURE__*/ (0, __TURBOPACK__imported__module__$5b$project$5d2f$node_modules$2f$next$2f$dist$2f$server$2f$route$2d$modules$2f$app$2d$page$2f$vendored$2f$ssr$2f$react$2d$jsx$2d$dev$2d$runtime$2e$js__$5b$app$2d$ssr$5d$__$28$ecmascript$29$__["jsxDEV"])(__TURBOPACK__imported__module__$5b$project$5d2f$node_modules$2f$next$2f$dist$2f$server$2f$route$2d$modules$2f$app$2d$page$2f$vendored$2f$ssr$2f$react$2d$jsx$2d$dev$2d$runtime$2e$js__$5b$app$2d$ssr$5d$__$28$ecmascript$29$__["Fragment"], {
@@ -3948,7 +3988,7 @@ function LabelFinder() {
                                                                                     className: "h-3.5 w-3.5 mr-1"
                                                                                 }, void 0, false, {
                                                                                     fileName: "[project]/src/components/label-finder.tsx",
-                                                                                    lineNumber: 940,
+                                                                                    lineNumber: 951,
                                                                                     columnNumber: 37
                                                                                 }, this),
                                                                                 (0, __TURBOPACK__imported__module__$5b$project$5d2f$src$2f$lib$2f$i18n$2e$ts__$5b$app$2d$ssr$5d$__$28$ecmascript$29$__["t"])(locale, "pitch.sentAndTracked")
@@ -3957,7 +3997,7 @@ function LabelFinder() {
                                                                     ]
                                                                 }, void 0, true, {
                                                                     fileName: "[project]/src/components/label-finder.tsx",
-                                                                    lineNumber: 933,
+                                                                    lineNumber: 944,
                                                                     columnNumber: 29
                                                                 }, this),
                                                                 /*#__PURE__*/ (0, __TURBOPACK__imported__module__$5b$project$5d2f$node_modules$2f$next$2f$dist$2f$server$2f$route$2d$modules$2f$app$2d$page$2f$vendored$2f$ssr$2f$react$2d$jsx$2d$dev$2d$runtime$2e$js__$5b$app$2d$ssr$5d$__$28$ecmascript$29$__["jsxDEV"])("div", {
@@ -3973,14 +4013,14 @@ function LabelFinder() {
                                                                                     className: "h-3.5 w-3.5 mr-1.5"
                                                                                 }, void 0, false, {
                                                                                     fileName: "[project]/src/components/label-finder.tsx",
-                                                                                    lineNumber: 957,
+                                                                                    lineNumber: 968,
                                                                                     columnNumber: 35
                                                                                 }, this),
                                                                                 (0, __TURBOPACK__imported__module__$5b$project$5d2f$src$2f$lib$2f$i18n$2e$ts__$5b$app$2d$ssr$5d$__$28$ecmascript$29$__["t"])(locale, "pitch.openEmailClient")
                                                                             ]
                                                                         }, void 0, true, {
                                                                             fileName: "[project]/src/components/label-finder.tsx",
-                                                                            lineNumber: 951,
+                                                                            lineNumber: 962,
                                                                             columnNumber: 33
                                                                         }, this),
                                                                         !demoAlreadyExists && !pitchDemoCreated && /*#__PURE__*/ (0, __TURBOPACK__imported__module__$5b$project$5d2f$node_modules$2f$next$2f$dist$2f$server$2f$route$2d$modules$2f$app$2d$page$2f$vendored$2f$ssr$2f$react$2d$jsx$2d$dev$2d$runtime$2e$js__$5b$app$2d$ssr$5d$__$28$ecmascript$29$__["jsxDEV"])(__TURBOPACK__imported__module__$5b$project$5d2f$src$2f$components$2f$ui$2f$button$2e$tsx__$5b$app$2d$ssr$5d$__$28$ecmascript$29$__["Button"], {
@@ -4006,14 +4046,14 @@ function LabelFinder() {
                                                                                     className: "h-3.5 w-3.5 mr-1.5"
                                                                                 }, void 0, false, {
                                                                                     fileName: "[project]/src/components/label-finder.tsx",
-                                                                                    lineNumber: 982,
+                                                                                    lineNumber: 993,
                                                                                     columnNumber: 35
                                                                                 }, this),
                                                                                 (0, __TURBOPACK__imported__module__$5b$project$5d2f$src$2f$lib$2f$i18n$2e$ts__$5b$app$2d$ssr$5d$__$28$ecmascript$29$__["t"])(locale, "pitch.addDemoOnly")
                                                                             ]
                                                                         }, void 0, true, {
                                                                             fileName: "[project]/src/components/label-finder.tsx",
-                                                                            lineNumber: 963,
+                                                                            lineNumber: 974,
                                                                             columnNumber: 33
                                                                         }, this),
                                                                         pitchDemoCreated && /*#__PURE__*/ (0, __TURBOPACK__imported__module__$5b$project$5d2f$node_modules$2f$next$2f$dist$2f$server$2f$route$2d$modules$2f$app$2d$page$2f$vendored$2f$ssr$2f$react$2d$jsx$2d$dev$2d$runtime$2e$js__$5b$app$2d$ssr$5d$__$28$ecmascript$29$__["jsxDEV"])(__TURBOPACK__imported__module__$5b$project$5d2f$src$2f$components$2f$ui$2f$button$2e$tsx__$5b$app$2d$ssr$5d$__$28$ecmascript$29$__["Button"], {
@@ -4030,13 +4070,13 @@ function LabelFinder() {
                                                                             ]
                                                                         }, void 0, true, {
                                                                             fileName: "[project]/src/components/label-finder.tsx",
-                                                                            lineNumber: 987,
+                                                                            lineNumber: 998,
                                                                             columnNumber: 33
                                                                         }, this)
                                                                     ]
                                                                 }, void 0, true, {
                                                                     fileName: "[project]/src/components/label-finder.tsx",
-                                                                    lineNumber: 948,
+                                                                    lineNumber: 959,
                                                                     columnNumber: 29
                                                                 }, this),
                                                                 !detailEmails.length && /*#__PURE__*/ (0, __TURBOPACK__imported__module__$5b$project$5d2f$node_modules$2f$next$2f$dist$2f$server$2f$route$2d$modules$2f$app$2d$page$2f$vendored$2f$ssr$2f$react$2d$jsx$2d$dev$2d$runtime$2e$js__$5b$app$2d$ssr$5d$__$28$ecmascript$29$__["jsxDEV"])("p", {
@@ -4046,7 +4086,7 @@ function LabelFinder() {
                                                                             className: "h-3 w-3"
                                                                         }, void 0, false, {
                                                                             fileName: "[project]/src/components/label-finder.tsx",
-                                                                            lineNumber: 1001,
+                                                                            lineNumber: 1012,
                                                                             columnNumber: 33
                                                                         }, this),
                                                                         " ",
@@ -4054,31 +4094,31 @@ function LabelFinder() {
                                                                     ]
                                                                 }, void 0, true, {
                                                                     fileName: "[project]/src/components/label-finder.tsx",
-                                                                    lineNumber: 1000,
+                                                                    lineNumber: 1011,
                                                                     columnNumber: 31
                                                                 }, this)
                                                             ]
                                                         }, void 0, true, {
                                                             fileName: "[project]/src/components/label-finder.tsx",
-                                                            lineNumber: 914,
+                                                            lineNumber: 925,
                                                             columnNumber: 27
                                                         }, this)
                                                     ]
                                                 }, void 0, true, {
                                                     fileName: "[project]/src/components/label-finder.tsx",
-                                                    lineNumber: 896,
+                                                    lineNumber: 907,
                                                     columnNumber: 25
                                                 }, this)
                                             ]
                                         }, void 0, true, {
                                             fileName: "[project]/src/components/label-finder.tsx",
-                                            lineNumber: 847,
+                                            lineNumber: 858,
                                             columnNumber: 21
                                         }, this)
                                     ]
                                 }, void 0, true, {
                                     fileName: "[project]/src/components/label-finder.tsx",
-                                    lineNumber: 836,
+                                    lineNumber: 847,
                                     columnNumber: 17
                                 }, this),
                                 /*#__PURE__*/ (0, __TURBOPACK__imported__module__$5b$project$5d2f$node_modules$2f$next$2f$dist$2f$server$2f$route$2d$modules$2f$app$2d$page$2f$vendored$2f$ssr$2f$react$2d$jsx$2d$dev$2d$runtime$2e$js__$5b$app$2d$ssr$5d$__$28$ecmascript$29$__["jsxDEV"])(__TURBOPACK__imported__module__$5b$project$5d2f$src$2f$components$2f$ui$2f$dialog$2e$tsx__$5b$app$2d$ssr$5d$__$28$ecmascript$29$__["DialogFooter"], {
@@ -4096,14 +4136,14 @@ function LabelFinder() {
                                                     className: "h-3 w-3 mr-1"
                                                 }, void 0, false, {
                                                     fileName: "[project]/src/components/label-finder.tsx",
-                                                    lineNumber: 1014,
+                                                    lineNumber: 1025,
                                                     columnNumber: 23
                                                 }, this),
                                                 (0, __TURBOPACK__imported__module__$5b$project$5d2f$src$2f$lib$2f$i18n$2e$ts__$5b$app$2d$ssr$5d$__$28$ecmascript$29$__["t"])(locale, "labels.delete")
                                             ]
                                         }, void 0, true, {
                                             fileName: "[project]/src/components/label-finder.tsx",
-                                            lineNumber: 1013,
+                                            lineNumber: 1024,
                                             columnNumber: 21
                                         }, this),
                                         /*#__PURE__*/ (0, __TURBOPACK__imported__module__$5b$project$5d2f$node_modules$2f$next$2f$dist$2f$server$2f$route$2d$modules$2f$app$2d$page$2f$vendored$2f$ssr$2f$react$2d$jsx$2d$dev$2d$runtime$2e$js__$5b$app$2d$ssr$5d$__$28$ecmascript$29$__["jsxDEV"])(__TURBOPACK__imported__module__$5b$project$5d2f$src$2f$components$2f$ui$2f$button$2e$tsx__$5b$app$2d$ssr$5d$__$28$ecmascript$29$__["Button"], {
@@ -4112,13 +4152,13 @@ function LabelFinder() {
                                             children: (0, __TURBOPACK__imported__module__$5b$project$5d2f$src$2f$lib$2f$i18n$2e$ts__$5b$app$2d$ssr$5d$__$28$ecmascript$29$__["t"])(locale, "labels.close")
                                         }, void 0, false, {
                                             fileName: "[project]/src/components/label-finder.tsx",
-                                            lineNumber: 1017,
+                                            lineNumber: 1028,
                                             columnNumber: 19
                                         }, this)
                                     ]
                                 }, void 0, true, {
                                     fileName: "[project]/src/components/label-finder.tsx",
-                                    lineNumber: 1011,
+                                    lineNumber: 1022,
                                     columnNumber: 17
                                 }, this)
                             ]
@@ -4126,12 +4166,12 @@ function LabelFinder() {
                     })()
                 }, void 0, false, {
                     fileName: "[project]/src/components/label-finder.tsx",
-                    lineNumber: 673,
+                    lineNumber: 676,
                     columnNumber: 9
                 }, this)
             }, void 0, false, {
                 fileName: "[project]/src/components/label-finder.tsx",
-                lineNumber: 672,
+                lineNumber: 675,
                 columnNumber: 7
             }, this),
             /*#__PURE__*/ (0, __TURBOPACK__imported__module__$5b$project$5d2f$node_modules$2f$next$2f$dist$2f$server$2f$route$2d$modules$2f$app$2d$page$2f$vendored$2f$ssr$2f$react$2d$jsx$2d$dev$2d$runtime$2e$js__$5b$app$2d$ssr$5d$__$28$ecmascript$29$__["jsxDEV"])(__TURBOPACK__imported__module__$5b$project$5d2f$src$2f$components$2f$ui$2f$dialog$2e$tsx__$5b$app$2d$ssr$5d$__$28$ecmascript$29$__["Dialog"], {
@@ -4148,19 +4188,19 @@ function LabelFinder() {
                                         className: "h-5 w-5 text-primary"
                                     }, void 0, false, {
                                         fileName: "[project]/src/components/label-finder.tsx",
-                                        lineNumber: 1030,
+                                        lineNumber: 1041,
                                         columnNumber: 15
                                     }, this),
                                     (0, __TURBOPACK__imported__module__$5b$project$5d2f$src$2f$lib$2f$i18n$2e$ts__$5b$app$2d$ssr$5d$__$28$ecmascript$29$__["t"])(locale, "labels.smartMatchTitle")
                                 ]
                             }, void 0, true, {
                                 fileName: "[project]/src/components/label-finder.tsx",
-                                lineNumber: 1029,
+                                lineNumber: 1040,
                                 columnNumber: 13
                             }, this)
                         }, void 0, false, {
                             fileName: "[project]/src/components/label-finder.tsx",
-                            lineNumber: 1028,
+                            lineNumber: 1039,
                             columnNumber: 11
                         }, this),
                         /*#__PURE__*/ (0, __TURBOPACK__imported__module__$5b$project$5d2f$node_modules$2f$next$2f$dist$2f$server$2f$route$2d$modules$2f$app$2d$page$2f$vendored$2f$ssr$2f$react$2d$jsx$2d$dev$2d$runtime$2e$js__$5b$app$2d$ssr$5d$__$28$ecmascript$29$__["jsxDEV"])("p", {
@@ -4168,7 +4208,7 @@ function LabelFinder() {
                             children: (0, __TURBOPACK__imported__module__$5b$project$5d2f$src$2f$lib$2f$i18n$2e$ts__$5b$app$2d$ssr$5d$__$28$ecmascript$29$__["t"])(locale, "labels.smartMatchDesc")
                         }, void 0, false, {
                             fileName: "[project]/src/components/label-finder.tsx",
-                            lineNumber: 1033,
+                            lineNumber: 1044,
                             columnNumber: 11
                         }, this),
                         /*#__PURE__*/ (0, __TURBOPACK__imported__module__$5b$project$5d2f$node_modules$2f$next$2f$dist$2f$server$2f$route$2d$modules$2f$app$2d$page$2f$vendored$2f$ssr$2f$react$2d$jsx$2d$dev$2d$runtime$2e$js__$5b$app$2d$ssr$5d$__$28$ecmascript$29$__["jsxDEV"])(__TURBOPACK__imported__module__$5b$project$5d2f$src$2f$components$2f$ui$2f$select$2e$tsx__$5b$app$2d$ssr$5d$__$28$ecmascript$29$__["Select"], {
@@ -4181,12 +4221,12 @@ function LabelFinder() {
                                         placeholder: (0, __TURBOPACK__imported__module__$5b$project$5d2f$src$2f$lib$2f$i18n$2e$ts__$5b$app$2d$ssr$5d$__$28$ecmascript$29$__["t"])(locale, "labels.selectGenre")
                                     }, void 0, false, {
                                         fileName: "[project]/src/components/label-finder.tsx",
-                                        lineNumber: 1035,
+                                        lineNumber: 1046,
                                         columnNumber: 56
                                     }, this)
                                 }, void 0, false, {
                                     fileName: "[project]/src/components/label-finder.tsx",
-                                    lineNumber: 1035,
+                                    lineNumber: 1046,
                                     columnNumber: 13
                                 }, this),
                                 /*#__PURE__*/ (0, __TURBOPACK__imported__module__$5b$project$5d2f$node_modules$2f$next$2f$dist$2f$server$2f$route$2d$modules$2f$app$2d$page$2f$vendored$2f$ssr$2f$react$2d$jsx$2d$dev$2d$runtime$2e$js__$5b$app$2d$ssr$5d$__$28$ecmascript$29$__["jsxDEV"])(__TURBOPACK__imported__module__$5b$project$5d2f$src$2f$components$2f$ui$2f$select$2e$tsx__$5b$app$2d$ssr$5d$__$28$ecmascript$29$__["SelectContent"], {
@@ -4195,18 +4235,18 @@ function LabelFinder() {
                                             children: g
                                         }, g, false, {
                                             fileName: "[project]/src/components/label-finder.tsx",
-                                            lineNumber: 1036,
+                                            lineNumber: 1047,
                                             columnNumber: 48
                                         }, this))
                                 }, void 0, false, {
                                     fileName: "[project]/src/components/label-finder.tsx",
-                                    lineNumber: 1036,
+                                    lineNumber: 1047,
                                     columnNumber: 13
                                 }, this)
                             ]
                         }, void 0, true, {
                             fileName: "[project]/src/components/label-finder.tsx",
-                            lineNumber: 1034,
+                            lineNumber: 1045,
                             columnNumber: 11
                         }, this),
                         smartMatchGenre && /*#__PURE__*/ (0, __TURBOPACK__imported__module__$5b$project$5d2f$node_modules$2f$next$2f$dist$2f$server$2f$route$2d$modules$2f$app$2d$page$2f$vendored$2f$ssr$2f$react$2d$jsx$2d$dev$2d$runtime$2e$js__$5b$app$2d$ssr$5d$__$28$ecmascript$29$__["jsxDEV"])("div", {
@@ -4221,14 +4261,14 @@ function LabelFinder() {
                                                     className: "h-3.5 w-3.5"
                                                 }, void 0, false, {
                                                     fileName: "[project]/src/components/label-finder.tsx",
-                                                    lineNumber: 1044,
+                                                    lineNumber: 1055,
                                                     columnNumber: 21
                                                 }, this),
                                                 (0, __TURBOPACK__imported__module__$5b$project$5d2f$src$2f$lib$2f$i18n$2e$ts__$5b$app$2d$ssr$5d$__$28$ecmascript$29$__["t"])(locale, "labels.topTier")
                                             ]
                                         }, void 0, true, {
                                             fileName: "[project]/src/components/label-finder.tsx",
-                                            lineNumber: 1043,
+                                            lineNumber: 1054,
                                             columnNumber: 19
                                         }, this),
                                         /*#__PURE__*/ (0, __TURBOPACK__imported__module__$5b$project$5d2f$node_modules$2f$next$2f$dist$2f$server$2f$route$2d$modules$2f$app$2d$page$2f$vendored$2f$ssr$2f$react$2d$jsx$2d$dev$2d$runtime$2e$js__$5b$app$2d$ssr$5d$__$28$ecmascript$29$__["jsxDEV"])("div", {
@@ -4251,7 +4291,7 @@ function LabelFinder() {
                                                                     ]
                                                                 }, void 0, true, {
                                                                     fileName: "[project]/src/components/label-finder.tsx",
-                                                                    lineNumber: 1051,
+                                                                    lineNumber: 1062,
                                                                     columnNumber: 27
                                                                 }, this),
                                                                 /*#__PURE__*/ (0, __TURBOPACK__imported__module__$5b$project$5d2f$node_modules$2f$next$2f$dist$2f$server$2f$route$2d$modules$2f$app$2d$page$2f$vendored$2f$ssr$2f$react$2d$jsx$2d$dev$2d$runtime$2e$js__$5b$app$2d$ssr$5d$__$28$ecmascript$29$__["jsxDEV"])("span", {
@@ -4259,7 +4299,7 @@ function LabelFinder() {
                                                                     children: l.name
                                                                 }, void 0, false, {
                                                                     fileName: "[project]/src/components/label-finder.tsx",
-                                                                    lineNumber: 1052,
+                                                                    lineNumber: 1063,
                                                                     columnNumber: 27
                                                                 }, this),
                                                                 l.trending && /*#__PURE__*/ (0, __TURBOPACK__imported__module__$5b$project$5d2f$node_modules$2f$next$2f$dist$2f$server$2f$route$2d$modules$2f$app$2d$page$2f$vendored$2f$ssr$2f$react$2d$jsx$2d$dev$2d$runtime$2e$js__$5b$app$2d$ssr$5d$__$28$ecmascript$29$__["jsxDEV"])("span", {
@@ -4267,13 +4307,13 @@ function LabelFinder() {
                                                                     children: "🔥"
                                                                 }, void 0, false, {
                                                                     fileName: "[project]/src/components/label-finder.tsx",
-                                                                    lineNumber: 1053,
+                                                                    lineNumber: 1064,
                                                                     columnNumber: 42
                                                                 }, this)
                                                             ]
                                                         }, void 0, true, {
                                                             fileName: "[project]/src/components/label-finder.tsx",
-                                                            lineNumber: 1050,
+                                                            lineNumber: 1061,
                                                             columnNumber: 25
                                                         }, this),
                                                         /*#__PURE__*/ (0, __TURBOPACK__imported__module__$5b$project$5d2f$node_modules$2f$next$2f$dist$2f$server$2f$route$2d$modules$2f$app$2d$page$2f$vendored$2f$ssr$2f$react$2d$jsx$2d$dev$2d$runtime$2e$js__$5b$app$2d$ssr$5d$__$28$ecmascript$29$__["jsxDEV"])("span", {
@@ -4284,24 +4324,24 @@ function LabelFinder() {
                                                             ]
                                                         }, void 0, true, {
                                                             fileName: "[project]/src/components/label-finder.tsx",
-                                                            lineNumber: 1055,
+                                                            lineNumber: 1066,
                                                             columnNumber: 25
                                                         }, this)
                                                     ]
                                                 }, l.id, true, {
                                                     fileName: "[project]/src/components/label-finder.tsx",
-                                                    lineNumber: 1048,
+                                                    lineNumber: 1059,
                                                     columnNumber: 23
                                                 }, this))
                                         }, void 0, false, {
                                             fileName: "[project]/src/components/label-finder.tsx",
-                                            lineNumber: 1046,
+                                            lineNumber: 1057,
                                             columnNumber: 19
                                         }, this)
                                     ]
                                 }, void 0, true, {
                                     fileName: "[project]/src/components/label-finder.tsx",
-                                    lineNumber: 1042,
+                                    lineNumber: 1053,
                                     columnNumber: 17
                                 }, this),
                                 smartMatchResults.mid.length > 0 && /*#__PURE__*/ (0, __TURBOPACK__imported__module__$5b$project$5d2f$node_modules$2f$next$2f$dist$2f$server$2f$route$2d$modules$2f$app$2d$page$2f$vendored$2f$ssr$2f$react$2d$jsx$2d$dev$2d$runtime$2e$js__$5b$app$2d$ssr$5d$__$28$ecmascript$29$__["jsxDEV"])("div", {
@@ -4313,14 +4353,14 @@ function LabelFinder() {
                                                     className: "h-3.5 w-3.5"
                                                 }, void 0, false, {
                                                     fileName: "[project]/src/components/label-finder.tsx",
-                                                    lineNumber: 1064,
+                                                    lineNumber: 1075,
                                                     columnNumber: 21
                                                 }, this),
                                                 (0, __TURBOPACK__imported__module__$5b$project$5d2f$src$2f$lib$2f$i18n$2e$ts__$5b$app$2d$ssr$5d$__$28$ecmascript$29$__["t"])(locale, "labels.midTier")
                                             ]
                                         }, void 0, true, {
                                             fileName: "[project]/src/components/label-finder.tsx",
-                                            lineNumber: 1063,
+                                            lineNumber: 1074,
                                             columnNumber: 19
                                         }, this),
                                         /*#__PURE__*/ (0, __TURBOPACK__imported__module__$5b$project$5d2f$node_modules$2f$next$2f$dist$2f$server$2f$route$2d$modules$2f$app$2d$page$2f$vendored$2f$ssr$2f$react$2d$jsx$2d$dev$2d$runtime$2e$js__$5b$app$2d$ssr$5d$__$28$ecmascript$29$__["jsxDEV"])("div", {
@@ -4343,7 +4383,7 @@ function LabelFinder() {
                                                                     ]
                                                                 }, void 0, true, {
                                                                     fileName: "[project]/src/components/label-finder.tsx",
-                                                                    lineNumber: 1071,
+                                                                    lineNumber: 1082,
                                                                     columnNumber: 27
                                                                 }, this),
                                                                 /*#__PURE__*/ (0, __TURBOPACK__imported__module__$5b$project$5d2f$node_modules$2f$next$2f$dist$2f$server$2f$route$2d$modules$2f$app$2d$page$2f$vendored$2f$ssr$2f$react$2d$jsx$2d$dev$2d$runtime$2e$js__$5b$app$2d$ssr$5d$__$28$ecmascript$29$__["jsxDEV"])("span", {
@@ -4351,7 +4391,7 @@ function LabelFinder() {
                                                                     children: l.name
                                                                 }, void 0, false, {
                                                                     fileName: "[project]/src/components/label-finder.tsx",
-                                                                    lineNumber: 1072,
+                                                                    lineNumber: 1083,
                                                                     columnNumber: 27
                                                                 }, this),
                                                                 l.trending && /*#__PURE__*/ (0, __TURBOPACK__imported__module__$5b$project$5d2f$node_modules$2f$next$2f$dist$2f$server$2f$route$2d$modules$2f$app$2d$page$2f$vendored$2f$ssr$2f$react$2d$jsx$2d$dev$2d$runtime$2e$js__$5b$app$2d$ssr$5d$__$28$ecmascript$29$__["jsxDEV"])("span", {
@@ -4359,13 +4399,13 @@ function LabelFinder() {
                                                                     children: "🔥"
                                                                 }, void 0, false, {
                                                                     fileName: "[project]/src/components/label-finder.tsx",
-                                                                    lineNumber: 1073,
+                                                                    lineNumber: 1084,
                                                                     columnNumber: 42
                                                                 }, this)
                                                             ]
                                                         }, void 0, true, {
                                                             fileName: "[project]/src/components/label-finder.tsx",
-                                                            lineNumber: 1070,
+                                                            lineNumber: 1081,
                                                             columnNumber: 25
                                                         }, this),
                                                         /*#__PURE__*/ (0, __TURBOPACK__imported__module__$5b$project$5d2f$node_modules$2f$next$2f$dist$2f$server$2f$route$2d$modules$2f$app$2d$page$2f$vendored$2f$ssr$2f$react$2d$jsx$2d$dev$2d$runtime$2e$js__$5b$app$2d$ssr$5d$__$28$ecmascript$29$__["jsxDEV"])("span", {
@@ -4376,24 +4416,24 @@ function LabelFinder() {
                                                             ]
                                                         }, void 0, true, {
                                                             fileName: "[project]/src/components/label-finder.tsx",
-                                                            lineNumber: 1075,
+                                                            lineNumber: 1086,
                                                             columnNumber: 25
                                                         }, this)
                                                     ]
                                                 }, l.id, true, {
                                                     fileName: "[project]/src/components/label-finder.tsx",
-                                                    lineNumber: 1068,
+                                                    lineNumber: 1079,
                                                     columnNumber: 23
                                                 }, this))
                                         }, void 0, false, {
                                             fileName: "[project]/src/components/label-finder.tsx",
-                                            lineNumber: 1066,
+                                            lineNumber: 1077,
                                             columnNumber: 19
                                         }, this)
                                     ]
                                 }, void 0, true, {
                                     fileName: "[project]/src/components/label-finder.tsx",
-                                    lineNumber: 1062,
+                                    lineNumber: 1073,
                                     columnNumber: 17
                                 }, this),
                                 smartMatchResults.emerging.length > 0 && /*#__PURE__*/ (0, __TURBOPACK__imported__module__$5b$project$5d2f$node_modules$2f$next$2f$dist$2f$server$2f$route$2d$modules$2f$app$2d$page$2f$vendored$2f$ssr$2f$react$2d$jsx$2d$dev$2d$runtime$2e$js__$5b$app$2d$ssr$5d$__$28$ecmascript$29$__["jsxDEV"])("div", {
@@ -4405,14 +4445,14 @@ function LabelFinder() {
                                                     className: "h-3.5 w-3.5"
                                                 }, void 0, false, {
                                                     fileName: "[project]/src/components/label-finder.tsx",
-                                                    lineNumber: 1084,
+                                                    lineNumber: 1095,
                                                     columnNumber: 21
                                                 }, this),
                                                 (0, __TURBOPACK__imported__module__$5b$project$5d2f$src$2f$lib$2f$i18n$2e$ts__$5b$app$2d$ssr$5d$__$28$ecmascript$29$__["t"])(locale, "labels.emerging")
                                             ]
                                         }, void 0, true, {
                                             fileName: "[project]/src/components/label-finder.tsx",
-                                            lineNumber: 1083,
+                                            lineNumber: 1094,
                                             columnNumber: 19
                                         }, this),
                                         /*#__PURE__*/ (0, __TURBOPACK__imported__module__$5b$project$5d2f$node_modules$2f$next$2f$dist$2f$server$2f$route$2d$modules$2f$app$2d$page$2f$vendored$2f$ssr$2f$react$2d$jsx$2d$dev$2d$runtime$2e$js__$5b$app$2d$ssr$5d$__$28$ecmascript$29$__["jsxDEV"])("div", {
@@ -4432,7 +4472,7 @@ function LabelFinder() {
                                                                     children: "🔥"
                                                                 }, void 0, false, {
                                                                     fileName: "[project]/src/components/label-finder.tsx",
-                                                                    lineNumber: 1091,
+                                                                    lineNumber: 1102,
                                                                     columnNumber: 27
                                                                 }, this),
                                                                 /*#__PURE__*/ (0, __TURBOPACK__imported__module__$5b$project$5d2f$node_modules$2f$next$2f$dist$2f$server$2f$route$2d$modules$2f$app$2d$page$2f$vendored$2f$ssr$2f$react$2d$jsx$2d$dev$2d$runtime$2e$js__$5b$app$2d$ssr$5d$__$28$ecmascript$29$__["jsxDEV"])("span", {
@@ -4440,13 +4480,13 @@ function LabelFinder() {
                                                                     children: l.name
                                                                 }, void 0, false, {
                                                                     fileName: "[project]/src/components/label-finder.tsx",
-                                                                    lineNumber: 1092,
+                                                                    lineNumber: 1103,
                                                                     columnNumber: 27
                                                                 }, this)
                                                             ]
                                                         }, void 0, true, {
                                                             fileName: "[project]/src/components/label-finder.tsx",
-                                                            lineNumber: 1090,
+                                                            lineNumber: 1101,
                                                             columnNumber: 25
                                                         }, this),
                                                         /*#__PURE__*/ (0, __TURBOPACK__imported__module__$5b$project$5d2f$node_modules$2f$next$2f$dist$2f$server$2f$route$2d$modules$2f$app$2d$page$2f$vendored$2f$ssr$2f$react$2d$jsx$2d$dev$2d$runtime$2e$js__$5b$app$2d$ssr$5d$__$28$ecmascript$29$__["jsxDEV"])("span", {
@@ -4457,24 +4497,24 @@ function LabelFinder() {
                                                             ]
                                                         }, void 0, true, {
                                                             fileName: "[project]/src/components/label-finder.tsx",
-                                                            lineNumber: 1094,
+                                                            lineNumber: 1105,
                                                             columnNumber: 25
                                                         }, this)
                                                     ]
                                                 }, l.id, true, {
                                                     fileName: "[project]/src/components/label-finder.tsx",
-                                                    lineNumber: 1088,
+                                                    lineNumber: 1099,
                                                     columnNumber: 23
                                                 }, this))
                                         }, void 0, false, {
                                             fileName: "[project]/src/components/label-finder.tsx",
-                                            lineNumber: 1086,
+                                            lineNumber: 1097,
                                             columnNumber: 19
                                         }, this)
                                     ]
                                 }, void 0, true, {
                                     fileName: "[project]/src/components/label-finder.tsx",
-                                    lineNumber: 1082,
+                                    lineNumber: 1093,
                                     columnNumber: 17
                                 }, this),
                                 smartMatchResults.top.length === 0 && smartMatchResults.mid.length === 0 && smartMatchResults.emerging.length === 0 && /*#__PURE__*/ (0, __TURBOPACK__imported__module__$5b$project$5d2f$node_modules$2f$next$2f$dist$2f$server$2f$route$2d$modules$2f$app$2d$page$2f$vendored$2f$ssr$2f$react$2d$jsx$2d$dev$2d$runtime$2e$js__$5b$app$2d$ssr$5d$__$28$ecmascript$29$__["jsxDEV"])("p", {
@@ -4482,24 +4522,24 @@ function LabelFinder() {
                                     children: "No data for this genre yet."
                                 }, void 0, false, {
                                     fileName: "[project]/src/components/label-finder.tsx",
-                                    lineNumber: 1101,
+                                    lineNumber: 1112,
                                     columnNumber: 17
                                 }, this)
                             ]
                         }, void 0, true, {
                             fileName: "[project]/src/components/label-finder.tsx",
-                            lineNumber: 1040,
+                            lineNumber: 1051,
                             columnNumber: 13
                         }, this)
                     ]
                 }, void 0, true, {
                     fileName: "[project]/src/components/label-finder.tsx",
-                    lineNumber: 1027,
+                    lineNumber: 1038,
                     columnNumber: 9
                 }, this)
             }, void 0, false, {
                 fileName: "[project]/src/components/label-finder.tsx",
-                lineNumber: 1026,
+                lineNumber: 1037,
                 columnNumber: 7
             }, this),
             /*#__PURE__*/ (0, __TURBOPACK__imported__module__$5b$project$5d2f$node_modules$2f$next$2f$dist$2f$server$2f$route$2d$modules$2f$app$2d$page$2f$vendored$2f$ssr$2f$react$2d$jsx$2d$dev$2d$runtime$2e$js__$5b$app$2d$ssr$5d$__$28$ecmascript$29$__["jsxDEV"])(__TURBOPACK__imported__module__$5b$project$5d2f$src$2f$components$2f$ui$2f$dialog$2e$tsx__$5b$app$2d$ssr$5d$__$28$ecmascript$29$__["Dialog"], {
@@ -4513,12 +4553,12 @@ function LabelFinder() {
                                 children: editingLabel ? (0, __TURBOPACK__imported__module__$5b$project$5d2f$src$2f$lib$2f$i18n$2e$ts__$5b$app$2d$ssr$5d$__$28$ecmascript$29$__["t"])(locale, "labels.editLabel") : (0, __TURBOPACK__imported__module__$5b$project$5d2f$src$2f$lib$2f$i18n$2e$ts__$5b$app$2d$ssr$5d$__$28$ecmascript$29$__["t"])(locale, "labels.addLabel")
                             }, void 0, false, {
                                 fileName: "[project]/src/components/label-finder.tsx",
-                                lineNumber: 1112,
+                                lineNumber: 1123,
                                 columnNumber: 13
                             }, this)
                         }, void 0, false, {
                             fileName: "[project]/src/components/label-finder.tsx",
-                            lineNumber: 1111,
+                            lineNumber: 1122,
                             columnNumber: 11
                         }, this),
                         /*#__PURE__*/ (0, __TURBOPACK__imported__module__$5b$project$5d2f$node_modules$2f$next$2f$dist$2f$server$2f$route$2d$modules$2f$app$2d$page$2f$vendored$2f$ssr$2f$react$2d$jsx$2d$dev$2d$runtime$2e$js__$5b$app$2d$ssr$5d$__$28$ecmascript$29$__["jsxDEV"])("div", {
@@ -4532,7 +4572,7 @@ function LabelFinder() {
                                             children: (0, __TURBOPACK__imported__module__$5b$project$5d2f$src$2f$lib$2f$i18n$2e$ts__$5b$app$2d$ssr$5d$__$28$ecmascript$29$__["t"])(locale, "labels.labelName")
                                         }, void 0, false, {
                                             fileName: "[project]/src/components/label-finder.tsx",
-                                            lineNumber: 1116,
+                                            lineNumber: 1127,
                                             columnNumber: 15
                                         }, this),
                                         /*#__PURE__*/ (0, __TURBOPACK__imported__module__$5b$project$5d2f$node_modules$2f$next$2f$dist$2f$server$2f$route$2d$modules$2f$app$2d$page$2f$vendored$2f$ssr$2f$react$2d$jsx$2d$dev$2d$runtime$2e$js__$5b$app$2d$ssr$5d$__$28$ecmascript$29$__["jsxDEV"])(__TURBOPACK__imported__module__$5b$project$5d2f$src$2f$components$2f$ui$2f$input$2e$tsx__$5b$app$2d$ssr$5d$__$28$ecmascript$29$__["Input"], {
@@ -4542,13 +4582,13 @@ function LabelFinder() {
                                             className: "bg-secondary/50"
                                         }, void 0, false, {
                                             fileName: "[project]/src/components/label-finder.tsx",
-                                            lineNumber: 1117,
+                                            lineNumber: 1128,
                                             columnNumber: 15
                                         }, this)
                                     ]
                                 }, void 0, true, {
                                     fileName: "[project]/src/components/label-finder.tsx",
-                                    lineNumber: 1115,
+                                    lineNumber: 1126,
                                     columnNumber: 13
                                 }, this),
                                 /*#__PURE__*/ (0, __TURBOPACK__imported__module__$5b$project$5d2f$node_modules$2f$next$2f$dist$2f$server$2f$route$2d$modules$2f$app$2d$page$2f$vendored$2f$ssr$2f$react$2d$jsx$2d$dev$2d$runtime$2e$js__$5b$app$2d$ssr$5d$__$28$ecmascript$29$__["jsxDEV"])("div", {
@@ -4562,7 +4602,7 @@ function LabelFinder() {
                                                     children: (0, __TURBOPACK__imported__module__$5b$project$5d2f$src$2f$lib$2f$i18n$2e$ts__$5b$app$2d$ssr$5d$__$28$ecmascript$29$__["t"])(locale, "labels.genre")
                                                 }, void 0, false, {
                                                     fileName: "[project]/src/components/label-finder.tsx",
-                                                    lineNumber: 1121,
+                                                    lineNumber: 1132,
                                                     columnNumber: 17
                                                 }, this),
                                                 /*#__PURE__*/ (0, __TURBOPACK__imported__module__$5b$project$5d2f$node_modules$2f$next$2f$dist$2f$server$2f$route$2d$modules$2f$app$2d$page$2f$vendored$2f$ssr$2f$react$2d$jsx$2d$dev$2d$runtime$2e$js__$5b$app$2d$ssr$5d$__$28$ecmascript$29$__["jsxDEV"])(__TURBOPACK__imported__module__$5b$project$5d2f$src$2f$components$2f$ui$2f$select$2e$tsx__$5b$app$2d$ssr$5d$__$28$ecmascript$29$__["Select"], {
@@ -4573,12 +4613,12 @@ function LabelFinder() {
                                                             className: "bg-secondary/50",
                                                             children: /*#__PURE__*/ (0, __TURBOPACK__imported__module__$5b$project$5d2f$node_modules$2f$next$2f$dist$2f$server$2f$route$2d$modules$2f$app$2d$page$2f$vendored$2f$ssr$2f$react$2d$jsx$2d$dev$2d$runtime$2e$js__$5b$app$2d$ssr$5d$__$28$ecmascript$29$__["jsxDEV"])(__TURBOPACK__imported__module__$5b$project$5d2f$src$2f$components$2f$ui$2f$select$2e$tsx__$5b$app$2d$ssr$5d$__$28$ecmascript$29$__["SelectValue"], {}, void 0, false, {
                                                                 fileName: "[project]/src/components/label-finder.tsx",
-                                                                lineNumber: 1123,
+                                                                lineNumber: 1134,
                                                                 columnNumber: 62
                                                             }, this)
                                                         }, void 0, false, {
                                                             fileName: "[project]/src/components/label-finder.tsx",
-                                                            lineNumber: 1123,
+                                                            lineNumber: 1134,
                                                             columnNumber: 19
                                                         }, this),
                                                         /*#__PURE__*/ (0, __TURBOPACK__imported__module__$5b$project$5d2f$node_modules$2f$next$2f$dist$2f$server$2f$route$2d$modules$2f$app$2d$page$2f$vendored$2f$ssr$2f$react$2d$jsx$2d$dev$2d$runtime$2e$js__$5b$app$2d$ssr$5d$__$28$ecmascript$29$__["jsxDEV"])(__TURBOPACK__imported__module__$5b$project$5d2f$src$2f$components$2f$ui$2f$select$2e$tsx__$5b$app$2d$ssr$5d$__$28$ecmascript$29$__["SelectContent"], {
@@ -4587,24 +4627,24 @@ function LabelFinder() {
                                                                     children: g
                                                                 }, g, false, {
                                                                     fileName: "[project]/src/components/label-finder.tsx",
-                                                                    lineNumber: 1124,
+                                                                    lineNumber: 1135,
                                                                     columnNumber: 67
                                                                 }, this))
                                                         }, void 0, false, {
                                                             fileName: "[project]/src/components/label-finder.tsx",
-                                                            lineNumber: 1124,
+                                                            lineNumber: 1135,
                                                             columnNumber: 19
                                                         }, this)
                                                     ]
                                                 }, void 0, true, {
                                                     fileName: "[project]/src/components/label-finder.tsx",
-                                                    lineNumber: 1122,
+                                                    lineNumber: 1133,
                                                     columnNumber: 17
                                                 }, this)
                                             ]
                                         }, void 0, true, {
                                             fileName: "[project]/src/components/label-finder.tsx",
-                                            lineNumber: 1120,
+                                            lineNumber: 1131,
                                             columnNumber: 15
                                         }, this),
                                         /*#__PURE__*/ (0, __TURBOPACK__imported__module__$5b$project$5d2f$node_modules$2f$next$2f$dist$2f$server$2f$route$2d$modules$2f$app$2d$page$2f$vendored$2f$ssr$2f$react$2d$jsx$2d$dev$2d$runtime$2e$js__$5b$app$2d$ssr$5d$__$28$ecmascript$29$__["jsxDEV"])("div", {
@@ -4615,7 +4655,7 @@ function LabelFinder() {
                                                     children: (0, __TURBOPACK__imported__module__$5b$project$5d2f$src$2f$lib$2f$i18n$2e$ts__$5b$app$2d$ssr$5d$__$28$ecmascript$29$__["t"])(locale, "labels.submissionType")
                                                 }, void 0, false, {
                                                     fileName: "[project]/src/components/label-finder.tsx",
-                                                    lineNumber: 1128,
+                                                    lineNumber: 1139,
                                                     columnNumber: 17
                                                 }, this),
                                                 /*#__PURE__*/ (0, __TURBOPACK__imported__module__$5b$project$5d2f$node_modules$2f$next$2f$dist$2f$server$2f$route$2d$modules$2f$app$2d$page$2f$vendored$2f$ssr$2f$react$2d$jsx$2d$dev$2d$runtime$2e$js__$5b$app$2d$ssr$5d$__$28$ecmascript$29$__["jsxDEV"])(__TURBOPACK__imported__module__$5b$project$5d2f$src$2f$components$2f$ui$2f$select$2e$tsx__$5b$app$2d$ssr$5d$__$28$ecmascript$29$__["Select"], {
@@ -4626,12 +4666,12 @@ function LabelFinder() {
                                                             className: "bg-secondary/50",
                                                             children: /*#__PURE__*/ (0, __TURBOPACK__imported__module__$5b$project$5d2f$node_modules$2f$next$2f$dist$2f$server$2f$route$2d$modules$2f$app$2d$page$2f$vendored$2f$ssr$2f$react$2d$jsx$2d$dev$2d$runtime$2e$js__$5b$app$2d$ssr$5d$__$28$ecmascript$29$__["jsxDEV"])(__TURBOPACK__imported__module__$5b$project$5d2f$src$2f$components$2f$ui$2f$select$2e$tsx__$5b$app$2d$ssr$5d$__$28$ecmascript$29$__["SelectValue"], {}, void 0, false, {
                                                                 fileName: "[project]/src/components/label-finder.tsx",
-                                                                lineNumber: 1130,
+                                                                lineNumber: 1141,
                                                                 columnNumber: 62
                                                             }, this)
                                                         }, void 0, false, {
                                                             fileName: "[project]/src/components/label-finder.tsx",
-                                                            lineNumber: 1130,
+                                                            lineNumber: 1141,
                                                             columnNumber: 19
                                                         }, this),
                                                         /*#__PURE__*/ (0, __TURBOPACK__imported__module__$5b$project$5d2f$node_modules$2f$next$2f$dist$2f$server$2f$route$2d$modules$2f$app$2d$page$2f$vendored$2f$ssr$2f$react$2d$jsx$2d$dev$2d$runtime$2e$js__$5b$app$2d$ssr$5d$__$28$ecmascript$29$__["jsxDEV"])(__TURBOPACK__imported__module__$5b$project$5d2f$src$2f$components$2f$ui$2f$select$2e$tsx__$5b$app$2d$ssr$5d$__$28$ecmascript$29$__["SelectContent"], {
@@ -4640,30 +4680,30 @@ function LabelFinder() {
                                                                     children: getSubmissionLabel(type)
                                                                 }, type, false, {
                                                                     fileName: "[project]/src/components/label-finder.tsx",
-                                                                    lineNumber: 1131,
+                                                                    lineNumber: 1142,
                                                                     columnNumber: 67
                                                                 }, this))
                                                         }, void 0, false, {
                                                             fileName: "[project]/src/components/label-finder.tsx",
-                                                            lineNumber: 1131,
+                                                            lineNumber: 1142,
                                                             columnNumber: 19
                                                         }, this)
                                                     ]
                                                 }, void 0, true, {
                                                     fileName: "[project]/src/components/label-finder.tsx",
-                                                    lineNumber: 1129,
+                                                    lineNumber: 1140,
                                                     columnNumber: 17
                                                 }, this)
                                             ]
                                         }, void 0, true, {
                                             fileName: "[project]/src/components/label-finder.tsx",
-                                            lineNumber: 1127,
+                                            lineNumber: 1138,
                                             columnNumber: 15
                                         }, this)
                                     ]
                                 }, void 0, true, {
                                     fileName: "[project]/src/components/label-finder.tsx",
-                                    lineNumber: 1119,
+                                    lineNumber: 1130,
                                     columnNumber: 13
                                 }, this),
                                 /*#__PURE__*/ (0, __TURBOPACK__imported__module__$5b$project$5d2f$node_modules$2f$next$2f$dist$2f$server$2f$route$2d$modules$2f$app$2d$page$2f$vendored$2f$ssr$2f$react$2d$jsx$2d$dev$2d$runtime$2e$js__$5b$app$2d$ssr$5d$__$28$ecmascript$29$__["jsxDEV"])("div", {
@@ -4674,7 +4714,7 @@ function LabelFinder() {
                                             children: (0, __TURBOPACK__imported__module__$5b$project$5d2f$src$2f$lib$2f$i18n$2e$ts__$5b$app$2d$ssr$5d$__$28$ecmascript$29$__["t"])(locale, "labels.arContact")
                                         }, void 0, false, {
                                             fileName: "[project]/src/components/label-finder.tsx",
-                                            lineNumber: 1136,
+                                            lineNumber: 1147,
                                             columnNumber: 15
                                         }, this),
                                         /*#__PURE__*/ (0, __TURBOPACK__imported__module__$5b$project$5d2f$node_modules$2f$next$2f$dist$2f$server$2f$route$2d$modules$2f$app$2d$page$2f$vendored$2f$ssr$2f$react$2d$jsx$2d$dev$2d$runtime$2e$js__$5b$app$2d$ssr$5d$__$28$ecmascript$29$__["jsxDEV"])(__TURBOPACK__imported__module__$5b$project$5d2f$src$2f$components$2f$ui$2f$input$2e$tsx__$5b$app$2d$ssr$5d$__$28$ecmascript$29$__["Input"], {
@@ -4684,13 +4724,13 @@ function LabelFinder() {
                                             className: "bg-secondary/50"
                                         }, void 0, false, {
                                             fileName: "[project]/src/components/label-finder.tsx",
-                                            lineNumber: 1137,
+                                            lineNumber: 1148,
                                             columnNumber: 15
                                         }, this)
                                     ]
                                 }, void 0, true, {
                                     fileName: "[project]/src/components/label-finder.tsx",
-                                    lineNumber: 1135,
+                                    lineNumber: 1146,
                                     columnNumber: 13
                                 }, this),
                                 /*#__PURE__*/ (0, __TURBOPACK__imported__module__$5b$project$5d2f$node_modules$2f$next$2f$dist$2f$server$2f$route$2d$modules$2f$app$2d$page$2f$vendored$2f$ssr$2f$react$2d$jsx$2d$dev$2d$runtime$2e$js__$5b$app$2d$ssr$5d$__$28$ecmascript$29$__["jsxDEV"])("div", {
@@ -4701,7 +4741,7 @@ function LabelFinder() {
                                             children: (0, __TURBOPACK__imported__module__$5b$project$5d2f$src$2f$lib$2f$i18n$2e$ts__$5b$app$2d$ssr$5d$__$28$ecmascript$29$__["t"])(locale, "labels.status")
                                         }, void 0, false, {
                                             fileName: "[project]/src/components/label-finder.tsx",
-                                            lineNumber: 1140,
+                                            lineNumber: 1151,
                                             columnNumber: 15
                                         }, this),
                                         /*#__PURE__*/ (0, __TURBOPACK__imported__module__$5b$project$5d2f$node_modules$2f$next$2f$dist$2f$server$2f$route$2d$modules$2f$app$2d$page$2f$vendored$2f$ssr$2f$react$2d$jsx$2d$dev$2d$runtime$2e$js__$5b$app$2d$ssr$5d$__$28$ecmascript$29$__["jsxDEV"])(__TURBOPACK__imported__module__$5b$project$5d2f$src$2f$components$2f$ui$2f$select$2e$tsx__$5b$app$2d$ssr$5d$__$28$ecmascript$29$__["Select"], {
@@ -4712,12 +4752,12 @@ function LabelFinder() {
                                                     className: "bg-secondary/50",
                                                     children: /*#__PURE__*/ (0, __TURBOPACK__imported__module__$5b$project$5d2f$node_modules$2f$next$2f$dist$2f$server$2f$route$2d$modules$2f$app$2d$page$2f$vendored$2f$ssr$2f$react$2d$jsx$2d$dev$2d$runtime$2e$js__$5b$app$2d$ssr$5d$__$28$ecmascript$29$__["jsxDEV"])(__TURBOPACK__imported__module__$5b$project$5d2f$src$2f$components$2f$ui$2f$select$2e$tsx__$5b$app$2d$ssr$5d$__$28$ecmascript$29$__["SelectValue"], {}, void 0, false, {
                                                         fileName: "[project]/src/components/label-finder.tsx",
-                                                        lineNumber: 1142,
+                                                        lineNumber: 1153,
                                                         columnNumber: 60
                                                     }, this)
                                                 }, void 0, false, {
                                                     fileName: "[project]/src/components/label-finder.tsx",
-                                                    lineNumber: 1142,
+                                                    lineNumber: 1153,
                                                     columnNumber: 17
                                                 }, this),
                                                 /*#__PURE__*/ (0, __TURBOPACK__imported__module__$5b$project$5d2f$node_modules$2f$next$2f$dist$2f$server$2f$route$2d$modules$2f$app$2d$page$2f$vendored$2f$ssr$2f$react$2d$jsx$2d$dev$2d$runtime$2e$js__$5b$app$2d$ssr$5d$__$28$ecmascript$29$__["jsxDEV"])(__TURBOPACK__imported__module__$5b$project$5d2f$src$2f$components$2f$ui$2f$select$2e$tsx__$5b$app$2d$ssr$5d$__$28$ecmascript$29$__["SelectContent"], {
@@ -4727,7 +4767,7 @@ function LabelFinder() {
                                                             children: (0, __TURBOPACK__imported__module__$5b$project$5d2f$src$2f$lib$2f$i18n$2e$ts__$5b$app$2d$ssr$5d$__$28$ecmascript$29$__["t"])(locale, "labels.open")
                                                         }, void 0, false, {
                                                             fileName: "[project]/src/components/label-finder.tsx",
-                                                            lineNumber: 1144,
+                                                            lineNumber: 1155,
                                                             columnNumber: 19
                                                         }, this),
                                                         /*#__PURE__*/ (0, __TURBOPACK__imported__module__$5b$project$5d2f$node_modules$2f$next$2f$dist$2f$server$2f$route$2d$modules$2f$app$2d$page$2f$vendored$2f$ssr$2f$react$2d$jsx$2d$dev$2d$runtime$2e$js__$5b$app$2d$ssr$5d$__$28$ecmascript$29$__["jsxDEV"])(__TURBOPACK__imported__module__$5b$project$5d2f$src$2f$components$2f$ui$2f$select$2e$tsx__$5b$app$2d$ssr$5d$__$28$ecmascript$29$__["SelectItem"], {
@@ -4735,25 +4775,25 @@ function LabelFinder() {
                                                             children: (0, __TURBOPACK__imported__module__$5b$project$5d2f$src$2f$lib$2f$i18n$2e$ts__$5b$app$2d$ssr$5d$__$28$ecmascript$29$__["t"])(locale, "labels.closed")
                                                         }, void 0, false, {
                                                             fileName: "[project]/src/components/label-finder.tsx",
-                                                            lineNumber: 1145,
+                                                            lineNumber: 1156,
                                                             columnNumber: 19
                                                         }, this)
                                                     ]
                                                 }, void 0, true, {
                                                     fileName: "[project]/src/components/label-finder.tsx",
-                                                    lineNumber: 1143,
+                                                    lineNumber: 1154,
                                                     columnNumber: 17
                                                 }, this)
                                             ]
                                         }, void 0, true, {
                                             fileName: "[project]/src/components/label-finder.tsx",
-                                            lineNumber: 1141,
+                                            lineNumber: 1152,
                                             columnNumber: 15
                                         }, this)
                                     ]
                                 }, void 0, true, {
                                     fileName: "[project]/src/components/label-finder.tsx",
-                                    lineNumber: 1139,
+                                    lineNumber: 1150,
                                     columnNumber: 13
                                 }, this),
                                 /*#__PURE__*/ (0, __TURBOPACK__imported__module__$5b$project$5d2f$node_modules$2f$next$2f$dist$2f$server$2f$route$2d$modules$2f$app$2d$page$2f$vendored$2f$ssr$2f$react$2d$jsx$2d$dev$2d$runtime$2e$js__$5b$app$2d$ssr$5d$__$28$ecmascript$29$__["jsxDEV"])("div", {
@@ -4764,7 +4804,7 @@ function LabelFinder() {
                                             children: (0, __TURBOPACK__imported__module__$5b$project$5d2f$src$2f$lib$2f$i18n$2e$ts__$5b$app$2d$ssr$5d$__$28$ecmascript$29$__["t"])(locale, "labels.notes")
                                         }, void 0, false, {
                                             fileName: "[project]/src/components/label-finder.tsx",
-                                            lineNumber: 1150,
+                                            lineNumber: 1161,
                                             columnNumber: 15
                                         }, this),
                                         /*#__PURE__*/ (0, __TURBOPACK__imported__module__$5b$project$5d2f$node_modules$2f$next$2f$dist$2f$server$2f$route$2d$modules$2f$app$2d$page$2f$vendored$2f$ssr$2f$react$2d$jsx$2d$dev$2d$runtime$2e$js__$5b$app$2d$ssr$5d$__$28$ecmascript$29$__["jsxDEV"])(__TURBOPACK__imported__module__$5b$project$5d2f$src$2f$components$2f$ui$2f$textarea$2e$tsx__$5b$app$2d$ssr$5d$__$28$ecmascript$29$__["Textarea"], {
@@ -4775,19 +4815,19 @@ function LabelFinder() {
                                             className: "bg-secondary/50 resize-none"
                                         }, void 0, false, {
                                             fileName: "[project]/src/components/label-finder.tsx",
-                                            lineNumber: 1151,
+                                            lineNumber: 1162,
                                             columnNumber: 15
                                         }, this)
                                     ]
                                 }, void 0, true, {
                                     fileName: "[project]/src/components/label-finder.tsx",
-                                    lineNumber: 1149,
+                                    lineNumber: 1160,
                                     columnNumber: 13
                                 }, this)
                             ]
                         }, void 0, true, {
                             fileName: "[project]/src/components/label-finder.tsx",
-                            lineNumber: 1114,
+                            lineNumber: 1125,
                             columnNumber: 11
                         }, this),
                         /*#__PURE__*/ (0, __TURBOPACK__imported__module__$5b$project$5d2f$node_modules$2f$next$2f$dist$2f$server$2f$route$2d$modules$2f$app$2d$page$2f$vendored$2f$ssr$2f$react$2d$jsx$2d$dev$2d$runtime$2e$js__$5b$app$2d$ssr$5d$__$28$ecmascript$29$__["jsxDEV"])(__TURBOPACK__imported__module__$5b$project$5d2f$src$2f$components$2f$ui$2f$dialog$2e$tsx__$5b$app$2d$ssr$5d$__$28$ecmascript$29$__["DialogFooter"], {
@@ -4798,7 +4838,7 @@ function LabelFinder() {
                                     children: (0, __TURBOPACK__imported__module__$5b$project$5d2f$src$2f$lib$2f$i18n$2e$ts__$5b$app$2d$ssr$5d$__$28$ecmascript$29$__["t"])(locale, "labels.cancel")
                                 }, void 0, false, {
                                     fileName: "[project]/src/components/label-finder.tsx",
-                                    lineNumber: 1155,
+                                    lineNumber: 1166,
                                     columnNumber: 13
                                 }, this),
                                 /*#__PURE__*/ (0, __TURBOPACK__imported__module__$5b$project$5d2f$node_modules$2f$next$2f$dist$2f$server$2f$route$2d$modules$2f$app$2d$page$2f$vendored$2f$ssr$2f$react$2d$jsx$2d$dev$2d$runtime$2e$js__$5b$app$2d$ssr$5d$__$28$ecmascript$29$__["jsxDEV"])(__TURBOPACK__imported__module__$5b$project$5d2f$src$2f$components$2f$ui$2f$button$2e$tsx__$5b$app$2d$ssr$5d$__$28$ecmascript$29$__["Button"], {
@@ -4807,24 +4847,24 @@ function LabelFinder() {
                                     children: editingLabel ? (0, __TURBOPACK__imported__module__$5b$project$5d2f$src$2f$lib$2f$i18n$2e$ts__$5b$app$2d$ssr$5d$__$28$ecmascript$29$__["t"])(locale, "labels.update") : (0, __TURBOPACK__imported__module__$5b$project$5d2f$src$2f$lib$2f$i18n$2e$ts__$5b$app$2d$ssr$5d$__$28$ecmascript$29$__["t"])(locale, "labels.save")
                                 }, void 0, false, {
                                     fileName: "[project]/src/components/label-finder.tsx",
-                                    lineNumber: 1156,
+                                    lineNumber: 1167,
                                     columnNumber: 13
                                 }, this)
                             ]
                         }, void 0, true, {
                             fileName: "[project]/src/components/label-finder.tsx",
-                            lineNumber: 1154,
+                            lineNumber: 1165,
                             columnNumber: 11
                         }, this)
                     ]
                 }, void 0, true, {
                     fileName: "[project]/src/components/label-finder.tsx",
-                    lineNumber: 1110,
+                    lineNumber: 1121,
                     columnNumber: 9
                 }, this)
             }, void 0, false, {
                 fileName: "[project]/src/components/label-finder.tsx",
-                lineNumber: 1109,
+                lineNumber: 1120,
                 columnNumber: 7
             }, this),
             /*#__PURE__*/ (0, __TURBOPACK__imported__module__$5b$project$5d2f$node_modules$2f$next$2f$dist$2f$server$2f$route$2d$modules$2f$app$2d$page$2f$vendored$2f$ssr$2f$react$2d$jsx$2d$dev$2d$runtime$2e$js__$5b$app$2d$ssr$5d$__$28$ecmascript$29$__["jsxDEV"])(__TURBOPACK__imported__module__$5b$project$5d2f$src$2f$components$2f$ui$2f$dialog$2e$tsx__$5b$app$2d$ssr$5d$__$28$ecmascript$29$__["Dialog"], {
@@ -4838,12 +4878,12 @@ function LabelFinder() {
                                 children: (0, __TURBOPACK__imported__module__$5b$project$5d2f$src$2f$lib$2f$i18n$2e$ts__$5b$app$2d$ssr$5d$__$28$ecmascript$29$__["t"])(locale, "labels.deleteConfirm")
                             }, void 0, false, {
                                 fileName: "[project]/src/components/label-finder.tsx",
-                                lineNumber: 1164,
+                                lineNumber: 1175,
                                 columnNumber: 25
                             }, this)
                         }, void 0, false, {
                             fileName: "[project]/src/components/label-finder.tsx",
-                            lineNumber: 1164,
+                            lineNumber: 1175,
                             columnNumber: 11
                         }, this),
                         /*#__PURE__*/ (0, __TURBOPACK__imported__module__$5b$project$5d2f$node_modules$2f$next$2f$dist$2f$server$2f$route$2d$modules$2f$app$2d$page$2f$vendored$2f$ssr$2f$react$2d$jsx$2d$dev$2d$runtime$2e$js__$5b$app$2d$ssr$5d$__$28$ecmascript$29$__["jsxDEV"])("p", {
@@ -4851,7 +4891,7 @@ function LabelFinder() {
                             children: (0, __TURBOPACK__imported__module__$5b$project$5d2f$src$2f$lib$2f$i18n$2e$ts__$5b$app$2d$ssr$5d$__$28$ecmascript$29$__["t"])(locale, "labels.deleteConfirmMsg")
                         }, void 0, false, {
                             fileName: "[project]/src/components/label-finder.tsx",
-                            lineNumber: 1165,
+                            lineNumber: 1176,
                             columnNumber: 11
                         }, this),
                         /*#__PURE__*/ (0, __TURBOPACK__imported__module__$5b$project$5d2f$node_modules$2f$next$2f$dist$2f$server$2f$route$2d$modules$2f$app$2d$page$2f$vendored$2f$ssr$2f$react$2d$jsx$2d$dev$2d$runtime$2e$js__$5b$app$2d$ssr$5d$__$28$ecmascript$29$__["jsxDEV"])(__TURBOPACK__imported__module__$5b$project$5d2f$src$2f$components$2f$ui$2f$dialog$2e$tsx__$5b$app$2d$ssr$5d$__$28$ecmascript$29$__["DialogFooter"], {
@@ -4862,7 +4902,7 @@ function LabelFinder() {
                                     children: (0, __TURBOPACK__imported__module__$5b$project$5d2f$src$2f$lib$2f$i18n$2e$ts__$5b$app$2d$ssr$5d$__$28$ecmascript$29$__["t"])(locale, "labels.cancel")
                                 }, void 0, false, {
                                     fileName: "[project]/src/components/label-finder.tsx",
-                                    lineNumber: 1167,
+                                    lineNumber: 1178,
                                     columnNumber: 13
                                 }, this),
                                 /*#__PURE__*/ (0, __TURBOPACK__imported__module__$5b$project$5d2f$node_modules$2f$next$2f$dist$2f$server$2f$route$2d$modules$2f$app$2d$page$2f$vendored$2f$ssr$2f$react$2d$jsx$2d$dev$2d$runtime$2e$js__$5b$app$2d$ssr$5d$__$28$ecmascript$29$__["jsxDEV"])(__TURBOPACK__imported__module__$5b$project$5d2f$src$2f$components$2f$ui$2f$button$2e$tsx__$5b$app$2d$ssr$5d$__$28$ecmascript$29$__["Button"], {
@@ -4871,30 +4911,30 @@ function LabelFinder() {
                                     children: (0, __TURBOPACK__imported__module__$5b$project$5d2f$src$2f$lib$2f$i18n$2e$ts__$5b$app$2d$ssr$5d$__$28$ecmascript$29$__["t"])(locale, "labels.delete")
                                 }, void 0, false, {
                                     fileName: "[project]/src/components/label-finder.tsx",
-                                    lineNumber: 1168,
+                                    lineNumber: 1179,
                                     columnNumber: 13
                                 }, this)
                             ]
                         }, void 0, true, {
                             fileName: "[project]/src/components/label-finder.tsx",
-                            lineNumber: 1166,
+                            lineNumber: 1177,
                             columnNumber: 11
                         }, this)
                     ]
                 }, void 0, true, {
                     fileName: "[project]/src/components/label-finder.tsx",
-                    lineNumber: 1163,
+                    lineNumber: 1174,
                     columnNumber: 9
                 }, this)
             }, void 0, false, {
                 fileName: "[project]/src/components/label-finder.tsx",
-                lineNumber: 1162,
+                lineNumber: 1173,
                 columnNumber: 7
             }, this)
         ]
     }, void 0, true, {
         fileName: "[project]/src/components/label-finder.tsx",
-        lineNumber: 498,
+        lineNumber: 501,
         columnNumber: 5
     }, this);
 }

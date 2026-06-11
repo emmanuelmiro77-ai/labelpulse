@@ -92,6 +92,7 @@ export function LabelFinder() {
   const [detailWebsite, setDetailWebsite] = useState("");
   const [detailDemoLink, setDetailDemoLink] = useState("");
   const [detailSocialLink, setDetailSocialLink] = useState("");
+  const [detailSoundcloudLink, setDetailSoundcloudLink] = useState("");
   const [detailNotes, setDetailNotes] = useState("");
   const [detailStatus, setDetailStatus] = useState<"open" | "closed">("open");
   const [detailSubmissionType, setDetailSubmissionType] = useState<"email" | "webform" | "platform">("email");
@@ -190,6 +191,7 @@ export function LabelFinder() {
     setDetailWebsite(label.website || "");
     setDetailDemoLink(label.demoLink || "");
     setDetailSocialLink(label.socialLink || "");
+    setDetailSoundcloudLink(label.soundcloudLink || "");
     setDetailNotes(label.notes || "");
     setDetailStatus(label.status);
     setDetailSubmissionType(label.submissionType);
@@ -490,6 +492,7 @@ export function LabelFinder() {
       label.website ||
       label.demoLink ||
       label.socialLink ||
+      label.soundcloudLink ||
       label.notes
     );
   };
@@ -791,6 +794,14 @@ export function LabelFinder() {
                     </UILabel>
                     <Input value={detailSocialLink} onChange={(e) => setDetailSocialLink(e.target.value)}
                       onBlur={() => saveDetailField("socialLink", detailSocialLink)} placeholder="https://instagram.com/label" className="bg-secondary/50" />
+                  </div>
+
+                  <div className="space-y-1.5">
+                    <UILabel className="text-xs font-mono uppercase text-muted-foreground flex items-center gap-1.5">
+                      <Music2 className="h-3 w-3" /> {t(locale, "labels.soundcloudLink")}
+                    </UILabel>
+                    <Input value={detailSoundcloudLink} onChange={(e) => setDetailSoundcloudLink(e.target.value)}
+                      onBlur={() => saveDetailField("soundcloudLink", detailSoundcloudLink)} placeholder="https://soundcloud.com/label" className="bg-secondary/50" />
                   </div>
 
                   <div className="grid grid-cols-2 gap-3">
