@@ -1,4 +1,4 @@
-:81 {
+:{$FC_CUSTOM_LISTEN_PORT:81} {
 	@transform_port_query {
 		query XTransformPort=*
 	}
