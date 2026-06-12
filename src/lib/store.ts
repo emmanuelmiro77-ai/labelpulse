@@ -109,6 +109,7 @@ interface AppState {
   locale: Locale;
   userProfile: UserProfile;
   gmailAuth: GmailAuth;
+  rankingsUpdatedAt: string | null;
 
   // Label actions
   addLabel: (label: Partial<Omit<Label, "id" | "createdAt">> & { name: string }) => void;
@@ -137,6 +138,9 @@ interface AppState {
   setGmailAuth: (auth: GmailAuth) => void;
   clearGmailAuth: () => void;
 
+  // Rankings update tracking
+  setRankingsUpdatedAt: (date: string) => void;
+
   // Data backup
   exportData: () => string;
   importData: (jsonString: string) => boolean;
@@ -151,6 +155,7 @@ export const useAppStore = create<AppState>()(
       locale: "it" as Locale,
       userProfile: { artistName: "", scLink: "" } as UserProfile,
       gmailAuth: { isConnected: false, email: "", accessToken: "", expiresAt: 0 } as GmailAuth,
+      rankingsUpdatedAt: null as string | null,
 
       addLabel: (label) =>
         set((state) => ({
@@ -245,6 +250,8 @@ export const useAppStore = create<AppState>()(
 
       setGmailAuth: (auth) => set({ gmailAuth: auth }),
       clearGmailAuth: () => set({ gmailAuth: { isConnected: false, email: "", accessToken: "", expiresAt: 0 } }),
+
+      setRankingsUpdatedAt: (date) => set({ rankingsUpdatedAt: date }),
 
       exportData: () => {
         const state = get();
@@ -395,11 +402,16 @@ export const useAppStore = create<AppState>()(
 
           const mergedDemos = [...currentDemoById.values(), ...newDemos];
 
+          // Check if this import contains rankings data (from Beatport scraper)
+          const isRankingsImport = parsed._meta?.source === 'beatport' || parsed._meta?.source === 'beatstats';
+          const hasGenresAndLabels = parsed.genres && parsed.labels && Array.isArray(parsed.labels);
+          
           set({
             labels: mergedLabels,
             demos: mergedDemos,
             userProfile: userProfile || get().userProfile,
             locale: importedLocale || get().locale,
+            ...(isRankingsImport || hasGenresAndLabels ? { rankingsUpdatedAt: new Date().toISOString() } : {}),
           });
           return true;
         } catch {
@@ -409,8 +421,14 @@ export const useAppStore = create<AppState>()(
     }),
     {
       name: "labelpulse-storage",
-      version: 6,
+      version: 7,
       migrate: (persisted: any, version: number) => {
+        if (version < 7) {
+          // v7: add rankingsUpdatedAt
+          if (!persisted.rankingsUpdatedAt) {
+            persisted.rankingsUpdatedAt = null;
+          }
+        }
         if (version < 6) {
           // v6: add gmailAuth
           if (!persisted.gmailAuth) {
@@ -468,6 +486,7 @@ export const useAppStore = create<AppState>()(
         locale: state.locale,
         userProfile: state.userProfile,
         gmailAuth: state.gmailAuth,
+        rankingsUpdatedAt: state.rankingsUpdatedAt,
       }),
       merge: (persistedState: any, currentState: any) => {
         // Deep merge: ensure all labels from currentState have defaults

@@ -11,12 +11,19 @@ import {
   PopoverTrigger,
 } from "@/components/ui/popover";
 import { useToast } from "@/hooks/use-toast";
+import { RankingsWizard } from "@/components/rankings-wizard";
 
 export function DataBackup() {
-  const { locale, exportData, importData } = useAppStore();
+  const { locale, rankingsUpdatedAt, exportData, importData } = useAppStore();
   const { toast } = useToast();
   const fileInputRef = useRef<HTMLInputElement>(null);
   const [importWarning, setImportWarning] = useState(false);
+
+  // Check if rankings are stale (30+ days)
+  const daysSinceRankings = rankingsUpdatedAt
+    ? Math.floor((Date.now() - new Date(rankingsUpdatedAt).getTime()) / (1000 * 60 * 60 * 24))
+    : null;
+  const isRankingsStale = daysSinceRankings === null || daysSinceRankings > 30;
 
   const handleExport = () => {
     const json = exportData();
@@ -63,21 +70,34 @@ export function DataBackup() {
   return (
     <Popover>
       <PopoverTrigger asChild>
-        <Button variant="ghost" size="icon" className="text-muted-foreground hover:text-cyan-400" title={t(locale, "data.title")}>
+        <Button
+          variant="ghost"
+          size="icon"
+          className={`text-muted-foreground hover:text-cyan-400 relative ${isRankingsStale ? "animate-pulse" : ""}`}
+          title={t(locale, "data.title")}
+        >
           <Database className="h-4 w-4" />
+          {isRankingsStale && (
+            <span className="absolute -top-0.5 -right-0.5 w-2 h-2 bg-amber-400 rounded-full" />
+          )}
         </Button>
       </PopoverTrigger>
-      <PopoverContent className="w-80 p-4" align="end">
+      <PopoverContent className="w-80 p-4 max-h-[70vh] overflow-y-auto" align="end">
         <div className="space-y-4">
           <div className="text-sm font-semibold flex items-center gap-2">
             <Database className="h-4 w-4 text-cyan-400" />
             {t(locale, "data.title")}
           </div>
 
+          {/* Rankings Wizard */}
+          <RankingsWizard />
+
+          <div className="border-t border-border/30" />
+
           {/* Export */}
           <div className="space-y-2">
             <p className="text-xs text-muted-foreground">{t(locale, "data.exportDesc")}</p>
-            <Button onClick={handleExport} className="w-full" size="sm">
+            <Button onClick={handleExport} className="w-full" size="sm" variant="outline">
               <Download className="h-3.5 w-3.5 mr-1.5" />
               {t(locale, "data.exportButton")}
             </Button>
@@ -85,7 +105,7 @@ export function DataBackup() {
 
           <div className="border-t border-border/30" />
 
-          {/* Import */}
+          {/* Import Full Backup */}
           <div className="space-y-2">
             <p className="text-xs text-muted-foreground">{t(locale, "data.importDesc")}</p>
             {importWarning && (
