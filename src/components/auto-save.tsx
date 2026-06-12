@@ -1,6 +1,6 @@
 "use client";
 
-import { useAppStore } from "@/lib/store";
+import { useAppStore, forceBackupNow } from "@/lib/store";
 import { t } from "@/lib/i18n";
 import { useState, useEffect, useCallback, useRef } from "react";
 import { Save, FolderOpen, CheckCircle2, AlertCircle, Settings2 } from "lucide-react";
@@ -133,6 +133,9 @@ export function AutoSave() {
     const handleVisibilityChange = () => {
       if (document.visibilityState === "hidden") {
         doAutoSave();
+        // Force an immediate backup to localStorage when page is hidden
+        // This ensures the backup is always up-to-date even with debouncing
+        forceBackupNow();
       }
     };
 

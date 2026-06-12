@@ -86,14 +86,25 @@ function buildLabelsFromData(): Label[] {
 }
 
 // ==================== ROBUST STORAGE ====================
-// Custom storage with triple-layer data protection:
+// Custom storage with bulletproof data protection:
 // 1. Primary localStorage key
-// 2. Backup localStorage key (written on every save)
+// 2. Backup localStorage key (debounced — NOT written on every save)
 // 3. Data integrity check on load (auto-recover from backup if data loss detected)
+// 4. Write-blocking until rehydration completes (prevents race condition)
 
 const PRIMARY_KEY = "labelpulse-storage";
 const BACKUP_KEY = "labelpulse-storage-backup";
-const SEED_LABEL_COUNT = labelData.labels.length; // Number of seed labels from JSON
+const SEED_LABEL_COUNT = labelData.labels.length;
+
+// CRITICAL: Flag to prevent writes before Zustand rehydration completes.
+// Without this, the store initializes with seed data (empty user fields),
+// and any state change during the pre-rehydration window would write
+// seed data to localStorage, permanently destroying user edits.
+let _rehydrated = false;
+
+// Debounced backup writing — don't corrupt backup alongside primary
+let _backupTimer: ReturnType<typeof setTimeout> | null = null;
+const BACKUP_DEBOUNCE_MS = 60000; // 60 seconds
 
 function safeJsonParse(str: string | null): any | null {
   if (!str) return null;
@@ -155,6 +166,18 @@ function getTotalLabelCount(data: any): number {
   return 0;
 }
 
+function debouncedBackupWrite(value: string): void {
+  // Cancel any pending backup write
+  if (_backupTimer) {
+    clearTimeout(_backupTimer);
+  }
+  // Schedule a new backup write after debounce period
+  _backupTimer = setTimeout(() => {
+    safeLocalStorageSet(BACKUP_KEY, value);
+    _backupTimer = null;
+  }, BACKUP_DEBOUNCE_MS);
+}
+
 const robustStorage: StateStorage = {
   getItem: (name: string): string | null => {
     const primaryRaw = safeLocalStorageGet(PRIMARY_KEY);
@@ -186,9 +209,9 @@ const robustStorage: StateStorage = {
         ? countUserEditedLabels(backupData.state.labels)
         : countUserEditedLabels(backupData.labels || []);
 
-      // If primary has significantly fewer labels than backup AND backup has more user data
-      // this indicates a data loss event
-      if (backupLabelCount > primaryLabelCount + 50 && backupUserEdits >= primaryUserEdits) {
+      // If primary has fewer labels than backup AND backup has more or equal user data
+      // this indicates a data loss event (threshold: any decrease, was +50)
+      if (backupLabelCount > primaryLabelCount && backupUserEdits >= primaryUserEdits) {
         console.warn(
           `[LabelPulse Storage] DATA LOSS DETECTED! Primary: ${primaryLabelCount} labels (${primaryUserEdits} edited), Backup: ${backupLabelCount} labels (${backupUserEdits} edited). Restoring from backup.`
         );
@@ -211,14 +234,23 @@ const robustStorage: StateStorage = {
   },
 
   setItem: (name: string, value: string): void => {
-    // Write to primary
+    // CRITICAL FIX: Block ALL writes until rehydration is complete.
+    // Before rehydration, the store contains seed data with empty user fields.
+    // Writing this to localStorage would destroy user edits.
+    if (!_rehydrated) {
+      console.warn("[LabelPulse Storage] Blocked write before rehydration — protecting user data");
+      return;
+    }
+
+    // Write to primary immediately
     const primaryOk = safeLocalStorageSet(PRIMARY_KEY, value);
 
-    // Always write backup too
-    safeLocalStorageSet(BACKUP_KEY, value);
+    // Write to backup with debounce — so if primary gets corrupted,
+    // the backup still holds the last good state
+    debouncedBackupWrite(value);
 
     if (!primaryOk) {
-      console.error("[LabelPulse Storage] Primary write failed! Backup saved.");
+      console.error("[LabelPulse Storage] Primary write failed! Backup will be saved on debounce.");
     }
   },
 
@@ -228,6 +260,40 @@ const robustStorage: StateStorage = {
     safeLocalStorageRemove(BACKUP_KEY);
   },
 };
+
+/**
+ * Mark storage as rehydrated — called from onRehydrateStorage callback.
+ * After this, setItem writes are allowed.
+ */
+export function markRehydrated(): void {
+  _rehydrated = true;
+  console.log("[LabelPulse Storage] Rehydration complete — writes are now enabled");
+}
+
+/**
+ * Check if the store has finished rehydrating.
+ * Use this in React components to prevent rendering before data is loaded.
+ */
+export function isRehydrated(): boolean {
+  return _rehydrated;
+}
+
+/**
+ * Force-write a backup immediately (e.g., on visibility change or before unload).
+ * This ensures the backup is up-to-date even with debouncing.
+ */
+export function forceBackupNow(): void {
+  if (!_rehydrated) return;
+  if (typeof window === "undefined") return; // SSR guard
+  if (_backupTimer) {
+    clearTimeout(_backupTimer);
+    _backupTimer = null;
+  }
+  const primaryRaw = safeLocalStorageGet(PRIMARY_KEY);
+  if (primaryRaw) {
+    safeLocalStorageSet(BACKUP_KEY, primaryRaw);
+  }
+}
 
 // ==================== NO SEED DEMOS ====================
 // App starts with empty demos — user adds their own
@@ -315,6 +381,79 @@ function mergePreservingUserData(existing: Label, imported: Label): Partial<Labe
     trendingRankByGenre: Object.keys(imported.trendingRankByGenre || {}).length ? imported.trendingRankByGenre : existing.trendingRankByGenre,
     trendingPointsByGenre: Object.keys(imported.trendingPointsByGenre || {}).length ? imported.trendingPointsByGenre : existing.trendingPointsByGenre,
   };
+}
+
+/**
+ * Merge persisted labels with seed labels on rehydration.
+ * This ensures:
+ * - User-editable data (emails, notes, links) is ALWAYS preserved from persisted state
+ * - New seed labels (added in updates) are added without overwriting user data
+ * - Beatport rankings from persisted state are preserved
+ */
+function mergeLabelsWithSeed(persistedLabels: any[], seedLabels: Label[]): Label[] {
+  // Build a map of persisted labels by ID and by name
+  const persistedById = new Map<string, any>();
+  const persistedByName = new Map<string, any>();
+
+  for (const l of persistedLabels) {
+    // Apply safe defaults for all fields
+    const withDefaults = {
+      genres: [],
+      rankByGenre: {},
+      pointsByGenre: {},
+      trending: false,
+      trendingRankByGenre: {},
+      trendingPointsByGenre: {},
+      isCustom: false,
+      website: "",
+      demoLink: "",
+      socialLink: "",
+      soundcloudLink: "",
+      emails: [],
+      notes: "",
+      contactInfo: "",
+      ...l,
+    };
+    persistedById.set(l.id, withDefaults);
+    persistedByName.set(l.name?.toLowerCase().trim(), withDefaults);
+  }
+
+  const result: Label[] = [];
+
+  // Start with all seed labels
+  for (const seed of seedLabels) {
+    const persisted = persistedById.get(seed.id) || persistedByName.get(seed.name.toLowerCase().trim());
+
+    if (persisted) {
+      // Merge: seed provides the base, persisted data overrides user-editable fields
+      // The key insight: persisted data has the user's edits, seed data has the structure
+      const merged: Label = {
+        ...seed,                    // Start with seed (has correct genres/rankings from JSON)
+        ...persisted,               // Override with persisted data (has user edits)
+        // For Beatport data, prefer whichever has data (persisted might have newer import)
+        genres: persisted.genres?.length ? persisted.genres : seed.genres,
+        rankByGenre: Object.keys(persisted.rankByGenre || {}).length ? persisted.rankByGenre : seed.rankByGenre,
+        pointsByGenre: Object.keys(persisted.pointsByGenre || {}).length ? persisted.pointsByGenre : seed.pointsByGenre,
+        trending: persisted.trending || seed.trending,
+        trendingRankByGenre: Object.keys(persisted.trendingRankByGenre || {}).length ? persisted.trendingRankByGenre : seed.trendingRankByGenre,
+        trendingPointsByGenre: Object.keys(persisted.trendingPointsByGenre || {}).length ? persisted.trendingPointsByGenre : seed.trendingPointsByGenre,
+      };
+      result.push(merged);
+      // Remove from maps so we can track which persisted labels are NOT in seed
+      persistedById.delete(persisted.id);
+      persistedByName.delete(seed.name.toLowerCase().trim());
+    } else {
+      // New seed label not in persisted data — add it fresh
+      result.push(seed);
+    }
+  }
+
+  // Add any persisted labels that are NOT in the seed (user-added custom labels, or labels removed from seed)
+  for (const remaining of persistedById.values()) {
+    result.push(remaining as Label);
+  }
+
+  return result;
 }
 
 export const useAppStore = create<AppState>()(
@@ -575,35 +714,10 @@ export const useAppStore = create<AppState>()(
     }),
     {
       name: PRIMARY_KEY,
-      version: 8,
+      version: 9,
       storage: createJSONStorage(() => robustStorage),
       migrate: (persisted: any, version: number) => {
-        if (version < 8) {
-          // v8: add lastSavedAt, fix notes bug, robust storage
-          if (!persisted.lastSavedAt) {
-            persisted.lastSavedAt = null;
-          }
-          // Fix the notes bug: if any label has notes equal to its status, clear it
-          if (persisted.labels) {
-            persisted.labels = persisted.labels.map((l: any) => {
-              // Fix the bug where notes was set to "open" or "closed" instead of actual notes
-              if (l.notes === "open" || l.notes === "closed") {
-                l.notes = "";
-              }
-              return l;
-            });
-          }
-        }
-        if (version < 7) {
-          if (!persisted.rankingsUpdatedAt) {
-            persisted.rankingsUpdatedAt = null;
-          }
-        }
-        if (version < 6) {
-          if (!persisted.gmailAuth) {
-            persisted.gmailAuth = { isConnected: false, email: "", accessToken: "", expiresAt: 0 };
-          }
-        }
+        // Migrations run from oldest to newest (proper order)
         if (version < 5) {
           if (persisted.demos) {
             const seedIds = ["demo_1", "demo_2", "demo_3", "demo_4", "demo_5", "demo_6"];
@@ -645,6 +759,31 @@ export const useAppStore = create<AppState>()(
             persisted.userProfile = { artistName: "", scLink: "" };
           }
         }
+        if (version < 6) {
+          if (!persisted.gmailAuth) {
+            persisted.gmailAuth = { isConnected: false, email: "", accessToken: "", expiresAt: 0 };
+          }
+        }
+        if (version < 7) {
+          if (!persisted.rankingsUpdatedAt) {
+            persisted.rankingsUpdatedAt = null;
+          }
+        }
+        if (version < 8) {
+          if (!persisted.lastSavedAt) {
+            persisted.lastSavedAt = null;
+          }
+          if (persisted.labels) {
+            persisted.labels = persisted.labels.map((l: any) => {
+              if (l.notes === "open" || l.notes === "closed") {
+                l.notes = "";
+              }
+              return l;
+            });
+          }
+        }
+        // v9: No data structure changes — just fixing the rehydration race condition
+        // The fix is in robustStorage.setItem blocking writes before rehydration
         return persisted;
       },
       partialize: (state) => ({
@@ -658,39 +797,45 @@ export const useAppStore = create<AppState>()(
         lastSavedAt: state.lastSavedAt,
       }),
       merge: (persistedState: any, currentState: any) => {
-        // Deep merge: ensure all labels from persistedState have defaults
-        const merged = { ...currentState, ...persistedState };
-        if (persistedState.labels) {
-          merged.labels = persistedState.labels.map((l: any) => ({
-            // Safe defaults for ALL fields
-            genres: [],
-            rankByGenre: {},
-            pointsByGenre: {},
-            trending: false,
-            trendingRankByGenre: {},
-            trendingPointsByGenre: {},
-            isCustom: false,
-            website: "",
-            demoLink: "",
-            socialLink: "",
-            soundcloudLink: "",
-            emails: [],
-            notes: "",
-            contactInfo: "",
-            ...l,
-          }));
+        // Deep merge: combine persisted data with current (seed) state
+        // CRITICAL: This must preserve ALL user-editable fields from persisted state
+
+        // Guard: if persistedState is null/undefined (first visit or SSR), use currentState
+        if (!persistedState) {
+          return currentState;
         }
+
+        const merged = { ...currentState, ...persistedState };
+
+        if (persistedState.labels && Array.isArray(persistedState.labels) && persistedState.labels.length > 0) {
+          // Use the smart merge that combines seed labels with persisted labels
+          // This ensures user data is preserved while also adding any new seed labels
+          const seedLabels = buildLabelsFromData();
+          merged.labels = mergeLabelsWithSeed(persistedState.labels, seedLabels);
+        }
+        // If persistedState.labels is missing/empty, we fall through to
+        // currentState.labels which is buildLabelsFromData() — correct for first visit
+
         return merged;
       },
       onRehydrateStorage: () => (state, error) => {
         if (error) {
           console.error("[LabelPulse Storage] Rehydration error:", error);
+          // Even on error, mark as rehydrated so the app can function
+          markRehydrated();
         } else if (state) {
           // Log successful rehydration for debugging
           const userEditedCount = countUserEditedLabels(state.labels);
           console.log(
             `[LabelPulse Storage] Rehydrated: ${state.labels.length} labels, ${userEditedCount} with user data`
           );
+          // Mark as rehydrated — NOW writes are allowed
+          markRehydrated();
+          // Force an immediate backup to ensure backup is up-to-date
+          forceBackupNow();
+        } else {
+          // state is null (first visit or storage empty) — still mark rehydrated
+          markRehydrated();
         }
       },
     }
