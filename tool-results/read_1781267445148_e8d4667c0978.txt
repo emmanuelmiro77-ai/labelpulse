@@ -1,0 +1,2002 @@
+     1→{
+     2→  "version": 1,
+     3→  "app": "labelpulse",
+     4→  "exportedAt": "2026-06-12T12:29:27.031Z",
+     5→  "data": {
+     6→    "labels": [
+     7→      {
+     8→        "genres": [
+     9→          "Downtempo"
+    10→        ],
+    11→        "rankByGenre": {
+    12→          "Downtempo": 16
+    13→        },
+    14→        "pointsByGenre": {
+    15→          "Downtempo": 27134
+    16→        },
+    17→        "trending": false,
+    18→        "trendingRankByGenre": {},
+    19→        "trendingPointsByGenre": {},
+    20→        "isCustom": false,
+    21→        "website": "",
+    22→        "demoLink": "",
+    23→        "socialLink": "",
+    24→        "soundcloudLink": "",
+    25→        "emails": [],
+    26→        "id": "lbl_kosa",
+    27→        "name": "• KOSA •",
+    28→        "genre": "Downtempo",
+    29→        "submissionType": "email",
+    30→        "contactInfo": "",
+    31→        "status": "open",
+    32→        "notes": "",
+    33→        "createdAt": "2026-06-11T14:33:55.069Z"
+    34→      },
+    35→      {
+    36→        "genres": [
+    37→          "Bass House"
+    38→        ],
+    39→        "rankByGenre": {
+    40→          "Bass House": 19
+    41→        },
+    42→        "pointsByGenre": {
+    43→          "Bass House": 90
+    44→        },
+    45→        "trending": true,
+    46→        "trendingRankByGenre": {
+    47→          "Bass House": 19
+    48→        },
+    49→        "trendingPointsByGenre": {
+    50→          "Bass House": 90
+    51→        },
+    52→        "isCustom": false,
+    53→        "website": "",
+    54→        "demoLink": "",
+    55→        "socialLink": "",
+    56→        "soundcloudLink": "",
+    57→        "emails": [],
+    58→        "id": "lbl_1001_recordings",
+    59→        "name": "1001 RECORDINGS",
+    60→        "genre": "Bass House",
+    61→        "submissionType": "email",
+    62→        "contactInfo": "",
+    63→        "status": "open",
+    64→        "notes": "",
+    65→        "createdAt": "2026-06-11T14:33:55.069Z"
+    66→      },
+    67→      {
+    68→        "genres": [
+    69→          "Funky House"
+    70→        ],
+    71→        "rankByGenre": {
+    72→          "Funky House": 16
+    73→        },
+    74→        "pointsByGenre": {
+    75→          "Funky House": 88
+    76→        },
+    77→        "trending": true,
+    78→        "trendingRankByGenre": {
+    79→          "Funky House": 16
+    80→        },
+    81→        "trendingPointsByGenre": {
+    82→          "Funky House": 88
+    83→        },
+    84→        "isCustom": false,
+    85→        "website": "",
+    86→        "demoLink": "",
+    87→        "socialLink": "",
+    88→        "soundcloudLink": "",
+    89→        "emails": [],
+    90→        "id": "lbl_12_1_london",
+    91→        "name": "12+1 LONDON",
+    92→        "genre": "Jackin House",
+    93→        "submissionType": "email",
+    94→        "contactInfo": "",
+    95→        "status": "open",
+    96→        "notes": "",
+    97→        "createdAt": "2026-06-11T14:33:55.069Z"
+    98→      },
+    99→      {
+   100→        "genres": [
+   101→          "Psy-Trance",
+   102→          "Techno Peak Time / Driving"
+   103→        ],
+   104→        "rankByGenre": {
+   105→          "Psy-Trance": 27,
+   106→          "Techno Peak Time / Driving": 2
+   107→        },
+   108→        "pointsByGenre": {
+   109→          "Psy-Trance": 36,
+   110→          "Techno Peak Time / Driving": 289
+   111→        },
+   112→        "trending": true,
+   113→        "trendingRankByGenre": {
+   114→          "Psy-Trance": 27,
+   115→          "Techno Peak Time / Driving": 2
+   116→        },
+   117→        "trendingPointsByGenre": {
+   118→          "Psy-Trance": 36,
+   119→          "Techno Peak Time / Driving": 289
+   120→        },
+   121→        "isCustom": false,
+   122→        "website": "",
+   123→        "demoLink": "",
+   124→        "socialLink": "",
+   125→        "soundcloudLink": "",
+   126→        "emails": [],
+   127→        "id": "lbl_1605",
+   128→        "name": "1605",
+   129→        "genre": "Techno Peak Time / Driving",
+   130→        "submissionType": "email",
+   131→        "contactInfo": "",
+   132→        "status": "open",
+   133→        "notes": "",
+   134→        "createdAt": "2026-06-11T14:33:55.069Z"
+   135→      },
+   136→      {
+   137→        "genres": [
+   138→          "Amapiano"
+   139→        ],
+   140→        "rankByGenre": {
+   141→          "Amapiano": 39
+   142→        },
+   143→        "pointsByGenre": {
+   144→          "Amapiano": 10042
+   145→        },
+   146→        "trending": false,
+   147→        "trendingRankByGenre": {},
+   148→        "trendingPointsByGenre": {},
+   149→        "isCustom": false,
+   150→        "website": "",
+   151→        "demoLink": "",
+   152→        "socialLink": "",
+   153→        "soundcloudLink": "",
+   154→        "emails": [],
+   155→        "id": "lbl_18_area_holdings",
+   156→        "name": "18 AREA HOLDINGS",
+   157→        "genre": "Amapiano",
+   158→        "submissionType": "email",
+   159→        "contactInfo": "",
+   160→        "status": "open",
+   161→        "notes": "",
+   162→        "createdAt": "2026-06-11T14:33:55.069Z"
+   163→      },
+   164→      {
+   165→        "genres": [
+   166→          "Uk Garage / Bassline"
+   167→        ],
+   168→        "rankByGenre": {
+   169→          "Uk Garage / Bassline": 54
+   170→        },
+   171→        "pointsByGenre": {
+   172→          "Uk Garage / Bassline": 8
+   173→        },
+   174→        "trending": false,
+   175→        "trendingRankByGenre": {
+   176→          "140 / Deep Dubstep / Grime": 10
+   177→        },
+   178→        "trendingPointsByGenre": {
+   179→          "140 / Deep Dubstep / Grime": 1865
+   180→        },
+   181→        "isCustom": false,
+   182→        "website": "",
+   183→        "demoLink": "",
+   184→        "socialLink": "",
+   185→        "soundcloudLink": "",
+   186→        "emails": [],
+   187→        "id": "lbl_1985_music",
+   188→        "name": "1985 MUSIC",
+   189→        "genre": "140 / Deep Dubstep / Grime",
+   190→        "submissionType": "email",
+   191→        "contactInfo": "",
+   192→        "status": "open",
+   193→        "notes": "",
+   194→        "createdAt": "2026-06-11T14:33:55.069Z"
+   195→      },
+   196→      {
+   197→        "genres": [
+   198→          "Electro Classic / Detroit / Modern"
+   199→        ],
+   200→        "rankByGenre": {
+   201→          "Electro Classic / Detroit / Modern": 46
+   202→        },
+   203→        "pointsByGenre": {
+   204→          "Electro Classic / Detroit / Modern": 9975
+   205→        },
+   206→        "trending": false,
+   207→        "trendingRankByGenre": {},
+   208→        "trendingPointsByGenre": {},
+   209→        "isCustom": false,
+   210→        "website": "",
+   211→        "demoLink": "",
+   212→        "socialLink": "",
+   213→        "soundcloudLink": "",
+   214→        "emails": [],
+   215→        "id": "lbl_20_20_vision_recordings",
+   216→        "name": "20/20 VISION RECORDINGS",
+   217→        "genre": "Electro Classic / Detroit / Modern",
+   218→        "submissionType": "email",
+   219→        "contactInfo": "",
+   220→        "status": "open",
+   221→        "notes": "",
+   222→        "createdAt": "2026-06-11T14:33:55.069Z"
+   223→      },
+   224→      {
+   225→        "genres": [
+   226→          "Amapiano"
+   227→        ],
+   228→        "rankByGenre": {},
+   229→        "pointsByGenre": {},
+   230→        "trending": true,
+   231→        "trendingRankByGenre": {
+   232→          "Amapiano": 10
+   233→        },
+   234→        "trendingPointsByGenre": {
+   235→          "Amapiano": 1415
+   236→        },
+   237→        "isCustom": false,
+   238→        "website": "",
+   239→        "demoLink": "",
+   240→        "socialLink": "",
+   241→        "soundcloudLink": "",
+   242→        "emails": [],
+   243→        "id": "lbl_2026_lessons_holdings_pty_lt",
+   244→        "name": "2026 LESSONS HOLDINGS (PTY) LT...",
+   245→        "genre": "Amapiano",
+   246→        "submissionType": "email",
+   247→        "contactInfo": "",
+   248→        "status": "open",
+   249→        "notes": "",
+   250→        "createdAt": "2026-06-11T14:33:55.069Z"
+   251→      },
+   252→      {
+   253→        "genres": [
+   254→          "Electronica"
+   255→        ],
+   256→        "rankByGenre": {},
+   257→        "pointsByGenre": {},
+   258→        "trending": true,
+   259→        "trendingRankByGenre": {
+   260→          "Electronica": 5
+   261→        },
+   262→        "trendingPointsByGenre": {
+   263→          "Electronica": 2896
+   264→        },
+   265→        "isCustom": false,
+   266→        "website": "",
+   267→        "demoLink": "",
+   268→        "socialLink": "",
+   269→        "soundcloudLink": "",
+   270→        "emails": [],
+   271→        "id": "lbl_23hours",
+   272→        "name": "23HOURS",
+   273→        "genre": "Electronica",
+   274→        "submissionType": "email",
+   275→        "contactInfo": "",
+   276→        "status": "open",
+   277→        "notes": "",
+   278→        "createdAt": "2026-06-11T14:33:55.069Z"
+   279→      },
+   280→      {
+   281→        "genres": [
+   282→          "Hard Dance / Hardcore / Neo Rave",
+   283→          "Trance Main Floor"
+   284→        ],
+   285→        "rankByGenre": {
+   286→          "Hard Dance / Hardcore / Neo Rave": 5,
+   287→          "Trance Main Floor": 8
+   288→        },
+   289→        "pointsByGenre": {
+   290→          "Hard Dance / Hardcore / Neo Rave": 227,
+   291→          "Trance Main Floor": 140
+   292→        },
+   293→        "trending": true,
+   294→        "trendingRankByGenre": {
+   295→          "Hard Dance / Hardcore / Neo Rave": 5,
+   296→          "Trance Main Floor": 8
+   297→        },
+   298→        "trendingPointsByGenre": {
+   299→          "Hard Dance / Hardcore / Neo Rave": 227,
+   300→          "Trance Main Floor": 140
+   301→        },
+   302→        "isCustom": false,
+   303→        "website": "",
+   304→        "demoLink": "",
+   305→        "socialLink": "",
+   306→        "soundcloudLink": "",
+   307→        "emails": [],
+   308→        "id": "lbl_44_label_group",
+   309→        "name": "44 LABEL GROUP",
+   310→        "genre": "Hard Dance / Hardcore / Neo Rave",
+   311→        "submissionType": "email",
+   312→        "contactInfo": "",
+   313→        "status": "open",
+   314→        "notes": "",
+   315→        "createdAt": "2026-06-11T14:33:55.069Z"
+   316→      },
+   317→      {
+   318→        "genres": [
+   319→          "Electro Classic / Detroit / Modern"
+   320→        ],
+   321→        "rankByGenre": {
+   322→          "Electro Classic / Detroit / Modern": 26
+   323→        },
+   324→        "pointsByGenre": {
+   325→          "Electro Classic / Detroit / Modern": 17639
+   326→        },
+   327→        "trending": false,
+   328→        "trendingRankByGenre": {},
+   329→        "trendingPointsByGenre": {},
+   330→        "isCustom": false,
+   331→        "website": "",
+   332→        "demoLink": "",
+   333→        "socialLink": "",
+   334→        "soundcloudLink": "",
+   335→        "emails": [],
+   336→        "id": "lbl_808_life",
+   337→        "name": "808 LIFE",
+   338→        "genre": "Electro Classic / Detroit / Modern",
+   339→        "submissionType": "email",
+   340→        "contactInfo": "",
+   341→        "status": "open",
+   342→        "notes": "",
+   343→        "createdAt": "2026-06-11T14:33:55.069Z"
+   344→      },
+   345→      {
+   346→        "genres": [
+   347→          "Breaks / Breakbeat / Uk Bass"
+   348→        ],
+   349→        "rankByGenre": {
+   350→          "Breaks / Breakbeat / Uk Bass": 1
+   351→        },
+   352→        "pointsByGenre": {
+   353→          "Breaks / Breakbeat / Uk Bass": 921
+   354→        },
+   355→        "trending": true,
+   356→        "trendingRankByGenre": {
+   357→          "Breaks / Breakbeat / Uk Bass": 1
+   358→        },
+   359→        "trendingPointsByGenre": {
+   360→          "Breaks / Breakbeat / Uk Bass": 921
+   361→        },
+   362→        "isCustom": false,
+   363→        "website": "",
+   364→        "demoLink": "",
+   365→        "socialLink": "",
+   366→        "soundcloudLink": "",
+   367→        "emails": [],
+   368→        "id": "lbl_83",
+   369→        "name": "83",
+   370→        "genre": "Breaks / Breakbeat / Uk Bass",
+   371→        "submissionType": "email",
+   372→        "contactInfo": "",
+   373→        "status": "open",
+   374→        "notes": "",
+   375→        "createdAt": "2026-06-11T14:33:55.069Z"
+   376→      },
+   377→      {
+   378→        "genres": [
+   379→          "Trance Main Floor"
+   380→        ],
+   381→        "rankByGenre": {
+   382→          "Trance Main Floor": 32
+   383→        },
+   384→        "pointsByGenre": {
+   385→          "Trance Main Floor": 17047
+   386→        },
+   387→        "trending": false,
+   388→        "trendingRankByGenre": {},
+   389→        "trendingPointsByGenre": {},
+   390→        "isCustom": false,
+   391→        "website": "",
+   392→        "demoLink": "",
+   393→        "socialLink": "",
+   394→        "soundcloudLink": "",
+   395→        "emails": [],
+   396→        "id": "lbl_844_label_group",
+   397→        "name": "844 LABEL GROUP",
+   398→        "genre": "Trance Main Floor",
+   399→        "submissionType": "email",
+   400→        "contactInfo": "",
+   401→        "status": "open",
+   402→        "notes": "",
+   403→        "createdAt": "2026-06-11T14:33:55.069Z"
+   404→      },
+   405→      {
+   406→        "genres": [
+   407→          "Trap / Future Bass"
+   408→        ],
+   409→        "rankByGenre": {
+   410→          "Trap / Future Bass": 10
+   411→        },
+   412→        "pointsByGenre": {
+   413→          "Trap / Future Bass": 123
+   414→        },
+   415→        "trending": true,
+   416→        "trendingRankByGenre": {
+   417→          "Trap / Future Bass": 10
+   418→        },
+   419→        "trendingPointsByGenre": {
+   420→          "Trap / Future Bass": 123
+   421→        },
+   422→        "isCustom": false,
+   423→        "website": "",
+   424→        "demoLink": "",
+   425→        "socialLink": "",
+   426→        "soundcloudLink": "",
+   427→        "emails": [],
+   428→        "id": "lbl_88rising_music",
+   429→        "name": "88RISING MUSIC",
+   430→        "genre": "Trap / Future Bass",
+   431→        "submissionType": "email",
+   432→        "contactInfo": "",
+   433→        "status": "open",
+   434→        "notes": "",
+   435→        "createdAt": "2026-06-11T14:33:55.069Z"
+   436→      },
+   437→      {
+   438→        "genres": [
+   439→          "Deep House",
+   440→          "House",
+   441→          "Progressive House"
+   442→        ],
+   443→        "rankByGenre": {
+   444→          "Deep House": 2,
+   445→          "House": 26,
+   446→          "Progressive House": 12
+   447→        },
+   448→        "pointsByGenre": {
+   449→          "Deep House": 424,
+   450→          "House": 70,
+   451→          "Progressive House": 121
+   452→        },
+   453→        "trending": true,
+   454→        "trendingRankByGenre": {
+   455→          "Deep House": 2,
+   456→          "House": 26,
+   457→          "Progressive House": 12
+   458→        },
+   459→        "trendingPointsByGenre": {
+   460→          "Deep House": 424,
+   461→          "House": 70,
+   462→          "Progressive House": 121
+   463→        },
+   464→        "isCustom": false,
+   465→        "website": "",
+   466→        "demoLink": "",
+   467→        "socialLink": "",
+   468→        "soundcloudLink": "",
+   469→        "emails": [],
+   470→        "id": "lbl_8bit",
+   471→        "name": "8BIT",
+   472→        "genre": "Deep House",
+   473→        "submissionType": "email",
+   474→        "contactInfo": "",
+   475→        "status": "open",
+   476→        "notes": "",
+   477→        "createdAt": "2026-06-11T14:33:55.069Z"
+   478→      },
+   479→      {
+   480→        "genres": [
+   481→          "Brazilian Funk"
+   482→        ],
+   483→        "rankByGenre": {
+   484→          "Brazilian Funk": 21
+   485→        },
+   486→        "pointsByGenre": {
+   487→          "Brazilian Funk": 1398
+   488→        },
+   489→        "trending": false,
+   490→        "trendingRankByGenre": {},
+   491→        "trendingPointsByGenre": {},
+   492→        "isCustom": false,
+   493→        "website": "",
+   494→        "demoLink": "",
+   495→        "socialLink": "",
+   496→        "soundcloudLink": "",
+   497→        "emails": [],
+   498→        "id": "lbl_a_baile",
+   499→        "name": "A BAILE",
+   500→        "genre": "Brazilian Funk",
+   501→        "submissionType": "email",
+   502→        "contactInfo": "",
+   503→        "status": "open",
+   504→        "notes": "",
+   505→        "createdAt": "2026-06-11T14:33:55.069Z"
+   506→      },
+   507→      {
+   508→        "genres": [
+   509→          "Amapiano",
+   510→          "Trance Main Floor"
+   511→        ],
+   512→        "rankByGenre": {
+   513→          "Amapiano": 22,
+   514→          "Trance Main Floor": 2
+   515→        },
+   516→        "pointsByGenre": {
+   517→          "Amapiano": 81,
+   518→          "Trance Main Floor": 377
+   519→        },
+   520→        "trending": true,
+   521→        "trendingRankByGenre": {
+   522→          "Amapiano": 22,
+   523→          "Trance Main Floor": 2
+   524→        },
+   525→        "trendingPointsByGenre": {
+   526→          "Amapiano": 81,
+   527→          "Trance Main Floor": 377
+   528→        },
+   529→        "isCustom": false,
+   530→        "website": "",
+   531→        "demoLink": "",
+   532→        "socialLink": "",
+   533→        "soundcloudLink": "",
+   534→        "emails": [],
+   535→        "id": "lbl_a_state_of_trance",
+   536→        "name": "A STATE OF TRANCE",
+   537→        "genre": "Trance Main Floor",
+   538→        "submissionType": "email",
+   539→        "contactInfo": "",
+   540→        "status": "open",
+   541→        "notes": "",
+   542→        "createdAt": "2026-06-11T14:33:55.069Z"
+   543→      },
+   544→      {
+   545→        "genres": [
+   546→          "Indie Dance"
+   547→        ],
+   548→        "rankByGenre": {
+   549→          "Indie Dance": 41
+   550→        },
+   551→        "pointsByGenre": {
+   552→          "Indie Dance": 50
+   553→        },
+   554→        "trending": false,
+   555→        "trendingRankByGenre": {},
+   556→        "trendingPointsByGenre": {},
+   557→        "isCustom": false,
+   558→        "website": "",
+   559→        "demoLink": "",
+   560→        "socialLink": "",
+   561→        "soundcloudLink": "",
+   562→        "emails": [],
+   563→        "id": "lbl_abra_x",
+   564→        "name": "ABRA X",
+   565→        "genre": "Indie Dance",
+   566→        "submissionType": "email",
+   567→        "contactInfo": "",
+   568→        "status": "open",
+   569→        "notes": "",
+   570→        "createdAt": "2026-06-11T14:33:55.069Z"
+   571→      },
+   572→      {
+   573→        "genres": [
+   574→          "Indie Dance",
+   575→          "Melodic House & Techno"
+   576→        ],
+   577→        "rankByGenre": {
+   578→          "Indie Dance": 27,
+   579→          "Melodic House & Techno": 55
+   580→        },
+   581→        "pointsByGenre": {
+   582→          "Indie Dance": 74,
+   583→          "Melodic House & Techno": 23
+   584→        },
+   585→        "trending": false,
+   586→        "trendingRankByGenre": {
+   587→          "Indie Dance": 10
+   588→        },
+   589→        "trendingPointsByGenre": {
+   590→          "Indie Dance": 2072
+   591→        },
+   592→        "isCustom": false,
+   593→        "website": "",
+   594→        "demoLink": "",
+   595→        "socialLink": "",
+   596→        "soundcloudLink": "",
+   597→        "emails": [],
+   598→        "id": "lbl_abracadabra_music",
+   599→        "name": "ABRACADABRA MUSIC",
+   600→        "genre": "Afro House",
+   601→        "submissionType": "email",
+   602→        "contactInfo": "",
+   603→        "status": "open",
+   604→        "notes": "",
+   605→        "createdAt": "2026-06-11T14:33:55.069Z"
+   606→      },
+   607→      {
+   608→        "genres": [
+   609→          "140 / Deep Dubstep / Grime"
+   610→        ],
+   611→        "rankByGenre": {
+   612→          "140 / Deep Dubstep / Grime": 2
+   613→        },
+   614→        "pointsByGenre": {
+   615→          "140 / Deep Dubstep / Grime": 701
+   616→        },
+   617→        "trending": true,
+   618→        "trendingRankByGenre": {
+   619→          "140 / Deep Dubstep / Grime": 2
+   620→        },
+   621→        "trendingPointsByGenre": {
+   622→          "140 / Deep Dubstep / Grime": 701
+   623→        },
+   624→        "isCustom": false,
+   625→        "website": "",
+   626→        "demoLink": "",
+   627→        "socialLink": "",
+   628→        "soundcloudLink": "",
+   629→        "emails": [],
+   630→        "id": "lbl_acetone",
+   631→        "name": "ACETONE",
+   632→        "genre": "Funky House",
+   633→        "submissionType": "email",
+   634→        "contactInfo": "",
+   635→        "status": "open",
+   636→        "notes": "",
+   637→        "createdAt": "2026-06-11T14:33:55.069Z"
+   638→      },
+   639→      {
+   640→        "genres": [
+   641→          "Ambient / Experimental"
+   642→        ],
+   643→        "rankByGenre": {
+   644→          "Ambient / Experimental": 27
+   645→        },
+   646→        "pointsByGenre": {
+   647→          "Ambient / Experimental": 12669
+   648→        },
+   649→        "trending": false,
+   650→        "trendingRankByGenre": {},
+   651→        "trendingPointsByGenre": {},
+   652→        "isCustom": false,
+   653→        "website": "",
+   654→        "demoLink": "",
+   655→        "socialLink": "",
+   656→        "soundcloudLink": "",
+   657→        "emails": [],
+   658→        "id": "lbl_ad_93",
+   659→        "name": "AD 93",
+   660→        "genre": "Ambient / Experimental",
+   661→        "submissionType": "email",
+   662→        "contactInfo": "",
+   663→        "status": "open",
+   664→        "notes": "",
+   665→        "createdAt": "2026-06-11T14:33:55.069Z"
+   666→      },
+   667→      {
+   668→        "genres": [
+   669→          "Bass House",
+   670→          "Melodic House & Techno"
+   671→        ],
+   672→        "rankByGenre": {
+   673→          "Bass House": 36,
+   674→          "Melodic House & Techno": 14
+   675→        },
+   676→        "pointsByGenre": {
+   677→          "Bass House": 60,
+   678→          "Melodic House & Techno": 94
+   679→        },
+   680→        "trending": true,
+   681→        "trendingRankByGenre": {
+   682→          "Bass House": 36,
+   683→          "Melodic House & Techno": 14
+   684→        },
+   685→        "trendingPointsByGenre": {
+   686→          "Bass House": 60,
+   687→          "Melodic House & Techno": 94
+   688→        },
+   689→        "isCustom": false,
+   690→        "website": "",
+   691→        "demoLink": "",
+   692→        "socialLink": "",
+   693→        "soundcloudLink": "",
+   694→        "emails": [],
+   695→        "id": "lbl_aeterna_records",
+   696→        "name": "AETERNA RECORDS",
+   697→        "genre": "Bass House",
+   698→        "submissionType": "email",
+   699→        "contactInfo": "",
+   700→        "status": "open",
+   701→        "notes": "",
+   702→        "createdAt": "2026-06-11T14:33:55.069Z"
+   703→      },
+   704→      {
+   705→        "genres": [
+   706→          "Bass House",
+   707→          "Tech House"
+   708→        ],
+   709→        "rankByGenre": {
+   710→          "Bass House": 4,
+   711→          "Tech House": 21
+   712→        },
+   713→        "pointsByGenre": {
+   714→          "Bass House": 191,
+   715→          "Tech House": 84
+   716→        },
+   717→        "trending": true,
+   718→        "trendingRankByGenre": {
+   719→          "Bass House": 4,
+   720→          "Tech House": 21
+   721→        },
+   722→        "trendingPointsByGenre": {
+   723→          "Bass House": 191,
+   724→          "Tech House": 84
+   725→        },
+   726→        "isCustom": false,
+   727→        "website": "",
+   728→        "demoLink": "",
+   729→        "socialLink": "",
+   730→        "soundcloudLink": "",
+   731→        "emails": [],
+   732→        "id": "lbl_affairs",
+   733→        "name": "AFFAIRS",
+   734→        "genre": "Indie Dance",
+   735→        "submissionType": "email",
+   736→        "contactInfo": "",
+   737→        "status": "open",
+   738→        "notes": "",
+   739→        "createdAt": "2026-06-11T14:33:55.069Z"
+   740→      },
+   741→      {
+   742→        "genres": [
+   743→          "Hard Dance / Hardcore / Neo Rave"
+   744→        ],
+   745→        "rankByGenre": {
+   746→          "Hard Dance / Hardcore / Neo Rave": 22
+   747→        },
+   748→        "pointsByGenre": {
+   749→          "Hard Dance / Hardcore / Neo Rave": 86
+   750→        },
+   751→        "trending": true,
+   752→        "trendingRankByGenre": {
+   753→          "Hard Dance / Hardcore / Neo Rave": 22
+   754→        },
+   755→        "trendingPointsByGenre": {
+   756→          "Hard Dance / Hardcore / Neo Rave": 86
+   757→        },
+   758→        "isCustom": false,
+   759→        "website": "",
+   760→        "demoLink": "",
+   761→        "socialLink": "",
+   762→        "soundcloudLink": "",
+   763→        "emails": [],
+   764→        "id": "lbl_affenk_fig_red",
+   765→        "name": "AFFENKäFIG RED",
+   766→        "genre": "Hard Techno",
+   767→        "submissionType": "email",
+   768→        "contactInfo": "",
+   769→        "status": "open",
+   770→        "notes": "",
+   771→        "createdAt": "2026-06-11T14:33:55.069Z"
+   772→      },
+   773→      {
+   774→        "genres": [
+   775→          "Mainstage"
+   776→        ],
+   777→        "rankByGenre": {
+   778→          "Mainstage": 57
+   779→        },
+   780→        "pointsByGenre": {
+   781→          "Mainstage": 10
+   782→        },
+   783→        "trending": false,
+   784→        "trendingRankByGenre": {
+   785→          "Ambient / Experimental": 5
+   786→        },
+   787→        "trendingPointsByGenre": {
+   788→          "Ambient / Experimental": 1774
+   789→        },
+   790→        "isCustom": false,
+   791→        "website": "",
+   792→        "demoLink": "",
+   793→        "socialLink": "",
+   794→        "soundcloudLink": "",
+   795→        "emails": [],
+   796→        "id": "lbl_affiliate",
+   797→        "name": "AFFILIATE",
+   798→        "genre": "Ambient / Experimental",
+   799→        "submissionType": "email",
+   800→        "contactInfo": "",
+   801→        "status": "open",
+   802→        "notes": "",
+   803→        "createdAt": "2026-06-11T14:33:55.069Z"
+   804→      },
+   805→      {
+   806→        "genres": [
+   807→          "Mainstage"
+   808→        ],
+   809→        "rankByGenre": {
+   810→          "Mainstage": 52
+   811→        },
+   812→        "pointsByGenre": {
+   813→          "Mainstage": 25
+   814→        },
+   815→        "trending": false,
+   816→        "trendingRankByGenre": {},
+   817→        "trendingPointsByGenre": {},
+   818→        "isCustom": false,
+   819→        "website": "",
+   820→        "demoLink": "",
+   821→        "socialLink": "",
+   822→        "soundcloudLink": "",
+   823→        "emails": [],
+   824→        "id": "lbl_affin",
+   825→        "name": "AFFIN",
+   826→        "genre": "Ambient / Experimental",
+   827→        "submissionType": "email",
+   828→        "contactInfo": "",
+   829→        "status": "open",
+   830→        "notes": "",
+   831→        "createdAt": "2026-06-11T14:33:55.069Z"
+   832→      },
+   833→      {
+   834→        "genres": [
+   835→          "Amapiano"
+   836→        ],
+   837→        "rankByGenre": {
+   838→          "Amapiano": 35
+   839→        },
+   840→        "pointsByGenre": {
+   841→          "Amapiano": 10364
+   842→        },
+   843→        "trending": false,
+   844→        "trendingRankByGenre": {},
+   845→        "trendingPointsByGenre": {},
+   846→        "isCustom": false,
+   847→        "website": "",
+   848→        "demoLink": "",
+   849→        "socialLink": "",
+   850→        "soundcloudLink": "",
+   851→        "emails": [],
+   852→        "id": "lbl_afrika_music_group",
+   853→        "name": "AFRIKA MUSIC GROUP",
+   854→        "genre": "Amapiano",
+   855→        "submissionType": "email",
+   856→        "contactInfo": "",
+   857→        "status": "open",
+   858→        "notes": "",
+   859→        "createdAt": "2026-06-11T14:33:55.069Z"
+   860→      },
+   861→      {
+   862→        "genres": [
+   863→          "Afro House"
+   864→        ],
+   865→        "rankByGenre": {
+   866→          "Afro House": 25
+   867→        },
+   868→        "pointsByGenre": {
+   869→          "Afro House": 73
+   870→        },
+   871→        "trending": true,
+   872→        "trendingRankByGenre": {
+   873→          "Afro House": 25
+   874→        },
+   875→        "trendingPointsByGenre": {
+   876→          "Afro House": 73
+   877→        },
+   878→        "isCustom": false,
+   879→        "website": "",
+   880→        "demoLink": "",
+   881→        "socialLink": "",
+   882→        "soundcloudLink": "",
+   883→        "emails": [],
+   884→        "id": "lbl_afro_republik",
+   885→        "name": "AFRO REPUBLIK",
+   886→        "genre": "Afro House",
+   887→        "submissionType": "email",
+   888→        "contactInfo": "",
+   889→        "status": "open",
+   890→        "notes": "",
+   891→        "createdAt": "2026-06-11T14:33:55.069Z"
+   892→      },
+   893→      {
+   894→        "genres": [
+   895→          "Afro House"
+   896→        ],
+   897→        "rankByGenre": {
+   898→          "Afro House": 5
+   899→        },
+   900→        "pointsByGenre": {
+   901→          "Afro House": 170
+   902→        },
+   903→        "trending": true,
+   904→        "trendingRankByGenre": {
+   905→          "Afro House": 5
+   906→        },
+   907→        "trendingPointsByGenre": {
+   908→          "Afro House": 170
+   909→        },
+   910→        "isCustom": false,
+   911→        "website": "",
+   912→        "demoLink": "",
+   913→        "socialLink": "",
+   914→        "soundcloudLink": "",
+   915→        "emails": [],
+   916→        "id": "lbl_afrodise",
+   917→        "name": "AFRODISE",
+   918→        "genre": "Afro House",
+   919→        "submissionType": "email",
+   920→        "contactInfo": "",
+   921→        "status": "open",
+   922→        "notes": "",
+   923→        "createdAt": "2026-06-11T14:33:55.069Z"
+   924→      },
+   925→      {
+   926→        "genres": [
+   927→          "Trance Main Floor"
+   928→        ],
+   929→        "rankByGenre": {
+   930→          "Trance Main Floor": 61
+   931→        },
+   932→        "pointsByGenre": {
+   933→          "Trance Main Floor": 4
+   934→        },
+   935→        "trending": false,
+   936→        "trendingRankByGenre": {},
+   937→        "trendingPointsByGenre": {},
+   938→        "isCustom": false,
+   939→        "website": "",
+   940→        "demoLink": "",
+   941→        "socialLink": "",
+   942→        "soundcloudLink": "",
+   943→        "emails": [],
+   944→        "id": "lbl_afterdark",
+   945→        "name": "AFTERDARK",
+   946→        "genre": "Trance Main Floor",
+   947→        "submissionType": "email",
+   948→        "contactInfo": "",
+   949→        "status": "open",
+   950→        "notes": "",
+   951→        "createdAt": "2026-06-11T14:33:55.069Z"
+   952→      },
+   953→      {
+   954→        "genres": [
+   955→          "Melodic House & Techno"
+   956→        ],
+   957→        "rankByGenre": {
+   958→          "Melodic House & Techno": 30
+   959→        },
+   960→        "pointsByGenre": {
+   961→          "Melodic House & Techno": 64
+   962→        },
+   963→        "trending": false,
+   964→        "trendingRankByGenre": {},
+   965→        "trendingPointsByGenre": {},
+   966→        "isCustom": false,
+   967→        "website": "",
+   968→        "demoLink": "",
+   969→        "socialLink": "",
+   970→        "soundcloudLink": "",
+   971→        "emails": [],
+   972→        "id": "lbl_afterlife_records",
+   973→        "name": "AFTERLIFE RECORDS",
+   974→        "genre": "Melodic House & Techno",
+   975→        "submissionType": "email",
+   976→        "contactInfo": "",
+   977→        "status": "open",
+   978→        "notes": "",
+   979→        "createdAt": "2026-06-11T14:33:55.069Z"
+   980→      },
+   981→      {
+   982→        "genres": [
+   983→          "Breaks / Breakbeat / Uk Bass",
+   984→          "Uk Garage / Bassline"
+   985→        ],
+   986→        "rankByGenre": {
+   987→          "Breaks / Breakbeat / Uk Bass": 40,
+   988→          "Uk Garage / Bassline": 43
+   989→        },
+   990→        "pointsByGenre": {
+   991→          "Breaks / Breakbeat / Uk Bass": 38,
+   992→          "Uk Garage / Bassline": 29
+   993→        },
+   994→        "trending": false,
+   995→        "trendingRankByGenre": {
+   996→          "Breaks / Breakbeat / Uk Bass": 10
+   997→        },
+   998→        "trendingPointsByGenre": {
+   999→          "Breaks / Breakbeat / Uk Bass": 1660
+  1000→        },
+  1001→        "isCustom": false,
+  1002→        "website": "",
+  1003→        "demoLink": "",
+  1004→        "socialLink": "",
+  1005→        "soundcloudLink": "",
+  1006→        "emails": [],
+  1007→        "id": "lbl_against_the_grain",
+  1008→        "name": "AGAINST THE GRAIN",
+  1009→        "genre": "Breaks / Breakbeat / Uk Bass",
+  1010→        "submissionType": "email",
+  1011→        "contactInfo": "",
+  1012→        "status": "open",
+  1013→        "notes": "",
+  1014→        "createdAt": "2026-06-11T14:33:55.069Z"
+  1015→      },
+  1016→      {
+  1017→        "genres": [
+  1018→          "Trap / Future Bass"
+  1019→        ],
+  1020→        "rankByGenre": {
+  1021→          "Trap / Future Bass": 32
+  1022→        },
+  1023→        "pointsByGenre": {
+  1024→          "Trap / Future Bass": 42
+  1025→        },
+  1026→        "trending": false,
+  1027→        "trendingRankByGenre": {},
+  1028→        "trendingPointsByGenre": {},
+  1029→        "isCustom": false,
+  1030→        "website": "",
+  1031→        "demoLink": "",
+  1032→        "socialLink": "",
+  1033→        "soundcloudLink": "",
+  1034→        "emails": [],
+  1035→        "id": "lbl_age_101",
+  1036→        "name": "AGE 101",
+  1037→        "genre": "Brazilian Funk",
+  1038→        "submissionType": "email",
+  1039→        "contactInfo": "",
+  1040→        "status": "open",
+  1041→        "notes": "",
+  1042→        "createdAt": "2026-06-11T14:33:55.069Z"
+  1043→      },
+  1044→      {
+  1045→        "genres": [
+  1046→          "Hard Techno"
+  1047→        ],
+  1048→        "rankByGenre": {
+  1049→          "Hard Techno": 9
+  1050→        },
+  1051→        "pointsByGenre": {
+  1052→          "Hard Techno": 40816
+  1053→        },
+  1054→        "trending": true,
+  1055→        "trendingRankByGenre": {
+  1056→          "Hard Techno": 6
+  1057→        },
+  1058→        "trendingPointsByGenre": {
+  1059→          "Hard Techno": 3050
+  1060→        },
+  1061→        "isCustom": false,
+  1062→        "website": "",
+  1063→        "demoLink": "",
+  1064→        "socialLink": "",
+  1065→        "soundcloudLink": "",
+  1066→        "emails": [],
+  1067→        "id": "lbl_agony",
+  1068→        "name": "AGONY",
+  1069→        "genre": "Hard Techno",
+  1070→        "submissionType": "email",
+  1071→        "contactInfo": "",
+  1072→        "status": "open",
+  1073→        "notes": "",
+  1074→        "createdAt": "2026-06-11T14:33:55.069Z"
+  1075→      },
+  1076→      {
+  1077→        "genres": [
+  1078→          "Downtempo"
+  1079→        ],
+  1080→        "rankByGenre": {
+  1081→          "Downtempo": 45
+  1082→        },
+  1083→        "pointsByGenre": {
+  1084→          "Downtempo": 7349
+  1085→        },
+  1086→        "trending": false,
+  1087→        "trendingRankByGenre": {},
+  1088→        "trendingPointsByGenre": {},
+  1089→        "isCustom": false,
+  1090→        "website": "",
+  1091→        "demoLink": "",
+  1092→        "socialLink": "",
+  1093→        "soundcloudLink": "",
+  1094→        "emails": [],
+  1095→        "id": "lbl_akasha_mx",
+  1096→        "name": "AKASHA MX",
+  1097→        "genre": "Downtempo",
+  1098→        "submissionType": "email",
+  1099→        "contactInfo": "",
+  1100→        "status": "open",
+  1101→        "notes": "",
+  1102→        "createdAt": "2026-06-11T14:33:55.069Z"
+  1103→      },
+  1104→      {
+  1105→        "genres": [
+  1106→          "Electro Classic / Detroit / Modern"
+  1107→        ],
+  1108→        "rankByGenre": {
+  1109→          "Electro Classic / Detroit / Modern": 50
+  1110→        },
+  1111→        "pointsByGenre": {
+  1112→          "Electro Classic / Detroit / Modern": 8830
+  1113→        },
+  1114→        "trending": false,
+  1115→        "trendingRankByGenre": {},
+  1116→        "trendingPointsByGenre": {},
+  1117→        "isCustom": false,
+  1118→        "website": "",
+  1119→        "demoLink": "",
+  1120→        "socialLink": "",
+  1121→        "soundcloudLink": "",
+  1122→        "emails": [],
+  1123→        "id": "lbl_alien_communications_ltd",
+  1124→        "name": "ALIEN COMMUNICATIONS LTD",
+  1125→        "genre": "Electro Classic / Detroit / Modern",
+  1126→        "submissionType": "email",
+  1127→        "contactInfo": "",
+  1128→        "status": "open",
+  1129→        "notes": "",
+  1130→        "createdAt": "2026-06-11T14:33:55.069Z"
+  1131→      },
+  1132→      {
+  1133→        "genres": [
+  1134→          "Funky House"
+  1135→        ],
+  1136→        "rankByGenre": {
+  1137→          "Funky House": 45
+  1138→        },
+  1139→        "pointsByGenre": {
+  1140→          "Funky House": 1
+  1141→        },
+  1142→        "trending": false,
+  1143→        "trendingRankByGenre": {},
+  1144→        "trendingPointsByGenre": {},
+  1145→        "isCustom": false,
+  1146→        "website": "",
+  1147→        "demoLink": "",
+  1148→        "socialLink": "",
+  1149→        "soundcloudLink": "",
+  1150→        "emails": [],
+  1151→        "id": "lbl_aliens_on_mushrooms",
+  1152→        "name": "ALIENS ON MUSHROOMS",
+  1153→        "genre": "Jackin House",
+  1154→        "submissionType": "email",
+  1155→        "contactInfo": "",
+  1156→        "status": "open",
+  1157→        "notes": "",
+  1158→        "createdAt": "2026-06-11T14:33:55.069Z"
+  1159→      },
+  1160→      {
+  1161→        "genres": [
+  1162→          "Melodic House & Techno"
+  1163→        ],
+  1164→        "rankByGenre": {
+  1165→          "Melodic House & Techno": 18
+  1166→        },
+  1167→        "pointsByGenre": {
+  1168→          "Melodic House & Techno": 86
+  1169→        },
+  1170→        "trending": true,
+  1171→        "trendingRankByGenre": {
+  1172→          "Melodic House & Techno": 18
+  1173→        },
+  1174→        "trendingPointsByGenre": {
+  1175→          "Melodic House & Techno": 86
+  1176→        },
+  1177→        "isCustom": false,
+  1178→        "website": "",
+  1179→        "demoLink": "",
+  1180→        "socialLink": "",
+  1181→        "soundcloudLink": "",
+  1182→        "emails": [],
+  1183→        "id": "lbl_all_day_i_dream",
+  1184→        "name": "ALL DAY I DREAM",
+  1185→        "genre": "Organic House",
+  1186→        "submissionType": "email",
+  1187→        "contactInfo": "",
+  1188→        "status": "open",
+  1189→        "notes": "",
+  1190→        "createdAt": "2026-06-11T14:33:55.069Z"
+  1191→      },
+  1192→      {
+  1193→        "genres": [
+  1194→          "Hard Dance / Hardcore / Neo Rave"
+  1195→        ],
+  1196→        "rankByGenre": {
+  1197→          "Hard Dance / Hardcore / Neo Rave": 7
+  1198→        },
+  1199→        "pointsByGenre": {
+  1200→          "Hard Dance / Hardcore / Neo Rave": 173
+  1201→        },
+  1202→        "trending": true,
+  1203→        "trendingRankByGenre": {
+  1204→          "Hard Dance / Hardcore / Neo Rave": 7
+  1205→        },
+  1206→        "trendingPointsByGenre": {
+  1207→          "Hard Dance / Hardcore / Neo Rave": 173
+  1208→        },
+  1209→        "isCustom": false,
+  1210→        "website": "",
+  1211→        "demoLink": "",
+  1212→        "socialLink": "",
+  1213→        "soundcloudLink": "",
+  1214→        "emails": [],
+  1215→        "id": "lbl_all_night_long",
+  1216→        "name": "ALL NIGHT LONG",
+  1217→        "genre": "Hard Dance / Hardcore / Neo Rave",
+  1218→        "submissionType": "email",
+  1219→        "contactInfo": "",
+  1220→        "status": "open",
+  1221→        "notes": "",
+  1222→        "createdAt": "2026-06-11T14:33:55.069Z"
+  1223→      },
+  1224→      {
+  1225→        "genres": [
+  1226→          "Ambient / Experimental"
+  1227→        ],
+  1228→        "rankByGenre": {
+  1229→          "Ambient / Experimental": 1
+  1230→        },
+  1231→        "pointsByGenre": {
+  1232→          "Ambient / Experimental": 250
+  1233→        },
+  1234→        "trending": true,
+  1235→        "trendingRankByGenre": {
+  1236→          "Ambient / Experimental": 1
+  1237→        },
+  1238→        "trendingPointsByGenre": {
+  1239→          "Ambient / Experimental": 250
+  1240→        },
+  1241→        "isCustom": false,
+  1242→        "website": "",
+  1243→        "demoLink": "",
+  1244→        "socialLink": "",
+  1245→        "soundcloudLink": "",
+  1246→        "emails": [],
+  1247→        "id": "lbl_all_the_people",
+  1248→        "name": "ALL THE PEOPLE",
+  1249→        "genre": "Bass / Club",
+  1250→        "submissionType": "email",
+  1251→        "contactInfo": "",
+  1252→        "status": "open",
+  1253→        "notes": "",
+  1254→        "createdAt": "2026-06-11T14:33:55.069Z"
+  1255→      },
+  1256→      {
+  1257→        "genres": [
+  1258→          "Dance / Pop",
+  1259→          "Hard Techno",
+  1260→          "Minimal / Deep Tech",
+  1261→          "Trance Main Floor"
+  1262→        ],
+  1263→        "rankByGenre": {
+  1264→          "Dance / Pop": 17,
+  1265→          "Hard Techno": 47,
+  1266→          "Minimal / Deep Tech": 54,
+  1267→          "Trance Main Floor": 22
+  1268→        },
+  1269→        "pointsByGenre": {
+  1270→          "Dance / Pop": 97,
+  1271→          "Hard Techno": 20,
+  1272→          "Minimal / Deep Tech": 11,
+  1273→          "Trance Main Floor": 80
+  1274→        },
+  1275→        "trending": true,
+  1276→        "trendingRankByGenre": {
+  1277→          "Dance / Pop": 17,
+  1278→          "Hard Techno": 47,
+  1279→          "Trance Main Floor": 22
+  1280→        },
+  1281→        "trendingPointsByGenre": {
+  1282→          "Dance / Pop": 97,
+  1283→          "Hard Techno": 20,
+  1284→          "Trance Main Floor": 80
+  1285→        },
+  1286→        "isCustom": false,
+  1287→        "website": "",
+  1288→        "demoLink": "",
+  1289→        "socialLink": "",
+  1290→        "soundcloudLink": "",
+  1291→        "emails": [],
+  1292→        "id": "lbl_all_ways_dance",
+  1293→        "name": "ALL WAYS DANCE",
+  1294→        "genre": "Trance Main Floor",
+  1295→        "submissionType": "email",
+  1296→        "contactInfo": "",
+  1297→        "status": "open",
+  1298→        "notes": "",
+  1299→        "createdAt": "2026-06-11T14:33:55.069Z"
+  1300→      },
+  1301→      {
+  1302→        "genres": [
+  1303→          "Trap / Future Bass"
+  1304→        ],
+  1305→        "rankByGenre": {
+  1306→          "Trap / Future Bass": 21
+  1307→        },
+  1308→        "pointsByGenre": {
+  1309→          "Trap / Future Bass": 62
+  1310→        },
+  1311→        "trending": true,
+  1312→        "trendingRankByGenre": {
+  1313→          "Trap / Future Bass": 21
+  1314→        },
+  1315→        "trendingPointsByGenre": {
+  1316→          "Trap / Future Bass": 62
+  1317→        },
+  1318→        "isCustom": false,
+  1319→        "website": "",
+  1320→        "demoLink": "",
+  1321→        "socialLink": "",
+  1322→        "soundcloudLink": "",
+  1323→        "emails": [],
+  1324→        "id": "lbl_alott",
+  1325→        "name": "ALOTT",
+  1326→        "genre": "Trap / Future Bass",
+  1327→        "submissionType": "email",
+  1328→        "contactInfo": "",
+  1329→        "status": "open",
+  1330→        "notes": "",
+  1331→        "createdAt": "2026-06-11T14:33:55.069Z"
+  1332→      },
+  1333→      {
+  1334→        "genres": [
+  1335→          "Techno Peak Time / Driving"
+  1336→        ],
+  1337→        "rankByGenre": {
+  1338→          "Techno Peak Time / Driving": 32
+  1339→        },
+  1340→        "pointsByGenre": {
+  1341→          "Techno Peak Time / Driving": 52
+  1342→        },
+  1343→        "trending": false,
+  1344→        "trendingRankByGenre": {},
+  1345→        "trendingPointsByGenre": {},
+  1346→        "isCustom": false,
+  1347→        "website": "",
+  1348→        "demoLink": "",
+  1349→        "socialLink": "",
+  1350→        "soundcloudLink": "",
+  1351→        "emails": [],
+  1352→        "id": "lbl_alpaka_muzik",
+  1353→        "name": "ALPAKA MUZIK",
+  1354→        "genre": "Psy-Trance",
+  1355→        "submissionType": "email",
+  1356→        "contactInfo": "",
+  1357→        "status": "open",
+  1358→        "notes": "",
+  1359→        "createdAt": "2026-06-11T14:33:55.069Z"
+  1360→      },
+  1361→      {
+  1362→        "genres": [
+  1363→          "Psy-Trance"
+  1364→        ],
+  1365→        "rankByGenre": {
+  1366→          "Psy-Trance": 30
+  1367→        },
+  1368→        "pointsByGenre": {
+  1369→          "Psy-Trance": 30
+  1370→        },
+  1371→        "trending": false,
+  1372→        "trendingRankByGenre": {},
+  1373→        "trendingPointsByGenre": {},
+  1374→        "isCustom": false,
+  1375→        "website": "",
+  1376→        "demoLink": "",
+  1377→        "socialLink": "",
+  1378→        "soundcloudLink": "",
+  1379→        "emails": [],
+  1380→        "id": "lbl_alteza_records_official",
+  1381→        "name": "ALTEZA RECORDS OFFICIAL",
+  1382→        "genre": "Psy-Trance",
+  1383→        "submissionType": "email",
+  1384→        "contactInfo": "",
+  1385→        "status": "open",
+  1386→        "notes": "",
+  1387→        "createdAt": "2026-06-11T14:33:55.069Z"
+  1388→      },
+  1389→      {
+  1390→        "genres": [
+  1391→          "Funky House"
+  1392→        ],
+  1393→        "rankByGenre": {
+  1394→          "Funky House": 23
+  1395→        },
+  1396→        "pointsByGenre": {
+  1397→          "Funky House": 11744
+  1398→        },
+  1399→        "trending": false,
+  1400→        "trendingRankByGenre": {},
+  1401→        "trendingPointsByGenre": {},
+  1402→        "isCustom": false,
+  1403→        "website": "",
+  1404→        "demoLink": "",
+  1405→        "socialLink": "",
+  1406→        "soundcloudLink": "",
+  1407→        "emails": [],
+  1408→        "id": "lbl_altitude_records",
+  1409→        "name": "ALTITUDE RECORDS",
+  1410→        "genre": "Funky House",
+  1411→        "submissionType": "email",
+  1412→        "contactInfo": "",
+  1413→        "status": "open",
+  1414→        "notes": "",
+  1415→        "createdAt": "2026-06-11T14:33:55.069Z"
+  1416→      },
+  1417→      {
+  1418→        "genres": [
+  1419→          "Breaks / Breakbeat / Uk Bass",
+  1420→          "House",
+  1421→          "Tech House"
+  1422→        ],
+  1423→        "rankByGenre": {
+  1424→          "Breaks / Breakbeat / Uk Bass": 18,
+  1425→          "House": 35,
+  1426→          "Tech House": 29
+  1427→        },
+  1428→        "pointsByGenre": {
+  1429→          "Breaks / Breakbeat / Uk Bass": 80,
+  1430→          "House": 49,
+  1431→          "Tech House": 74
+  1432→        },
+  1433→        "trending": true,
+  1434→        "trendingRankByGenre": {
+  1435→          "Breaks / Breakbeat / Uk Bass": 18,
+  1436→          "House": 35,
+  1437→          "Tech House": 29
+  1438→        },
+  1439→        "trendingPointsByGenre": {
+  1440→          "Breaks / Breakbeat / Uk Bass": 80,
+  1441→          "House": 49,
+  1442→          "Tech House": 74
+  1443→        },
+  1444→        "isCustom": false,
+  1445→        "website": "",
+  1446→        "demoLink": "",
+  1447→        "socialLink": "",
+  1448→        "soundcloudLink": "",
+  1449→        "emails": [],
+  1450→        "id": "lbl_altra_moda",
+  1451→        "name": "ALTRA MODA",
+  1452→        "genre": "House",
+  1453→        "submissionType": "email",
+  1454→        "contactInfo": "",
+  1455→        "status": "open",
+  1456→        "notes": "",
+  1457→        "createdAt": "2026-06-11T14:33:55.069Z"
+  1458→      },
+  1459→      {
+  1460→        "genres": [
+  1461→          "Hard Dance / Hardcore / Neo Rave"
+  1462→        ],
+  1463→        "rankByGenre": {
+  1464→          "Hard Dance / Hardcore / Neo Rave": 45
+  1465→        },
+  1466→        "pointsByGenre": {
+  1467→          "Hard Dance / Hardcore / Neo Rave": 10387
+  1468→        },
+  1469→        "trending": false,
+  1470→        "trendingRankByGenre": {},
+  1471→        "trendingPointsByGenre": {},
+  1472→        "isCustom": false,
+  1473→        "website": "",
+  1474→        "demoLink": "",
+  1475→        "socialLink": "",
+  1476→        "soundcloudLink": "",
+  1477→        "emails": [],
+  1478→        "id": "lbl_altruism_records",
+  1479→        "name": "ALTRUISM RECORDS",
+  1480→        "genre": "Hard Dance / Hardcore / Neo Rave",
+  1481→        "submissionType": "email",
+  1482→        "contactInfo": "",
+  1483→        "status": "open",
+  1484→        "notes": "",
+  1485→        "createdAt": "2026-06-11T14:33:55.069Z"
+  1486→      },
+  1487→      {
+  1488→        "genres": [
+  1489→          "Techno Peak Time / Driving"
+  1490→        ],
+  1491→        "rankByGenre": {
+  1492→          "Techno Peak Time / Driving": 33
+  1493→        },
+  1494→        "pointsByGenre": {
+  1495→          "Techno Peak Time / Driving": 51
+  1496→        },
+  1497→        "trending": false,
+  1498→        "trendingRankByGenre": {},
+  1499→        "trendingPointsByGenre": {},
+  1500→        "isCustom": false,
+  1501→        "website": "",
+  1502→        "demoLink": "",
+  1503→        "socialLink": "",
+  1504→        "soundcloudLink": "",
+  1505→        "emails": [],
+  1506→        "id": "lbl_alula_tunes",
+  1507→        "name": "ALULA TUNES",
+  1508→        "genre": "Techno Peak Time / Driving",
+  1509→        "submissionType": "email",
+  1510→        "contactInfo": "",
+  1511→        "status": "open",
+  1512→        "notes": "",
+  1513→        "createdAt": "2026-06-11T14:33:55.069Z"
+  1514→      },
+  1515→      {
+  1516→        "genres": [
+  1517→          "Ambient / Experimental"
+  1518→        ],
+  1519→        "rankByGenre": {
+  1520→          "Ambient / Experimental": 47
+  1521→        },
+  1522→        "pointsByGenre": {
+  1523→          "Ambient / Experimental": 8171
+  1524→        },
+  1525→        "trending": false,
+  1526→        "trendingRankByGenre": {},
+  1527→        "trendingPointsByGenre": {},
+  1528→        "isCustom": false,
+  1529→        "website": "",
+  1530→        "demoLink": "",
+  1531→        "socialLink": "",
+  1532→        "soundcloudLink": "",
+  1533→        "emails": [],
+  1534→        "id": "lbl_ambient_soundscapes",
+  1535→        "name": "AMBIENT SOUNDSCAPES",
+  1536→        "genre": "Ambient / Experimental",
+  1537→        "submissionType": "email",
+  1538→        "contactInfo": "",
+  1539→        "status": "open",
+  1540→        "notes": "",
+  1541→        "createdAt": "2026-06-11T14:33:55.069Z"
+  1542→      },
+  1543→      {
+  1544→        "genres": [
+  1545→          "Downtempo"
+  1546→        ],
+  1547→        "rankByGenre": {
+  1548→          "Downtempo": 49
+  1549→        },
+  1550→        "pointsByGenre": {
+  1551→          "Downtempo": 6946
+  1552→        },
+  1553→        "trending": false,
+  1554→        "trendingRankByGenre": {},
+  1555→        "trendingPointsByGenre": {},
+  1556→        "isCustom": false,
+  1557→        "website": "",
+  1558→        "demoLink": "",
+  1559→        "socialLink": "",
+  1560→        "soundcloudLink": "",
+  1561→        "emails": [],
+  1562→        "id": "lbl_amselcom",
+  1563→        "name": "AMSELCOM",
+  1564→        "genre": "Downtempo",
+  1565→        "submissionType": "email",
+  1566→        "contactInfo": "",
+  1567→        "status": "open",
+  1568→        "notes": "",
+  1569→        "createdAt": "2026-06-11T14:33:55.069Z"
+  1570→      },
+  1571→      {
+  1572→        "genres": [
+  1573→          "Organic House"
+  1574→        ],
+  1575→        "rankByGenre": {
+  1576→          "Organic House": 17
+  1577→        },
+  1578→        "pointsByGenre": {
+  1579→          "Organic House": 30336
+  1580→        },
+  1581→        "trending": true,
+  1582→        "trendingRankByGenre": {
+  1583→          "Organic House": 4
+  1584→        },
+  1585→        "trendingPointsByGenre": {
+  1586→          "Organic House": 2887
+  1587→        },
+  1588→        "isCustom": false,
+  1589→        "website": "",
+  1590→        "demoLink": "",
+  1591→        "socialLink": "",
+  1592→        "soundcloudLink": "",
+  1593→        "emails": [],
+  1594→        "id": "lbl_amulanga",
+  1595→        "name": "AMULANGA",
+  1596→        "genre": "Organic House",
+  1597→        "submissionType": "email",
+  1598→        "contactInfo": "",
+  1599→        "status": "open",
+  1600→        "notes": "",
+  1601→        "createdAt": "2026-06-11T14:33:55.069Z"
+  1602→      },
+  1603→      {
+  1604→        "genres": [
+  1605→          "Electro Classic / Detroit / Modern"
+  1606→        ],
+  1607→        "rankByGenre": {
+  1608→          "Electro Classic / Detroit / Modern": 49
+  1609→        },
+  1610→        "pointsByGenre": {
+  1611→          "Electro Classic / Detroit / Modern": 9012
+  1612→        },
+  1613→        "trending": false,
+  1614→        "trendingRankByGenre": {},
+  1615→        "trendingPointsByGenre": {},
+  1616→        "isCustom": false,
+  1617→        "website": "",
+  1618→        "demoLink": "",
+  1619→        "socialLink": "",
+  1620→        "soundcloudLink": "",
+  1621→        "emails": [],
+  1622→        "id": "lbl_analog_concept",
+  1623→        "name": "ANALOG CONCEPT",
+  1624→        "genre": "Electro Classic / Detroit / Modern",
+  1625→        "submissionType": "email",
+  1626→        "contactInfo": "",
+  1627→        "status": "open",
+  1628→        "notes": "",
+  1629→        "createdAt": "2026-06-11T14:33:55.069Z"
+  1630→      },
+  1631→      {
+  1632→        "genres": [
+  1633→          "Drum & Bass"
+  1634→        ],
+  1635→        "rankByGenre": {
+  1636→          "Drum & Bass": 44
+  1637→        },
+  1638→        "pointsByGenre": {
+  1639→          "Drum & Bass": 10351
+  1640→        },
+  1641→        "trending": false,
+  1642→        "trendingRankByGenre": {},
+  1643→        "trendingPointsByGenre": {},
+  1644→        "isCustom": false,
+  1645→        "website": "",
+  1646→        "demoLink": "",
+  1647→        "socialLink": "",
+  1648→        "soundcloudLink": "",
+  1649→        "emails": [],
+  1650→        "id": "lbl_andromedik",
+  1651→        "name": "ANDROMEDIK",
+  1652→        "genre": "Drum & Bass",
+  1653→        "submissionType": "email",
+  1654→        "contactInfo": "",
+  1655→        "status": "open",
+  1656→        "notes": "",
+  1657→        "createdAt": "2026-06-11T14:33:55.069Z"
+  1658→      },
+  1659→      {
+  1660→        "genres": [
+  1661→          "Electronica"
+  1662→        ],
+  1663→        "rankByGenre": {
+  1664→          "Electronica": 39
+  1665→        },
+  1666→        "pointsByGenre": {
+  1667→          "Electronica": 9607
+  1668→        },
+  1669→        "trending": false,
+  1670→        "trendingRankByGenre": {},
+  1671→        "trendingPointsByGenre": {},
+  1672→        "isCustom": false,
+  1673→        "website": "",
+  1674→        "demoLink": "",
+  1675→        "socialLink": "",
+  1676→        "soundcloudLink": "",
+  1677→        "emails": [],
+  1678→        "id": "lbl_animal63",
+  1679→        "name": "ANIMAL63",
+  1680→        "genre": "Electronica",
+  1681→        "submissionType": "email",
+  1682→        "contactInfo": "",
+  1683→        "status": "open",
+  1684→        "notes": "",
+  1685→        "createdAt": "2026-06-11T14:33:55.069Z"
+  1686→      },
+  1687→      {
+  1688→        "genres": [
+  1689→          "Techno Peak Time / Driving"
+  1690→        ],
+  1691→        "rankByGenre": {
+  1692→          "Techno Peak Time / Driving": 4
+  1693→        },
+  1694→        "pointsByGenre": {
+  1695→          "Techno Peak Time / Driving": 224
+  1696→        },
+  1697→        "trending": true,
+  1698→        "trendingRankByGenre": {
+  1699→          "Techno Peak Time / Driving": 4
+  1700→        },
+  1701→        "trendingPointsByGenre": {
+  1702→          "Techno Peak Time / Driving": 224
+  1703→        },
+  1704→        "isCustom": false,
+  1705→        "website": "",
+  1706→        "demoLink": "",
+  1707→        "socialLink": "",
+  1708→        "soundcloudLink": "",
+  1709→        "emails": [],
+  1710→        "id": "lbl_animarum_recordings",
+  1711→        "name": "ANIMARUM RECORDINGS",
+  1712→        "genre": "Techno Peak Time / Driving",
+  1713→        "submissionType": "email",
+  1714→        "contactInfo": "",
+  1715→        "status": "open",
+  1716→        "notes": "",
+  1717→        "createdAt": "2026-06-11T14:33:55.069Z"
+  1718→      },
+  1719→      {
+  1720→        "genres": [
+  1721→          "Trance Main Floor"
+  1722→        ],
+  1723→        "rankByGenre": {
+  1724→          "Trance Main Floor": 4
+  1725→        },
+  1726→        "pointsByGenre": {
+  1727→          "Trance Main Floor": 364
+  1728→        },
+  1729→        "trending": true,
+  1730→        "trendingRankByGenre": {
+  1731→          "Trance Main Floor": 4
+  1732→        },
+  1733→        "trendingPointsByGenre": {
+  1734→          "Trance Main Floor": 364
+  1735→        },
+  1736→        "isCustom": false,
+  1737→        "website": "",
+  1738→        "demoLink": "",
+  1739→        "socialLink": "",
+  1740→        "soundcloudLink": "",
+  1741→        "emails": [],
+  1742→        "id": "lbl_anjunabeats",
+  1743→        "name": "ANJUNABEATS",
+  1744→        "genre": "Ambient / Experimental",
+  1745→        "submissionType": "email",
+  1746→        "contactInfo": "",
+  1747→        "status": "open",
+  1748→        "notes": "",
+  1749→        "createdAt": "2026-06-11T14:33:55.069Z"
+  1750→      },
+  1751→      {
+  1752→        "genres": [
+  1753→          "Breaks / Breakbeat / Uk Bass",
+  1754→          "Mainstage"
+  1755→        ],
+  1756→        "rankByGenre": {
+  1757→          "Breaks / Breakbeat / Uk Bass": 51,
+  1758→          "Mainstage": 10
+  1759→        },
+  1760→        "pointsByGenre": {
+  1761→          "Breaks / Breakbeat / Uk Bass": 19,
+  1762→          "Mainstage": 100
+  1763→        },
+  1764→        "trending": true,
+  1765→        "trendingRankByGenre": {
+  1766→          "Mainstage": 10
+  1767→        },
+  1768→        "trendingPointsByGenre": {
+  1769→          "Mainstage": 100
+  1770→        },
+  1771→        "isCustom": false,
+  1772→        "website": "",
+  1773→        "demoLink": "",
+  1774→        "socialLink": "",
+  1775→        "soundcloudLink": "",
+  1776→        "emails": [],
+  1777→        "id": "lbl_anjunachill",
+  1778→        "name": "ANJUNACHILL",
+  1779→        "genre": "Ambient / Experimental",
+  1780→        "submissionType": "email",
+  1781→        "contactInfo": "",
+  1782→        "status": "open",
+  1783→        "notes": "",
+  1784→        "createdAt": "2026-06-11T14:33:55.069Z"
+  1785→      },
+  1786→      {
+  1787→        "genres": [
+  1788→          "Breaks / Breakbeat / Uk Bass",
+  1789→          "Deep House",
+  1790→          "Electronica",
+  1791→          "Indie Dance",
+  1792→          "Mainstage",
+  1793→          "Melodic House & Techno",
+  1794→          "Progressive House"
+  1795→        ],
+  1796→        "rankByGenre": {
+  1797→          "Breaks / Breakbeat / Uk Bass": 46,
+  1798→          "Deep House": 28,
+  1799→          "Electronica": 37,
+  1800→          "Indie Dance": 40,
+  1801→          "Mainstage": 30,
+  1802→          "Melodic House & Techno": 53,
+  1803→          "Progressive House": 1
+  1804→        },
+  1805→        "pointsByGenre": {
+  1806→          "Breaks / Breakbeat / Uk Bass": 27,
+  1807→          "Deep House": 65,
+  1808→          "Electronica": 53,
+  1809→          "Indie Dance": 52,
+  1810→          "Mainstage": 62,
+  1811→          "Melodic House & Techno": 27,
+  1812→          "Progressive House": 437
+  1813→        },
+  1814→        "trending": true,
+  1815→        "trendingRankByGenre": {
+  1816→          "Breaks / Breakbeat / Uk Bass": 46,
+  1817→          "Deep House": 28,
+  1818→          "Electronica": 37,
+  1819→          "Indie Dance": 40,
+  1820→          "Mainstage": 30,
+  1821→          "Progressive House": 1
+  1822→        },
+  1823→        "trendingPointsByGenre": {
+  1824→          "Breaks / Breakbeat / Uk Bass": 27,
+  1825→          "Deep House": 65,
+  1826→          "Electronica": 53,
+  1827→          "Indie Dance": 52,
+  1828→          "Mainstage": 62,
+  1829→          "Progressive House": 437
+  1830→        },
+  1831→        "isCustom": false,
+  1832→        "website": "",
+  1833→        "demoLink": "",
+  1834→        "socialLink": "",
+  1835→        "soundcloudLink": "",
+  1836→        "emails": [],
+  1837→        "id": "lbl_anjunadeep",
+  1838→        "name": "ANJUNADEEP",
+  1839→        "genre": "Ambient / Experimental",
+  1840→        "submissionType": "email",
+  1841→        "contactInfo": "",
+  1842→        "status": "open",
+  1843→        "notes": "",
+  1844→        "createdAt": "2026-06-11T14:33:55.069Z"
+  1845→      },
+  1846→      {
+  1847→        "genres": [
+  1848→          "Electronica",
+  1849→          "Progressive House"
+  1850→        ],
+  1851→        "rankByGenre": {
+  1852→          "Electronica": 32,
+  1853→          "Progressive House": 31
+  1854→        },
+  1855→        "pointsByGenre": {
+  1856→          "Electronica": 63,
+  1857→          "Progressive House": 57
+  1858→        },
+  1859→        "trending": false,
+  1860→        "trendingRankByGenre": {
+  1861→          "Electronica": 7
+  1862→        },
+  1863→        "trendingPointsByGenre": {
+  1864→          "Electronica": 1837
+  1865→        },
+  1866→        "isCustom": false,
+  1867→        "website": "",
+  1868→        "demoLink": "",
+  1869→        "socialLink": "",
+  1870→        "soundcloudLink": "",
+  1871→        "emails": [],
+  1872→        "id": "lbl_anjunadeep_explorations",
+  1873→        "name": "ANJUNADEEP EXPLORATIONS",
+  1874→        "genre": "Breaks / Breakbeat / Uk Bass",
+  1875→        "submissionType": "email",
+  1876→        "contactInfo": "",
+  1877→        "status": "open",
+  1878→        "notes": "",
+  1879→        "createdAt": "2026-06-11T14:33:55.069Z"
+  1880→      },
+  1881→      {
+  1882→        "genres": [
+  1883→          "Breaks / Breakbeat / Uk Bass"
+  1884→        ],
+  1885→        "rankByGenre": {
+  1886→          "Breaks / Breakbeat / Uk Bass": 21
+  1887→        },
+  1888→        "pointsByGenre": {
+  1889→          "Breaks / Breakbeat / Uk Bass": 74
+  1890→        },
+  1891→        "trending": true,
+  1892→        "trendingRankByGenre": {
+  1893→          "Breaks / Breakbeat / Uk Bass": 21
+  1894→        },
+  1895→        "trendingPointsByGenre": {
+  1896→          "Breaks / Breakbeat / Uk Bass": 74
+  1897→        },
+  1898→        "isCustom": false,
+  1899→        "website": "",
+  1900→        "demoLink": "",
+  1901→        "socialLink": "",
+  1902→        "soundcloudLink": "",
+  1903→        "emails": [],
+  1904→        "id": "lbl_another_rhythm",
+  1905→        "name": "ANOTHER RHYTHM",
+  1906→        "genre": "Breaks / Breakbeat / Uk Bass",
+  1907→        "submissionType": "email",
+  1908→        "contactInfo": "",
+  1909→        "status": "open",
+  1910→        "notes": "",
+  1911→        "createdAt": "2026-06-11T14:33:55.069Z"
+  1912→      },
+  1913→      {
+  1914→        "genres": [
+  1915→          "Bass House"
+  1916→        ],
+  1917→        "rankByGenre": {
+  1918→          "Bass House": 31
+  1919→        },
+  1920→        "pointsByGenre": {
+  1921→          "Bass House": 70
+  1922→        },
+  1923→        "trending": false,
+  1924→        "trendingRankByGenre": {},
+  1925→        "trendingPointsByGenre": {},
+  1926→        "isCustom": false,
+  1927→        "website": "",
+  1928→        "demoLink": "",
+  1929→        "socialLink": "",
+  1930→        "soundcloudLink": "",
+  1931→        "emails": [],
+  1932→        "id": "lbl_anti_up",
+  1933→        "name": "ANTI UP",
+  1934→        "genre": "Bass House",
+  1935→        "submissionType": "email",
+  1936→        "contactInfo": "",
+  1937→        "status": "open",
+  1938→        "notes": "",
+  1939→        "createdAt": "2026-06-11T14:33:55.069Z"
+  1940→      },
+  1941→      {
+  1942→        "genres": [
+  1943→          "Ambient / Experimental"
+  1944→        ],
+  1945→        "rankByGenre": {
+  1946→          "Ambient / Experimental": 22
+  1947→        },
+  1948→        "pointsByGenre": {
+  1949→          "Ambient / Experimental": 13610
+  1950→        },
+  1951→        "trending": true,
+  1952→        "trendingRankByGenre": {
+  1953→          "Ambient / Experimental": 9
+  1954→        },
+  1955→        "trendingPointsByGenre": {
+  1956→          "Ambient / Experimental": 1503
+  1957→        },
+  1958→        "isCustom": false,
+  1959→        "website": "",
+  1960→        "demoLink": "",
+  1961→        "socialLink": "",
+  1962→        "soundcloudLink": "",
+  1963→        "emails": [],
+  1964→        "id": "lbl_ap_musik",
+  1965→        "name": "AP MUSIK",
+  1966→        "genre": "Ambient / Experimental",
+  1967→        "submissionType": "email",
+  1968→        "contactInfo": "",
+  1969→        "status": "open",
+  1970→        "notes": "",
+  1971→        "createdAt": "2026-06-11T14:33:55.069Z"
+  1972→      },
+  1973→      {
+  1974→        "genres": [
+  1975→          "Amapiano"
+  1976→        ],
+  1977→        "rankByGenre": {
+  1978→          "Amapiano": 19
+  1979→        },
+  1980→        "pointsByGenre": {
+  1981→          "Amapiano": 15547
+  1982→        },
+  1983→        "trending": false,
+  1984→        "trendingRankByGenre": {},
+  1985→        "trendingPointsByGenre": {},
+  1986→        "isCustom": false,
+  1987→        "website": "",
+  1988→        "demoLink": "",
+  1989→        "socialLink": "",
+  1990→        "soundcloudLink": "",
+  1991→        "emails": [],
+  1992→        "id": "lbl_apent",
+  1993→        "name": "APENT",
+  1994→        "genre": "Amapiano",
+  1995→        "submissionType": "email",
+  1996→        "contactInfo": "",
+  1997→        "status": "open",
+  1998→        "notes": "",
+  1999→        "createdAt": "2026-06-11T14:33:55.069Z"
+  2000→      },
+
+[showing lines 1-2000 of 54754; use offset=2001 with limit to continue reading]
