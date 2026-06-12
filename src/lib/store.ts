@@ -384,76 +384,108 @@ function mergePreservingUserData(existing: Label, imported: Label): Partial<Labe
 }
 
 /**
- * Merge persisted labels with seed labels on rehydration.
- * This ensures:
- * - User-editable data (emails, notes, links) is ALWAYS preserved from persisted state
- * - New seed labels (added in updates) are added without overwriting user data
- * - Beatport rankings from persisted state are preserved
+ * Label defaults for safe field initialization.
+ * Used when persisted labels are missing fields due to version upgrades.
  */
-function mergeLabelsWithSeed(persistedLabels: any[], seedLabels: Label[]): Label[] {
-  // Build a map of persisted labels by ID and by name
-  const persistedById = new Map<string, any>();
-  const persistedByName = new Map<string, any>();
+const LABEL_DEFAULTS = {
+  genres: [],
+  rankByGenre: {},
+  pointsByGenre: {},
+  trending: false,
+  trendingRankByGenre: {},
+  trendingPointsByGenre: {},
+  isCustom: false,
+  website: "",
+  demoLink: "",
+  socialLink: "",
+  soundcloudLink: "",
+  emails: [],
+  notes: "",
+  contactInfo: "",
+  submissionType: "email" as SubmissionType,
+  status: "open" as LabelStatus,
+  genre: "",
+};
 
-  for (const l of persistedLabels) {
-    // Apply safe defaults for all fields
-    const withDefaults = {
-      genres: [],
-      rankByGenre: {},
-      pointsByGenre: {},
-      trending: false,
-      trendingRankByGenre: {},
-      trendingPointsByGenre: {},
-      isCustom: false,
-      website: "",
-      demoLink: "",
-      socialLink: "",
-      soundcloudLink: "",
-      emails: [],
-      notes: "",
-      contactInfo: "",
-      ...l,
-    };
-    persistedById.set(l.id, withDefaults);
-    persistedByName.set(l.name?.toLowerCase().trim(), withDefaults);
-  }
-
-  const result: Label[] = [];
-
-  // Start with all seed labels
-  for (const seed of seedLabels) {
-    const persisted = persistedById.get(seed.id) || persistedByName.get(seed.name.toLowerCase().trim());
-
-    if (persisted) {
-      // Merge: seed provides the base, persisted data overrides user-editable fields
-      // The key insight: persisted data has the user's edits, seed data has the structure
-      const merged: Label = {
-        ...seed,                    // Start with seed (has correct genres/rankings from JSON)
-        ...persisted,               // Override with persisted data (has user edits)
-        // For Beatport data, prefer whichever has data (persisted might have newer import)
-        genres: persisted.genres?.length ? persisted.genres : seed.genres,
-        rankByGenre: Object.keys(persisted.rankByGenre || {}).length ? persisted.rankByGenre : seed.rankByGenre,
-        pointsByGenre: Object.keys(persisted.pointsByGenre || {}).length ? persisted.pointsByGenre : seed.pointsByGenre,
-        trending: persisted.trending || seed.trending,
-        trendingRankByGenre: Object.keys(persisted.trendingRankByGenre || {}).length ? persisted.trendingRankByGenre : seed.trendingRankByGenre,
-        trendingPointsByGenre: Object.keys(persisted.trendingPointsByGenre || {}).length ? persisted.trendingPointsByGenre : seed.trendingPointsByGenre,
-      };
-      result.push(merged);
-      // Remove from maps so we can track which persisted labels are NOT in seed
-      persistedById.delete(persisted.id);
-      persistedByName.delete(seed.name.toLowerCase().trim());
-    } else {
-      // New seed label not in persisted data — add it fresh
-      result.push(seed);
+/**
+ * Repair corrupted label data.
+ * Detects and fixes: same email appearing on too many labels (likely corruption).
+ * Returns repaired labels array.
+ */
+function repairLabelData(labels: Label[]): Label[] {
+  // Count how many labels each email appears on
+  const emailLabelCount = new Map<string, number>();
+  for (const l of labels) {
+    if (l.emails && Array.isArray(l.emails)) {
+      for (const e of l.emails) {
+        if (e && e.trim()) {
+          const key = e.toLowerCase().trim();
+          emailLabelCount.set(key, (emailLabelCount.get(key) || 0) + 1);
+        }
+      }
     }
   }
 
-  // Add any persisted labels that are NOT in the seed (user-added custom labels, or labels removed from seed)
-  for (const remaining of persistedById.values()) {
-    result.push(remaining as Label);
+  // If any email appears on more than 5 labels, it's likely corrupted
+  // (no legitimate email belongs to 5+ different labels)
+  const corruptedEmails = new Set<string>();
+  for (const [email, count] of emailLabelCount) {
+    if (count > 5) {
+      corruptedEmails.add(email);
+      console.warn(
+        `[LabelPulse Repair] Email "${email}" found on ${count} labels — likely corruption, will be removed from all but the first label.`
+      );
+    }
   }
 
-  return result;
+  if (corruptedEmails.size === 0) {
+    return labels; // No corruption detected
+  }
+
+  // For each corrupted email, find the FIRST label that should keep it
+  // (try to match by name, otherwise keep the first one chronologically)
+  const emailOwner = new Map<string, string>(); // email → label ID that keeps it
+  for (const email of corruptedEmails) {
+    // Try to find a label whose name contains part of the email domain
+    for (const l of labels) {
+      if (l.emails?.some(e => e.toLowerCase().trim() === email)) {
+        const domain = email.split("@")[1]?.split(".")[0]?.toLowerCase();
+        if (domain && l.name.toLowerCase().includes(domain)) {
+          emailOwner.set(email, l.id);
+          break;
+        }
+      }
+    }
+    // If no name match, keep the first label with this email
+    if (!emailOwner.has(email)) {
+      for (const l of labels) {
+        if (l.emails?.some(e => e.toLowerCase().trim() === email)) {
+          emailOwner.set(email, l.id);
+          break;
+        }
+      }
+    }
+  }
+
+  // Remove corrupted emails from labels that don't own them
+  return labels.map(l => {
+    if (!l.emails || !Array.isArray(l.emails)) return l;
+    const cleanedEmails = l.emails.filter(e => {
+      const key = e?.toLowerCase().trim();
+      if (!key) return false;
+      if (!corruptedEmails.has(key)) return true; // Not corrupted, keep it
+      // Corrupted email: only keep if this label owns it
+      return emailOwner.get(key) === l.id;
+    });
+    const cleanedContactInfo = cleanedEmails[0] || "";
+    if (cleanedEmails.length !== l.emails.length || cleanedContactInfo !== l.contactInfo) {
+      console.log(
+        `[LabelPulse Repair] Cleaned label "${l.name}": removed ${l.emails.length - cleanedEmails.length} corrupted email(s)`
+      );
+      return { ...l, emails: cleanedEmails, contactInfo: cleanedContactInfo };
+    }
+    return l;
+  });
 }
 
 export const useAppStore = create<AppState>()(
@@ -797,8 +829,9 @@ export const useAppStore = create<AppState>()(
         lastSavedAt: state.lastSavedAt,
       }),
       merge: (persistedState: any, currentState: any) => {
-        // Deep merge: combine persisted data with current (seed) state
-        // CRITICAL: This must preserve ALL user-editable fields from persisted state
+        // SIMPLE & SAFE merge: preserve persisted data, add defaults, append new seed labels
+        // CRITICAL: We must NEVER modify persisted user data during merge.
+        // The old complex mergeLabelsWithSeed function was causing data corruption.
 
         // Guard: if persistedState is null/undefined (first visit or SSR), use currentState
         if (!persistedState) {
@@ -808,10 +841,29 @@ export const useAppStore = create<AppState>()(
         const merged = { ...currentState, ...persistedState };
 
         if (persistedState.labels && Array.isArray(persistedState.labels) && persistedState.labels.length > 0) {
-          // Use the smart merge that combines seed labels with persisted labels
-          // This ensures user data is preserved while also adding any new seed labels
+          // Step 1: Add safe defaults to ALL persisted labels (never overwrite existing values)
+          merged.labels = persistedState.labels.map((l: any) => ({
+            ...LABEL_DEFAULTS,
+            ...l,
+          }));
+
+          // Step 2: Append NEW seed labels that don't exist in persisted data
+          // (e.g., labels added to labels-data.json in app updates)
+          const persistedIds = new Set(persistedState.labels.map((l: any) => l.id));
+          const persistedNames = new Set(
+            persistedState.labels
+              .map((l: any) => l.name?.toLowerCase().trim())
+              .filter(Boolean)
+          );
           const seedLabels = buildLabelsFromData();
-          merged.labels = mergeLabelsWithSeed(persistedState.labels, seedLabels);
+          for (const seed of seedLabels) {
+            if (!persistedIds.has(seed.id) && !persistedNames.has(seed.name.toLowerCase().trim())) {
+              merged.labels.push(seed);
+            }
+          }
+
+          // Step 3: Repair corrupted data (e.g., same email on too many labels)
+          merged.labels = repairLabelData(merged.labels);
         }
         // If persistedState.labels is missing/empty, we fall through to
         // currentState.labels which is buildLabelsFromData() — correct for first visit
