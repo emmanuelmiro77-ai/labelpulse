@@ -93,12 +93,16 @@ interface Label {
 4. Both primary AND backup are simultaneously corrupted
 5. Rehydration then reads the corrupted data → user edits gone
 
-**Fix Plan** (version 9 migration):
-1. Replace `useState` hydration check with `useAppStore.persist.hasHydrated()`
-2. Block `setItem` writes until after rehydration completes
-3. Don't write backup on every save — use debounce (60s interval)
-4. Improve `merge` function to properly merge seed + persisted labels
-5. Lower data-loss detection threshold from 50 to 0
+**Fix Applied** (persist version 9):
+1. Block `setItem` writes until after rehydration completes (`_rehydrated` flag)
+2. Real `isRehydrated()` check in page.tsx (polls until Zustand finishes)
+3. Backup debounced (60s) — NOT mirrored on every write
+4. Simple merge: just add defaults + append new seed labels (NEVER modify persisted user data)
+5. Auto-repair: if same email on 5+ labels, removes from all but the owner
+6. Data-loss detection threshold: 0 (was 50)
+
+**Previous complex merge function (mergeLabelsWithSeed) REMOVED** — it was causing
+email duplication across all labels by incorrectly merging seed data with persisted data.
 
 ## Deployment
 
