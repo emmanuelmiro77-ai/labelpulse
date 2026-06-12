@@ -1,6 +1,6 @@
 "use client";
 
-import { useAppStore, isRehydrated } from "@/lib/store";
+import { useAppStore } from "@/lib/store";
 import { t, LOCALE_NAMES, LOCALE_FLAGS, type Locale } from "@/lib/i18n";
 import {
   LayoutDashboard,
@@ -56,26 +56,12 @@ export default function Home() {
   const [mobileMenuOpen, setMobileMenuOpen] = useState(false);
   const [helpOpen, setHelpOpen] = useState(false);
 
-  // Wait for Zustand persist to rehydrate from localStorage before rendering
-  // CRITICAL: We must NOT render until Zustand has loaded data from localStorage.
-  // Otherwise, the store contains seed data (empty user fields) and any state
-  // change would trigger persist to overwrite localStorage with seed data.
+  // Wait for client-side hydration before rendering
+  // This prevents SSR/client mismatch and ensures localStorage is available
   const [hydrated, setHydrated] = useState(false);
 
   useEffect(() => {
-    // If already rehydrated (e.g. HMR), render immediately
-    if (isRehydrated()) {
-      setHydrated(true);
-      return;
-    }
-    // Otherwise, poll until Zustand persist finishes rehydration
-    const interval = setInterval(() => {
-      if (isRehydrated()) {
-        setHydrated(true);
-        clearInterval(interval);
-      }
-    }, 50);
-    return () => clearInterval(interval);
+    setHydrated(true);
   }, []);
 
   if (!hydrated) {

@@ -86,23 +86,17 @@ function buildLabelsFromData(): Label[] {
 }
 
 // ==================== ROBUST STORAGE ====================
-// Custom storage with bulletproof data protection:
+// Custom storage with data protection:
 // 1. Primary localStorage key
-// 2. Backup localStorage key (debounced — NOT written on every save)
+// 2. Backup localStorage key (debounced — not on every save)
 // 3. Data integrity check on load (auto-recover from backup if data loss detected)
-// 4. Write-blocking until rehydration completes (prevents race condition)
+// 4. Smart write guard: prevents writes that would cause data loss
 
 const PRIMARY_KEY = "labelpulse-storage";
 const BACKUP_KEY = "labelpulse-storage-backup";
 const SEED_LABEL_COUNT = labelData.labels.length;
 
-// CRITICAL: Flag to prevent writes before Zustand rehydration completes.
-// Without this, the store initializes with seed data (empty user fields),
-// and any state change during the pre-rehydration window would write
-// seed data to localStorage, permanently destroying user edits.
-let _rehydrated = false;
-
-// Debounced backup writing — don't corrupt backup alongside primary
+// Debounced backup writing
 let _backupTimer: ReturnType<typeof setTimeout> | null = null;
 const BACKUP_DEBOUNCE_MS = 60000; // 60 seconds
 
@@ -166,12 +160,22 @@ function getTotalLabelCount(data: any): number {
   return 0;
 }
 
+/**
+ * Extract user-edited label count from raw localStorage string.
+ * Used by the write guard to check if a write would cause data loss.
+ */
+function getUserEditCountFromRaw(raw: string | null): number {
+  if (!raw) return 0;
+  const data = safeJsonParse(raw);
+  if (!data) return 0;
+  const labels = data.state?.labels || data.labels || [];
+  return countUserEditedLabels(labels);
+}
+
 function debouncedBackupWrite(value: string): void {
-  // Cancel any pending backup write
   if (_backupTimer) {
     clearTimeout(_backupTimer);
   }
-  // Schedule a new backup write after debounce period
   _backupTimer = setTimeout(() => {
     safeLocalStorageSet(BACKUP_KEY, value);
     _backupTimer = null;
@@ -190,7 +194,6 @@ const robustStorage: StateStorage = {
     if (!primaryData) {
       if (backupData) {
         console.warn("[LabelPulse Storage] Primary data missing/corrupt, restoring from backup");
-        // Restore backup to primary
         if (backupRaw) safeLocalStorageSet(PRIMARY_KEY, backupRaw);
         return backupRaw;
       }
@@ -210,12 +213,10 @@ const robustStorage: StateStorage = {
         : countUserEditedLabels(backupData.labels || []);
 
       // If primary has fewer labels than backup AND backup has more or equal user data
-      // this indicates a data loss event (threshold: any decrease, was +50)
       if (backupLabelCount > primaryLabelCount && backupUserEdits >= primaryUserEdits) {
         console.warn(
           `[LabelPulse Storage] DATA LOSS DETECTED! Primary: ${primaryLabelCount} labels (${primaryUserEdits} edited), Backup: ${backupLabelCount} labels (${backupUserEdits} edited). Restoring from backup.`
         );
-        // Restore from backup
         if (backupRaw) safeLocalStorageSet(PRIMARY_KEY, backupRaw);
         return backupRaw;
       }
@@ -234,57 +235,45 @@ const robustStorage: StateStorage = {
   },
 
   setItem: (name: string, value: string): void => {
-    // CRITICAL FIX: Block ALL writes until rehydration is complete.
-    // Before rehydration, the store contains seed data with empty user fields.
-    // Writing this to localStorage would destroy user edits.
-    if (!_rehydrated) {
-      console.warn("[LabelPulse Storage] Blocked write before rehydration — protecting user data");
+    // SMART WRITE GUARD: Before writing, check if this write would cause data loss.
+    // Compare the new value's user-edit count with what's currently in localStorage.
+    // If the new value has FEWER user edits than what's stored, it's likely a
+    // seed-data overwrite — block it to protect user data.
+    const currentRaw = safeLocalStorageGet(PRIMARY_KEY);
+    const currentEdits = getUserEditCountFromRaw(currentRaw);
+    const newEdits = getUserEditCountFromRaw(value);
+
+    if (currentEdits > 0 && newEdits < currentEdits) {
+      // We're about to write data with FEWER user edits than what's stored.
+      // This is likely the seed data being written before rehydration completes.
+      console.warn(
+        `[LabelPulse Storage] BLOCKED write: would reduce user edits from ${currentEdits} to ${newEdits}. Protecting user data.`
+      );
       return;
     }
 
     // Write to primary immediately
     const primaryOk = safeLocalStorageSet(PRIMARY_KEY, value);
 
-    // Write to backup with debounce — so if primary gets corrupted,
-    // the backup still holds the last good state
+    // Write to backup with debounce
     debouncedBackupWrite(value);
 
     if (!primaryOk) {
-      console.error("[LabelPulse Storage] Primary write failed! Backup will be saved on debounce.");
+      console.error("[LabelPulse Storage] Primary write failed!");
     }
   },
 
   removeItem: (name: string): void => {
-    // Only remove when explicitly requested (e.g., logout/clear)
     safeLocalStorageRemove(PRIMARY_KEY);
     safeLocalStorageRemove(BACKUP_KEY);
   },
 };
 
 /**
- * Mark storage as rehydrated — called from onRehydrateStorage callback.
- * After this, setItem writes are allowed.
- */
-export function markRehydrated(): void {
-  _rehydrated = true;
-  console.log("[LabelPulse Storage] Rehydration complete — writes are now enabled");
-}
-
-/**
- * Check if the store has finished rehydrating.
- * Use this in React components to prevent rendering before data is loaded.
- */
-export function isRehydrated(): boolean {
-  return _rehydrated;
-}
-
-/**
  * Force-write a backup immediately (e.g., on visibility change or before unload).
- * This ensures the backup is up-to-date even with debouncing.
  */
 export function forceBackupNow(): void {
-  if (!_rehydrated) return;
-  if (typeof window === "undefined") return; // SSR guard
+  if (typeof window === "undefined") return;
   if (_backupTimer) {
     clearTimeout(_backupTimer);
     _backupTimer = null;
@@ -296,7 +285,6 @@ export function forceBackupNow(): void {
 }
 
 // ==================== NO SEED DEMOS ====================
-// App starts with empty demos — user adds their own
 
 // ==================== STORE ====================
 
@@ -385,7 +373,6 @@ function mergePreservingUserData(existing: Label, imported: Label): Partial<Labe
 
 /**
  * Label defaults for safe field initialization.
- * Used when persisted labels are missing fields due to version upgrades.
  */
 const LABEL_DEFAULTS = {
   genres: [],
@@ -410,10 +397,8 @@ const LABEL_DEFAULTS = {
 /**
  * Repair corrupted label data.
  * Detects and fixes: same email appearing on too many labels (likely corruption).
- * Returns repaired labels array.
  */
 function repairLabelData(labels: Label[]): Label[] {
-  // Count how many labels each email appears on
   const emailLabelCount = new Map<string, number>();
   for (const l of labels) {
     if (l.emails && Array.isArray(l.emails)) {
@@ -426,27 +411,22 @@ function repairLabelData(labels: Label[]): Label[] {
     }
   }
 
-  // If any email appears on more than 5 labels, it's likely corrupted
-  // (no legitimate email belongs to 5+ different labels)
   const corruptedEmails = new Set<string>();
   for (const [email, count] of emailLabelCount) {
     if (count > 5) {
       corruptedEmails.add(email);
       console.warn(
-        `[LabelPulse Repair] Email "${email}" found on ${count} labels — likely corruption, will be removed from all but the first label.`
+        `[LabelPulse Repair] Email "${email}" found on ${count} labels — likely corruption, will be removed from all but the owner.`
       );
     }
   }
 
   if (corruptedEmails.size === 0) {
-    return labels; // No corruption detected
+    return labels;
   }
 
-  // For each corrupted email, find the FIRST label that should keep it
-  // (try to match by name, otherwise keep the first one chronologically)
-  const emailOwner = new Map<string, string>(); // email → label ID that keeps it
+  const emailOwner = new Map<string, string>();
   for (const email of corruptedEmails) {
-    // Try to find a label whose name contains part of the email domain
     for (const l of labels) {
       if (l.emails?.some(e => e.toLowerCase().trim() === email)) {
         const domain = email.split("@")[1]?.split(".")[0]?.toLowerCase();
@@ -456,7 +436,6 @@ function repairLabelData(labels: Label[]): Label[] {
         }
       }
     }
-    // If no name match, keep the first label with this email
     if (!emailOwner.has(email)) {
       for (const l of labels) {
         if (l.emails?.some(e => e.toLowerCase().trim() === email)) {
@@ -467,14 +446,12 @@ function repairLabelData(labels: Label[]): Label[] {
     }
   }
 
-  // Remove corrupted emails from labels that don't own them
   return labels.map(l => {
     if (!l.emails || !Array.isArray(l.emails)) return l;
     const cleanedEmails = l.emails.filter(e => {
       const key = e?.toLowerCase().trim();
       if (!key) return false;
-      if (!corruptedEmails.has(key)) return true; // Not corrupted, keep it
-      // Corrupted email: only keep if this label owns it
+      if (!corruptedEmails.has(key)) return true;
       return emailOwner.get(key) === l.id;
     });
     const cleanedContactInfo = cleanedEmails[0] || "";
@@ -635,7 +612,6 @@ export const useAppStore = create<AppState>()(
           const newLabels: Label[] = [];
 
           for (const imported of importedLabels as Label[]) {
-            // 1) Same ID → merge, ALWAYS preserving user data
             if (currentLabelById.has(imported.id)) {
               const existing = currentLabelById.get(imported.id)!;
               const merged = {
@@ -646,7 +622,6 @@ export const useAppStore = create<AppState>()(
               continue;
             }
 
-            // 2) Same name (case-insensitive) → merge and keep existing ID
             const nameKey = imported.name.toLowerCase().trim();
             if (currentLabelByName.has(nameKey)) {
               const existing = currentLabelByName.get(nameKey)!;
@@ -659,7 +634,6 @@ export const useAppStore = create<AppState>()(
               continue;
             }
 
-            // 3) Brand new label → add it
             newLabels.push({
               ...imported,
               id: imported.id || genId(),
@@ -726,7 +700,6 @@ export const useAppStore = create<AppState>()(
 
           const mergedDemos = [...currentDemoById.values(), ...newDemos];
 
-          // Check if this import contains rankings data
           const isRankingsImport = parsed._meta?.source === 'beatport' || parsed._meta?.source === 'beatstats';
           const hasGenresAndLabels = parsed.genres && parsed.labels && Array.isArray(parsed.labels);
           
@@ -749,7 +722,6 @@ export const useAppStore = create<AppState>()(
       version: 9,
       storage: createJSONStorage(() => robustStorage),
       migrate: (persisted: any, version: number) => {
-        // Migrations run from oldest to newest (proper order)
         if (version < 5) {
           if (persisted.demos) {
             const seedIds = ["demo_1", "demo_2", "demo_3", "demo_4", "demo_5", "demo_6"];
@@ -814,8 +786,6 @@ export const useAppStore = create<AppState>()(
             });
           }
         }
-        // v9: No data structure changes — just fixing the rehydration race condition
-        // The fix is in robustStorage.setItem blocking writes before rehydration
         return persisted;
       },
       partialize: (state) => ({
@@ -831,9 +801,7 @@ export const useAppStore = create<AppState>()(
       merge: (persistedState: any, currentState: any) => {
         // SIMPLE & SAFE merge: preserve persisted data, add defaults, append new seed labels
         // CRITICAL: We must NEVER modify persisted user data during merge.
-        // The old complex mergeLabelsWithSeed function was causing data corruption.
 
-        // Guard: if persistedState is null/undefined (first visit or SSR), use currentState
         if (!persistedState) {
           return currentState;
         }
@@ -848,7 +816,6 @@ export const useAppStore = create<AppState>()(
           }));
 
           // Step 2: Append NEW seed labels that don't exist in persisted data
-          // (e.g., labels added to labels-data.json in app updates)
           const persistedIds = new Set(persistedState.labels.map((l: any) => l.id));
           const persistedNames = new Set(
             persistedState.labels
@@ -865,29 +832,19 @@ export const useAppStore = create<AppState>()(
           // Step 3: Repair corrupted data (e.g., same email on too many labels)
           merged.labels = repairLabelData(merged.labels);
         }
-        // If persistedState.labels is missing/empty, we fall through to
-        // currentState.labels which is buildLabelsFromData() — correct for first visit
 
         return merged;
       },
       onRehydrateStorage: () => (state, error) => {
         if (error) {
           console.error("[LabelPulse Storage] Rehydration error:", error);
-          // Even on error, mark as rehydrated so the app can function
-          markRehydrated();
         } else if (state) {
-          // Log successful rehydration for debugging
           const userEditedCount = countUserEditedLabels(state.labels);
           console.log(
             `[LabelPulse Storage] Rehydrated: ${state.labels.length} labels, ${userEditedCount} with user data`
           );
-          // Mark as rehydrated — NOW writes are allowed
-          markRehydrated();
-          // Force an immediate backup to ensure backup is up-to-date
+          // Force an immediate backup after rehydration
           forceBackupNow();
-        } else {
-          // state is null (first visit or storage empty) — still mark rehydrated
-          markRehydrated();
         }
       },
     }
