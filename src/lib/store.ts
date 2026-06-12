@@ -1,7 +1,7 @@
 "use client";
 
 import { create } from "zustand";
-import { persist } from "zustand/middleware";
+import { persist, createJSONStorage, StateStorage } from "zustand/middleware";
 import type { Locale } from "./i18n";
 import labelData from "./labels-data.json";
 
@@ -85,6 +85,150 @@ function buildLabelsFromData(): Label[] {
   }));
 }
 
+// ==================== ROBUST STORAGE ====================
+// Custom storage with triple-layer data protection:
+// 1. Primary localStorage key
+// 2. Backup localStorage key (written on every save)
+// 3. Data integrity check on load (auto-recover from backup if data loss detected)
+
+const PRIMARY_KEY = "labelpulse-storage";
+const BACKUP_KEY = "labelpulse-storage-backup";
+const SEED_LABEL_COUNT = labelData.labels.length; // Number of seed labels from JSON
+
+function safeJsonParse(str: string | null): any | null {
+  if (!str) return null;
+  try {
+    return JSON.parse(str);
+  } catch {
+    return null;
+  }
+}
+
+function safeLocalStorageGet(key: string): string | null {
+  try {
+    return localStorage.getItem(key);
+  } catch {
+    return null;
+  }
+}
+
+function safeLocalStorageSet(key: string, value: string): boolean {
+  try {
+    localStorage.setItem(key, value);
+    return true;
+  } catch (e) {
+    console.error(`[LabelPulse Storage] Failed to write ${key}:`, e);
+    return false;
+  }
+}
+
+function safeLocalStorageRemove(key: string): void {
+  try {
+    localStorage.removeItem(key);
+  } catch {
+    // Ignore
+  }
+}
+
+/**
+ * Check if persisted data has user edits (emails, notes, links, etc.)
+ * This helps us detect if the store was accidentally reset to seed data.
+ */
+function countUserEditedLabels(labels: any[]): number {
+  if (!Array.isArray(labels)) return 0;
+  return labels.filter((l) =>
+    (l.emails && l.emails.length > 0) ||
+    (l.notes && l.notes.trim() !== "") ||
+    (l.website && l.website.trim() !== "") ||
+    (l.demoLink && l.demoLink.trim() !== "") ||
+    (l.socialLink && l.socialLink.trim() !== "") ||
+    (l.soundcloudLink && l.soundcloudLink.trim() !== "") ||
+    (l.contactInfo && l.contactInfo.trim() !== "") ||
+    l.isCustom === true
+  ).length;
+}
+
+function getTotalLabelCount(data: any): number {
+  if (!data) return 0;
+  if (Array.isArray(data.labels)) return data.labels.length;
+  if (data.state && Array.isArray(data.state.labels)) return data.state.labels.length;
+  return 0;
+}
+
+const robustStorage: StateStorage = {
+  getItem: (name: string): string | null => {
+    const primaryRaw = safeLocalStorageGet(PRIMARY_KEY);
+    const backupRaw = safeLocalStorageGet(BACKUP_KEY);
+
+    const primaryData = safeJsonParse(primaryRaw);
+    const backupData = safeJsonParse(backupRaw);
+
+    // If primary is missing/corrupt, try backup
+    if (!primaryData) {
+      if (backupData) {
+        console.warn("[LabelPulse Storage] Primary data missing/corrupt, restoring from backup");
+        // Restore backup to primary
+        if (backupRaw) safeLocalStorageSet(PRIMARY_KEY, backupRaw);
+        return backupRaw;
+      }
+      // Both empty — first visit
+      return null;
+    }
+
+    // Both exist — check for data loss
+    if (backupData) {
+      const primaryLabelCount = getTotalLabelCount(primaryData);
+      const backupLabelCount = getTotalLabelCount(backupData);
+      const primaryUserEdits = primaryData.state?.labels
+        ? countUserEditedLabels(primaryData.state.labels)
+        : countUserEditedLabels(primaryData.labels || []);
+      const backupUserEdits = backupData.state?.labels
+        ? countUserEditedLabels(backupData.state.labels)
+        : countUserEditedLabels(backupData.labels || []);
+
+      // If primary has significantly fewer labels than backup AND backup has more user data
+      // this indicates a data loss event
+      if (backupLabelCount > primaryLabelCount + 50 && backupUserEdits >= primaryUserEdits) {
+        console.warn(
+          `[LabelPulse Storage] DATA LOSS DETECTED! Primary: ${primaryLabelCount} labels (${primaryUserEdits} edited), Backup: ${backupLabelCount} labels (${backupUserEdits} edited). Restoring from backup.`
+        );
+        // Restore from backup
+        if (backupRaw) safeLocalStorageSet(PRIMARY_KEY, backupRaw);
+        return backupRaw;
+      }
+
+      // If primary has fewer user edits than backup, use backup
+      if (backupUserEdits > primaryUserEdits && backupLabelCount >= primaryLabelCount) {
+        console.warn(
+          `[LabelPulse Storage] More user data in backup (${backupUserEdits} vs ${primaryUserEdits} edited labels). Restoring from backup.`
+        );
+        if (backupRaw) safeLocalStorageSet(PRIMARY_KEY, backupRaw);
+        return backupRaw;
+      }
+    }
+
+    return primaryRaw;
+  },
+
+  setItem: (name: string, value: string): void => {
+    // Write to primary
+    const primaryOk = safeLocalStorageSet(PRIMARY_KEY, value);
+
+    // Always write backup too
+    safeLocalStorageSet(BACKUP_KEY, value);
+
+    if (!primaryOk) {
+      console.error("[LabelPulse Storage] Primary write failed! Backup saved.");
+    }
+  },
+
+  removeItem: (name: string): void => {
+    // Only remove when explicitly requested (e.g., logout/clear)
+    safeLocalStorageRemove(PRIMARY_KEY);
+    safeLocalStorageRemove(BACKUP_KEY);
+  },
+};
+
 // ==================== NO SEED DEMOS ====================
 // App starts with empty demos — user adds their own
 
@@ -110,6 +254,7 @@ interface AppState {
   userProfile: UserProfile;
   gmailAuth: GmailAuth;
   rankingsUpdatedAt: string | null;
+  lastSavedAt: string | null;
 
   // Label actions
   addLabel: (label: Partial<Omit<Label, "id" | "createdAt">> & { name: string }) => void;
@@ -146,6 +291,32 @@ interface AppState {
   importData: (jsonString: string) => boolean;
 }
 
+/**
+ * Merge helper: preserves ALL user-editable fields from existing label
+ * when imported label has empty/default values for those fields.
+ */
+function mergePreservingUserData(existing: Label, imported: Label): Partial<Label> {
+  return {
+    // User-editable data — ALWAYS prefer existing if it has real data
+    emails: imported.emails?.length ? imported.emails : existing.emails,
+    contactInfo: imported.contactInfo?.trim() || existing.contactInfo,
+    website: imported.website?.trim() || existing.website,
+    demoLink: imported.demoLink?.trim() || existing.demoLink,
+    socialLink: imported.socialLink?.trim() || existing.socialLink,
+    soundcloudLink: imported.soundcloudLink?.trim() || existing.soundcloudLink,
+    notes: imported.notes?.trim() || existing.notes,
+    status: (imported.status === "open" || imported.status === "closed") ? imported.status : (existing.status || "open"),
+
+    // Beatport/ranking data — prefer imported (it's the fresh data)
+    genres: imported.genres?.length ? imported.genres : existing.genres,
+    rankByGenre: Object.keys(imported.rankByGenre || {}).length ? imported.rankByGenre : existing.rankByGenre,
+    pointsByGenre: Object.keys(imported.pointsByGenre || {}).length ? imported.pointsByGenre : existing.pointsByGenre,
+    trending: imported.trending || existing.trending,
+    trendingRankByGenre: Object.keys(imported.trendingRankByGenre || {}).length ? imported.trendingRankByGenre : existing.trendingRankByGenre,
+    trendingPointsByGenre: Object.keys(imported.trendingPointsByGenre || {}).length ? imported.trendingPointsByGenre : existing.trendingPointsByGenre,
+  };
+}
+
 export const useAppStore = create<AppState>()(
   persist(
     (set, get) => ({
@@ -156,6 +327,7 @@ export const useAppStore = create<AppState>()(
       userProfile: { artistName: "", scLink: "" } as UserProfile,
       gmailAuth: { isConnected: false, email: "", accessToken: "", expiresAt: 0 } as GmailAuth,
       rankingsUpdatedAt: null as string | null,
+      lastSavedAt: null as string | null,
 
       addLabel: (label) =>
         set((state) => ({
@@ -184,6 +356,7 @@ export const useAppStore = create<AppState>()(
               emails: label.emails || [],
             },
           ],
+          lastSavedAt: new Date().toISOString(),
         })),
 
       updateLabel: (id, updates) =>
@@ -191,11 +364,13 @@ export const useAppStore = create<AppState>()(
           labels: state.labels.map((l) =>
             l.id === id ? { ...l, ...updates } : l
           ),
+          lastSavedAt: new Date().toISOString(),
         })),
 
       deleteLabel: (id) =>
         set((state) => ({
           labels: state.labels.filter((l) => l.id !== id),
+          lastSavedAt: new Date().toISOString(),
         })),
 
       addDemo: (demo) =>
@@ -204,6 +379,7 @@ export const useAppStore = create<AppState>()(
             ...state.demos,
             { ...demo, id: genId(), createdAt: new Date().toISOString() },
           ],
+          lastSavedAt: new Date().toISOString(),
         })),
 
       updateDemo: (id, updates) =>
@@ -211,11 +387,13 @@ export const useAppStore = create<AppState>()(
           demos: state.demos.map((d) =>
             d.id === id ? { ...d, ...updates } : d
           ),
+          lastSavedAt: new Date().toISOString(),
         })),
 
       deleteDemo: (id) =>
         set((state) => ({
           demos: state.demos.filter((d) => d.id !== id),
+          lastSavedAt: new Date().toISOString(),
         })),
 
       advanceDemoStatus: (id) => {
@@ -238,13 +416,14 @@ export const useAppStore = create<AppState>()(
             demos: state.demos.map((d) =>
               d.id === id ? { ...d, ...updates } : d
             ),
+            lastSavedAt: new Date().toISOString(),
           }));
         }
       },
 
       setActiveTab: (tab) => set({ activeTab: tab }),
       setLocale: (locale) => set({ locale }),
-      setUserProfile: (profile) => set((state) => ({ userProfile: { ...state.userProfile, ...profile } })),
+      setUserProfile: (profile) => set((state) => ({ userProfile: { ...state.userProfile, ...profile }, lastSavedAt: new Date().toISOString() })),
 
       getGenres: () => labelData.genres,
 
@@ -279,30 +458,20 @@ export const useAppStore = create<AppState>()(
           const currentDemos = get().demos;
 
           // === LABEL MERGE ===
-          // Build lookup maps for current labels (immutable approach)
           const currentLabelById = new Map(currentLabels.map(l => [l.id, l]));
           const currentLabelByName = new Map(currentLabels.map(l => [l.name.toLowerCase().trim(), l]));
 
           const newLabels: Label[] = [];
 
           for (const imported of importedLabels as Label[]) {
-            // 1) Same ID → merge user data into existing (imported enriches current)
+            // 1) Same ID → merge, ALWAYS preserving user data
             if (currentLabelById.has(imported.id)) {
               const existing = currentLabelById.get(imported.id)!;
-              currentLabelById.set(imported.id, {
+              const merged = {
                 ...existing,
-                emails: imported.emails?.length ? imported.emails : existing.emails,
-                contactInfo: imported.contactInfo || existing.contactInfo,
-                website: imported.website || existing.website,
-                demoLink: imported.demoLink || existing.demoLink,
-                socialLink: imported.socialLink || existing.socialLink,
-                soundcloudLink: imported.soundcloudLink || existing.soundcloudLink,
-                notes: imported.notes || existing.notes,
-                status: imported.status || existing.status,
-                genres: imported.genres?.length ? imported.genres : existing.genres,
-                rankByGenre: Object.keys(imported.rankByGenre || {}).length ? imported.rankByGenre : existing.rankByGenre,
-                pointsByGenre: Object.keys(imported.pointsByGenre || {}).length ? imported.pointsByGenre : existing.pointsByGenre,
-              });
+                ...mergePreservingUserData(existing, imported),
+              };
+              currentLabelById.set(imported.id, merged);
               continue;
             }
 
@@ -312,25 +481,14 @@ export const useAppStore = create<AppState>()(
               const existing = currentLabelByName.get(nameKey)!;
               const mergedLabel: Label = {
                 ...existing,
-                emails: imported.emails?.length ? imported.emails : existing.emails,
-                contactInfo: imported.contactInfo || existing.contactInfo,
-                website: imported.website || existing.website,
-                demoLink: imported.demoLink || existing.demoLink,
-                socialLink: imported.socialLink || existing.socialLink,
-                soundcloudLink: imported.soundcloudLink || existing.soundcloudLink,
-                notes: imported.notes || existing.notes,
-                status: imported.status || existing.status,
-                genres: imported.genres?.length ? imported.genres : existing.genres,
-                rankByGenre: Object.keys(imported.rankByGenre || {}).length ? imported.rankByGenre : existing.rankByGenre,
-                pointsByGenre: Object.keys(imported.pointsByGenre || {}).length ? imported.pointsByGenre : existing.pointsByGenre,
+                ...mergePreservingUserData(existing, imported),
               };
-              // Update both maps to keep them in sync
               currentLabelById.set(existing.id, mergedLabel);
               currentLabelByName.set(nameKey, mergedLabel);
               continue;
             }
 
-            // 3) Brand new label → add it (assign new ID for safety)
+            // 3) Brand new label → add it
             newLabels.push({
               ...imported,
               id: imported.id || genId(),
@@ -354,11 +512,9 @@ export const useAppStore = create<AppState>()(
             });
           }
 
-          // Rebuild labels: current (possibly merged) + genuinely new ones
           const mergedLabels = [...currentLabelById.values(), ...newLabels];
 
           // === DEMO MERGE ===
-          // Same logic: merge by ID or by (trackName + labelId) combo
           const currentDemoById = new Map(currentDemos.map(d => [d.id, d]));
           const currentDemoByKey = new Map(
             currentDemos.map(d => [`${d.trackName.toLowerCase().trim()}||${d.labelId}`, d])
@@ -368,19 +524,17 @@ export const useAppStore = create<AppState>()(
 
           for (const imported of importedDemos as Demo[]) {
             if (currentDemoById.has(imported.id)) {
-              // Same ID → merge (imported enriches current)
               const existing = currentDemoById.get(imported.id)!;
               currentDemoById.set(imported.id, {
                 ...existing,
                 ...imported,
-                id: existing.id, // keep original ID
+                id: existing.id,
               });
               continue;
             }
 
             const key = `${imported.trackName?.toLowerCase().trim()}||${imported.labelId}`;
             if (currentDemoByKey.has(key)) {
-              // Same track+label combo → merge into existing
               const existing = currentDemoByKey.get(key)!;
               const merged: Demo = {
                 ...existing,
@@ -392,7 +546,6 @@ export const useAppStore = create<AppState>()(
               continue;
             }
 
-            // Brand new demo
             newDemos.push({
               ...imported,
               id: imported.id || genId(),
@@ -402,7 +555,7 @@ export const useAppStore = create<AppState>()(
 
           const mergedDemos = [...currentDemoById.values(), ...newDemos];
 
-          // Check if this import contains rankings data (from Beatport scraper)
+          // Check if this import contains rankings data
           const isRankingsImport = parsed._meta?.source === 'beatport' || parsed._meta?.source === 'beatstats';
           const hasGenresAndLabels = parsed.genres && parsed.labels && Array.isArray(parsed.labels);
           
@@ -412,6 +565,7 @@ export const useAppStore = create<AppState>()(
             userProfile: userProfile || get().userProfile,
             locale: importedLocale || get().locale,
             ...(isRankingsImport || hasGenresAndLabels ? { rankingsUpdatedAt: new Date().toISOString() } : {}),
+            lastSavedAt: new Date().toISOString(),
           });
           return true;
         } catch {
@@ -420,23 +574,37 @@ export const useAppStore = create<AppState>()(
       },
     }),
     {
-      name: "labelpulse-storage",
-      version: 7,
+      name: PRIMARY_KEY,
+      version: 8,
+      storage: createJSONStorage(() => robustStorage),
       migrate: (persisted: any, version: number) => {
+        if (version < 8) {
+          // v8: add lastSavedAt, fix notes bug, robust storage
+          if (!persisted.lastSavedAt) {
+            persisted.lastSavedAt = null;
+          }
+          // Fix the notes bug: if any label has notes equal to its status, clear it
+          if (persisted.labels) {
+            persisted.labels = persisted.labels.map((l: any) => {
+              // Fix the bug where notes was set to "open" or "closed" instead of actual notes
+              if (l.notes === "open" || l.notes === "closed") {
+                l.notes = "";
+              }
+              return l;
+            });
+          }
+        }
         if (version < 7) {
-          // v7: add rankingsUpdatedAt
           if (!persisted.rankingsUpdatedAt) {
             persisted.rankingsUpdatedAt = null;
           }
         }
         if (version < 6) {
-          // v6: add gmailAuth
           if (!persisted.gmailAuth) {
             persisted.gmailAuth = { isConnected: false, email: "", accessToken: "", expiresAt: 0 };
           }
         }
         if (version < 5) {
-          // v5: add emails array, website, demoLink, socialLink + remove seed demos
           if (persisted.demos) {
             const seedIds = ["demo_1", "demo_2", "demo_3", "demo_4", "demo_5", "demo_6"];
             persisted.demos = persisted.demos.filter(
@@ -487,12 +655,14 @@ export const useAppStore = create<AppState>()(
         userProfile: state.userProfile,
         gmailAuth: state.gmailAuth,
         rankingsUpdatedAt: state.rankingsUpdatedAt,
+        lastSavedAt: state.lastSavedAt,
       }),
       merge: (persistedState: any, currentState: any) => {
-        // Deep merge: ensure all labels from currentState have defaults
+        // Deep merge: ensure all labels from persistedState have defaults
         const merged = { ...currentState, ...persistedState };
         if (persistedState.labels) {
           merged.labels = persistedState.labels.map((l: any) => ({
+            // Safe defaults for ALL fields
             genres: [],
             rankByGenre: {},
             pointsByGenre: {},
@@ -505,10 +675,23 @@ export const useAppStore = create<AppState>()(
             socialLink: "",
             soundcloudLink: "",
             emails: [],
+            notes: "",
+            contactInfo: "",
             ...l,
           }));
         }
         return merged;
+      },
+      onRehydrateStorage: () => (state, error) => {
+        if (error) {
+          console.error("[LabelPulse Storage] Rehydration error:", error);
+        } else if (state) {
+          // Log successful rehydration for debugging
+          const userEditedCount = countUserEditedLabels(state.labels);
+          console.log(
+            `[LabelPulse Storage] Rehydrated: ${state.labels.length} labels, ${userEditedCount} with user data`
+          );
+        }
       },
     }
   )
