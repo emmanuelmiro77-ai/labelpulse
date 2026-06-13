@@ -1,6 +1,7 @@
 "use client";
 
-import { useAppStore } from "@/lib/store";
+import { useAppStore, loadFromCloud, forceCloudSync } from "@/lib/store";
+import { isSupabaseConfigured } from "@/lib/supabase";
 import { t, LOCALE_NAMES, LOCALE_FLAGS, type Locale } from "@/lib/i18n";
 import {
   LayoutDashboard,
@@ -14,7 +15,7 @@ import {
   Globe,
   Loader2,
 } from "lucide-react";
-import { useState } from "react";
+import { useState, useEffect } from "react";
 import { Button } from "@/components/ui/button";
 import {
   Popover,
@@ -55,6 +56,34 @@ export default function Home() {
   const { activeTab, setActiveTab, locale, setLocale, hasRehydrated } = useAppStore();
   const [mobileMenuOpen, setMobileMenuOpen] = useState(false);
   const [helpOpen, setHelpOpen] = useState(false);
+
+  // Carica i dati dal cloud dopo la reidratazione da localStorage
+  useEffect(() => {
+    if (hasRehydrated) {
+      loadFromCloud();
+    }
+  }, [hasRehydrated]);
+
+  // Sincronizza con il cloud quando la pagina viene chiusa o nascosta
+  useEffect(() => {
+    const handleVisibilityChange = () => {
+      if (document.visibilityState === "hidden") {
+        forceCloudSync();
+      }
+    };
+
+    const handleBeforeUnload = () => {
+      forceCloudSync();
+    };
+
+    document.addEventListener("visibilitychange", handleVisibilityChange);
+    window.addEventListener("beforeunload", handleBeforeUnload);
+
+    return () => {
+      document.removeEventListener("visibilitychange", handleVisibilityChange);
+      window.removeEventListener("beforeunload", handleBeforeUnload);
+    };
+  }, []);
 
   // Wait for Zustand rehydration before rendering.
   // hasRehydrated is set to true AFTER the store has loaded persisted data from localStorage.

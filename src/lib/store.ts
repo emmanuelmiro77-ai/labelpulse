@@ -4,6 +4,7 @@ import { create } from "zustand";
 import { persist, createJSONStorage, StateStorage } from "zustand/middleware";
 import type { Locale } from "./i18n";
 import labelData from "./labels-data.json";
+import { saveStateToCloud, loadStateFromCloud, isSupabaseConfigured } from "./supabase";
 
 // ==================== TYPES ====================
 
@@ -301,6 +302,7 @@ interface AppState {
   rankingsUpdatedAt: string | null;
   lastSavedAt: string | null;
   hasRehydrated: boolean;
+  hasCloudSynced: boolean;
 
   // Label actions
   addLabel: (label: Partial<Omit<Label, "id" | "createdAt">> & { name: string }) => void;
@@ -469,8 +471,9 @@ export const useAppStore = create<AppState>()(
       rankingsUpdatedAt: null as string | null,
       lastSavedAt: null as string | null,
       hasRehydrated: false as boolean,
+      hasCloudSynced: false as boolean,
 
-      addLabel: (label) =>
+      addLabel: (label) => {
         set((state) => ({
           labels: [
             ...state.labels,
@@ -498,44 +501,56 @@ export const useAppStore = create<AppState>()(
             },
           ],
           lastSavedAt: new Date().toISOString(),
-        })),
+        }));
+        syncToCloud();
+      },
 
-      updateLabel: (id, updates) =>
+      updateLabel: (id, updates) => {
         set((state) => ({
           labels: state.labels.map((l) =>
             l.id === id ? { ...l, ...updates } : l
           ),
           lastSavedAt: new Date().toISOString(),
-        })),
+        }));
+        syncToCloud();
+      },
 
-      deleteLabel: (id) =>
+      deleteLabel: (id) => {
         set((state) => ({
           labels: state.labels.filter((l) => l.id !== id),
           lastSavedAt: new Date().toISOString(),
-        })),
+        }));
+        syncToCloud();
+      },
 
-      addDemo: (demo) =>
+      addDemo: (demo) => {
         set((state) => ({
           demos: [
             ...state.demos,
             { ...demo, id: genId(), createdAt: new Date().toISOString() },
           ],
           lastSavedAt: new Date().toISOString(),
-        })),
+        }));
+        syncToCloud();
+      },
 
-      updateDemo: (id, updates) =>
+      updateDemo: (id, updates) => {
         set((state) => ({
           demos: state.demos.map((d) =>
             d.id === id ? { ...d, ...updates } : d
           ),
           lastSavedAt: new Date().toISOString(),
-        })),
+        }));
+        syncToCloud();
+      },
 
-      deleteDemo: (id) =>
+      deleteDemo: (id) => {
         set((state) => ({
           demos: state.demos.filter((d) => d.id !== id),
           lastSavedAt: new Date().toISOString(),
-        })),
+        }));
+        syncToCloud();
+      },
 
       advanceDemoStatus: (id) => {
         const flow: DemoStatus[] = [
@@ -559,19 +574,23 @@ export const useAppStore = create<AppState>()(
             ),
             lastSavedAt: new Date().toISOString(),
           }));
+          syncToCloud();
         }
       },
 
       setActiveTab: (tab) => set({ activeTab: tab }),
-      setLocale: (locale) => set({ locale }),
-      setUserProfile: (profile) => set((state) => ({ userProfile: { ...state.userProfile, ...profile }, lastSavedAt: new Date().toISOString() })),
+      setLocale: (locale) => { set({ locale }); syncToCloud(); },
+      setUserProfile: (profile) => {
+        set((state) => ({ userProfile: { ...state.userProfile, ...profile }, lastSavedAt: new Date().toISOString() }));
+        syncToCloud();
+      },
 
       getGenres: () => labelData.genres,
 
-      setGmailAuth: (auth) => set({ gmailAuth: auth }),
-      clearGmailAuth: () => set({ gmailAuth: { isConnected: false, email: "", accessToken: "", expiresAt: 0 } }),
+      setGmailAuth: (auth) => { set({ gmailAuth: auth }); syncToCloud(); },
+      clearGmailAuth: () => { set({ gmailAuth: { isConnected: false, email: "", accessToken: "", expiresAt: 0 } }); syncToCloud(); },
 
-      setRankingsUpdatedAt: (date) => set({ rankingsUpdatedAt: date }),
+      setRankingsUpdatedAt: (date) => { set({ rankingsUpdatedAt: date }); syncToCloud(); },
 
       exportData: () => {
         const state = get();
@@ -704,6 +723,7 @@ export const useAppStore = create<AppState>()(
             ...(isRankingsImport || hasGenresAndLabels ? { rankingsUpdatedAt: new Date().toISOString() } : {}),
             lastSavedAt: new Date().toISOString(),
           });
+          syncToCloud();
           return true;
         } catch {
           return false;
@@ -870,4 +890,164 @@ export function getLabelTier(
   if (rank <= 20) return "top";
   if (rank <= 50) return "mid";
   return label.trending ? "emerging" : null;
+}
+
+// ==================== CLOUD SYNC ====================
+// Sistema di sincronizzazione con Supabase.
+// - Ogni modifica ai dati viene salvata su Supabase (debounced)
+// - All'avvio, i dati vengono caricati dal cloud se più recenti
+// - Se Supabase non è configurato, funziona solo con localStorage
+
+let _cloudSyncTimer: ReturnType<typeof setTimeout> | null = null;
+const CLOUD_SYNC_DEBOUNCE_MS = 3000; // 3 secondi di debounce
+
+/**
+ * Sincronizza lo stato corrente con Supabase (debounced).
+ * Chiamata dopo ogni azione utente che modifica i dati.
+ */
+export function syncToCloud(): void {
+  if (!isSupabaseConfigured) return;
+
+  if (_cloudSyncTimer) {
+    clearTimeout(_cloudSyncTimer);
+  }
+
+  _cloudSyncTimer = setTimeout(async () => {
+    _cloudSyncTimer = null;
+    const state = useAppStore.getState();
+    const dataToSync = {
+      labels: state.labels,
+      demos: state.demos,
+      activeTab: state.activeTab,
+      locale: state.locale,
+      userProfile: state.userProfile,
+      gmailAuth: state.gmailAuth,
+      rankingsUpdatedAt: state.rankingsUpdatedAt,
+      lastSavedAt: state.lastSavedAt,
+    };
+    await saveStateToCloud(dataToSync);
+  }, CLOUD_SYNC_DEBOUNCE_MS);
+}
+
+/**
+ * Forza la sincronizzazione immediata con Supabae (senza debounce).
+ * Usata quando la pagina sta per essere chiusa o nascosta.
+ */
+export async function forceCloudSync(): Promise<void> {
+  if (!isSupabaseConfigured) return;
+
+  if (_cloudSyncTimer) {
+    clearTimeout(_cloudSyncTimer);
+    _cloudSyncTimer = null;
+  }
+
+  const state = useAppStore.getState();
+  const dataToSync = {
+    labels: state.labels,
+    demos: state.demos,
+    activeTab: state.activeTab,
+    locale: state.locale,
+    userProfile: state.userProfile,
+    gmailAuth: state.gmailAuth,
+    rankingsUpdatedAt: state.rankingsUpdatedAt,
+    lastSavedAt: state.lastSavedAt,
+  };
+  await saveStateToCloud(dataToSync);
+}
+
+/**
+ * Carica i dati dal cloud e aggiorna lo store se i dati cloud sono più recenti.
+ * Chiamata una volta all'avvio dell'app, dopo la reidratazione da localStorage.
+ */
+export async function loadFromCloud(): Promise<void> {
+  if (!isSupabaseConfigured) {
+    console.log("[LabelPulse Cloud] Supabase not configured, skipping cloud load");
+    useAppStore.setState({ hasCloudSynced: true });
+    return;
+  }
+
+  try {
+    const cloudData = await loadStateFromCloud();
+    if (!cloudData) {
+      // Nessun dato nel cloud — facciamo il primo upload dei dati locali
+      console.log("[LabelPulse Cloud] No cloud data, uploading local data as initial sync");
+      await forceCloudSync();
+      useAppStore.setState({ hasCloudSynced: true });
+      return;
+    }
+
+    const cloud = cloudData as any;
+    const localState = useAppStore.getState();
+
+    // Confronta i timestamp per decidere quali dati usare
+    const localSavedAt = localState.lastSavedAt ? new Date(localState.lastSavedAt).getTime() : 0;
+    const cloudSavedAt = cloud.lastSavedAt ? new Date(cloud.lastSavedAt).getTime() : 0;
+
+    if (cloudSavedAt > localSavedAt) {
+      // I dati cloud sono più recenti — aggiorna lo store locale
+      console.log(
+        `[LabelPulse Cloud] Cloud data is newer (cloud: ${cloud.lastSavedAt}, local: ${localState.lastSavedAt}). Updating local store.`
+      );
+
+      // Usa la stessa logica di merge della reidratazione
+      const merged = mergeCloudData(cloud, localState);
+      useAppStore.setState({
+        ...merged,
+        hasCloudSynced: true,
+      });
+    } else {
+      // I dati locali sono più recenti o uguali — mantieni i dati locali, aggiorna il cloud
+      console.log("[LabelPulse Cloud] Local data is up to date. Cloud sync complete.");
+      useAppStore.setState({ hasCloudSynced: true });
+    }
+  } catch (err) {
+    console.error("[LabelPulse Cloud] Load from cloud failed:", err);
+    useAppStore.setState({ hasCloudSynced: true });
+  }
+}
+
+/**
+ * Merge dei dati cloud con quelli locali, preservando i dati utente.
+ * Usa la stessa logica della funzione merge di Zustand persist.
+ */
+function mergeCloudData(cloudData: any, localState: any): Partial<AppState> {
+  const merged: Partial<AppState> = {};
+
+  // Labels: applica defaults e merge con seed data, come nella reidratazione
+  if (cloudData.labels && Array.isArray(cloudData.labels) && cloudData.labels.length > 0) {
+    merged.labels = cloudData.labels.map((l: any) => ({
+      ...LABEL_DEFAULTS,
+      ...l,
+    }));
+
+    // Aggiungi seed labels mancanti
+    const cloudIds = new Set(cloudData.labels.map((l: any) => l.id));
+    const cloudNames = new Set(
+      cloudData.labels.map((l: any) => l.name?.toLowerCase().trim()).filter(Boolean)
+    );
+    const seedLabels = buildLabelsFromData();
+    for (const seed of seedLabels) {
+      if (!cloudIds.has(seed.id) && !cloudNames.has(seed.name.toLowerCase().trim())) {
+        (merged.labels as Label[]).push(seed);
+      }
+    }
+
+    // Repair corrupted data
+    merged.labels = repairLabelData(merged.labels);
+  } else {
+    merged.labels = localState.labels;
+  }
+
+  // Demos
+  merged.demos = Array.isArray(cloudData.demos) ? cloudData.demos : localState.demos;
+
+  // Simple fields
+  merged.activeTab = cloudData.activeTab || localState.activeTab;
+  merged.locale = cloudData.locale || localState.locale;
+  merged.userProfile = cloudData.userProfile || localState.userProfile;
+  merged.gmailAuth = cloudData.gmailAuth || localState.gmailAuth;
+  merged.rankingsUpdatedAt = cloudData.rankingsUpdatedAt ?? localState.rankingsUpdatedAt;
+  merged.lastSavedAt = cloudData.lastSavedAt ?? localState.lastSavedAt;
+
+  return merged;
 }
