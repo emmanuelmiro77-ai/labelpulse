@@ -30,10 +30,13 @@ import { HelpModal } from "@/components/help-modal";
 import { GmailSettings } from "@/components/gmail-settings";
 import { DataBackup } from "@/components/data-backup";
 import { AutoSave } from "@/components/auto-save";
+import { RankingsPage } from "@/components/rankings-page";
+import { BarChart3 } from "lucide-react";
 
 const NAV_KEYS = [
   { id: "dashboard" as const, labelKey: "nav.dashboard" as const, icon: LayoutDashboard },
   { id: "labels" as const, labelKey: "nav.labels" as const, icon: Music2 },
+  { id: "rankings" as const, labelKey: "nav.rankings" as const, icon: BarChart3 },
   { id: "demos" as const, labelKey: "nav.demos" as const, icon: Send },
   { id: "pitch" as const, labelKey: "nav.pitch" as const, icon: Megaphone },
 ];
@@ -41,6 +44,7 @@ const NAV_KEYS = [
 const SECTION_TITLES = {
   dashboard: "dash.title",
   labels: "labels.title",
+  rankings: "rankings.title",
   demos: "demos.title",
   pitch: "campaign.title",
 } as const;
@@ -48,6 +52,7 @@ const SECTION_TITLES = {
 const SECTION_SUBTITLES = {
   dashboard: "dash.subtitle",
   labels: "labels.subtitle",
+  rankings: "rankings.subtitle",
   demos: "demos.subtitle",
   pitch: "campaign.subtitle",
 } as const;
@@ -251,6 +256,7 @@ export default function Home() {
           <div className="flex items-center gap-2 mb-1">
             {activeTab === "dashboard" && <LayoutDashboard className="h-5 w-5 text-primary" />}
             {activeTab === "labels" && <Music2 className="h-5 w-5 text-primary" />}
+            {activeTab === "rankings" && <BarChart3 className="h-5 w-5 text-primary" />}
             {activeTab === "demos" && <Send className="h-5 w-5 text-primary" />}
             {activeTab === "pitch" && <Megaphone className="h-5 w-5 text-primary" />}
             <h2 className="text-xl font-bold text-foreground">
@@ -264,6 +270,7 @@ export default function Home() {
 
         {activeTab === "dashboard" && <Dashboard />}
         {activeTab === "labels" && <LabelFinder />}
+        {activeTab === "rankings" && <RankingsPage />}
         {activeTab === "demos" && <DemoTracker />}
         {activeTab === "pitch" && <PitchGenerator />}
       </main>

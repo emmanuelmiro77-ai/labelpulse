@@ -40,6 +40,7 @@ export interface Label {
   trendingRankByGenre: Record<string, number>;
   trendingPointsByGenre: Record<string, number>;
   isCustom?: boolean; // user-added label
+  prevRankByGenre?: Record<string, number>; // Previous ranking snapshot (before last import)
 }
 
 export interface Demo {
@@ -295,7 +296,7 @@ interface GmailAuth {
 interface AppState {
   labels: Label[];
   demos: Demo[];
-  activeTab: "dashboard" | "labels" | "demos" | "pitch";
+  activeTab: "dashboard" | "labels" | "rankings" | "demos" | "pitch";
   locale: Locale;
   userProfile: UserProfile;
   gmailAuth: GmailAuth;
@@ -344,6 +345,13 @@ interface AppState {
  * when imported label has empty/default values for those fields.
  */
 function mergePreservingUserData(existing: Label, imported: Label): Partial<Label> {
+  // Before overwriting ranking data, save the current rank as "previous" snapshot.
+  // This allows the Rankings page to show movement arrows (↑↓) between imports.
+  const hasNewRankData = Object.keys(imported.rankByGenre || {}).length > 0;
+  const currentRank = hasNewRankData && Object.keys(existing.rankByGenre || {}).length > 0
+    ? { ...existing.rankByGenre }
+    : existing.prevRankByGenre || {};
+
   return {
     // User-editable data — ALWAYS prefer existing if it has real data
     emails: imported.emails?.length ? imported.emails : existing.emails,
@@ -362,6 +370,9 @@ function mergePreservingUserData(existing: Label, imported: Label): Partial<Labe
     trending: imported.trending || existing.trending,
     trendingRankByGenre: Object.keys(imported.trendingRankByGenre || {}).length ? imported.trendingRankByGenre : existing.trendingRankByGenre,
     trendingPointsByGenre: Object.keys(imported.trendingPointsByGenre || {}).length ? imported.trendingPointsByGenre : existing.trendingPointsByGenre,
+
+    // Ranking history — save current rank as "previous" when new data arrives
+    prevRankByGenre: currentRank,
   };
 }
 
@@ -386,6 +397,7 @@ const LABEL_DEFAULTS = {
   submissionType: "email" as SubmissionType,
   status: "open" as LabelStatus,
   genre: "",
+  prevRankByGenre: {},
 };
 
 /**
