@@ -88,17 +88,17 @@ function buildLabelsFromData(): Label[] {
 // ==================== ROBUST STORAGE ====================
 // Custom storage with data protection:
 // 1. Primary localStorage key
-// 2. Backup localStorage key (debounced — not on every save)
+// 2. Backup localStorage key (written IMMEDIATELY on every save — no debounce)
 // 3. Data integrity check on load (auto-recover from backup if data loss detected)
-// 4. Smart write guard: prevents writes that would cause data loss
+// 4. Rehydration guard: blocks ALL writes until Zustand persist loads data
 
 const PRIMARY_KEY = "labelpulse-storage";
 const BACKUP_KEY = "labelpulse-storage-backup";
 const SEED_LABEL_COUNT = labelData.labels.length;
 
-// Debounced backup writing
-let _backupTimer: ReturnType<typeof setTimeout> | null = null;
-const BACKUP_DEBOUNCE_MS = 60000; // 60 seconds
+// Rehydration guard: blocks ALL writes until Zustand persist has loaded data from localStorage.
+// Before rehydration, the store contains seed data which would overwrite user data.
+let _rehydrated = false;
 
 function safeJsonParse(str: string | null): any | null {
   if (!str) return null;
@@ -172,15 +172,7 @@ function getUserEditCountFromRaw(raw: string | null): number {
   return countUserEditedLabels(labels);
 }
 
-function debouncedBackupWrite(value: string): void {
-  if (_backupTimer) {
-    clearTimeout(_backupTimer);
-  }
-  _backupTimer = setTimeout(() => {
-    safeLocalStorageSet(BACKUP_KEY, value);
-    _backupTimer = null;
-  }, BACKUP_DEBOUNCE_MS);
-}
+// (debounced backup removed — we now write backup IMMEDIATELY on every write for maximum data safety)
 
 const robustStorage: StateStorage = {
   getItem: (name: string): string | null => {
@@ -190,19 +182,18 @@ const robustStorage: StateStorage = {
     const primaryData = safeJsonParse(primaryRaw);
     const backupData = safeJsonParse(backupRaw);
 
+    let result: string | null = null;
+
     // If primary is missing/corrupt, try backup
     if (!primaryData) {
       if (backupData) {
         console.warn("[LabelPulse Storage] Primary data missing/corrupt, restoring from backup");
         if (backupRaw) safeLocalStorageSet(PRIMARY_KEY, backupRaw);
-        return backupRaw;
+        result = backupRaw;
       }
-      // Both empty — first visit
-      return null;
-    }
-
-    // Both exist — check for data loss
-    if (backupData) {
+      // Both empty — first visit, result stays null
+    } else if (backupData) {
+      // Both exist — check for data loss
       const primaryLabelCount = getTotalLabelCount(primaryData);
       const backupLabelCount = getTotalLabelCount(backupData);
       const primaryUserEdits = primaryData.state?.labels
@@ -218,36 +209,38 @@ const robustStorage: StateStorage = {
           `[LabelPulse Storage] DATA LOSS DETECTED! Primary: ${primaryLabelCount} labels (${primaryUserEdits} edited), Backup: ${backupLabelCount} labels (${backupUserEdits} edited). Restoring from backup.`
         );
         if (backupRaw) safeLocalStorageSet(PRIMARY_KEY, backupRaw);
-        return backupRaw;
-      }
-
-      // If primary has fewer user edits than backup, use backup
-      if (backupUserEdits > primaryUserEdits && backupLabelCount >= primaryLabelCount) {
+        result = backupRaw;
+      } else if (backupUserEdits > primaryUserEdits && backupLabelCount >= primaryLabelCount) {
+        // If primary has fewer user edits than backup, use backup
         console.warn(
           `[LabelPulse Storage] More user data in backup (${backupUserEdits} vs ${primaryUserEdits} edited labels). Restoring from backup.`
         );
         if (backupRaw) safeLocalStorageSet(PRIMARY_KEY, backupRaw);
-        return backupRaw;
+        result = backupRaw;
+      } else {
+        result = primaryRaw;
       }
+    } else {
+      // Primary exists, no backup — normal case
+      result = primaryRaw;
     }
 
-    return primaryRaw;
+    // CRITICAL: Mark rehydrated BEFORE returning — Zustand will call setItem with
+    // merged data immediately after this getItem returns, and we MUST allow that write.
+    // This ensures seed data (initial state) writes are blocked, but merged data writes pass.
+    _rehydrated = true;
+
+    return result;
   },
 
   setItem: (name: string, value: string): void => {
-    // SMART WRITE GUARD: Before writing, check if this write would cause data loss.
-    // Compare the new value's user-edit count with what's currently in localStorage.
-    // If the new value has FEWER user edits than what's stored, it's likely a
-    // seed-data overwrite — block it to protect user data.
-    const currentRaw = safeLocalStorageGet(PRIMARY_KEY);
-    const currentEdits = getUserEditCountFromRaw(currentRaw);
-    const newEdits = getUserEditCountFromRaw(value);
-
-    if (currentEdits > 0 && newEdits < currentEdits) {
-      // We're about to write data with FEWER user edits than what's stored.
-      // This is likely the seed data being written before rehydration completes.
+    // REHYDRATION GUARD: Block ALL writes before Zustand persist has loaded data.
+    // Before rehydration, the store only has seed data — writing it would overwrite
+    // any user data in localStorage. After rehydration, ALL writes are legitimate
+    // (user actions, repairs, imports, etc.) and must ALWAYS be saved.
+    if (!_rehydrated) {
       console.warn(
-        `[LabelPulse Storage] BLOCKED write: would reduce user edits from ${currentEdits} to ${newEdits}. Protecting user data.`
+        `[LabelPulse Storage] BLOCKED pre-rehydration write — protecting user data in localStorage`
       );
       return;
     }
@@ -255,8 +248,9 @@ const robustStorage: StateStorage = {
     // Write to primary immediately
     const primaryOk = safeLocalStorageSet(PRIMARY_KEY, value);
 
-    // Write to backup with debounce
-    debouncedBackupWrite(value);
+    // Write to backup IMMEDIATELY (no debounce) for maximum data safety.
+    // Previous 60s debounce caused data loss if browser crashed before backup was written.
+    safeLocalStorageSet(BACKUP_KEY, value);
 
     if (!primaryOk) {
       console.error("[LabelPulse Storage] Primary write failed!");
@@ -271,13 +265,10 @@ const robustStorage: StateStorage = {
 
 /**
  * Force-write a backup immediately (e.g., on visibility change or before unload).
+ * Since backup is now written on every setItem, this is a safety net.
  */
 export function forceBackupNow(): void {
   if (typeof window === "undefined") return;
-  if (_backupTimer) {
-    clearTimeout(_backupTimer);
-    _backupTimer = null;
-  }
   const primaryRaw = safeLocalStorageGet(PRIMARY_KEY);
   if (primaryRaw) {
     safeLocalStorageSet(BACKUP_KEY, primaryRaw);
@@ -309,6 +300,7 @@ interface AppState {
   gmailAuth: GmailAuth;
   rankingsUpdatedAt: string | null;
   lastSavedAt: string | null;
+  hasRehydrated: boolean;
 
   // Label actions
   addLabel: (label: Partial<Omit<Label, "id" | "createdAt">> & { name: string }) => void;
@@ -476,6 +468,7 @@ export const useAppStore = create<AppState>()(
       gmailAuth: { isConnected: false, email: "", accessToken: "", expiresAt: 0 } as GmailAuth,
       rankingsUpdatedAt: null as string | null,
       lastSavedAt: null as string | null,
+      hasRehydrated: false as boolean,
 
       addLabel: (label) =>
         set((state) => ({
@@ -836,6 +829,9 @@ export const useAppStore = create<AppState>()(
         return merged;
       },
       onRehydrateStorage: () => (state, error) => {
+        // ALWAYS mark rehydrated — even on error — to avoid permanently blocking writes
+        _rehydrated = true;
+
         if (error) {
           console.error("[LabelPulse Storage] Rehydration error:", error);
         } else if (state) {
@@ -843,9 +839,20 @@ export const useAppStore = create<AppState>()(
           console.log(
             `[LabelPulse Storage] Rehydrated: ${state.labels.length} labels, ${userEditedCount} with user data`
           );
-          // Force an immediate backup after rehydration
-          forceBackupNow();
         }
+
+        // Signal to UI that rehydration is complete.
+        // IMPORTANT: onRehydrateStorage can be called synchronously INSIDE create(),
+        // before useAppStore is assigned. We use setTimeout to defer setState to the
+        // next macrotask, by which time useAppStore will be fully initialized.
+        if (typeof window !== "undefined") {
+          setTimeout(() => {
+            useAppStore.setState({ hasRehydrated: true });
+          }, 0);
+        }
+
+        // Force an immediate backup after rehydration
+        forceBackupNow();
       },
     }
   )

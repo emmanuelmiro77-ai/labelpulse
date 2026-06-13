@@ -1,0 +1,867 @@
+     1→"use client";
+     2→
+     3→import { create } from "zustand";
+     4→import { persist, createJSONStorage, StateStorage } from "zustand/middleware";
+     5→import type { Locale } from "./i18n";
+     6→import labelData from "./labels-data.json";
+     7→
+     8→// ==================== TYPES ====================
+     9→
+    10→export type SubmissionType = "email" | "webform" | "platform";
+    11→export type LabelStatus = "open" | "closed";
+    12→export type DemoStatus =
+    13→  | "ready"
+    14→  | "sent"
+    15→  | "reviewing"
+    16→  | "accepted"
+    17→  | "rejected";
+    18→
+    19→export interface Label {
+    20→  id: string;
+    21→  name: string;
+    22→  genre: string; // primary genre for user-added
+    23→  submissionType: SubmissionType;
+    24→  contactInfo: string;
+    25→  status: LabelStatus;
+    26→  notes: string;
+    27→  createdAt: string;
+    28→  // User-enriched data (persistent)
+    29→  emails: string[];
+    30→  website: string;
+    31→  demoLink: string;
+    32→  socialLink: string;
+    33→  soundcloudLink: string;
+    34→  // Real Beatport data
+    35→  genres: string[];
+    36→  rankByGenre: Record<string, number>;
+    37→  pointsByGenre: Record<string, number>;
+    38→  trending: boolean;
+    39→  trendingRankByGenre: Record<string, number>;
+    40→  trendingPointsByGenre: Record<string, number>;
+    41→  isCustom?: boolean; // user-added label
+    42→}
+    43→
+    44→export interface Demo {
+    45→  id: string;
+    46→  trackName: string;
+    47→  labelId: string;
+    48→  status: DemoStatus;
+    49→  sentDate: string | null;
+    50→  link: string;
+    51→  notes: string;
+    52→  createdAt: string;
+    53→  pitchText: string;
+    54→  artistName: string;
+    55→}
+    56→
+    57→// ==================== HELPERS ====================
+    58→
+    59→const genId = () =>
+    60→  Date.now().toString(36) + Math.random().toString(36).slice(2, 7);
+    61→
+    62→// Convert imported data to Label objects
+    63→function buildLabelsFromData(): Label[] {
+    64→  return labelData.labels.map((l) => ({
+    65→    id: l.id,
+    66→    name: l.name,
+    67→    genre: l.genres[0] || "",
+    68→    submissionType: "email" as SubmissionType,
+    69→    contactInfo: "",
+    70→    status: "open" as LabelStatus,
+    71→    notes: "",
+    72→    createdAt: new Date().toISOString(),
+    73→    emails: [] as string[],
+    74→    website: "",
+    75→    demoLink: "",
+    76→    socialLink: "",
+    77→    soundcloudLink: "",
+    78→    genres: l.genres,
+    79→    rankByGenre: (l.rankByGenre || {}) as Record<string, number>,
+    80→    pointsByGenre: (l.pointsByGenre || {}) as Record<string, number>,
+    81→    trending: l.trending || false,
+    82→    trendingRankByGenre: (l.trendingRankByGenre || {}) as Record<string, number>,
+    83→    trendingPointsByGenre: (l.trendingPointsByGenre || {}) as Record<string, number>,
+    84→    isCustom: false,
+    85→  }));
+    86→}
+    87→
+    88→// ==================== ROBUST STORAGE ====================
+    89→// Custom storage with data protection:
+    90→// 1. Primary localStorage key
+    91→// 2. Backup localStorage key (debounced — not on every save)
+    92→// 3. Data integrity check on load (auto-recover from backup if data loss detected)
+    93→// 4. Smart write guard: prevents writes that would cause data loss
+    94→
+    95→const PRIMARY_KEY = "labelpulse-storage";
+    96→const BACKUP_KEY = "labelpulse-storage-backup";
+    97→const SEED_LABEL_COUNT = labelData.labels.length;
+    98→
+    99→// Debounced backup writing
+   100→let _backupTimer: ReturnType<typeof setTimeout> | null = null;
+   101→const BACKUP_DEBOUNCE_MS = 60000; // 60 seconds
+   102→
+   103→function safeJsonParse(str: string | null): any | null {
+   104→  if (!str) return null;
+   105→  try {
+   106→    return JSON.parse(str);
+   107→  } catch {
+   108→    return null;
+   109→  }
+   110→}
+   111→
+   112→function safeLocalStorageGet(key: string): string | null {
+   113→  try {
+   114→    return localStorage.getItem(key);
+   115→  } catch {
+   116→    return null;
+   117→  }
+   118→}
+   119→
+   120→function safeLocalStorageSet(key: string, value: string): boolean {
+   121→  try {
+   122→    localStorage.setItem(key, value);
+   123→    return true;
+   124→  } catch (e) {
+   125→    console.error(`[LabelPulse Storage] Failed to write ${key}:`, e);
+   126→    return false;
+   127→  }
+   128→}
+   129→
+   130→function safeLocalStorageRemove(key: string): void {
+   131→  try {
+   132→    localStorage.removeItem(key);
+   133→  } catch {
+   134→    // Ignore
+   135→  }
+   136→}
+   137→
+   138→/**
+   139→ * Check if persisted data has user edits (emails, notes, links, etc.)
+   140→ * This helps us detect if the store was accidentally reset to seed data.
+   141→ */
+   142→function countUserEditedLabels(labels: any[]): number {
+   143→  if (!Array.isArray(labels)) return 0;
+   144→  return labels.filter((l) =>
+   145→    (l.emails && l.emails.length > 0) ||
+   146→    (l.notes && l.notes.trim() !== "") ||
+   147→    (l.website && l.website.trim() !== "") ||
+   148→    (l.demoLink && l.demoLink.trim() !== "") ||
+   149→    (l.socialLink && l.socialLink.trim() !== "") ||
+   150→    (l.soundcloudLink && l.soundcloudLink.trim() !== "") ||
+   151→    (l.contactInfo && l.contactInfo.trim() !== "") ||
+   152→    l.isCustom === true
+   153→  ).length;
+   154→}
+   155→
+   156→function getTotalLabelCount(data: any): number {
+   157→  if (!data) return 0;
+   158→  if (Array.isArray(data.labels)) return data.labels.length;
+   159→  if (data.state && Array.isArray(data.state.labels)) return data.state.labels.length;
+   160→  return 0;
+   161→}
+   162→
+   163→/**
+   164→ * Extract user-edited label count from raw localStorage string.
+   165→ * Used by the write guard to check if a write would cause data loss.
+   166→ */
+   167→function getUserEditCountFromRaw(raw: string | null): number {
+   168→  if (!raw) return 0;
+   169→  const data = safeJsonParse(raw);
+   170→  if (!data) return 0;
+   171→  const labels = data.state?.labels || data.labels || [];
+   172→  return countUserEditedLabels(labels);
+   173→}
+   174→
+   175→function debouncedBackupWrite(value: string): void {
+   176→  if (_backupTimer) {
+   177→    clearTimeout(_backupTimer);
+   178→  }
+   179→  _backupTimer = setTimeout(() => {
+   180→    safeLocalStorageSet(BACKUP_KEY, value);
+   181→    _backupTimer = null;
+   182→  }, BACKUP_DEBOUNCE_MS);
+   183→}
+   184→
+   185→const robustStorage: StateStorage = {
+   186→  getItem: (name: string): string | null => {
+   187→    const primaryRaw = safeLocalStorageGet(PRIMARY_KEY);
+   188→    const backupRaw = safeLocalStorageGet(BACKUP_KEY);
+   189→
+   190→    const primaryData = safeJsonParse(primaryRaw);
+   191→    const backupData = safeJsonParse(backupRaw);
+   192→
+   193→    // If primary is missing/corrupt, try backup
+   194→    if (!primaryData) {
+   195→      if (backupData) {
+   196→        console.warn("[LabelPulse Storage] Primary data missing/corrupt, restoring from backup");
+   197→        if (backupRaw) safeLocalStorageSet(PRIMARY_KEY, backupRaw);
+   198→        return backupRaw;
+   199→      }
+   200→      // Both empty — first visit
+   201→      return null;
+   202→    }
+   203→
+   204→    // Both exist — check for data loss
+   205→    if (backupData) {
+   206→      const primaryLabelCount = getTotalLabelCount(primaryData);
+   207→      const backupLabelCount = getTotalLabelCount(backupData);
+   208→      const primaryUserEdits = primaryData.state?.labels
+   209→        ? countUserEditedLabels(primaryData.state.labels)
+   210→        : countUserEditedLabels(primaryData.labels || []);
+   211→      const backupUserEdits = backupData.state?.labels
+   212→        ? countUserEditedLabels(backupData.state.labels)
+   213→        : countUserEditedLabels(backupData.labels || []);
+   214→
+   215→      // If primary has fewer labels than backup AND backup has more or equal user data
+   216→      if (backupLabelCount > primaryLabelCount && backupUserEdits >= primaryUserEdits) {
+   217→        console.warn(
+   218→          `[LabelPulse Storage] DATA LOSS DETECTED! Primary: ${primaryLabelCount} labels (${primaryUserEdits} edited), Backup: ${backupLabelCount} labels (${backupUserEdits} edited). Restoring from backup.`
+   219→        );
+   220→        if (backupRaw) safeLocalStorageSet(PRIMARY_KEY, backupRaw);
+   221→        return backupRaw;
+   222→      }
+   223→
+   224→      // If primary has fewer user edits than backup, use backup
+   225→      if (backupUserEdits > primaryUserEdits && backupLabelCount >= primaryLabelCount) {
+   226→        console.warn(
+   227→          `[LabelPulse Storage] More user data in backup (${backupUserEdits} vs ${primaryUserEdits} edited labels). Restoring from backup.`
+   228→        );
+   229→        if (backupRaw) safeLocalStorageSet(PRIMARY_KEY, backupRaw);
+   230→        return backupRaw;
+   231→      }
+   232→    }
+   233→
+   234→    return primaryRaw;
+   235→  },
+   236→
+   237→  setItem: (name: string, value: string): void => {
+   238→    // SMART WRITE GUARD: Before writing, check if this write would cause data loss.
+   239→    // Compare the new value's user-edit count with what's currently in localStorage.
+   240→    // If the new value has FEWER user edits than what's stored, it's likely a
+   241→    // seed-data overwrite — block it to protect user data.
+   242→    const currentRaw = safeLocalStorageGet(PRIMARY_KEY);
+   243→    const currentEdits = getUserEditCountFromRaw(currentRaw);
+   244→    const newEdits = getUserEditCountFromRaw(value);
+   245→
+   246→    if (currentEdits > 0 && newEdits < currentEdits) {
+   247→      // We're about to write data with FEWER user edits than what's stored.
+   248→      // This is likely the seed data being written before rehydration completes.
+   249→      console.warn(
+   250→        `[LabelPulse Storage] BLOCKED write: would reduce user edits from ${currentEdits} to ${newEdits}. Protecting user data.`
+   251→      );
+   252→      return;
+   253→    }
+   254→
+   255→    // Write to primary immediately
+   256→    const primaryOk = safeLocalStorageSet(PRIMARY_KEY, value);
+   257→
+   258→    // Write to backup with debounce
+   259→    debouncedBackupWrite(value);
+   260→
+   261→    if (!primaryOk) {
+   262→      console.error("[LabelPulse Storage] Primary write failed!");
+   263→    }
+   264→  },
+   265→
+   266→  removeItem: (name: string): void => {
+   267→    safeLocalStorageRemove(PRIMARY_KEY);
+   268→    safeLocalStorageRemove(BACKUP_KEY);
+   269→  },
+   270→};
+   271→
+   272→/**
+   273→ * Force-write a backup immediately (e.g., on visibility change or before unload).
+   274→ */
+   275→export function forceBackupNow(): void {
+   276→  if (typeof window === "undefined") return;
+   277→  if (_backupTimer) {
+   278→    clearTimeout(_backupTimer);
+   279→    _backupTimer = null;
+   280→  }
+   281→  const primaryRaw = safeLocalStorageGet(PRIMARY_KEY);
+   282→  if (primaryRaw) {
+   283→    safeLocalStorageSet(BACKUP_KEY, primaryRaw);
+   284→  }
+   285→}
+   286→
+   287→// ==================== NO SEED DEMOS ====================
+   288→
+   289→// ==================== STORE ====================
+   290→
+   291→interface UserProfile {
+   292→  artistName: string;
+   293→  scLink: string;
+   294→}
+   295→
+   296→interface GmailAuth {
+   297→  isConnected: boolean;
+   298→  email: string;
+   299→  accessToken: string;
+   300→  expiresAt: number;
+   301→}
+   302→
+   303→interface AppState {
+   304→  labels: Label[];
+   305→  demos: Demo[];
+   306→  activeTab: "dashboard" | "labels" | "demos" | "pitch";
+   307→  locale: Locale;
+   308→  userProfile: UserProfile;
+   309→  gmailAuth: GmailAuth;
+   310→  rankingsUpdatedAt: string | null;
+   311→  lastSavedAt: string | null;
+   312→
+   313→  // Label actions
+   314→  addLabel: (label: Partial<Omit<Label, "id" | "createdAt">> & { name: string }) => void;
+   315→  updateLabel: (id: string, updates: Partial<Label>) => void;
+   316→  deleteLabel: (id: string) => void;
+   317→
+   318→  // Demo actions
+   319→  addDemo: (demo: Omit<Demo, "id" | "createdAt">) => void;
+   320→  updateDemo: (id: string, updates: Partial<Demo>) => void;
+   321→  deleteDemo: (id: string) => void;
+   322→  advanceDemoStatus: (id: string) => void;
+   323→
+   324→  // Navigation
+   325→  setActiveTab: (tab: "dashboard" | "labels" | "demos" | "pitch") => void;
+   326→
+   327→  // Language
+   328→  setLocale: (locale: Locale) => void;
+   329→
+   330→  // User Profile
+   331→  setUserProfile: (profile: Partial<UserProfile>) => void;
+   332→
+   333→  // Available genres
+   334→  getGenres: () => string[];
+   335→
+   336→  // Gmail
+   337→  setGmailAuth: (auth: GmailAuth) => void;
+   338→  clearGmailAuth: () => void;
+   339→
+   340→  // Rankings update tracking
+   341→  setRankingsUpdatedAt: (date: string) => void;
+   342→
+   343→  // Data backup
+   344→  exportData: () => string;
+   345→  importData: (jsonString: string) => boolean;
+   346→}
+   347→
+   348→/**
+   349→ * Merge helper: preserves ALL user-editable fields from existing label
+   350→ * when imported label has empty/default values for those fields.
+   351→ */
+   352→function mergePreservingUserData(existing: Label, imported: Label): Partial<Label> {
+   353→  return {
+   354→    // User-editable data — ALWAYS prefer existing if it has real data
+   355→    emails: imported.emails?.length ? imported.emails : existing.emails,
+   356→    contactInfo: imported.contactInfo?.trim() || existing.contactInfo,
+   357→    website: imported.website?.trim() || existing.website,
+   358→    demoLink: imported.demoLink?.trim() || existing.demoLink,
+   359→    socialLink: imported.socialLink?.trim() || existing.socialLink,
+   360→    soundcloudLink: imported.soundcloudLink?.trim() || existing.soundcloudLink,
+   361→    notes: imported.notes?.trim() || existing.notes,
+   362→    status: (imported.status === "open" || imported.status === "closed") ? imported.status : (existing.status || "open"),
+   363→
+   364→    // Beatport/ranking data — prefer imported (it's the fresh data)
+   365→    genres: imported.genres?.length ? imported.genres : existing.genres,
+   366→    rankByGenre: Object.keys(imported.rankByGenre || {}).length ? imported.rankByGenre : existing.rankByGenre,
+   367→    pointsByGenre: Object.keys(imported.pointsByGenre || {}).length ? imported.pointsByGenre : existing.pointsByGenre,
+   368→    trending: imported.trending || existing.trending,
+   369→    trendingRankByGenre: Object.keys(imported.trendingRankByGenre || {}).length ? imported.trendingRankByGenre : existing.trendingRankByGenre,
+   370→    trendingPointsByGenre: Object.keys(imported.trendingPointsByGenre || {}).length ? imported.trendingPointsByGenre : existing.trendingPointsByGenre,
+   371→  };
+   372→}
+   373→
+   374→/**
+   375→ * Label defaults for safe field initialization.
+   376→ */
+   377→const LABEL_DEFAULTS = {
+   378→  genres: [],
+   379→  rankByGenre: {},
+   380→  pointsByGenre: {},
+   381→  trending: false,
+   382→  trendingRankByGenre: {},
+   383→  trendingPointsByGenre: {},
+   384→  isCustom: false,
+   385→  website: "",
+   386→  demoLink: "",
+   387→  socialLink: "",
+   388→  soundcloudLink: "",
+   389→  emails: [],
+   390→  notes: "",
+   391→  contactInfo: "",
+   392→  submissionType: "email" as SubmissionType,
+   393→  status: "open" as LabelStatus,
+   394→  genre: "",
+   395→};
+   396→
+   397→/**
+   398→ * Repair corrupted label data.
+   399→ * Detects and fixes: same email appearing on too many labels (likely corruption).
+   400→ */
+   401→function repairLabelData(labels: Label[]): Label[] {
+   402→  const emailLabelCount = new Map<string, number>();
+   403→  for (const l of labels) {
+   404→    if (l.emails && Array.isArray(l.emails)) {
+   405→      for (const e of l.emails) {
+   406→        if (e && e.trim()) {
+   407→          const key = e.toLowerCase().trim();
+   408→          emailLabelCount.set(key, (emailLabelCount.get(key) || 0) + 1);
+   409→        }
+   410→      }
+   411→    }
+   412→  }
+   413→
+   414→  const corruptedEmails = new Set<string>();
+   415→  for (const [email, count] of emailLabelCount) {
+   416→    if (count > 5) {
+   417→      corruptedEmails.add(email);
+   418→      console.warn(
+   419→        `[LabelPulse Repair] Email "${email}" found on ${count} labels — likely corruption, will be removed from all but the owner.`
+   420→      );
+   421→    }
+   422→  }
+   423→
+   424→  if (corruptedEmails.size === 0) {
+   425→    return labels;
+   426→  }
+   427→
+   428→  const emailOwner = new Map<string, string>();
+   429→  for (const email of corruptedEmails) {
+   430→    for (const l of labels) {
+   431→      if (l.emails?.some(e => e.toLowerCase().trim() === email)) {
+   432→        const domain = email.split("@")[1]?.split(".")[0]?.toLowerCase();
+   433→        if (domain && l.name.toLowerCase().includes(domain)) {
+   434→          emailOwner.set(email, l.id);
+   435→          break;
+   436→        }
+   437→      }
+   438→    }
+   439→    if (!emailOwner.has(email)) {
+   440→      for (const l of labels) {
+   441→        if (l.emails?.some(e => e.toLowerCase().trim() === email)) {
+   442→          emailOwner.set(email, l.id);
+   443→          break;
+   444→        }
+   445→      }
+   446→    }
+   447→  }
+   448→
+   449→  return labels.map(l => {
+   450→    if (!l.emails || !Array.isArray(l.emails)) return l;
+   451→    const cleanedEmails = l.emails.filter(e => {
+   452→      const key = e?.toLowerCase().trim();
+   453→      if (!key) return false;
+   454→      if (!corruptedEmails.has(key)) return true;
+   455→      return emailOwner.get(key) === l.id;
+   456→    });
+   457→    const cleanedContactInfo = cleanedEmails[0] || "";
+   458→    if (cleanedEmails.length !== l.emails.length || cleanedContactInfo !== l.contactInfo) {
+   459→      console.log(
+   460→        `[LabelPulse Repair] Cleaned label "${l.name}": removed ${l.emails.length - cleanedEmails.length} corrupted email(s)`
+   461→      );
+   462→      return { ...l, emails: cleanedEmails, contactInfo: cleanedContactInfo };
+   463→    }
+   464→    return l;
+   465→  });
+   466→}
+   467→
+   468→export const useAppStore = create<AppState>()(
+   469→  persist(
+   470→    (set, get) => ({
+   471→      labels: buildLabelsFromData(),
+   472→      demos: [] as Demo[],
+   473→      activeTab: "dashboard" as const,
+   474→      locale: "it" as Locale,
+   475→      userProfile: { artistName: "", scLink: "" } as UserProfile,
+   476→      gmailAuth: { isConnected: false, email: "", accessToken: "", expiresAt: 0 } as GmailAuth,
+   477→      rankingsUpdatedAt: null as string | null,
+   478→      lastSavedAt: null as string | null,
+   479→
+   480→      addLabel: (label) =>
+   481→        set((state) => ({
+   482→          labels: [
+   483→            ...state.labels,
+   484→            {
+   485→              ...label,
+   486→              id: genId(),
+   487→              createdAt: new Date().toISOString(),
+   488→              isCustom: true,
+   489→              genre: label.genre || "",
+   490→              contactInfo: label.contactInfo || "",
+   491→              status: label.status || "open",
+   492→              notes: label.notes || "",
+   493→              submissionType: label.submissionType || "email",
+   494→              genres: label.genres || (label.genre ? [label.genre] : []),
+   495→              rankByGenre: label.rankByGenre || {},
+   496→              pointsByGenre: label.pointsByGenre || {},
+   497→              trending: label.trending || false,
+   498→              trendingRankByGenre: label.trendingRankByGenre || {},
+   499→              trendingPointsByGenre: label.trendingPointsByGenre || {},
+   500→              website: label.website || "",
+   501→              demoLink: label.demoLink || "",
+   502→              socialLink: label.socialLink || "",
+   503→              soundcloudLink: label.soundcloudLink || "",
+   504→              emails: label.emails || [],
+   505→            },
+   506→          ],
+   507→          lastSavedAt: new Date().toISOString(),
+   508→        })),
+   509→
+   510→      updateLabel: (id, updates) =>
+   511→        set((state) => ({
+   512→          labels: state.labels.map((l) =>
+   513→            l.id === id ? { ...l, ...updates } : l
+   514→          ),
+   515→          lastSavedAt: new Date().toISOString(),
+   516→        })),
+   517→
+   518→      deleteLabel: (id) =>
+   519→        set((state) => ({
+   520→          labels: state.labels.filter((l) => l.id !== id),
+   521→          lastSavedAt: new Date().toISOString(),
+   522→        })),
+   523→
+   524→      addDemo: (demo) =>
+   525→        set((state) => ({
+   526→          demos: [
+   527→            ...state.demos,
+   528→            { ...demo, id: genId(), createdAt: new Date().toISOString() },
+   529→          ],
+   530→          lastSavedAt: new Date().toISOString(),
+   531→        })),
+   532→
+   533→      updateDemo: (id, updates) =>
+   534→        set((state) => ({
+   535→          demos: state.demos.map((d) =>
+   536→            d.id === id ? { ...d, ...updates } : d
+   537→          ),
+   538→          lastSavedAt: new Date().toISOString(),
+   539→        })),
+   540→
+   541→      deleteDemo: (id) =>
+   542→        set((state) => ({
+   543→          demos: state.demos.filter((d) => d.id !== id),
+   544→          lastSavedAt: new Date().toISOString(),
+   545→        })),
+   546→
+   547→      advanceDemoStatus: (id) => {
+   548→        const flow: DemoStatus[] = [
+   549→          "ready",
+   550→          "sent",
+   551→          "reviewing",
+   552→          "accepted",
+   553→        ];
+   554→        const demo = get().demos.find((d) => d.id === id);
+   555→        if (!demo) return;
+   556→        const idx = flow.indexOf(demo.status);
+   557→        if (idx < flow.length - 1) {
+   558→          const nextStatus = flow[idx + 1];
+   559→          const updates: Partial<Demo> = { status: nextStatus };
+   560→          if (nextStatus === "sent" && !demo.sentDate) {
+   561→            updates.sentDate = new Date().toISOString().split("T")[0];
+   562→          }
+   563→          set((state) => ({
+   564→            demos: state.demos.map((d) =>
+   565→              d.id === id ? { ...d, ...updates } : d
+   566→            ),
+   567→            lastSavedAt: new Date().toISOString(),
+   568→          }));
+   569→        }
+   570→      },
+   571→
+   572→      setActiveTab: (tab) => set({ activeTab: tab }),
+   573→      setLocale: (locale) => set({ locale }),
+   574→      setUserProfile: (profile) => set((state) => ({ userProfile: { ...state.userProfile, ...profile }, lastSavedAt: new Date().toISOString() })),
+   575→
+   576→      getGenres: () => labelData.genres,
+   577→
+   578→      setGmailAuth: (auth) => set({ gmailAuth: auth }),
+   579→      clearGmailAuth: () => set({ gmailAuth: { isConnected: false, email: "", accessToken: "", expiresAt: 0 } }),
+   580→
+   581→      setRankingsUpdatedAt: (date) => set({ rankingsUpdatedAt: date }),
+   582→
+   583→      exportData: () => {
+   584→        const state = get();
+   585→        const exportObj = {
+   586→          version: 1,
+   587→          app: "labelpulse",
+   588→          exportedAt: new Date().toISOString(),
+   589→          data: {
+   590→            labels: state.labels,
+   591→            demos: state.demos,
+   592→            userProfile: state.userProfile,
+   593→            locale: state.locale,
+   594→          }
+   595→        };
+   596→        return JSON.stringify(exportObj, null, 2);
+   597→      },
+   598→
+   599→      importData: (jsonString: string) => {
+   600→        try {
+   601→          const parsed = JSON.parse(jsonString);
+   602→          if (parsed.app !== "labelpulse" || !parsed.data) return false;
+   603→          
+   604→          const { labels: importedLabels = [], demos: importedDemos = [], userProfile, locale: importedLocale } = parsed.data;
+   605→          const currentLabels = get().labels;
+   606→          const currentDemos = get().demos;
+   607→
+   608→          // === LABEL MERGE ===
+   609→          const currentLabelById = new Map(currentLabels.map(l => [l.id, l]));
+   610→          const currentLabelByName = new Map(currentLabels.map(l => [l.name.toLowerCase().trim(), l]));
+   611→
+   612→          const newLabels: Label[] = [];
+   613→
+   614→          for (const imported of importedLabels as Label[]) {
+   615→            if (currentLabelById.has(imported.id)) {
+   616→              const existing = currentLabelById.get(imported.id)!;
+   617→              const merged = {
+   618→                ...existing,
+   619→                ...mergePreservingUserData(existing, imported),
+   620→              };
+   621→              currentLabelById.set(imported.id, merged);
+   622→              continue;
+   623→            }
+   624→
+   625→            const nameKey = imported.name.toLowerCase().trim();
+   626→            if (currentLabelByName.has(nameKey)) {
+   627→              const existing = currentLabelByName.get(nameKey)!;
+   628→              const mergedLabel: Label = {
+   629→                ...existing,
+   630→                ...mergePreservingUserData(existing, imported),
+   631→              };
+   632→              currentLabelById.set(existing.id, mergedLabel);
+   633→              currentLabelByName.set(nameKey, mergedLabel);
+   634→              continue;
+   635→            }
+   636→
+   637→            newLabels.push({
+   638→              ...imported,
+   639→              id: imported.id || genId(),
+   640→              createdAt: imported.createdAt || new Date().toISOString(),
+   641→              isCustom: imported.isCustom ?? true,
+   642→              genres: imported.genres || [],
+   643→              rankByGenre: imported.rankByGenre || {},
+   644→              pointsByGenre: imported.pointsByGenre || {},
+   645→              trending: imported.trending || false,
+   646→              trendingRankByGenre: imported.trendingRankByGenre || {},
+   647→              trendingPointsByGenre: imported.trendingPointsByGenre || {},
+   648→              emails: imported.emails || [],
+   649→              website: imported.website || "",
+   650→              demoLink: imported.demoLink || "",
+   651→              socialLink: imported.socialLink || "",
+   652→              soundcloudLink: imported.soundcloudLink || "",
+   653→              contactInfo: imported.contactInfo || "",
+   654→              notes: imported.notes || "",
+   655→              status: imported.status || "open",
+   656→              submissionType: imported.submissionType || "email",
+   657→            });
+   658→          }
+   659→
+   660→          const mergedLabels = [...currentLabelById.values(), ...newLabels];
+   661→
+   662→          // === DEMO MERGE ===
+   663→          const currentDemoById = new Map(currentDemos.map(d => [d.id, d]));
+   664→          const currentDemoByKey = new Map(
+   665→            currentDemos.map(d => [`${d.trackName.toLowerCase().trim()}||${d.labelId}`, d])
+   666→          );
+   667→
+   668→          const newDemos: Demo[] = [];
+   669→
+   670→          for (const imported of importedDemos as Demo[]) {
+   671→            if (currentDemoById.has(imported.id)) {
+   672→              const existing = currentDemoById.get(imported.id)!;
+   673→              currentDemoById.set(imported.id, {
+   674→                ...existing,
+   675→                ...imported,
+   676→                id: existing.id,
+   677→              });
+   678→              continue;
+   679→            }
+   680→
+   681→            const key = `${imported.trackName?.toLowerCase().trim()}||${imported.labelId}`;
+   682→            if (currentDemoByKey.has(key)) {
+   683→              const existing = currentDemoByKey.get(key)!;
+   684→              const merged: Demo = {
+   685→                ...existing,
+   686→                ...imported,
+   687→                id: existing.id,
+   688→              };
+   689→              currentDemoById.set(existing.id, merged);
+   690→              currentDemoByKey.set(key, merged);
+   691→              continue;
+   692→            }
+   693→
+   694→            newDemos.push({
+   695→              ...imported,
+   696→              id: imported.id || genId(),
+   697→              createdAt: imported.createdAt || new Date().toISOString(),
+   698→            });
+   699→          }
+   700→
+   701→          const mergedDemos = [...currentDemoById.values(), ...newDemos];
+   702→
+   703→          const isRankingsImport = parsed._meta?.source === 'beatport' || parsed._meta?.source === 'beatstats';
+   704→          const hasGenresAndLabels = parsed.genres && parsed.labels && Array.isArray(parsed.labels);
+   705→          
+   706→          set({
+   707→            labels: mergedLabels,
+   708→            demos: mergedDemos,
+   709→            userProfile: userProfile || get().userProfile,
+   710→            locale: importedLocale || get().locale,
+   711→            ...(isRankingsImport || hasGenresAndLabels ? { rankingsUpdatedAt: new Date().toISOString() } : {}),
+   712→            lastSavedAt: new Date().toISOString(),
+   713→          });
+   714→          return true;
+   715→        } catch {
+   716→          return false;
+   717→        }
+   718→      },
+   719→    }),
+   720→    {
+   721→      name: PRIMARY_KEY,
+   722→      version: 9,
+   723→      storage: createJSONStorage(() => robustStorage),
+   724→      migrate: (persisted: any, version: number) => {
+   725→        if (version < 5) {
+   726→          if (persisted.demos) {
+   727→            const seedIds = ["demo_1", "demo_2", "demo_3", "demo_4", "demo_5", "demo_6"];
+   728→            persisted.demos = persisted.demos.filter(
+   729→              (d: any) => !seedIds.includes(d.id)
+   730→            );
+   731→          }
+   732→          if (persisted.labels) {
+   733→            persisted.labels = persisted.labels.map((l: any) => ({
+   734→              ...l,
+   735→              genres: l.genres || (l.genre ? [l.genre] : []),
+   736→              rankByGenre: l.rankByGenre || {},
+   737→              pointsByGenre: l.pointsByGenre || {},
+   738→              trending: l.trending || false,
+   739→              trendingRankByGenre: l.trendingRankByGenre || {},
+   740→              trendingPointsByGenre: l.trendingPointsByGenre || {},
+   741→              isCustom: l.isCustom ?? false,
+   742→              website: l.website || "",
+   743→              demoLink: l.demoLink || "",
+   744→              socialLink: l.socialLink || "",
+   745→              soundcloudLink: l.soundcloudLink || "",
+   746→              emails: Array.isArray(l.emails) ? l.emails : (l.contactInfo ? [l.contactInfo] : []),
+   747→            }));
+   748→          }
+   749→          if (persisted.demos) {
+   750→            persisted.demos = persisted.demos.map((d: any) => ({
+   751→              ...d,
+   752→              sentDate: d.sentDate ?? null,
+   753→              link: d.link || "",
+   754→              notes: d.notes || "",
+   755→              pitchText: d.pitchText || "",
+   756→              artistName: d.artistName || "",
+   757→            }));
+   758→          }
+   759→          if (!persisted.locale) {
+   760→            persisted.locale = "it";
+   761→          }
+   762→          if (!persisted.userProfile) {
+   763→            persisted.userProfile = { artistName: "", scLink: "" };
+   764→          }
+   765→        }
+   766→        if (version < 6) {
+   767→          if (!persisted.gmailAuth) {
+   768→            persisted.gmailAuth = { isConnected: false, email: "", accessToken: "", expiresAt: 0 };
+   769→          }
+   770→        }
+   771→        if (version < 7) {
+   772→          if (!persisted.rankingsUpdatedAt) {
+   773→            persisted.rankingsUpdatedAt = null;
+   774→          }
+   775→        }
+   776→        if (version < 8) {
+   777→          if (!persisted.lastSavedAt) {
+   778→            persisted.lastSavedAt = null;
+   779→          }
+   780→          if (persisted.labels) {
+   781→            persisted.labels = persisted.labels.map((l: any) => {
+   782→              if (l.notes === "open" || l.notes === "closed") {
+   783→                l.notes = "";
+   784→              }
+   785→              return l;
+   786→            });
+   787→          }
+   788→        }
+   789→        return persisted;
+   790→      },
+   791→      partialize: (state) => ({
+   792→        labels: state.labels,
+   793→        demos: state.demos,
+   794→        activeTab: state.activeTab,
+   795→        locale: state.locale,
+   796→        userProfile: state.userProfile,
+   797→        gmailAuth: state.gmailAuth,
+   798→        rankingsUpdatedAt: state.rankingsUpdatedAt,
+   799→        lastSavedAt: state.lastSavedAt,
+   800→      }),
+   801→      merge: (persistedState: any, currentState: any) => {
+   802→        // SIMPLE & SAFE merge: preserve persisted data, add defaults, append new seed labels
+   803→        // CRITICAL: We must NEVER modify persisted user data during merge.
+   804→
+   805→        if (!persistedState) {
+   806→          return currentState;
+   807→        }
+   808→
+   809→        const merged = { ...currentState, ...persistedState };
+   810→
+   811→        if (persistedState.labels && Array.isArray(persistedState.labels) && persistedState.labels.length > 0) {
+   812→          // Step 1: Add safe defaults to ALL persisted labels (never overwrite existing values)
+   813→          merged.labels = persistedState.labels.map((l: any) => ({
+   814→            ...LABEL_DEFAULTS,
+   815→            ...l,
+   816→          }));
+   817→
+   818→          // Step 2: Append NEW seed labels that don't exist in persisted data
+   819→          const persistedIds = new Set(persistedState.labels.map((l: any) => l.id));
+   820→          const persistedNames = new Set(
+   821→            persistedState.labels
+   822→              .map((l: any) => l.name?.toLowerCase().trim())
+   823→              .filter(Boolean)
+   824→          );
+   825→          const seedLabels = buildLabelsFromData();
+   826→          for (const seed of seedLabels) {
+   827→            if (!persistedIds.has(seed.id) && !persistedNames.has(seed.name.toLowerCase().trim())) {
+   828→              merged.labels.push(seed);
+   829→            }
+   830→          }
+   831→
+   832→          // Step 3: Repair corrupted data (e.g., same email on too many labels)
+   833→          merged.labels = repairLabelData(merged.labels);
+   834→        }
+   835→
+   836→        return merged;
+   837→      },
+   838→      onRehydrateStorage: () => (state, error) => {
+   839→        if (error) {
+   840→          console.error("[LabelPulse Storage] Rehydration error:", error);
+   841→        } else if (state) {
+   842→          const userEditedCount = countUserEditedLabels(state.labels);
+   843→          console.log(
+   844→            `[LabelPulse Storage] Rehydrated: ${state.labels.length} labels, ${userEditedCount} with user data`
+   845→          );
+   846→          // Force an immediate backup after rehydration
+   847→          forceBackupNow();
+   848→        }
+   849→      },
+   850→    }
+   851→  )
+   852→);
+   853→
+   854→// Helper: get tier for a label in a given genre
+   855→export function getLabelTier(
+   856→  label: Label,
+   857→  genre?: string
+   858→): "top" | "mid" | "emerging" | null {
+   859→  if (!genre) genre = label.genres?.[0];
+   860→  if (!genre) return null;
+   861→  const rank = label.rankByGenre?.[genre];
+   862→  if (!rank) return label.trending ? "emerging" : null;
+   863→  if (rank <= 20) return "top";
+   864→  if (rank <= 50) return "mid";
+   865→  return label.trending ? "emerging" : null;
+   866→}
+   867→

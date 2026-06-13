@@ -14,7 +14,7 @@ import {
   Globe,
   Loader2,
 } from "lucide-react";
-import { useState, useEffect } from "react";
+import { useState } from "react";
 import { Button } from "@/components/ui/button";
 import {
   Popover,
@@ -52,19 +52,15 @@ const SECTION_SUBTITLES = {
 } as const;
 
 export default function Home() {
-  const { activeTab, setActiveTab, locale, setLocale } = useAppStore();
+  const { activeTab, setActiveTab, locale, setLocale, hasRehydrated } = useAppStore();
   const [mobileMenuOpen, setMobileMenuOpen] = useState(false);
   const [helpOpen, setHelpOpen] = useState(false);
 
-  // Wait for client-side hydration before rendering
-  // This prevents SSR/client mismatch and ensures localStorage is available
-  const [hydrated, setHydrated] = useState(false);
-
-  useEffect(() => {
-    setHydrated(true);
-  }, []);
-
-  if (!hydrated) {
+  // Wait for Zustand rehydration before rendering.
+  // hasRehydrated is set to true AFTER the store has loaded persisted data from localStorage.
+  // This prevents the UI from rendering with seed data before user data is loaded,
+  // and prevents user actions from writing seed data over persisted data.
+  if (!hasRehydrated) {
     return (
       <div className="min-h-screen flex items-center justify-center bg-background">
         <div className="flex flex-col items-center gap-3">
