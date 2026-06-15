@@ -33,6 +33,7 @@ export interface Label {
   socialLink: string;
   soundcloudLink: string;
   beatportLink: string;
+  customLinks: { type: string; value: string }[];
   // Real Beatport data
   genres: string[];
   rankByGenre: Record<string, number>;
@@ -94,6 +95,7 @@ function buildLabelsFromData(): Label[] {
     socialLink: "",
     soundcloudLink: "",
     beatportLink: "",
+    customLinks: [] as { type: string; value: string }[],
     genres: l.genres,
     rankByGenre: (l.rankByGenre || {}) as Record<string, number>,
     pointsByGenre: (l.pointsByGenre || {}) as Record<string, number>,
@@ -413,6 +415,7 @@ const LABEL_DEFAULTS = {
   socialLink: "",
   soundcloudLink: "",
   beatportLink: "",
+  customLinks: [],
   emails: [],
   notes: "",
   contactInfo: "",

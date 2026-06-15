@@ -226,6 +226,7 @@ function buildRankedList(
       socialLink: "",
       soundcloudLink: "",
       beatportLink: "",
+      customLinks: [],
       genres: [genre],
       rankByGenre: { [genre]: currentRank || 999 },
       pointsByGenre: {},

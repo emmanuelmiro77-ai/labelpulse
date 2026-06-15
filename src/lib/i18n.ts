@@ -344,6 +344,19 @@ type TranslationKeys = {
   "labels.beatportLink": string;
   "labels.openLink": string;
 
+  // Unified links section
+  "labels.linksSection": string;
+  "labels.addLinkPlaceholder": string;
+  "labels.linkTypeWebsite": string;
+  "labels.linkTypeInstagram": string;
+  "labels.linkTypeSoundcloud": string;
+  "labels.linkTypeBeatport": string;
+  "labels.linkTypeSpotify": string;
+  "labels.linkTypeYoutube": string;
+  "labels.linkTypeBandcamp": string;
+  "labels.linkTypeDemoLink": string;
+  "labels.linkTypeOther": string;
+
   // Auto-save
   "autosave.title": string;
   "autosave.description": string;
@@ -664,6 +677,17 @@ const translations: Record<Locale, TranslationKeys> = {
     "labels.soundcloudLink": "SoundCloud",
     "labels.beatportLink": "Beatport",
     "labels.openLink": "Apri link",
+    "labels.linksSection": "Link & Social",
+    "labels.addLinkPlaceholder": "Aggiungi link...",
+    "labels.linkTypeWebsite": "Sito Web",
+    "labels.linkTypeInstagram": "Instagram",
+    "labels.linkTypeSoundcloud": "SoundCloud",
+    "labels.linkTypeBeatport": "Beatport",
+    "labels.linkTypeSpotify": "Spotify",
+    "labels.linkTypeYoutube": "YouTube",
+    "labels.linkTypeBandcamp": "Bandcamp",
+    "labels.linkTypeDemoLink": "Link Demo",
+    "labels.linkTypeOther": "Altro",
     "autosave.title": "Salvataggio Automatico",
     "autosave.description": "Scegli una cartella del tuo PC dove salvare il backup in automatico ogni volta che chiudi l'app. Nessun dato verrà perso!",
     "autosave.saveNow": "Salva",
@@ -979,6 +1003,17 @@ const translations: Record<Locale, TranslationKeys> = {
     "labels.soundcloudLink": "SoundCloud",
     "labels.beatportLink": "Beatport",
     "labels.openLink": "Open link",
+    "labels.linksSection": "Links & Social",
+    "labels.addLinkPlaceholder": "Add link...",
+    "labels.linkTypeWebsite": "Website",
+    "labels.linkTypeInstagram": "Instagram",
+    "labels.linkTypeSoundcloud": "SoundCloud",
+    "labels.linkTypeBeatport": "Beatport",
+    "labels.linkTypeSpotify": "Spotify",
+    "labels.linkTypeYoutube": "YouTube",
+    "labels.linkTypeBandcamp": "Bandcamp",
+    "labels.linkTypeDemoLink": "Demo Link",
+    "labels.linkTypeOther": "Other",
     "autosave.title": "Auto-Save",
     "autosave.description": "Choose a folder on your PC to automatically save a backup every time you close the app. No data will be lost!",
     "autosave.saveNow": "Save",
@@ -1294,6 +1329,17 @@ const translations: Record<Locale, TranslationKeys> = {
     "labels.soundcloudLink": "SoundCloud",
     "labels.beatportLink": "Beatport",
     "labels.openLink": "Abrir enlace",
+    "labels.linksSection": "Links & Social",
+    "labels.addLinkPlaceholder": "Agregar link...",
+    "labels.linkTypeWebsite": "Sitio Web",
+    "labels.linkTypeInstagram": "Instagram",
+    "labels.linkTypeSoundcloud": "SoundCloud",
+    "labels.linkTypeBeatport": "Beatport",
+    "labels.linkTypeSpotify": "Spotify",
+    "labels.linkTypeYoutube": "YouTube",
+    "labels.linkTypeBandcamp": "Bandcamp",
+    "labels.linkTypeDemoLink": "Link Demo",
+    "labels.linkTypeOther": "Otro",
     "autosave.title": "Guardado Automático",
     "autosave.description": "Elige una carpeta en tu PC para guardar un backup automáticamente cada vez que cierres la app. ¡No se perderán datos!",
     "autosave.saveNow": "Guardar",
@@ -1609,6 +1655,17 @@ const translations: Record<Locale, TranslationKeys> = {
     "labels.soundcloudLink": "SoundCloud",
     "labels.beatportLink": "Beatport",
     "labels.openLink": "Ouvrir le lien",
+    "labels.linksSection": "Links & Social",
+    "labels.addLinkPlaceholder": "Ajouter un lien...",
+    "labels.linkTypeWebsite": "Site Web",
+    "labels.linkTypeInstagram": "Instagram",
+    "labels.linkTypeSoundcloud": "SoundCloud",
+    "labels.linkTypeBeatport": "Beatport",
+    "labels.linkTypeSpotify": "Spotify",
+    "labels.linkTypeYoutube": "YouTube",
+    "labels.linkTypeBandcamp": "Bandcamp",
+    "labels.linkTypeDemoLink": "Lien Démo",
+    "labels.linkTypeOther": "Autre",
     "autosave.title": "Sauvegarde Automatique",
     "autosave.description": "Choisissez un dossier sur votre PC pour sauvegarder automatiquement un backup à chaque fermeture de l'app. Aucune donnée ne sera perdue !",
     "autosave.saveNow": "Sauvegarder",
@@ -1924,6 +1981,17 @@ const translations: Record<Locale, TranslationKeys> = {
     "labels.soundcloudLink": "SoundCloud",
     "labels.beatportLink": "Beatport",
     "labels.openLink": "Link öffnen",
+    "labels.linksSection": "Links & Social",
+    "labels.addLinkPlaceholder": "Link hinzufügen...",
+    "labels.linkTypeWebsite": "Website",
+    "labels.linkTypeInstagram": "Instagram",
+    "labels.linkTypeSoundcloud": "SoundCloud",
+    "labels.linkTypeBeatport": "Beatport",
+    "labels.linkTypeSpotify": "Spotify",
+    "labels.linkTypeYoutube": "YouTube",
+    "labels.linkTypeBandcamp": "Bandcamp",
+    "labels.linkTypeDemoLink": "Demo-Link",
+    "labels.linkTypeOther": "Sonstiges",
     "autosave.title": "Automatisches Speichern",
     "autosave.description": "Wählen Sie einen Ordner auf Ihrem PC, um bei jedem Schließen der App automatisch ein Backup zu speichern. Keine Daten gehen verloren!",
     "autosave.saveNow": "Speichern",
@@ -2239,6 +2307,17 @@ const translations: Record<Locale, TranslationKeys> = {
     "labels.soundcloudLink": "SoundCloud",
     "labels.beatportLink": "Beatport",
     "labels.openLink": "Abrir link",
+    "labels.linksSection": "Links & Social",
+    "labels.addLinkPlaceholder": "Adicionar link...",
+    "labels.linkTypeWebsite": "Site Web",
+    "labels.linkTypeInstagram": "Instagram",
+    "labels.linkTypeSoundcloud": "SoundCloud",
+    "labels.linkTypeBeatport": "Beatport",
+    "labels.linkTypeSpotify": "Spotify",
+    "labels.linkTypeYoutube": "YouTube",
+    "labels.linkTypeBandcamp": "Bandcamp",
+    "labels.linkTypeDemoLink": "Link Demo",
+    "labels.linkTypeOther": "Outro",
     "autosave.title": "Salvamento Automático",
     "autosave.description": "Escolha uma pasta no seu PC para salvar um backup automaticamente toda vez que fechar o app. Nenhum dado será perdido!",
     "autosave.saveNow": "Salvar",

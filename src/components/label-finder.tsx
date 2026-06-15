@@ -2,7 +2,7 @@
 
 import { useAppStore, getLabelTier, type Label } from "@/lib/store";
 import { t } from "@/lib/i18n";
-import { useState, useMemo, useCallback, useEffect } from "react";
+import React, { useState, useMemo, useCallback, useEffect } from "react";
 import { sendEmail, ensureValidToken } from "@/lib/gmail";
 import {
   Search,
@@ -76,7 +76,28 @@ const SUBMISSION_TYPES = ["email", "webform", "platform"] as const;
 // E.g. "spectrummusicnl" → "https://instagram.com/spectrummusicnl"
 // If already a full URL, returns as-is.
 
-function toClickableUrl(value: string, field: "website" | "demoLink" | "socialLink" | "soundcloudLink" | "beatportLink"): string | null {
+// ==================== LINK TYPE DEFINITIONS ====================
+const LINK_TYPES = [
+  { id: "website", labelKey: "labels.linkTypeWebsite", icon: Globe, placeholder: "https://www.label.com", color: "text-blue-400" },
+  { id: "instagram", labelKey: "labels.linkTypeInstagram", icon: ExternalLink, placeholder: "username", color: "text-pink-400" },
+  { id: "soundcloud", labelKey: "labels.linkTypeSoundcloud", icon: Music2, placeholder: "username", color: "text-orange-400" },
+  { id: "beatport", labelKey: "labels.linkTypeBeatport", icon: Disc3, placeholder: "label-slug", color: "text-forest-400" },
+  { id: "spotify", labelKey: "labels.linkTypeSpotify", icon: Music2, placeholder: "artist-id", color: "text-green-400" },
+  { id: "youtube", labelKey: "labels.linkTypeYoutube", icon: ExternalLink, placeholder: "@channel", color: "text-red-400" },
+  { id: "bandcamp", labelKey: "labels.linkTypeBandcamp", icon: Music2, placeholder: "username", color: "text-cyan-400" },
+  { id: "demoLink", labelKey: "labels.linkTypeDemoLink", icon: Link2, placeholder: "https://www.label.com/submit-demo", color: "text-purple-400" },
+  { id: "other", labelKey: "labels.linkTypeOther", icon: ExternalLink, placeholder: "https://...", color: "text-gray-400" },
+] as const;
+
+type LinkTypeId = typeof LINK_TYPES[number]["id"];
+
+interface DetailLink {
+  type: LinkTypeId | string;
+  value: string;
+}
+
+// Smart URL builder for each link type
+function toClickableUrl(value: string, linkType: string): string | null {
   if (!value || !value.trim()) return null;
   const v = value.trim();
 
@@ -84,35 +105,121 @@ function toClickableUrl(value: string, field: "website" | "demoLink" | "socialLi
   if (/^https?:\/\//i.test(v)) return v;
 
   // Email
-  if (v.includes("@") && field !== "socialLink" && field !== "soundcloudLink") {
+  if (v.includes("@") && linkType !== "instagram" && linkType !== "soundcloud") {
     return `mailto:${v}`;
   }
 
-  // Field-specific smart defaults
-  switch (field) {
-    case "socialLink":
-      // Could be Instagram, Facebook, X/Twitter, etc.
-      // Heuristic: if it looks like a username (no dots, no slashes), assume Instagram
+  // Type-specific smart defaults
+  switch (linkType) {
+    case "instagram":
       if (/^[a-zA-Z0-9._]{1,30}$/.test(v)) {
         return `https://instagram.com/${v.replace(/^@/, "")}`;
       }
-      // If it has dots but no slashes, might be a domain-like handle — try as-is with https
-      if (!/\//.test(v)) return `https://${v}`;
       return `https://${v}`;
-    case "soundcloudLink":
+    case "soundcloud":
       if (/^[a-zA-Z0-9._-]{1,30}$/.test(v)) {
         return `https://soundcloud.com/${v.replace(/^@/, "")}`;
       }
       return `https://${v}`;
-    case "beatportLink":
+    case "beatport":
       if (/^[a-zA-Z0-9._-]{1,50}$/.test(v)) {
         return `https://www.beatport.com/label/${v.replace(/^@/, "")}`;
       }
       return `https://${v}`;
+    case "spotify":
+      if (/^[a-zA-Z0-9._-]{1,40}$/.test(v)) {
+        return `https://open.spotify.com/artist/${v.replace(/^@/, "")}`;
+      }
+      return `https://${v}`;
+    case "youtube":
+      if (/^@?[a-zA-Z0-9._-]{1,40}$/.test(v)) {
+        return `https://youtube.com/${v.replace(/^@/, "@")}`;
+      }
+      return `https://${v}`;
+    case "bandcamp":
+      if (/^[a-zA-Z0-9._-]{1,40}$/.test(v)) {
+        return `https://${v}.bandcamp.com`;
+      }
+      return `https://${v}`;
     case "website":
     case "demoLink":
+    case "other":
+    default:
       return `https://${v}`;
   }
+}
+
+// Get placeholder for a link type
+function getLinkPlaceholder(linkType: string): string {
+  const found = LINK_TYPES.find(lt => lt.id === linkType);
+  return found?.placeholder || "https://...";
+}
+
+// Get icon component for a link type
+function getLinkIcon(linkType: string): React.ComponentType<{ className?: string }> {
+  const found = LINK_TYPES.find(lt => lt.id === linkType);
+  return found?.icon || ExternalLink;
+}
+
+// Get color class for a link type
+function getLinkColor(linkType: string): string {
+  const found = LINK_TYPES.find(lt => lt.id === linkType);
+  return found?.color || "text-cyan-400";
+}
+
+// Convert fixed link fields + customLinks into a unified DetailLink array
+function labelToDetailLinks(label: Label): DetailLink[] {
+  const links: DetailLink[] = [];
+  if (label.website?.trim()) links.push({ type: "website", value: label.website });
+  if (label.socialLink?.trim()) links.push({ type: "instagram", value: label.socialLink });
+  if (label.soundcloudLink?.trim()) links.push({ type: "soundcloud", value: label.soundcloudLink });
+  if (label.beatportLink?.trim()) links.push({ type: "beatport", value: label.beatportLink });
+  if (label.demoLink?.trim()) links.push({ type: "demoLink", value: label.demoLink });
+  // Add custom links
+  if (label.customLinks?.length) {
+    for (const cl of label.customLinks) {
+      if (cl.value?.trim()) links.push({ type: cl.type, value: cl.value });
+    }
+  }
+  return links;
+}
+
+// Save a DetailLink array back to the fixed fields + customLinks
+function detailLinksToFields(links: DetailLink[]): Partial<Label> {
+  const fields: Partial<Label> = {
+    website: "",
+    socialLink: "",
+    soundcloudLink: "",
+    beatportLink: "",
+    demoLink: "",
+    customLinks: [],
+  };
+  for (const link of links) {
+    if (!link.value?.trim()) continue;
+    switch (link.type) {
+      case "website":
+        fields.website = link.value;
+        break;
+      case "instagram":
+        fields.socialLink = link.value;
+        break;
+      case "soundcloud":
+        fields.soundcloudLink = link.value;
+        break;
+      case "beatport":
+        fields.beatportLink = link.value;
+        break;
+      case "demoLink":
+        fields.demoLink = link.value;
+        break;
+      default:
+        // Custom type - goes into customLinks
+        if (!fields.customLinks) fields.customLinks = [];
+        fields.customLinks.push({ type: link.type, value: link.value });
+        break;
+    }
+  }
+  return fields;
 }
 
 // Get display text for a link (strips protocol for cleaner display)
@@ -144,11 +251,7 @@ export function LabelFinder() {
   const [detailLabel, setDetailLabel] = useState<Label | null>(null);
   const [detailEmails, setDetailEmails] = useState<string[]>([]);
   const [newEmailInput, setNewEmailInput] = useState("");
-  const [detailWebsite, setDetailWebsite] = useState("");
-  const [detailDemoLink, setDetailDemoLink] = useState("");
-  const [detailSocialLink, setDetailSocialLink] = useState("");
-  const [detailSoundcloudLink, setDetailSoundcloudLink] = useState("");
-  const [detailBeatportLink, setDetailBeatportLink] = useState("");
+  const [detailLinks, setDetailLinks] = useState<DetailLink[]>([]);
   const [detailNotes, setDetailNotes] = useState("");
   const [detailStatus, setDetailStatus] = useState<"open" | "closed">("open");
   const [detailSubmissionType, setDetailSubmissionType] = useState<"email" | "webform" | "platform">("email");
@@ -243,11 +346,7 @@ export function LabelFinder() {
   const openDetail = useCallback((label: Label) => {
     setDetailLabel(label);
     setDetailEmails(label.emails?.length ? [...label.emails] : (label.contactInfo ? [label.contactInfo] : []));
-    setDetailWebsite(label.website || "");
-    setDetailDemoLink(label.demoLink || "");
-    setDetailSocialLink(label.socialLink || "");
-    setDetailSoundcloudLink(label.soundcloudLink || "");
-    setDetailBeatportLink(label.beatportLink || "");
+    setDetailLinks(labelToDetailLinks(label));
     setDetailNotes(label.notes || "");
     setDetailStatus(label.status);
     setDetailSubmissionType(label.submissionType);
@@ -313,6 +412,42 @@ export function LabelFinder() {
       setTimeout(() => setDetailSaved(false), 1500);
     }
   }, [detailEmails, detailLabel, updateLabel]);
+
+  // Link management
+  const saveLinksToStore = useCallback((links: DetailLink[]) => {
+    if (!detailLabel) return;
+    const exists = labels.find(l => l.id === detailLabel.id);
+    if (!exists) return;
+    const fields = detailLinksToFields(links);
+    updateLabel(detailLabel.id, fields);
+    setDetailSaved(true);
+    setTimeout(() => setDetailSaved(false), 1500);
+  }, [detailLabel, updateLabel, labels]);
+
+  const addDetailLink = useCallback((type: string) => {
+    const newLinks = [...detailLinks, { type, value: "" }];
+    setDetailLinks(newLinks);
+    // Don't save to store yet - value is empty
+  }, [detailLinks]);
+
+  const updateDetailLink = useCallback((index: number, field: "type" | "value", val: string) => {
+    const newLinks = [...detailLinks];
+    newLinks[index] = { ...newLinks[index], [field]: val };
+    setDetailLinks(newLinks);
+    if (field === "value" && val.trim()) {
+      saveLinksToStore(newLinks);
+    }
+  }, [detailLinks, saveLinksToStore]);
+
+  const removeDetailLink = useCallback((index: number) => {
+    const newLinks = detailLinks.filter((_, i) => i !== index);
+    setDetailLinks(newLinks);
+    saveLinksToStore(newLinks);
+  }, [detailLinks, saveLinksToStore]);
+
+  const saveDetailLinkOnBlur = useCallback((index: number) => {
+    saveLinksToStore(detailLinks);
+  }, [detailLinks, saveLinksToStore]);
 
   // Pitch generation
   const pitchText = useMemo(() => {
@@ -580,6 +715,7 @@ export function LabelFinder() {
       label.socialLink ||
       label.soundcloudLink ||
       label.beatportLink ||
+      (label.customLinks && label.customLinks.length > 0) ||
       label.notes
     );
   };
@@ -873,119 +1009,83 @@ export function LabelFinder() {
                     </div>
                   </div>
 
-                  <div className="space-y-1.5">
-                    <UILabel className="text-xs font-mono uppercase text-muted-foreground flex items-center gap-1.5">
-                      <Globe className="h-3 w-3" /> {t(locale, "labels.website")}
-                    </UILabel>
-                    <div className="flex items-center gap-1.5">
-                      <Input value={detailWebsite} onChange={(e) => setDetailWebsite(e.target.value)}
-                        onBlur={() => saveDetailField("website", detailWebsite)} placeholder="https://www.label.com" className="bg-secondary/50 flex-1" />
-                      {detailWebsite?.trim() && (
-                        <Button variant="ghost" size="icon" className="shrink-0 h-9 w-9 text-cyan-400 hover:text-cyan-300 hover:bg-cyan-500/10"
-                          onClick={() => window.open(toClickableUrl(detailWebsite, "website") || "#", "_blank")}
-                          title={t(locale, "labels.openLink")}>
-                          <ExternalLink className="h-3.5 w-3.5" />
-                        </Button>
-                      )}
+                  {/* Unified Links & Social section */}
+                  <div className="space-y-2">
+                    <div className="flex items-center justify-between">
+                      <UILabel className="text-xs font-mono uppercase text-muted-foreground flex items-center gap-1.5">
+                        <ExternalLink className="h-3 w-3" /> {t(locale, "labels.linksSection")}
+                      </UILabel>
                     </div>
-                    {detailWebsite?.trim() && toClickableUrl(detailWebsite, "website") && (
-                      <a href={toClickableUrl(detailWebsite, "website")!} target="_blank" rel="noopener noreferrer"
-                        className="text-[11px] font-mono text-cyan-400 hover:text-cyan-300 hover:underline truncate block">
-                        {toClickableUrl(detailWebsite, "website")!}
-                      </a>
-                    )}
-                  </div>
-
-                  <div className="space-y-1.5">
-                    <UILabel className="text-xs font-mono uppercase text-muted-foreground flex items-center gap-1.5">
-                      <Link2 className="h-3 w-3" /> {t(locale, "labels.demoLink")}
-                    </UILabel>
+                    {/* Existing links */}
+                    {detailLinks.map((link, idx) => {
+                      const Icon = getLinkIcon(link.type);
+                      const color = getLinkColor(link.type);
+                      const clickUrl = link.value?.trim() ? toClickableUrl(link.value, link.type) : null;
+                      // Find which types are already used (to limit dropdown choices)
+                      const usedTypes = new Set(detailLinks.map((l, i) => i !== idx ? l.type : null).filter(Boolean));
+                      return (
+                        <div key={idx} className="space-y-1">
+                          <div className="flex items-center gap-1.5">
+                            {/* Type selector */}
+                            <Select value={link.type} onValueChange={(v) => updateDetailLink(idx, "type", v)}>
+                              <SelectTrigger className="bg-secondary/50 w-[130px] shrink-0 h-9 text-xs">
+                                <SelectValue />
+                              </SelectTrigger>
+                              <SelectContent>
+                                {LINK_TYPES.map((lt) => (
+                                  <SelectItem key={lt.id} value={lt.id} disabled={usedTypes.has(lt.id) && lt.id !== link.type}>
+                                    {t(locale, lt.labelKey as any)}
+                                  </SelectItem>
+                                ))}
+                              </SelectContent>
+                            </Select>
+                            {/* Value input */}
+                            <Input value={link.value} onChange={(e) => updateDetailLink(idx, "value", e.target.value)}
+                              onBlur={() => saveDetailLinkOnBlur(idx)}
+                              placeholder={getLinkPlaceholder(link.type)} className="bg-secondary/50 flex-1 text-sm" />
+                            {/* Open link button */}
+                            {clickUrl && (
+                              <Button variant="ghost" size="icon" className={`shrink-0 h-9 w-9 ${color} hover:opacity-80 hover:bg-white/5`}
+                                onClick={() => window.open(clickUrl, "_blank")}
+                                title={t(locale, "labels.openLink")}>
+                                <ExternalLink className="h-3.5 w-3.5" />
+                              </Button>
+                            )}
+                            {/* Remove button */}
+                            <Button variant="ghost" size="icon" className="shrink-0 h-9 w-9 text-muted-foreground hover:text-destructive hover:bg-destructive/10"
+                              onClick={() => removeDetailLink(idx)}>
+                              <X className="h-3.5 w-3.5" />
+                            </Button>
+                          </div>
+                          {/* Clickable URL preview */}
+                          {clickUrl && (
+                            <a href={clickUrl} target="_blank" rel="noopener noreferrer"
+                              className={`text-[11px] font-mono ${color} hover:underline truncate block pl-[138px]`}>
+                              {clickUrl}
+                            </a>
+                          )}
+                        </div>
+                      );
+                    })}
+                    {/* Add new link button */}
                     <div className="flex items-center gap-1.5">
-                      <Input value={detailDemoLink} onChange={(e) => setDetailDemoLink(e.target.value)}
-                        onBlur={() => saveDetailField("demoLink", detailDemoLink)} placeholder="https://www.label.com/submit-demo" className="bg-secondary/50 flex-1" />
-                      {detailDemoLink?.trim() && (
-                        <Button variant="ghost" size="icon" className="shrink-0 h-9 w-9 text-cyan-400 hover:text-cyan-300 hover:bg-cyan-500/10"
-                          onClick={() => window.open(toClickableUrl(detailDemoLink, "demoLink") || "#", "_blank")}
-                          title={t(locale, "labels.openLink")}>
-                          <ExternalLink className="h-3.5 w-3.5" />
-                        </Button>
-                      )}
+                      <Select value="" onValueChange={(v) => addDetailLink(v)}>
+                        <SelectTrigger className="bg-secondary/30 border-dashed border-muted-foreground/30 w-full h-9 text-xs text-muted-foreground hover:border-primary/50 hover:text-primary transition-colors">
+                          <Plus className="h-3 w-3 mr-1" />
+                          <SelectValue placeholder={t(locale, "labels.addLinkPlaceholder")} />
+                        </SelectTrigger>
+                        <SelectContent>
+                          {LINK_TYPES.map((lt) => {
+                            const alreadyUsed = detailLinks.some(l => l.type === lt.id);
+                            return (
+                              <SelectItem key={lt.id} value={lt.id} disabled={alreadyUsed}>
+                                {t(locale, lt.labelKey as any)}
+                              </SelectItem>
+                            );
+                          })}
+                        </SelectContent>
+                      </Select>
                     </div>
-                    {detailDemoLink?.trim() && toClickableUrl(detailDemoLink, "demoLink") && (
-                      <a href={toClickableUrl(detailDemoLink, "demoLink")!} target="_blank" rel="noopener noreferrer"
-                        className="text-[11px] font-mono text-cyan-400 hover:text-cyan-300 hover:underline truncate block">
-                        {toClickableUrl(detailDemoLink, "demoLink")!}
-                      </a>
-                    )}
-                  </div>
-
-                  <div className="space-y-1.5">
-                    <UILabel className="text-xs font-mono uppercase text-muted-foreground flex items-center gap-1.5">
-                      <ExternalLink className="h-3 w-3" /> {t(locale, "labels.socialLink")}
-                    </UILabel>
-                    <div className="flex items-center gap-1.5">
-                      <Input value={detailSocialLink} onChange={(e) => setDetailSocialLink(e.target.value)}
-                        onBlur={() => saveDetailField("socialLink", detailSocialLink)} placeholder="https://instagram.com/label" className="bg-secondary/50 flex-1" />
-                      {detailSocialLink?.trim() && (
-                        <Button variant="ghost" size="icon" className="shrink-0 h-9 w-9 text-cyan-400 hover:text-cyan-300 hover:bg-cyan-500/10"
-                          onClick={() => window.open(toClickableUrl(detailSocialLink, "socialLink") || "#", "_blank")}
-                          title={t(locale, "labels.openLink")}>
-                          <ExternalLink className="h-3.5 w-3.5" />
-                        </Button>
-                      )}
-                    </div>
-                    {detailSocialLink?.trim() && toClickableUrl(detailSocialLink, "socialLink") && (
-                      <a href={toClickableUrl(detailSocialLink, "socialLink")!} target="_blank" rel="noopener noreferrer"
-                        className="text-[11px] font-mono text-cyan-400 hover:text-cyan-300 hover:underline truncate block">
-                        {toClickableUrl(detailSocialLink, "socialLink")!}
-                      </a>
-                    )}
-                  </div>
-
-                  <div className="space-y-1.5">
-                    <UILabel className="text-xs font-mono uppercase text-muted-foreground flex items-center gap-1.5">
-                      <Music2 className="h-3 w-3" /> {t(locale, "labels.soundcloudLink")}
-                    </UILabel>
-                    <div className="flex items-center gap-1.5">
-                      <Input value={detailSoundcloudLink} onChange={(e) => setDetailSoundcloudLink(e.target.value)}
-                        onBlur={() => saveDetailField("soundcloudLink", detailSoundcloudLink)} placeholder="https://soundcloud.com/label" className="bg-secondary/50 flex-1" />
-                      {detailSoundcloudLink?.trim() && (
-                        <Button variant="ghost" size="icon" className="shrink-0 h-9 w-9 text-cyan-400 hover:text-cyan-300 hover:bg-cyan-500/10"
-                          onClick={() => window.open(toClickableUrl(detailSoundcloudLink, "soundcloudLink") || "#", "_blank")}
-                          title={t(locale, "labels.openLink")}>
-                          <ExternalLink className="h-3.5 w-3.5" />
-                        </Button>
-                      )}
-                    </div>
-                    {detailSoundcloudLink?.trim() && toClickableUrl(detailSoundcloudLink, "soundcloudLink") && (
-                      <a href={toClickableUrl(detailSoundcloudLink, "soundcloudLink")!} target="_blank" rel="noopener noreferrer"
-                        className="text-[11px] font-mono text-cyan-400 hover:text-cyan-300 hover:underline truncate block">
-                        {toClickableUrl(detailSoundcloudLink, "soundcloudLink")!}
-                      </a>
-                    )}
-                  </div>
-
-                  <div className="space-y-1.5">
-                    <UILabel className="text-xs font-mono uppercase text-muted-foreground flex items-center gap-1.5">
-                      <Disc3 className="h-3 w-3" /> {t(locale, "labels.beatportLink")}
-                    </UILabel>
-                    <div className="flex items-center gap-1.5">
-                      <Input value={detailBeatportLink} onChange={(e) => setDetailBeatportLink(e.target.value)}
-                        onBlur={() => saveDetailField("beatportLink", detailBeatportLink)} placeholder="https://www.beatport.com/label/..." className="bg-secondary/50 flex-1" />
-                      {detailBeatportLink?.trim() && (
-                        <Button variant="ghost" size="icon" className="shrink-0 h-9 w-9 text-cyan-400 hover:text-cyan-300 hover:bg-cyan-500/10"
-                          onClick={() => window.open(toClickableUrl(detailBeatportLink, "beatportLink") || "#", "_blank")}
-                          title={t(locale, "labels.openLink")}>
-                          <ExternalLink className="h-3.5 w-3.5" />
-                        </Button>
-                      )}
-                    </div>
-                    {detailBeatportLink?.trim() && toClickableUrl(detailBeatportLink, "beatportLink") && (
-                      <a href={toClickableUrl(detailBeatportLink, "beatportLink")!} target="_blank" rel="noopener noreferrer"
-                        className="text-[11px] font-mono text-cyan-400 hover:text-cyan-300 hover:underline truncate block">
-                        {toClickableUrl(detailBeatportLink, "beatportLink")!}
-                      </a>
-                    )}
                   </div>
 
                   <div className="grid grid-cols-2 gap-3">
