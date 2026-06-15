@@ -66,11 +66,15 @@ export interface Demo {
   labelId: string;
   status: DemoStatus;
   sentDate: string | null;
-  link: string;
+  link: string; // primary SoundCloud link (legacy)
+  links: { type: string; value: string }[]; // multiple demo links (SoundCloud, Dropbox, WeTransfer, etc.)
   notes: string;
   createdAt: string;
   pitchText: string;
   artistName: string;
+  genre: string; // demo genre
+  bpm: string;
+  key: string;
 }
 
 // ==================== HELPERS ====================
@@ -303,6 +307,10 @@ export function forceBackupNow(): void {
 interface UserProfile {
   artistName: string;
   scLink: string;
+  bio: string;
+  email: string;
+  photoUrl: string;
+  links: { type: string; value: string }[];
 }
 
 interface GmailAuth {
@@ -315,7 +323,7 @@ interface GmailAuth {
 interface AppState {
   labels: Label[];
   demos: Demo[];
-  activeTab: "dashboard" | "labels" | "rankings" | "demos" | "pitch";
+  activeTab: "dashboard" | "labels" | "rankings" | "demos" | "pitch" | "profile";
   locale: Locale;
   userProfile: UserProfile;
   gmailAuth: GmailAuth;
@@ -337,7 +345,7 @@ interface AppState {
   advanceDemoStatus: (id: string) => void;
 
   // Navigation
-  setActiveTab: (tab: "dashboard" | "labels" | "rankings" | "demos" | "pitch") => void;
+  setActiveTab: (tab: "dashboard" | "labels" | "rankings" | "demos" | "pitch" | "profile") => void;
 
   // Language
   setLocale: (locale: Locale) => void;
@@ -503,7 +511,7 @@ export const useAppStore = create<AppState>()(
       demos: [] as Demo[],
       activeTab: "dashboard" as const,
       locale: "it" as Locale,
-      userProfile: { artistName: "", scLink: "" } as UserProfile,
+      userProfile: { artistName: "", scLink: "", bio: "", email: "", photoUrl: "", links: [] } as UserProfile,
       gmailAuth: { isConnected: false, email: "", accessToken: "", expiresAt: 0 } as GmailAuth,
       rankingsUpdatedAt: null as string | null,
       lastSavedAt: null as string | null,

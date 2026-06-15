@@ -90,7 +90,7 @@ const STATUS_TKEYS: Record<DemoStatus, "demos.ready" | "demos.sent" | "demos.rev
 };
 
 export function DemoTracker() {
-  const { labels, demos, addDemo, updateDemo, deleteDemo, advanceDemoStatus, locale: _locale, getGenres } =
+  const { labels, demos, addDemo, updateDemo, deleteDemo, advanceDemoStatus, locale: _locale, getGenres, userProfile } =
     useAppStore();
   const locale = _locale as Locale;
   const genres = getGenres();
@@ -112,7 +112,11 @@ export function DemoTracker() {
   const [formStatus, setFormStatus] = useState<DemoStatus>("ready");
   const [formSentDate, setFormSentDate] = useState("");
   const [formLink, setFormLink] = useState("");
+  const [formLinks, setFormLinks] = useState<{ type: string; value: string }[]>([]);
   const [formNotes, setFormNotes] = useState("");
+  const [formGenre, setFormGenre] = useState("");
+  const [formBpm, setFormBpm] = useState("");
+  const [formKey, setFormKey] = useState("");
 
   const filteredDemos = useMemo(() => {
     return demos.filter((d) => {
@@ -148,7 +152,11 @@ export function DemoTracker() {
     setFormStatus("ready");
     setFormSentDate("");
     setFormLink("");
+    setFormLinks([]);
     setFormNotes("");
+    setFormGenre("");
+    setFormBpm("");
+    setFormKey("");
   };
 
   const openAdd = () => { resetForm(); setEditingDemo(null); setShowAddDialog(true); };
@@ -159,7 +167,11 @@ export function DemoTracker() {
     setFormStatus(demo.status);
     setFormSentDate(demo.sentDate ?? "");
     setFormLink(demo.link);
+    setFormLinks(demo.links || []);
     setFormNotes(demo.notes);
+    setFormGenre(demo.genre || "");
+    setFormBpm(demo.bpm || "");
+    setFormKey(demo.key || "");
     setEditingDemo(demo);
     setShowAddDialog(true);
   };
@@ -172,9 +184,13 @@ export function DemoTracker() {
       status: formStatus,
       sentDate: formSentDate || null,
       link: formLink.trim(),
+      links: formLinks.filter(l => l.value.trim()),
       notes: formNotes.trim(),
       pitchText: editingDemo?.pitchText || "",
-      artistName: editingDemo?.artistName || "",
+      artistName: editingDemo?.artistName || userProfile.artistName || "",
+      genre: formGenre.trim(),
+      bpm: formBpm.trim(),
+      key: formKey.trim(),
     };
     if (editingDemo) { updateDemo(editingDemo.id, data); }
     else { addDemo(data); }
@@ -523,6 +539,54 @@ export function DemoTracker() {
             <div className="space-y-1.5">
               <UILabel className="text-xs font-mono uppercase text-muted-foreground">{t(locale, "demos.scLink")}</UILabel>
               <Input value={formLink} onChange={(e) => setFormLink(e.target.value)} placeholder="https://soundcloud.com/..." className="bg-secondary/50" />
+            </div>
+            {/* Additional demo links */}
+            {formLinks.map((fl, idx) => (
+              <div key={idx} className="flex items-center gap-1.5">
+                <Select value={fl.type} onValueChange={(v) => {
+                  const newLinks = [...formLinks];
+                  newLinks[idx] = { ...newLinks[idx], type: v };
+                  setFormLinks(newLinks);
+                }}>
+                  <SelectTrigger className="bg-secondary/50 w-[120px] shrink-0 h-9 text-xs">
+                    <SelectValue />
+                  </SelectTrigger>
+                  <SelectContent>
+                    <SelectItem value="soundcloud">SoundCloud</SelectItem>
+                    <SelectItem value="dropbox">Dropbox</SelectItem>
+                    <SelectItem value="wetransfer">WeTransfer</SelectItem>
+                    <SelectItem value="drive">Google Drive</SelectItem>
+                    <SelectItem value="other">{t(locale, "labels.linkTypeOther")}</SelectItem>
+                  </SelectContent>
+                </Select>
+                <Input value={fl.value} onChange={(e) => {
+                  const newLinks = [...formLinks];
+                  newLinks[idx] = { ...newLinks[idx], value: e.target.value };
+                  setFormLinks(newLinks);
+                }} placeholder="https://..." className="bg-secondary/50 flex-1 text-sm" />
+                <Button variant="ghost" size="icon" className="shrink-0 h-9 w-9 text-muted-foreground hover:text-destructive"
+                  onClick={() => setFormLinks(formLinks.filter((_, i) => i !== idx))}>
+                  <X className="h-3.5 w-3.5" />
+                </Button>
+              </div>
+            ))}
+            <Button variant="outline" size="sm" className="w-full border-dashed text-muted-foreground hover:text-primary"
+              onClick={() => setFormLinks([...formLinks, { type: "dropbox", value: "" }])}>
+              <Plus className="h-3 w-3 mr-1" /> {t(locale, "demos.addLink")}
+            </Button>
+            <div className="grid grid-cols-3 gap-3">
+              <div className="space-y-1.5">
+                <UILabel className="text-xs font-mono uppercase text-muted-foreground">{t(locale, "demos.genre")}</UILabel>
+                <Input value={formGenre} onChange={(e) => setFormGenre(e.target.value)} placeholder="Techno" className="bg-secondary/50" />
+              </div>
+              <div className="space-y-1.5">
+                <UILabel className="text-xs font-mono uppercase text-muted-foreground">BPM</UILabel>
+                <Input value={formBpm} onChange={(e) => setFormBpm(e.target.value)} placeholder="128" className="bg-secondary/50" />
+              </div>
+              <div className="space-y-1.5">
+                <UILabel className="text-xs font-mono uppercase text-muted-foreground">Key</UILabel>
+                <Input value={formKey} onChange={(e) => setFormKey(e.target.value)} placeholder="Am" className="bg-secondary/50" />
+              </div>
             </div>
             <div className="grid grid-cols-2 gap-3">
               <div className="space-y-1.5">

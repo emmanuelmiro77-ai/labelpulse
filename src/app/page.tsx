@@ -14,6 +14,7 @@ import {
   HelpCircle,
   Globe,
   Loader2,
+  User,
 } from "lucide-react";
 import { useState, useEffect } from "react";
 import { Button } from "@/components/ui/button";
@@ -31,6 +32,7 @@ import { GmailSettings } from "@/components/gmail-settings";
 import { DataBackup } from "@/components/data-backup";
 import { AutoSave } from "@/components/auto-save";
 import { RankingsPage } from "@/components/rankings-page";
+import { ProducerProfile } from "@/components/producer-profile";
 import { BarChart3 } from "lucide-react";
 
 const NAV_KEYS = [
@@ -39,6 +41,7 @@ const NAV_KEYS = [
   { id: "rankings" as const, labelKey: "nav.rankings" as const, icon: BarChart3 },
   { id: "demos" as const, labelKey: "nav.demos" as const, icon: Send },
   { id: "pitch" as const, labelKey: "nav.pitch" as const, icon: Megaphone },
+  { id: "profile" as const, labelKey: "nav.profile" as const, icon: User },
 ];
 
 const SECTION_TITLES = {
@@ -47,6 +50,7 @@ const SECTION_TITLES = {
   rankings: "rankings.title",
   demos: "demos.title",
   pitch: "campaign.title",
+  profile: "profile.title",
 } as const;
 
 const SECTION_SUBTITLES = {
@@ -55,6 +59,7 @@ const SECTION_SUBTITLES = {
   rankings: "rankings.subtitle",
   demos: "demos.subtitle",
   pitch: "campaign.subtitle",
+  profile: "profile.subtitle",
 } as const;
 
 export default function Home() {
@@ -259,6 +264,7 @@ export default function Home() {
             {activeTab === "rankings" && <BarChart3 className="h-5 w-5 text-primary" />}
             {activeTab === "demos" && <Send className="h-5 w-5 text-primary" />}
             {activeTab === "pitch" && <Megaphone className="h-5 w-5 text-primary" />}
+            {activeTab === "profile" && <User className="h-5 w-5 text-primary" />}
             <h2 className="text-xl font-bold text-foreground">
               {t(locale, SECTION_TITLES[activeTab])}
             </h2>
@@ -273,6 +279,7 @@ export default function Home() {
         {activeTab === "rankings" && <RankingsPage />}
         {activeTab === "demos" && <DemoTracker />}
         {activeTab === "pitch" && <PitchGenerator />}
+        {activeTab === "profile" && <ProducerProfile />}
       </main>
 
       {/* Footer */}

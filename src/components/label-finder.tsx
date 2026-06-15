@@ -529,9 +529,13 @@ export function LabelFinder() {
         status: "sent",
         sentDate: new Date().toISOString().split("T")[0],
         link: pitchScLink.trim(),
+        links: [],
         notes: pitchNote.trim(),
         pitchText: pitchText,
         artistName: pitchArtistName.trim(),
+        genre: "",
+        bpm: "",
+        key: "",
       });
       setPitchDemoCreated(true);
     }
@@ -550,9 +554,13 @@ export function LabelFinder() {
         status: "sent",
         sentDate: new Date().toISOString().split("T")[0],
         link: pitchScLink.trim(),
+        links: [],
         notes: pitchNote.trim(),
         pitchText: pitchText,
         artistName: pitchArtistName.trim(),
+        genre: "",
+        bpm: "",
+        key: "",
       });
       setPitchDemoCreated(true);
     }
@@ -607,9 +615,13 @@ export function LabelFinder() {
             status: "sent",
             sentDate: new Date().toISOString().split("T")[0],
             link: pitchScLink.trim(),
+            links: [],
             notes: pitchNote.trim(),
             pitchText: pitchText,
             artistName: pitchArtistName.trim(),
+            genre: "",
+            bpm: "",
+            key: "",
           });
           setPitchDemoCreated(true);
         }
@@ -1269,9 +1281,13 @@ export function LabelFinder() {
                                       status: "ready",
                                       sentDate: null,
                                       link: pitchScLink.trim(),
+                                      links: [],
                                       notes: pitchNote.trim(),
                                       pitchText: pitchText,
                                       artistName: pitchArtistName.trim(),
+                                      genre: "",
+                                      bpm: "",
+                                      key: "",
                                     });
                                     setPitchDemoCreated(true);
                                   }}

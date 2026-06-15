@@ -28,6 +28,7 @@ type TranslationKeys = {
   "nav.pitch": string;
   "nav.rankings": string;
   "nav.help": string;
+  "nav.profile": string;
 
   // Dashboard
   "dash.title": string;
@@ -144,6 +145,8 @@ type TranslationKeys = {
   "demos.targetLabel": string;
   "demos.selectLabel": string;
   "demos.scLink": string;
+  "demos.addLink": string;
+  "demos.genre": string;
   "demos.dateSent": string;
   "demos.sentDate": string;
   "demos.daysSince": string;
@@ -357,6 +360,28 @@ type TranslationKeys = {
   "labels.linkTypeDemoLink": string;
   "labels.linkTypeOther": string;
 
+  // Producer Profile
+  "profile.title": string;
+  "profile.subtitle": string;
+  "profile.artistName": string;
+  "profile.email": string;
+  "profile.bio": string;
+  "profile.bioPlaceholder": string;
+  "profile.photoUrl": string;
+  "profile.linksSection": string;
+  "profile.addLinkPlaceholder": string;
+  "profile.linkTypeWebsite": string;
+  "profile.linkTypeInstagram": string;
+  "profile.linkTypeSoundcloud": string;
+  "profile.linkTypeBeatport": string;
+  "profile.linkTypeSpotify": string;
+  "profile.linkTypeYoutube": string;
+  "profile.linkTypeBandcamp": string;
+  "profile.linkTypeOther": string;
+  "profile.openLink": string;
+  "profile.saved": string;
+  "profile.noLinks": string;
+
   // Auto-save
   "autosave.title": string;
   "autosave.description": string;
@@ -496,6 +521,8 @@ const translations: Record<Locale, TranslationKeys> = {
     "demos.targetLabel": "Label Target *",
     "demos.selectLabel": "Seleziona label",
     "demos.scLink": "Link SoundCloud Privato",
+    "demos.addLink": "Aggiungi link demo",
+    "demos.genre": "Genere",
     "demos.dateSent": "Data Invio",
     "demos.sentDate": "Data Invio",
     "demos.daysSince": "Giorni",
@@ -688,6 +715,27 @@ const translations: Record<Locale, TranslationKeys> = {
     "labels.linkTypeBandcamp": "Bandcamp",
     "labels.linkTypeDemoLink": "Link Demo",
     "labels.linkTypeOther": "Altro",
+    "nav.profile": "Profilo",
+    "profile.title": "Profilo Producer",
+    "profile.subtitle": "I tuoi dati artistici, richiamabili con un click quando invii demo",
+    "profile.artistName": "Nome Artista",
+    "profile.email": "Email",
+    "profile.bio": "Bio",
+    "profile.bioPlaceholder": "Racconta qualcosa di te e della tua musica...",
+    "profile.photoUrl": "URL Foto Profilo",
+    "profile.linksSection": "Link & Social",
+    "profile.addLinkPlaceholder": "Aggiungi link...",
+    "profile.linkTypeWebsite": "Sito Web",
+    "profile.linkTypeInstagram": "Instagram",
+    "profile.linkTypeSoundcloud": "SoundCloud",
+    "profile.linkTypeBeatport": "Beatport",
+    "profile.linkTypeSpotify": "Spotify",
+    "profile.linkTypeYoutube": "YouTube",
+    "profile.linkTypeBandcamp": "Bandcamp",
+    "profile.linkTypeOther": "Altro",
+    "profile.openLink": "Apri link",
+    "profile.saved": "Salvato",
+    "profile.noLinks": "Nessun link aggiunto",
     "autosave.title": "Salvataggio Automatico",
     "autosave.description": "Scegli una cartella del tuo PC dove salvare il backup in automatico ogni volta che chiudi l'app. Nessun dato verrà perso!",
     "autosave.saveNow": "Salva",
@@ -822,6 +870,8 @@ const translations: Record<Locale, TranslationKeys> = {
     "demos.targetLabel": "Target Label *",
     "demos.selectLabel": "Select label",
     "demos.scLink": "SoundCloud Private Link",
+    "demos.addLink": "Add demo link",
+    "demos.genre": "Genre",
     "demos.dateSent": "Date Sent",
     "demos.sentDate": "Sent Date",
     "demos.daysSince": "Days",
@@ -1014,6 +1064,27 @@ const translations: Record<Locale, TranslationKeys> = {
     "labels.linkTypeBandcamp": "Bandcamp",
     "labels.linkTypeDemoLink": "Demo Link",
     "labels.linkTypeOther": "Other",
+    "nav.profile": "Profile",
+    "profile.title": "Producer Profile",
+    "profile.subtitle": "Your artist info, ready to use with one click when sending demos",
+    "profile.artistName": "Artist Name",
+    "profile.email": "Email",
+    "profile.bio": "Bio",
+    "profile.bioPlaceholder": "Tell something about yourself and your music...",
+    "profile.photoUrl": "Profile Photo URL",
+    "profile.linksSection": "Links & Social",
+    "profile.addLinkPlaceholder": "Add link...",
+    "profile.linkTypeWebsite": "Website",
+    "profile.linkTypeInstagram": "Instagram",
+    "profile.linkTypeSoundcloud": "SoundCloud",
+    "profile.linkTypeBeatport": "Beatport",
+    "profile.linkTypeSpotify": "Spotify",
+    "profile.linkTypeYoutube": "YouTube",
+    "profile.linkTypeBandcamp": "Bandcamp",
+    "profile.linkTypeOther": "Other",
+    "profile.openLink": "Open link",
+    "profile.saved": "Saved",
+    "profile.noLinks": "No links added",
     "autosave.title": "Auto-Save",
     "autosave.description": "Choose a folder on your PC to automatically save a backup every time you close the app. No data will be lost!",
     "autosave.saveNow": "Save",
@@ -1148,6 +1219,8 @@ const translations: Record<Locale, TranslationKeys> = {
     "demos.targetLabel": "Label Destino *",
     "demos.selectLabel": "Seleccionar label",
     "demos.scLink": "Link Privado de SoundCloud",
+    "demos.addLink": "Agregar link demo",
+    "demos.genre": "Género",
     "demos.dateSent": "Fecha de Envío",
     "demos.sentDate": "Fecha Envío",
     "demos.daysSince": "Días",
@@ -1340,6 +1413,27 @@ const translations: Record<Locale, TranslationKeys> = {
     "labels.linkTypeBandcamp": "Bandcamp",
     "labels.linkTypeDemoLink": "Link Demo",
     "labels.linkTypeOther": "Otro",
+    "nav.profile": "Perfil",
+    "profile.title": "Perfil de Productor",
+    "profile.subtitle": "Tus datos artísticos, listos para usar con un clic al enviar demos",
+    "profile.artistName": "Nombre Artista",
+    "profile.email": "Email",
+    "profile.bio": "Bio",
+    "profile.bioPlaceholder": "Cuéntanos sobre ti y tu música...",
+    "profile.photoUrl": "URL Foto de Perfil",
+    "profile.linksSection": "Links & Social",
+    "profile.addLinkPlaceholder": "Agregar link...",
+    "profile.linkTypeWebsite": "Sitio Web",
+    "profile.linkTypeInstagram": "Instagram",
+    "profile.linkTypeSoundcloud": "SoundCloud",
+    "profile.linkTypeBeatport": "Beatport",
+    "profile.linkTypeSpotify": "Spotify",
+    "profile.linkTypeYoutube": "YouTube",
+    "profile.linkTypeBandcamp": "Bandcamp",
+    "profile.linkTypeOther": "Otro",
+    "profile.openLink": "Abrir enlace",
+    "profile.saved": "Guardado",
+    "profile.noLinks": "Sin links agregados",
     "autosave.title": "Guardado Automático",
     "autosave.description": "Elige una carpeta en tu PC para guardar un backup automáticamente cada vez que cierres la app. ¡No se perderán datos!",
     "autosave.saveNow": "Guardar",
@@ -1474,6 +1568,8 @@ const translations: Record<Locale, TranslationKeys> = {
     "demos.targetLabel": "Label Cible *",
     "demos.selectLabel": "Sélectionner un label",
     "demos.scLink": "Lien SoundCloud Privé",
+    "demos.addLink": "Ajouter lien démo",
+    "demos.genre": "Genre",
     "demos.dateSent": "Date d'Envoi",
     "demos.sentDate": "Date d'Envoi",
     "demos.daysSince": "Jours",
@@ -1666,6 +1762,27 @@ const translations: Record<Locale, TranslationKeys> = {
     "labels.linkTypeBandcamp": "Bandcamp",
     "labels.linkTypeDemoLink": "Lien Démo",
     "labels.linkTypeOther": "Autre",
+    "nav.profile": "Profil",
+    "profile.title": "Profil Producteur",
+    "profile.subtitle": "Vos infos artiste, prêtes à utiliser en un clic lors de l'envoi de démos",
+    "profile.artistName": "Nom d'Artiste",
+    "profile.email": "Email",
+    "profile.bio": "Bio",
+    "profile.bioPlaceholder": "Parlez de vous et de votre musique...",
+    "profile.photoUrl": "URL Photo de Profil",
+    "profile.linksSection": "Links & Social",
+    "profile.addLinkPlaceholder": "Ajouter un lien...",
+    "profile.linkTypeWebsite": "Site Web",
+    "profile.linkTypeInstagram": "Instagram",
+    "profile.linkTypeSoundcloud": "SoundCloud",
+    "profile.linkTypeBeatport": "Beatport",
+    "profile.linkTypeSpotify": "Spotify",
+    "profile.linkTypeYoutube": "YouTube",
+    "profile.linkTypeBandcamp": "Bandcamp",
+    "profile.linkTypeOther": "Autre",
+    "profile.openLink": "Ouvrir le lien",
+    "profile.saved": "Sauvegardé",
+    "profile.noLinks": "Aucun lien ajouté",
     "autosave.title": "Sauvegarde Automatique",
     "autosave.description": "Choisissez un dossier sur votre PC pour sauvegarder automatiquement un backup à chaque fermeture de l'app. Aucune donnée ne sera perdue !",
     "autosave.saveNow": "Sauvegarder",
@@ -1800,6 +1917,8 @@ const translations: Record<Locale, TranslationKeys> = {
     "demos.targetLabel": "Ziel-Label *",
     "demos.selectLabel": "Label auswählen",
     "demos.scLink": "SoundCloud Privater Link",
+    "demos.addLink": "Demo-Link hinzufügen",
+    "demos.genre": "Genre",
     "demos.dateSent": "Sendedatum",
     "demos.sentDate": "Gesendet am",
     "demos.daysSince": "Tage",
@@ -1992,6 +2111,27 @@ const translations: Record<Locale, TranslationKeys> = {
     "labels.linkTypeBandcamp": "Bandcamp",
     "labels.linkTypeDemoLink": "Demo-Link",
     "labels.linkTypeOther": "Sonstiges",
+    "nav.profile": "Profil",
+    "profile.title": "Produzentenprofil",
+    "profile.subtitle": "Deine Künstlerdaten, mit einem Klick abrufbar beim Demo-Versand",
+    "profile.artistName": "Künstlername",
+    "profile.email": "E-Mail",
+    "profile.bio": "Bio",
+    "profile.bioPlaceholder": "Erzähle etwas über dich und deine Musik...",
+    "profile.photoUrl": "Profilbild-URL",
+    "profile.linksSection": "Links & Social",
+    "profile.addLinkPlaceholder": "Link hinzufügen...",
+    "profile.linkTypeWebsite": "Website",
+    "profile.linkTypeInstagram": "Instagram",
+    "profile.linkTypeSoundcloud": "SoundCloud",
+    "profile.linkTypeBeatport": "Beatport",
+    "profile.linkTypeSpotify": "Spotify",
+    "profile.linkTypeYoutube": "YouTube",
+    "profile.linkTypeBandcamp": "Bandcamp",
+    "profile.linkTypeOther": "Sonstiges",
+    "profile.openLink": "Link öffnen",
+    "profile.saved": "Gespeichert",
+    "profile.noLinks": "Keine Links hinzugefügt",
     "autosave.title": "Automatisches Speichern",
     "autosave.description": "Wählen Sie einen Ordner auf Ihrem PC, um bei jedem Schließen der App automatisch ein Backup zu speichern. Keine Daten gehen verloren!",
     "autosave.saveNow": "Speichern",
@@ -2126,6 +2266,8 @@ const translations: Record<Locale, TranslationKeys> = {
     "demos.targetLabel": "Label Destino *",
     "demos.selectLabel": "Selecionar label",
     "demos.scLink": "Link Privado do SoundCloud",
+    "demos.addLink": "Adicionar link demo",
+    "demos.genre": "Gênero",
     "demos.dateSent": "Data de Envio",
     "demos.sentDate": "Data de Envio",
     "demos.daysSince": "Dias",
@@ -2318,6 +2460,27 @@ const translations: Record<Locale, TranslationKeys> = {
     "labels.linkTypeBandcamp": "Bandcamp",
     "labels.linkTypeDemoLink": "Link Demo",
     "labels.linkTypeOther": "Outro",
+    "nav.profile": "Perfil",
+    "profile.title": "Perfil de Produtor",
+    "profile.subtitle": "Seus dados artísticos, prontos para usar com um clique ao enviar demos",
+    "profile.artistName": "Nome Artista",
+    "profile.email": "Email",
+    "profile.bio": "Bio",
+    "profile.bioPlaceholder": "Conte sobre você e sua música...",
+    "profile.photoUrl": "URL Foto de Perfil",
+    "profile.linksSection": "Links & Social",
+    "profile.addLinkPlaceholder": "Adicionar link...",
+    "profile.linkTypeWebsite": "Site Web",
+    "profile.linkTypeInstagram": "Instagram",
+    "profile.linkTypeSoundcloud": "SoundCloud",
+    "profile.linkTypeBeatport": "Beatport",
+    "profile.linkTypeSpotify": "Spotify",
+    "profile.linkTypeYoutube": "YouTube",
+    "profile.linkTypeBandcamp": "Bandcamp",
+    "profile.linkTypeOther": "Outro",
+    "profile.openLink": "Abrir link",
+    "profile.saved": "Salvo",
+    "profile.noLinks": "Nenhum link adicionado",
     "autosave.title": "Salvamento Automático",
     "autosave.description": "Escolha uma pasta no seu PC para salvar um backup automaticamente toda vez que fechar o app. Nenhum dado será perdido!",
     "autosave.saveNow": "Salvar",
