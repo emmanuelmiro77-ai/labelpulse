@@ -1,7 +1,7 @@
 "use client";
 
 import { useAppStore, getLabelTier } from "@/lib/store";
-import type { Label } from "@/lib/store";
+import type { Label, RankingSnapshot, RankingTimePeriod } from "@/lib/store";
 import { t, type Locale } from "@/lib/i18n";
 import {
   Trophy,
@@ -9,7 +9,6 @@ import {
   TrendingDown,
   Minus,
   ArrowUpRight,
-  ArrowDownRight,
   Flame,
   Eye,
   BarChart3,
@@ -19,6 +18,10 @@ import {
   Filter,
   ChevronDown,
   AlertTriangle,
+  Clock,
+  Calendar,
+  Infinity,
+  History,
 } from "lucide-react";
 import { useState, useMemo, useCallback } from "react";
 import { Button } from "@/components/ui/button";
@@ -28,11 +31,13 @@ import { Button } from "@/components/ui/button";
 type SortMode = "rank" | "movement" | "points";
 type MovementFilter = "all" | "rising" | "falling" | "new" | "stable";
 
-interface RankedLabel extends Label {
+interface RankedLabel {
+  label: Label;
   rank: number;
   prevRank: number | null; // null = not ranked before (new entry)
   points: number;
   movement: number | null; // positive = moved up, negative = moved down, null = new
+  snapshotCount: number; // how many snapshots contributed to this period
 }
 
 // ==================== HELPERS ====================
@@ -73,13 +78,182 @@ function getTierBadge(tier: "top" | "mid" | "emerging" | null): { icon: React.Re
   }
 }
 
+function getPeriodLabel(period: RankingTimePeriod, locale: Locale): string {
+  return t(locale, `rankings.period.${period}`);
+}
+
+function getPeriodIcon(period: RankingTimePeriod) {
+  switch (period) {
+    case "current": return <Flame className="h-3.5 w-3.5" />;
+    case "1m": return <Clock className="h-3.5 w-3.5" />;
+    case "3m": return <Calendar className="h-3.5 w-3.5" />;
+    case "1y": return <History className="h-3.5 w-3.5" />;
+    case "all": return <Infinity className="h-3.5 w-3.5" />;
+  }
+}
+
+/**
+ * Get the time cutoff for a period (in milliseconds from now).
+ */
+function getPeriodCutoff(period: RankingTimePeriod): number {
+  const now = Date.now();
+  switch (period) {
+    case "current": return now; // Only current data
+    case "1m": return now - 30 * 24 * 60 * 60 * 1000;
+    case "3m": return now - 90 * 24 * 60 * 60 * 1000;
+    case "1y": return now - 365 * 24 * 60 * 60 * 1000;
+    case "all": return 0; // All time
+  }
+}
+
+// ==================== AGGREGATION LOGIC ====================
+
+/**
+ * Aggregate ranking snapshots for a given genre and time period.
+ * Returns a map of labelName -> { totalPoints, bestRank, snapshotCount, averageRank }
+ */
+function aggregateSnapshots(
+  snapshots: RankingSnapshot[],
+  genre: string,
+  period: RankingTimePeriod
+): Map<string, { totalPoints: number; bestRank: number; snapshotCount: number; averageRank: number }> {
+  const cutoff = getPeriodCutoff(period);
+  const result = new Map<string, { totalPoints: number; bestRank: number; snapshotCount: number; averageRank: number; rankSum: number }>();
+
+  for (const snapshot of snapshots) {
+    if (new Date(snapshot.timestamp).getTime() < cutoff) continue;
+    if (period === "current") continue; // Current period doesn't use snapshots
+
+    const genreData = snapshot.genres[genre];
+    if (!genreData) continue;
+
+    for (const [labelName, data] of Object.entries(genreData)) {
+      const existing = result.get(labelName);
+      if (existing) {
+        existing.totalPoints += data.points;
+        existing.rankSum += data.rank;
+        existing.snapshotCount++;
+        if (data.rank < existing.bestRank) existing.bestRank = data.rank;
+      } else {
+        result.set(labelName, {
+          totalPoints: data.points,
+          bestRank: data.rank,
+          snapshotCount: 1,
+          rankSum: data.rank,
+        });
+      }
+    }
+  }
+
+  // Calculate average rank
+  for (const [, val] of result) {
+    (val as any).averageRank = Math.round(val.rankSum / val.snapshotCount);
+  }
+
+  return result;
+}
+
+/**
+ * Build ranked list for a genre, considering the time period.
+ * - "current": uses live label data (rankByGenre)
+ * - Other periods: aggregates snapshots and re-ranks by cumulative points
+ */
+function buildRankedList(
+  labels: Label[],
+  snapshots: RankingSnapshot[],
+  genre: string,
+  period: RankingTimePeriod
+): RankedLabel[] {
+  if (period === "current") {
+    // Current view: use live label data
+    const ranked: RankedLabel[] = [];
+    for (const label of labels) {
+      const rank = label.rankByGenre?.[genre];
+      if (rank === undefined || rank === null) continue;
+
+      const prevRank = label.prevRankByGenre?.[genre] ?? null;
+      const points = label.pointsByGenre?.[genre] ?? 0;
+      let movement: number | null = null;
+
+      if (prevRank !== null && prevRank !== undefined) {
+        movement = prevRank - rank;
+      } else if (Object.keys(label.prevRankByGenre || {}).length > 0) {
+        movement = null;
+      }
+
+      ranked.push({ label, rank, prevRank, points, movement, snapshotCount: 1 });
+    }
+    return ranked;
+  }
+
+  // Historical/cumulative view: aggregate snapshots
+  const aggregated = aggregateSnapshots(snapshots, genre, period);
+  if (aggregated.size === 0) return [];
+
+  // Sort by total points descending to determine cumulative rank
+  const sorted = Array.from(aggregated.entries()).sort((a, b) => b[1].totalPoints - a[1].totalPoints);
+
+  // For movement in cumulative view, compare with the current live data
+  const ranked: RankedLabel[] = [];
+  for (let i = 0; i < sorted.length; i++) {
+    const [labelName, data] = sorted[i];
+    const cumulativeRank = i + 1;
+
+    // Find matching label in current data
+    const matchingLabel = labels.find(l => l.name === labelName);
+    const currentRank = matchingLabel?.rankByGenre?.[genre] ?? null;
+
+    // Movement: compare current live rank with cumulative rank
+    let movement: number | null = null;
+    if (currentRank !== null) {
+      movement = currentRank - cumulativeRank; // positive = label is better live than cumulative (hot right now)
+    }
+
+    // Use the label if found, otherwise create a minimal reference
+    const label = matchingLabel || {
+      id: `snapshot_${labelName.toLowerCase().replace(/[^a-z0-9]+/g, '_')}`,
+      name: labelName,
+      genre: genre,
+      submissionType: "email" as const,
+      contactInfo: "",
+      status: "open" as const,
+      notes: "",
+      createdAt: new Date().toISOString(),
+      emails: [],
+      website: "",
+      demoLink: "",
+      socialLink: "",
+      soundcloudLink: "",
+      genres: [genre],
+      rankByGenre: { [genre]: currentRank || 999 },
+      pointsByGenre: {},
+      trending: false,
+      trendingRankByGenre: {},
+      trendingPointsByGenre: {},
+      prevRankByGenre: {},
+    };
+
+    ranked.push({
+      label,
+      rank: cumulativeRank,
+      prevRank: currentRank,
+      points: data.totalPoints,
+      movement,
+      snapshotCount: data.snapshotCount,
+    });
+  }
+
+  return ranked;
+}
+
 // ==================== COMPONENT ====================
 
 export function RankingsPage() {
-  const { labels, locale, rankingsUpdatedAt } = useAppStore();
+  const { labels, locale, rankingsUpdatedAt, rankingSnapshots } = useAppStore();
   const [selectedGenre, setSelectedGenre] = useState<string | null>(null);
   const [sortMode, setSortMode] = useState<SortMode>("rank");
   const [movementFilter, setMovementFilter] = useState<MovementFilter>("all");
+  const [timePeriod, setTimePeriod] = useState<RankingTimePeriod>("current");
   const [showGenreDropdown, setShowGenreDropdown] = useState(false);
 
   // Get all genres from labels, sorted alphabetically
@@ -95,39 +269,11 @@ export function RankingsPage() {
     return Array.from(genreSet).sort((a, b) => a.localeCompare(b));
   }, [labels]);
 
-  // Build ranked list for selected genre
+  // Build ranked list for selected genre and period
   const rankedList = useMemo((): RankedLabel[] => {
     if (!selectedGenre) return [];
-
-    const ranked: RankedLabel[] = [];
-
-    for (const label of labels) {
-      const rank = label.rankByGenre?.[selectedGenre];
-      if (rank === undefined || rank === null) continue;
-
-      const prevRank = label.prevRankByGenre?.[selectedGenre] ?? null;
-      const points = label.pointsByGenre?.[selectedGenre] ?? 0;
-      let movement: number | null = null;
-
-      if (prevRank !== null && prevRank !== undefined) {
-        // Positive movement = moved UP (lower rank number is better)
-        movement = prevRank - rank;
-      } else if (Object.keys(label.prevRankByGenre || {}).length > 0) {
-        // Has previous data but not in this genre → new entry to this genre
-        movement = null;
-      }
-
-      ranked.push({
-        ...label,
-        rank,
-        prevRank,
-        points,
-        movement,
-      });
-    }
-
-    return ranked;
-  }, [labels, selectedGenre]);
+    return buildRankedList(labels, rankingSnapshots || [], selectedGenre, timePeriod);
+  }, [labels, rankingSnapshots, selectedGenre, timePeriod]);
 
   // Apply filters
   const filteredList = useMemo(() => {
@@ -176,14 +322,8 @@ export function RankingsPage() {
     const rising = rankedList.filter((l) => l.movement !== null && l.movement > 0).length;
     const falling = rankedList.filter((l) => l.movement !== null && l.movement < 0).length;
     const newEntries = rankedList.filter((l) => l.movement === null).length;
-    const topMover = rankedList
-      .filter((l) => l.movement !== null && l.movement > 0)
-      .sort((a, b) => (b.movement || 0) - (a.movement || 0))[0];
-    const worstMover = rankedList
-      .filter((l) => l.movement !== null && l.movement < 0)
-      .sort((a, b) => (a.movement || 0) - (b.movement || 0))[0];
 
-    return { total, rising, falling, newEntries, topMover, worstMover };
+    return { total, rising, falling, newEntries };
   }, [rankedList]);
 
   // Top rising labels across ALL genres (for the spotlight section)
@@ -211,10 +351,23 @@ export function RankingsPage() {
     return labels.some((l) => l.prevRankByGenre && Object.keys(l.prevRankByGenre).length > 0);
   }, [labels]);
 
+  // Snapshot stats for info display
+  const snapshotStats = useMemo(() => {
+    if (!rankingSnapshots || rankingSnapshots.length === 0) return { count: 0, oldest: null as string | null, newest: null as string | null };
+    const sorted = [...rankingSnapshots].sort((a, b) => new Date(a.timestamp).getTime() - new Date(b.timestamp).getTime());
+    return {
+      count: rankingSnapshots.length,
+      oldest: sorted[0].timestamp,
+      newest: sorted[sorted.length - 1].timestamp,
+    };
+  }, [rankingSnapshots]);
+
+  const hasSnapshots = rankingSnapshots && rankingSnapshots.length > 0;
+
   return (
     <div className="space-y-6">
       {/* Alert if no previous data */}
-      {!hasPreviousData && (
+      {!hasPreviousData && timePeriod === "current" && (
         <div className="flex items-start gap-3 p-4 rounded-lg bg-amber-500/10 border border-amber-500/30">
           <AlertTriangle className="h-5 w-5 text-amber-400 shrink-0 mt-0.5" />
           <div>
@@ -224,8 +377,35 @@ export function RankingsPage() {
         </div>
       )}
 
-      {/* Spotlight: Top Risers (only if we have previous data) */}
-      {hasPreviousData && topRisers.length > 0 && (
+      {/* Snapshot info banner */}
+      {timePeriod !== "current" && !hasSnapshots && (
+        <div className="flex items-start gap-3 p-4 rounded-lg bg-cyan-500/10 border border-cyan-500/30">
+          <History className="h-5 w-5 text-cyan-400 shrink-0 mt-0.5" />
+          <div>
+            <p className="text-sm text-cyan-400 font-medium">{t(locale, "rankings.noSnapshots")}</p>
+            <p className="text-xs text-muted-foreground mt-1">{t(locale, "rankings.noSnapshotsDesc")}</p>
+          </div>
+        </div>
+      )}
+
+      {/* Snapshot stats (when viewing historical data) */}
+      {timePeriod !== "current" && hasSnapshots && (
+        <div className="flex items-center gap-3 p-3 rounded-lg bg-muted/30 border border-border/50">
+          <History className="h-4 w-4 text-muted-foreground shrink-0" />
+          <div className="flex flex-wrap gap-4 text-xs text-muted-foreground">
+            <span>{snapshotStats.count} {t(locale, "rankings.snapshots")}</span>
+            {snapshotStats.oldest && (
+              <span>{t(locale, "rankings.from")}: {new Date(snapshotStats.oldest).toLocaleDateString(locale === "it" ? "it-IT" : "en-US")}</span>
+            )}
+            {snapshotStats.newest && (
+              <span>{t(locale, "rankings.to")}: {new Date(snapshotStats.newest).toLocaleDateString(locale === "it" ? "it-IT" : "en-US")}</span>
+            )}
+          </div>
+        </div>
+      )}
+
+      {/* Spotlight: Top Risers (only if we have previous data and viewing current) */}
+      {timePeriod === "current" && hasPreviousData && topRisers.length > 0 && (
         <div className="space-y-3">
           <div className="flex items-center gap-2">
             <Flame className="h-5 w-5 text-orange-400" />
@@ -330,21 +510,60 @@ export function RankingsPage() {
           )}
         </div>
 
+        {/* Time Period Selector */}
+        {selectedGenre && (
+          <div className="flex flex-col sm:flex-row items-start sm:items-center gap-2">
+            <span className="text-xs text-muted-foreground font-medium shrink-0">{t(locale, "rankings.periodLabel")}:</span>
+            <div className="flex rounded-lg border border-border overflow-hidden">
+              {(["current", "1m", "3m", "1y", "all"] as RankingTimePeriod[]).map((period) => {
+                const Icon = getPeriodIcon(period);
+                const isDisabled = period !== "current" && !hasSnapshots;
+                return (
+                  <button
+                    key={period}
+                    onClick={() => !isDisabled && setTimePeriod(period)}
+                    className={`flex items-center gap-1.5 px-3 py-1.5 text-xs font-medium transition-colors ${
+                      timePeriod === period
+                        ? "bg-cyan-500/15 text-cyan-400"
+                        : isDisabled
+                          ? "text-muted-foreground/40 cursor-not-allowed"
+                          : "text-muted-foreground hover:text-foreground hover:bg-secondary/50"
+                    }`}
+                    title={isDisabled ? t(locale, "rankings.periodDisabled") : getPeriodLabel(period, locale)}
+                  >
+                    <Icon className="h-3.5 w-3.5" />
+                    {getPeriodLabel(period, locale)}
+                  </button>
+                );
+              })}
+            </div>
+          </div>
+        )}
+
         {/* Stats bar */}
         {selectedGenre && stats.total > 0 && (
           <div className="flex flex-wrap gap-3 text-xs">
             <span className="flex items-center gap-1 text-muted-foreground">
               <Eye className="h-3 w-3" /> {stats.total} {t(locale, "rankings.labels")}
             </span>
-            <span className="flex items-center gap-1 text-emerald-400">
-              <TrendingUp className="h-3 w-3" /> {stats.rising} {t(locale, "rankings.rising")}
-            </span>
-            <span className="flex items-center gap-1 text-red-400">
-              <TrendingDown className="h-3 w-3" /> {stats.falling} {t(locale, "rankings.falling")}
-            </span>
-            <span className="flex items-center gap-1 text-cyan-400">
-              <ArrowUpRight className="h-3 w-3" /> {stats.newEntries} {t(locale, "rankings.newEntries")}
-            </span>
+            {timePeriod === "current" && (
+              <>
+                <span className="flex items-center gap-1 text-emerald-400">
+                  <TrendingUp className="h-3 w-3" /> {stats.rising} {t(locale, "rankings.rising")}
+                </span>
+                <span className="flex items-center gap-1 text-red-400">
+                  <TrendingDown className="h-3 w-3" /> {stats.falling} {t(locale, "rankings.falling")}
+                </span>
+                <span className="flex items-center gap-1 text-cyan-400">
+                  <ArrowUpRight className="h-3 w-3" /> {stats.newEntries} {t(locale, "rankings.newEntries")}
+                </span>
+              </>
+            )}
+            {timePeriod !== "current" && (
+              <span className="flex items-center gap-1 text-cyan-400">
+                <History className="h-3 w-3" /> {t(locale, "rankings.cumulativeView")}
+              </span>
+            )}
             {rankingsUpdatedAt && (
               <span className="flex items-center gap-1 text-muted-foreground ml-auto">
                 {t(locale, "rankings.lastUpdate")}: {new Date(rankingsUpdatedAt).toLocaleDateString(locale === "it" ? "it-IT" : "en-US")}
@@ -357,26 +576,35 @@ export function RankingsPage() {
         {selectedGenre && filteredList.length > 0 && (
           <div className="rounded-lg border border-border/50 overflow-hidden">
             {/* Table header */}
-            <div className="grid grid-cols-[3rem_1fr_4.5rem_4rem_4rem] sm:grid-cols-[3rem_1fr_5rem_5rem_5rem] items-center gap-1 px-3 py-2 bg-secondary/30 text-xs font-medium text-muted-foreground border-b border-border/50">
+            <div className={`grid items-center gap-1 px-3 py-2 bg-secondary/30 text-xs font-medium text-muted-foreground border-b border-border/50 ${
+              timePeriod !== "current"
+                ? "grid-cols-[3rem_1fr_4.5rem_4rem_4.5rem_3.5rem] sm:grid-cols-[3rem_1fr_5rem_5rem_5.5rem_4rem]"
+                : "grid-cols-[3rem_1fr_4.5rem_4rem_4rem] sm:grid-cols-[3rem_1fr_5rem_5rem_5rem]"
+            }`}>
               <span>#</span>
               <span>{t(locale, "rankings.colLabel")}</span>
               <span className="text-right">{t(locale, "rankings.colRank")}</span>
               <span className="text-right">{t(locale, "rankings.colMovement")}</span>
-              <span className="text-right">{t(locale, "rankings.colPoints")}</span>
+              <span className="text-right">{timePeriod !== "current" ? t(locale, "rankings.colCumPoints") : t(locale, "rankings.colPoints")}</span>
+              {timePeriod !== "current" && (
+                <span className="text-right">{t(locale, "rankings.colUpdates")}</span>
+              )}
             </div>
 
             {/* Table body */}
             <div className="divide-y divide-border/30">
               {filteredList.map((item) => {
-                const tier = getLabelTier(item, selectedGenre);
+                const tier = getLabelTier(item.label, selectedGenre!);
                 const tierBadge = getTierBadge(tier);
 
                 return (
                   <div
-                    key={item.id}
-                    className={`grid grid-cols-[3rem_1fr_4.5rem_4rem_4rem] sm:grid-cols-[3rem_1fr_5rem_5rem_5rem] items-center gap-1 px-3 py-2.5 text-sm transition-colors hover:bg-secondary/20 ${
-                      item.rank <= 3 ? "bg-primary/5" : ""
-                    }`}
+                    key={`${item.label.id}-${item.rank}`}
+                    className={`grid items-center gap-1 px-3 py-2.5 text-sm transition-colors hover:bg-secondary/20 ${
+                      timePeriod !== "current"
+                        ? "grid-cols-[3rem_1fr_4.5rem_4rem_4.5rem_3.5rem] sm:grid-cols-[3rem_1fr_5rem_5rem_5.5rem_4rem]"
+                        : "grid-cols-[3rem_1fr_4.5rem_4rem_4rem] sm:grid-cols-[3rem_1fr_5rem_5rem_5rem]"
+                    } ${item.rank <= 3 ? "bg-primary/5" : ""}`}
                   >
                     {/* Rank number */}
                     <span className={`font-mono font-bold ${item.rank <= 3 ? "text-primary" : "text-foreground"}`}>
@@ -385,12 +613,16 @@ export function RankingsPage() {
 
                     {/* Label name + tier */}
                     <div className="flex items-center gap-2 min-w-0">
-                      <span className="font-medium text-foreground truncate">{item.name}</span>
-                      <span className={`shrink-0 flex items-center gap-0.5 px-1.5 py-0.5 rounded text-[10px] border ${tierBadge.color}`}>
-                        {tierBadge.icon}
-                        {tier === "top" ? "T" : tier === "mid" ? "M" : tier === "emerging" ? "E" : ""}
-                      </span>
-                      {item.trending && <Flame className="h-3 w-3 text-orange-400 shrink-0" />}
+                      <span className="font-medium text-foreground truncate">{item.label.name}</span>
+                      {timePeriod === "current" && (
+                        <>
+                          <span className={`shrink-0 flex items-center gap-0.5 px-1.5 py-0.5 rounded text-[10px] border ${tierBadge.color}`}>
+                            {tierBadge.icon}
+                            {tier === "top" ? "T" : tier === "mid" ? "M" : tier === "emerging" ? "E" : ""}
+                          </span>
+                          {item.label.trending && <Flame className="h-3 w-3 text-orange-400 shrink-0" />}
+                        </>
+                      )}
                     </div>
 
                     {/* Current rank */}
@@ -400,16 +632,29 @@ export function RankingsPage() {
 
                     {/* Movement */}
                     <div className="flex items-center justify-end gap-1">
-                      {getMovementIcon(item.movement)}
-                      <span className={`font-mono text-xs ${getMovementColor(item.movement)}`}>
-                        {getMovementText(item.movement, locale)}
-                      </span>
+                      {timePeriod === "current" ? (
+                        <>
+                          {getMovementIcon(item.movement)}
+                          <span className={`font-mono text-xs ${getMovementColor(item.movement)}`}>
+                            {getMovementText(item.movement, locale)}
+                          </span>
+                        </>
+                      ) : (
+                        <span className="font-mono text-xs text-muted-foreground">—</span>
+                      )}
                     </div>
 
                     {/* Points */}
                     <span className="text-right font-mono text-xs text-muted-foreground">
                       {item.points.toLocaleString(locale === "it" ? "it-IT" : "en-US")}
                     </span>
+
+                    {/* Snapshot count (only for cumulative views) */}
+                    {timePeriod !== "current" && (
+                      <span className="text-right font-mono text-[10px] text-muted-foreground">
+                        {item.snapshotCount}×
+                      </span>
+                    )}
                   </div>
                 );
               })}
@@ -422,9 +667,11 @@ export function RankingsPage() {
           <div className="flex flex-col items-center justify-center py-12 text-center">
             <BarChart3 className="h-10 w-10 text-muted-foreground/30 mb-3" />
             <p className="text-sm text-muted-foreground">
-              {movementFilter !== "all"
-                ? t(locale, "rankings.noResultsFilter")
-                : t(locale, "rankings.noResults")}
+              {timePeriod !== "current" && !hasSnapshots
+                ? t(locale, "rankings.noSnapshots")
+                : movementFilter !== "all"
+                  ? t(locale, "rankings.noResultsFilter")
+                  : t(locale, "rankings.noResults")}
             </p>
           </div>
         )}

@@ -43,6 +43,21 @@ export interface Label {
   prevRankByGenre?: Record<string, number>; // Previous ranking snapshot (before last import)
 }
 
+// ==================== RANKING SNAPSHOTS ====================
+// Stores historical ranking data for time-period analysis (like Beatstats)
+// Each snapshot captures all label rankings at the moment of import.
+
+export type RankingTimePeriod = "current" | "1m" | "3m" | "1y" | "all";
+
+export interface RankingSnapshot {
+  id: string;
+  timestamp: string; // ISO date when the snapshot was taken
+  source: string; // 'beatport', 'beatstats', etc.
+  // Per-genre, per-label ranking data
+  genres: Record<string, Record<string, { rank: number; points: number }>>;
+  // genre -> labelName -> {rank, points}
+}
+
 export interface Demo {
   id: string;
   trackName: string;
@@ -304,6 +319,7 @@ interface AppState {
   lastSavedAt: string | null;
   hasRehydrated: boolean;
   hasCloudSynced: boolean;
+  rankingSnapshots: RankingSnapshot[];
 
   // Label actions
   addLabel: (label: Partial<Omit<Label, "id" | "createdAt">> & { name: string }) => void;
@@ -334,6 +350,9 @@ interface AppState {
 
   // Rankings update tracking
   setRankingsUpdatedAt: (date: string) => void;
+
+  // Ranking snapshots
+  addRankingSnapshot: (source: string) => void;
 
   // Data backup
   exportData: () => string;
@@ -484,6 +503,7 @@ export const useAppStore = create<AppState>()(
       lastSavedAt: null as string | null,
       hasRehydrated: false as boolean,
       hasCloudSynced: false as boolean,
+      rankingSnapshots: [] as RankingSnapshot[],
 
       addLabel: (label) => {
         set((state) => ({
@@ -603,6 +623,38 @@ export const useAppStore = create<AppState>()(
       clearGmailAuth: () => { set({ gmailAuth: { isConnected: false, email: "", accessToken: "", expiresAt: 0 } }); syncToCloud(); },
 
       setRankingsUpdatedAt: (date) => { set({ rankingsUpdatedAt: date }); syncToCloud(); },
+
+      addRankingSnapshot: (source) => {
+        const state = get();
+        const snapshotId = genId();
+        const timestamp = new Date().toISOString();
+
+        // Build snapshot: genre -> labelName -> {rank, points}
+        const genres: RankingSnapshot["genres"] = {};
+        for (const label of state.labels) {
+          if (!label.rankByGenre || Object.keys(label.rankByGenre).length === 0) continue;
+          for (const genre of Object.keys(label.rankByGenre)) {
+            if (!genres[genre]) genres[genre] = {};
+            genres[genre][label.name] = {
+              rank: label.rankByGenre[genre],
+              points: label.pointsByGenre?.[genre] ?? 0,
+            };
+          }
+        }
+
+        const snapshot: RankingSnapshot = {
+          id: snapshotId,
+          timestamp,
+          source,
+          genres,
+        };
+
+        set((state) => ({
+          rankingSnapshots: [...state.rankingSnapshots, snapshot],
+          lastSavedAt: new Date().toISOString(),
+        }));
+        syncToCloud();
+      },
 
       exportData: () => {
         const state = get();
@@ -726,7 +778,34 @@ export const useAppStore = create<AppState>()(
 
           const isRankingsImport = parsed._meta?.source === 'beatport' || parsed._meta?.source === 'beatstats';
           const hasGenresAndLabels = parsed.genres && parsed.labels && Array.isArray(parsed.labels);
-          
+
+          // Before overwriting ranking data, save a snapshot of current rankings for historical tracking
+          if (isRankingsImport || hasGenresAndLabels) {
+            const currentLabels = get().labels;
+            const snapshotId = genId();
+            const snapshotGenres: RankingSnapshot["genres"] = {};
+            for (const label of currentLabels) {
+              if (!label.rankByGenre || Object.keys(label.rankByGenre).length === 0) continue;
+              for (const genre of Object.keys(label.rankByGenre)) {
+                if (!snapshotGenres[genre]) snapshotGenres[genre] = {};
+                snapshotGenres[genre][label.name] = {
+                  rank: label.rankByGenre[genre],
+                  points: label.pointsByGenre?.[genre] ?? 0,
+                };
+              }
+            }
+            const snapshot: RankingSnapshot = {
+              id: snapshotId,
+              timestamp: new Date().toISOString(),
+              source: parsed._meta?.source || 'import',
+              genres: snapshotGenres,
+            };
+
+            set((state) => ({
+              rankingSnapshots: [...(state.rankingSnapshots || []), snapshot],
+            }));
+          }
+
           set({
             labels: mergedLabels,
             demos: mergedDemos,
@@ -744,7 +823,7 @@ export const useAppStore = create<AppState>()(
     }),
     {
       name: PRIMARY_KEY,
-      version: 9,
+      version: 10,
       storage: createJSONStorage(() => robustStorage),
       migrate: (persisted: any, version: number) => {
         if (version < 5) {
@@ -811,6 +890,17 @@ export const useAppStore = create<AppState>()(
             });
           }
         }
+        if (version < 10) {
+          if (!persisted.rankingSnapshots) {
+            persisted.rankingSnapshots = [];
+          }
+          if (persisted.labels) {
+            persisted.labels = persisted.labels.map((l: any) => ({
+              ...l,
+              prevRankByGenre: l.prevRankByGenre || {},
+            }));
+          }
+        }
         return persisted;
       },
       partialize: (state) => ({
@@ -822,6 +912,7 @@ export const useAppStore = create<AppState>()(
         gmailAuth: state.gmailAuth,
         rankingsUpdatedAt: state.rankingsUpdatedAt,
         lastSavedAt: state.lastSavedAt,
+        rankingSnapshots: state.rankingSnapshots,
       }),
       merge: (persistedState: any, currentState: any) => {
         // SIMPLE & SAFE merge: preserve persisted data, add defaults, append new seed labels
@@ -936,6 +1027,7 @@ export function syncToCloud(): void {
       gmailAuth: state.gmailAuth,
       rankingsUpdatedAt: state.rankingsUpdatedAt,
       lastSavedAt: state.lastSavedAt,
+      rankingSnapshots: state.rankingSnapshots,
     };
     await saveStateToCloud(dataToSync);
   }, CLOUD_SYNC_DEBOUNCE_MS);
@@ -963,6 +1055,7 @@ export async function forceCloudSync(): Promise<void> {
     gmailAuth: state.gmailAuth,
     rankingsUpdatedAt: state.rankingsUpdatedAt,
     lastSavedAt: state.lastSavedAt,
+    rankingSnapshots: state.rankingSnapshots,
   };
   await saveStateToCloud(dataToSync);
 }
@@ -1060,6 +1153,7 @@ function mergeCloudData(cloudData: any, localState: any): Partial<AppState> {
   merged.gmailAuth = cloudData.gmailAuth || localState.gmailAuth;
   merged.rankingsUpdatedAt = cloudData.rankingsUpdatedAt ?? localState.rankingsUpdatedAt;
   merged.lastSavedAt = cloudData.lastSavedAt ?? localState.lastSavedAt;
+  merged.rankingSnapshots = Array.isArray(cloudData.rankingSnapshots) ? cloudData.rankingSnapshots : (localState.rankingSnapshots || []);
 
   return merged;
 }
