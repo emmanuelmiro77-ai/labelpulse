@@ -257,6 +257,7 @@ export function RankingsPage() {
   const [movementFilter, setMovementFilter] = useState<MovementFilter>("all");
   const [timePeriod, setTimePeriod] = useState<RankingTimePeriod>("current");
   const [showGenreDropdown, setShowGenreDropdown] = useState(false);
+  const [spotlightShowAll, setSpotlightShowAll] = useState(false); // when true + genre selected, show global risers instead of genre-filtered
 
   // Get all genres from labels, sorted alphabetically
   const allGenres = useMemo(() => {
@@ -383,6 +384,13 @@ export function RankingsPage() {
     };
   }, [snapshots]);
 
+  // Spotlight risers: genre-filtered or global, based on toggle
+  const spotlightRisers = useMemo(() => {
+    if (!hasPreviousData) return [];
+    const isGenreFiltered = selectedGenre && !spotlightShowAll;
+    return isGenreFiltered ? topRisersForGenre : topRisers;
+  }, [hasPreviousData, selectedGenre, spotlightShowAll, topRisers, topRisersForGenre]);
+
   const hasSnapshots = snapshots.length > 0;
 
   return (
@@ -426,31 +434,46 @@ export function RankingsPage() {
       )}
 
       {/* Spotlight: Top Risers */}
-      {timePeriod === "current" && hasPreviousData && (() => {
-        // When a genre is selected, show genre-specific risers;
-        // otherwise show the global top risers across all genres
-        const risers = selectedGenre ? topRisersForGenre : topRisers;
-        if (risers.length === 0) return null;
-
-        return (
-          <div className="space-y-3">
-            <div className="flex items-center justify-between gap-2">
-              <div className="flex items-center gap-2">
-                <Flame className="h-5 w-5 text-orange-400" />
-                <h3 className="text-sm font-semibold text-foreground">
-                  {selectedGenre
-                    ? t(locale, "rankings.spotlightGenre")
-                    : t(locale, "rankings.spotlight")}
-                </h3>
-              </div>
-              {selectedGenre && (
-                <span className="text-xs text-muted-foreground bg-secondary/50 px-2 py-0.5 rounded-full">
-                  {selectedGenre}
-                </span>
-              )}
+      {timePeriod === "current" && hasPreviousData && (spotlightRisers.length > 0 || (selectedGenre && !spotlightShowAll)) && (
+        <div className="space-y-3">
+          <div className="flex items-center justify-between gap-2">
+            <div className="flex items-center gap-2">
+              <Flame className="h-5 w-5 text-orange-400" />
+              <h3 className="text-sm font-semibold text-foreground">
+                {selectedGenre && !spotlightShowAll
+                  ? t(locale, "rankings.spotlightGenre")
+                  : t(locale, "rankings.spotlight")}
+              </h3>
             </div>
+            {/* Toggle: only show when a genre is selected */}
+            {selectedGenre && (
+              <div className="flex rounded-lg border border-border overflow-hidden">
+                <button
+                  onClick={() => setSpotlightShowAll(false)}
+                  className={`px-2.5 py-1 text-[11px] font-medium transition-colors ${
+                    !spotlightShowAll
+                      ? "bg-primary/15 text-primary"
+                      : "text-muted-foreground hover:text-foreground hover:bg-secondary/50"
+                  }`}
+                >
+                  {selectedGenre}
+                </button>
+                <button
+                  onClick={() => setSpotlightShowAll(true)}
+                  className={`px-2.5 py-1 text-[11px] font-medium transition-colors ${
+                    spotlightShowAll
+                      ? "bg-primary/15 text-primary"
+                      : "text-muted-foreground hover:text-foreground hover:bg-secondary/50"
+                  }`}
+                >
+                  {t(locale, "rankings.spotlightAll")}
+                </button>
+              </div>
+            )}
+          </div>
+          {spotlightRisers.length > 0 ? (
             <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-5 gap-2">
-              {risers.map((item, idx) => (
+              {spotlightRisers.map((item, idx) => (
                 <div
                   key={`${item.label.id}-${item.genre}`}
                   className="flex items-center gap-2 p-2.5 rounded-lg bg-gradient-to-r from-emerald-500/10 to-transparent border border-emerald-500/20"
@@ -459,7 +482,7 @@ export function RankingsPage() {
                   <div className="min-w-0">
                     <p className="text-xs font-medium text-foreground truncate">{item.label.name}</p>
                     <p className="text-[10px] text-muted-foreground truncate">
-                      {selectedGenre
+                      {selectedGenre && !spotlightShowAll
                         ? `#${item.rank} · ${t(locale, "rankings.colMovement")} +${item.movement}`
                         : item.genre}
                     </p>
@@ -467,9 +490,13 @@ export function RankingsPage() {
                 </div>
               ))}
             </div>
-          </div>
-        );
-      })()}
+          ) : (
+            <p className="text-xs text-muted-foreground py-4 text-center">
+              {t(locale, "rankings.noRisersForGenre")}
+            </p>
+          )}
+        </div>
+      )}
 
 
       {/* Genre selector + Filters */}
@@ -497,6 +524,7 @@ export function RankingsPage() {
                       key={genre}
                       onClick={() => {
                         setSelectedGenre(genre);
+                        setSpotlightShowAll(false);
                         setShowGenreDropdown(false);
                       }}
                       className={`w-full flex items-center justify-between px-3 py-2 text-sm hover:bg-accent/50 transition-colors ${

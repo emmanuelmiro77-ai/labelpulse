@@ -222,6 +222,8 @@ type TranslationKeys = {
   "rankings.noHistoryDesc": string;
   "rankings.spotlight": string;
   "rankings.spotlightGenre": string;
+  "rankings.spotlightAll": string;
+  "rankings.noRisersForGenre": string;
   "rankings.labels": string;
   "rankings.rising": string;
   "rankings.falling": string;
@@ -549,6 +551,8 @@ const translations: Record<Locale, TranslationKeys> = {
     "rankings.noHistoryDesc": "Aggiorna le classifiche con i dati Beatport due volte per vedere i movimenti. Il primo aggiornamento stabilisce la baseline, dal secondo vedrai le frecce di movimento.",
     "rankings.spotlight": "Label in forte ascesa",
     "rankings.spotlightGenre": "In forte ascesa nel genere",
+    "rankings.spotlightAll": "Tutti",
+    "rankings.noRisersForGenre": "Nessuna label in ascesa in questo genere",
     "rankings.labels": "label",
     "rankings.rising": "in salita",
     "rankings.falling": "in discesa",
@@ -860,6 +864,8 @@ const translations: Record<Locale, TranslationKeys> = {
     "rankings.noHistoryDesc": "Update rankings with Beatport data twice to see movements. The first update establishes a baseline, from the second you'll see movement arrows.",
     "rankings.spotlight": "Top Risers",
     "rankings.spotlightGenre": "Rising in genre",
+    "rankings.spotlightAll": "All",
+    "rankings.noRisersForGenre": "No rising labels in this genre",
     "rankings.labels": "labels",
     "rankings.rising": "rising",
     "rankings.falling": "falling",
@@ -1171,6 +1177,8 @@ const translations: Record<Locale, TranslationKeys> = {
     "rankings.noHistoryDesc": "Actualiza las clasificaciones dos veces para ver movimientos. La primera actualización establece la baseline, desde la segunda verás flechas de movimiento.",
     "rankings.spotlight": "Labels en fuerte ascenso",
     "rankings.spotlightGenre": "En fuerte ascenso en el género",
+    "rankings.spotlightAll": "Todos",
+    "rankings.noRisersForGenre": "Ninguna label en ascenso en este género",
     "rankings.labels": "labels",
     "rankings.rising": "en subida",
     "rankings.falling": "en bajada",
@@ -1482,6 +1490,8 @@ const translations: Record<Locale, TranslationKeys> = {
     "rankings.noHistoryDesc": "Mettez à jour les classements deux fois pour voir les mouvements. La première mise à jour établit la baseline, à partir de la deuxième vous verrez les flèches de mouvement.",
     "rankings.spotlight": "Labels en forte hausse",
     "rankings.spotlightGenre": "En forte hausse dans le genre",
+    "rankings.spotlightAll": "Tous",
+    "rankings.noRisersForGenre": "Aucune label en hausse dans ce genre",
     "rankings.labels": "labels",
     "rankings.rising": "en hausse",
     "rankings.falling": "en baisse",
@@ -1793,6 +1803,8 @@ const translations: Record<Locale, TranslationKeys> = {
     "rankings.noHistoryDesc": "Aktualisiere die Ranglisten zweimal mit Beatport-Daten, um Bewegungen zu sehen. Das erste Update erstellt die Basislinie, ab dem zweiten siehst du Bewegungspfeile.",
     "rankings.spotlight": "Labels im starken Aufstieg",
     "rankings.spotlightGenre": "Im starken Aufstieg im Genre",
+    "rankings.spotlightAll": "Alle",
+    "rankings.noRisersForGenre": "Keine Labels im Aufstieg in diesem Genre",
     "rankings.labels": "Labels",
     "rankings.rising": "steigend",
     "rankings.falling": "fallend",
@@ -2104,6 +2116,8 @@ const translations: Record<Locale, TranslationKeys> = {
     "rankings.noHistoryDesc": "Atualize os rankings duas vezes para ver movimentos. A primeira atualização estabelece a baseline, a partir da segunda verá setas de movimento.",
     "rankings.spotlight": "Labels em forte ascensão",
     "rankings.spotlightGenre": "Em forte ascensão no gênero",
+    "rankings.spotlightAll": "Todos",
+    "rankings.noRisersForGenre": "Nenhuma label em ascensão neste gênero",
     "rankings.labels": "labels",
     "rankings.rising": "em subida",
     "rankings.falling": "em descida",
