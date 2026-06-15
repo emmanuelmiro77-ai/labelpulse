@@ -33,6 +33,7 @@ import {
   SendHorizonal,
   CheckCircle2,
   Loader2,
+  Disc3,
 } from "lucide-react";
 import { useToast } from "@/hooks/use-toast";
 import { Input } from "@/components/ui/input";
@@ -75,7 +76,7 @@ const SUBMISSION_TYPES = ["email", "webform", "platform"] as const;
 // E.g. "spectrummusicnl" → "https://instagram.com/spectrummusicnl"
 // If already a full URL, returns as-is.
 
-function toClickableUrl(value: string, field: "website" | "demoLink" | "socialLink" | "soundcloudLink"): string | null {
+function toClickableUrl(value: string, field: "website" | "demoLink" | "socialLink" | "soundcloudLink" | "beatportLink"): string | null {
   if (!value || !value.trim()) return null;
   const v = value.trim();
 
@@ -101,6 +102,11 @@ function toClickableUrl(value: string, field: "website" | "demoLink" | "socialLi
     case "soundcloudLink":
       if (/^[a-zA-Z0-9._-]{1,30}$/.test(v)) {
         return `https://soundcloud.com/${v.replace(/^@/, "")}`;
+      }
+      return `https://${v}`;
+    case "beatportLink":
+      if (/^[a-zA-Z0-9._-]{1,50}$/.test(v)) {
+        return `https://www.beatport.com/label/${v.replace(/^@/, "")}`;
       }
       return `https://${v}`;
     case "website":
@@ -142,6 +148,7 @@ export function LabelFinder() {
   const [detailDemoLink, setDetailDemoLink] = useState("");
   const [detailSocialLink, setDetailSocialLink] = useState("");
   const [detailSoundcloudLink, setDetailSoundcloudLink] = useState("");
+  const [detailBeatportLink, setDetailBeatportLink] = useState("");
   const [detailNotes, setDetailNotes] = useState("");
   const [detailStatus, setDetailStatus] = useState<"open" | "closed">("open");
   const [detailSubmissionType, setDetailSubmissionType] = useState<"email" | "webform" | "platform">("email");
@@ -240,6 +247,7 @@ export function LabelFinder() {
     setDetailDemoLink(label.demoLink || "");
     setDetailSocialLink(label.socialLink || "");
     setDetailSoundcloudLink(label.soundcloudLink || "");
+    setDetailBeatportLink(label.beatportLink || "");
     setDetailNotes(label.notes || "");
     setDetailStatus(label.status);
     setDetailSubmissionType(label.submissionType);
@@ -571,6 +579,7 @@ export function LabelFinder() {
       label.demoLink ||
       label.socialLink ||
       label.soundcloudLink ||
+      label.beatportLink ||
       label.notes
     );
   };
@@ -879,6 +888,12 @@ export function LabelFinder() {
                         </Button>
                       )}
                     </div>
+                    {detailWebsite?.trim() && toClickableUrl(detailWebsite, "website") && (
+                      <a href={toClickableUrl(detailWebsite, "website")!} target="_blank" rel="noopener noreferrer"
+                        className="text-[11px] font-mono text-cyan-400 hover:text-cyan-300 hover:underline truncate block">
+                        {toClickableUrl(detailWebsite, "website")!}
+                      </a>
+                    )}
                   </div>
 
                   <div className="space-y-1.5">
@@ -896,6 +911,12 @@ export function LabelFinder() {
                         </Button>
                       )}
                     </div>
+                    {detailDemoLink?.trim() && toClickableUrl(detailDemoLink, "demoLink") && (
+                      <a href={toClickableUrl(detailDemoLink, "demoLink")!} target="_blank" rel="noopener noreferrer"
+                        className="text-[11px] font-mono text-cyan-400 hover:text-cyan-300 hover:underline truncate block">
+                        {toClickableUrl(detailDemoLink, "demoLink")!}
+                      </a>
+                    )}
                   </div>
 
                   <div className="space-y-1.5">
@@ -913,6 +934,12 @@ export function LabelFinder() {
                         </Button>
                       )}
                     </div>
+                    {detailSocialLink?.trim() && toClickableUrl(detailSocialLink, "socialLink") && (
+                      <a href={toClickableUrl(detailSocialLink, "socialLink")!} target="_blank" rel="noopener noreferrer"
+                        className="text-[11px] font-mono text-cyan-400 hover:text-cyan-300 hover:underline truncate block">
+                        {toClickableUrl(detailSocialLink, "socialLink")!}
+                      </a>
+                    )}
                   </div>
 
                   <div className="space-y-1.5">
@@ -930,6 +957,35 @@ export function LabelFinder() {
                         </Button>
                       )}
                     </div>
+                    {detailSoundcloudLink?.trim() && toClickableUrl(detailSoundcloudLink, "soundcloudLink") && (
+                      <a href={toClickableUrl(detailSoundcloudLink, "soundcloudLink")!} target="_blank" rel="noopener noreferrer"
+                        className="text-[11px] font-mono text-cyan-400 hover:text-cyan-300 hover:underline truncate block">
+                        {toClickableUrl(detailSoundcloudLink, "soundcloudLink")!}
+                      </a>
+                    )}
+                  </div>
+
+                  <div className="space-y-1.5">
+                    <UILabel className="text-xs font-mono uppercase text-muted-foreground flex items-center gap-1.5">
+                      <Disc3 className="h-3 w-3" /> {t(locale, "labels.beatportLink")}
+                    </UILabel>
+                    <div className="flex items-center gap-1.5">
+                      <Input value={detailBeatportLink} onChange={(e) => setDetailBeatportLink(e.target.value)}
+                        onBlur={() => saveDetailField("beatportLink", detailBeatportLink)} placeholder="https://www.beatport.com/label/..." className="bg-secondary/50 flex-1" />
+                      {detailBeatportLink?.trim() && (
+                        <Button variant="ghost" size="icon" className="shrink-0 h-9 w-9 text-cyan-400 hover:text-cyan-300 hover:bg-cyan-500/10"
+                          onClick={() => window.open(toClickableUrl(detailBeatportLink, "beatportLink") || "#", "_blank")}
+                          title={t(locale, "labels.openLink")}>
+                          <ExternalLink className="h-3.5 w-3.5" />
+                        </Button>
+                      )}
+                    </div>
+                    {detailBeatportLink?.trim() && toClickableUrl(detailBeatportLink, "beatportLink") && (
+                      <a href={toClickableUrl(detailBeatportLink, "beatportLink")!} target="_blank" rel="noopener noreferrer"
+                        className="text-[11px] font-mono text-cyan-400 hover:text-cyan-300 hover:underline truncate block">
+                        {toClickableUrl(detailBeatportLink, "beatportLink")!}
+                      </a>
+                    )}
                   </div>
 
                   <div className="grid grid-cols-2 gap-3">

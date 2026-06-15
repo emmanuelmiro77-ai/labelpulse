@@ -225,6 +225,7 @@ function buildRankedList(
       demoLink: "",
       socialLink: "",
       soundcloudLink: "",
+      beatportLink: "",
       genres: [genre],
       rankByGenre: { [genre]: currentRank || 999 },
       pointsByGenre: {},

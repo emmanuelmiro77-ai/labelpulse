@@ -341,6 +341,7 @@ type TranslationKeys = {
 
   // SoundCloud field
   "labels.soundcloudLink": string;
+  "labels.beatportLink": string;
   "labels.openLink": string;
 
   // Auto-save
@@ -661,6 +662,7 @@ const translations: Record<Locale, TranslationKeys> = {
     "data.rankingsDaysAgo": "{days} giorni fa",
     "data.rankingsToday": "Oggi",
     "labels.soundcloudLink": "SoundCloud",
+    "labels.beatportLink": "Beatport",
     "labels.openLink": "Apri link",
     "autosave.title": "Salvataggio Automatico",
     "autosave.description": "Scegli una cartella del tuo PC dove salvare il backup in automatico ogni volta che chiudi l'app. Nessun dato verrà perso!",
@@ -975,6 +977,7 @@ const translations: Record<Locale, TranslationKeys> = {
     "data.rankingsDaysAgo": "{days} days ago",
     "data.rankingsToday": "Today",
     "labels.soundcloudLink": "SoundCloud",
+    "labels.beatportLink": "Beatport",
     "labels.openLink": "Open link",
     "autosave.title": "Auto-Save",
     "autosave.description": "Choose a folder on your PC to automatically save a backup every time you close the app. No data will be lost!",
@@ -1289,6 +1292,7 @@ const translations: Record<Locale, TranslationKeys> = {
     "data.rankingsDaysAgo": "Hace {days} días",
     "data.rankingsToday": "Hoy",
     "labels.soundcloudLink": "SoundCloud",
+    "labels.beatportLink": "Beatport",
     "labels.openLink": "Abrir enlace",
     "autosave.title": "Guardado Automático",
     "autosave.description": "Elige una carpeta en tu PC para guardar un backup automáticamente cada vez que cierres la app. ¡No se perderán datos!",
@@ -1603,6 +1607,7 @@ const translations: Record<Locale, TranslationKeys> = {
     "data.rankingsDaysAgo": "Il y a {days} jours",
     "data.rankingsToday": "Aujourd'hui",
     "labels.soundcloudLink": "SoundCloud",
+    "labels.beatportLink": "Beatport",
     "labels.openLink": "Ouvrir le lien",
     "autosave.title": "Sauvegarde Automatique",
     "autosave.description": "Choisissez un dossier sur votre PC pour sauvegarder automatiquement un backup à chaque fermeture de l'app. Aucune donnée ne sera perdue !",
@@ -1917,6 +1922,7 @@ const translations: Record<Locale, TranslationKeys> = {
     "data.rankingsDaysAgo": "Vor {days} Tagen",
     "data.rankingsToday": "Heute",
     "labels.soundcloudLink": "SoundCloud",
+    "labels.beatportLink": "Beatport",
     "labels.openLink": "Link öffnen",
     "autosave.title": "Automatisches Speichern",
     "autosave.description": "Wählen Sie einen Ordner auf Ihrem PC, um bei jedem Schließen der App automatisch ein Backup zu speichern. Keine Daten gehen verloren!",
@@ -2231,6 +2237,7 @@ const translations: Record<Locale, TranslationKeys> = {
     "data.rankingsDaysAgo": "{days} dias atrás",
     "data.rankingsToday": "Hoje",
     "labels.soundcloudLink": "SoundCloud",
+    "labels.beatportLink": "Beatport",
     "labels.openLink": "Abrir link",
     "autosave.title": "Salvamento Automático",
     "autosave.description": "Escolha uma pasta no seu PC para salvar um backup automaticamente toda vez que fechar o app. Nenhum dado será perdido!",
