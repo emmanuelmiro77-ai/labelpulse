@@ -70,6 +70,53 @@ import {
 
 const SUBMISSION_TYPES = ["email", "webform", "platform"] as const;
 
+// ==================== SMART URL HELPER ====================
+// Converts partial usernames/handles into full clickable URLs.
+// E.g. "spectrummusicnl" → "https://instagram.com/spectrummusicnl"
+// If already a full URL, returns as-is.
+
+function toClickableUrl(value: string, field: "website" | "demoLink" | "socialLink" | "soundcloudLink"): string | null {
+  if (!value || !value.trim()) return null;
+  const v = value.trim();
+
+  // Already a full URL
+  if (/^https?:\/\//i.test(v)) return v;
+
+  // Email
+  if (v.includes("@") && field !== "socialLink" && field !== "soundcloudLink") {
+    return `mailto:${v}`;
+  }
+
+  // Field-specific smart defaults
+  switch (field) {
+    case "socialLink":
+      // Could be Instagram, Facebook, X/Twitter, etc.
+      // Heuristic: if it looks like a username (no dots, no slashes), assume Instagram
+      if (/^[a-zA-Z0-9._]{1,30}$/.test(v)) {
+        return `https://instagram.com/${v.replace(/^@/, "")}`;
+      }
+      // If it has dots but no slashes, might be a domain-like handle — try as-is with https
+      if (!/\//.test(v)) return `https://${v}`;
+      return `https://${v}`;
+    case "soundcloudLink":
+      if (/^[a-zA-Z0-9._-]{1,30}$/.test(v)) {
+        return `https://soundcloud.com/${v.replace(/^@/, "")}`;
+      }
+      return `https://${v}`;
+    case "website":
+    case "demoLink":
+      return `https://${v}`;
+  }
+}
+
+// Get display text for a link (strips protocol for cleaner display)
+function getLinkDisplay(value: string): string {
+  return value
+    .replace(/^https?:\/\//, "")
+    .replace(/^mailto:/, "")
+    .replace(/\/$/, "");
+}
+
 export function LabelFinder() {
   const { labels, demos, addLabel, updateLabel, deleteLabel, addDemo, locale, getGenres, setActiveTab, userProfile, setUserProfile, gmailAuth, setGmailAuth } =
     useAppStore();
@@ -654,19 +701,33 @@ export function LabelFinder() {
                     <div className="flex flex-wrap items-center gap-x-3 gap-y-0.5 mt-1 text-[11px] text-muted-foreground">
                       <span className="text-primary/60 font-medium truncate max-w-[200px]">{bestGenre || label.genre}</span>
                       {label.emails && label.emails.length > 0 && (
-                        <span className="font-mono truncate max-w-[200px] flex items-center gap-0.5">
+                        <a
+                          href={`mailto:${label.emails[0]}`}
+                          onClick={(e) => e.stopPropagation()}
+                          className="font-mono truncate max-w-[200px] flex items-center gap-0.5 hover:text-foreground transition-colors"
+                        >
                           <Mail className="h-2.5 w-2.5" /> {label.emails[0]}{label.emails.length > 1 ? ` +${label.emails.length - 1}` : ""}
-                        </span>
+                        </a>
                       )}
                       {!label.emails?.length && label.contactInfo && (
-                        <span className="font-mono truncate max-w-[200px] flex items-center gap-0.5">
+                        <a
+                          href={label.contactInfo.includes("@") ? `mailto:${label.contactInfo}` : toClickableUrl(label.contactInfo, "website") || "#"}
+                          onClick={(e) => e.stopPropagation()}
+                          className="font-mono truncate max-w-[200px] flex items-center gap-0.5 hover:text-foreground transition-colors"
+                        >
                           <Mail className="h-2.5 w-2.5" /> {label.contactInfo}
-                        </span>
+                        </a>
                       )}
                       {label.website && (
-                        <span className="font-mono truncate max-w-[160px] flex items-center gap-0.5">
-                          <Globe className="h-2.5 w-2.5" /> {label.website}
-                        </span>
+                        <a
+                          href={toClickableUrl(label.website, "website") || "#"}
+                          onClick={(e) => e.stopPropagation()}
+                          target="_blank"
+                          rel="noopener noreferrer"
+                          className="font-mono truncate max-w-[160px] flex items-center gap-0.5 hover:text-cyan-400 transition-colors"
+                        >
+                          <Globe className="h-2.5 w-2.5" /> {getLinkDisplay(label.website)}
+                        </a>
                       )}
                       {bestGenre && label.pointsByGenre?.[bestGenre] && (
                         <span className="font-mono text-muted-foreground/50">
@@ -807,32 +868,68 @@ export function LabelFinder() {
                     <UILabel className="text-xs font-mono uppercase text-muted-foreground flex items-center gap-1.5">
                       <Globe className="h-3 w-3" /> {t(locale, "labels.website")}
                     </UILabel>
-                    <Input value={detailWebsite} onChange={(e) => setDetailWebsite(e.target.value)}
-                      onBlur={() => saveDetailField("website", detailWebsite)} placeholder="https://www.label.com" className="bg-secondary/50" />
+                    <div className="flex items-center gap-1.5">
+                      <Input value={detailWebsite} onChange={(e) => setDetailWebsite(e.target.value)}
+                        onBlur={() => saveDetailField("website", detailWebsite)} placeholder="https://www.label.com" className="bg-secondary/50 flex-1" />
+                      {detailWebsite?.trim() && (
+                        <Button variant="ghost" size="icon" className="shrink-0 h-9 w-9 text-cyan-400 hover:text-cyan-300 hover:bg-cyan-500/10"
+                          onClick={() => window.open(toClickableUrl(detailWebsite, "website") || "#", "_blank")}
+                          title={t(locale, "labels.openLink")}>
+                          <ExternalLink className="h-3.5 w-3.5" />
+                        </Button>
+                      )}
+                    </div>
                   </div>
 
                   <div className="space-y-1.5">
                     <UILabel className="text-xs font-mono uppercase text-muted-foreground flex items-center gap-1.5">
                       <Link2 className="h-3 w-3" /> {t(locale, "labels.demoLink")}
                     </UILabel>
-                    <Input value={detailDemoLink} onChange={(e) => setDetailDemoLink(e.target.value)}
-                      onBlur={() => saveDetailField("demoLink", detailDemoLink)} placeholder="https://www.label.com/submit-demo" className="bg-secondary/50" />
+                    <div className="flex items-center gap-1.5">
+                      <Input value={detailDemoLink} onChange={(e) => setDetailDemoLink(e.target.value)}
+                        onBlur={() => saveDetailField("demoLink", detailDemoLink)} placeholder="https://www.label.com/submit-demo" className="bg-secondary/50 flex-1" />
+                      {detailDemoLink?.trim() && (
+                        <Button variant="ghost" size="icon" className="shrink-0 h-9 w-9 text-cyan-400 hover:text-cyan-300 hover:bg-cyan-500/10"
+                          onClick={() => window.open(toClickableUrl(detailDemoLink, "demoLink") || "#", "_blank")}
+                          title={t(locale, "labels.openLink")}>
+                          <ExternalLink className="h-3.5 w-3.5" />
+                        </Button>
+                      )}
+                    </div>
                   </div>
 
                   <div className="space-y-1.5">
                     <UILabel className="text-xs font-mono uppercase text-muted-foreground flex items-center gap-1.5">
                       <ExternalLink className="h-3 w-3" /> {t(locale, "labels.socialLink")}
                     </UILabel>
-                    <Input value={detailSocialLink} onChange={(e) => setDetailSocialLink(e.target.value)}
-                      onBlur={() => saveDetailField("socialLink", detailSocialLink)} placeholder="https://instagram.com/label" className="bg-secondary/50" />
+                    <div className="flex items-center gap-1.5">
+                      <Input value={detailSocialLink} onChange={(e) => setDetailSocialLink(e.target.value)}
+                        onBlur={() => saveDetailField("socialLink", detailSocialLink)} placeholder="https://instagram.com/label" className="bg-secondary/50 flex-1" />
+                      {detailSocialLink?.trim() && (
+                        <Button variant="ghost" size="icon" className="shrink-0 h-9 w-9 text-cyan-400 hover:text-cyan-300 hover:bg-cyan-500/10"
+                          onClick={() => window.open(toClickableUrl(detailSocialLink, "socialLink") || "#", "_blank")}
+                          title={t(locale, "labels.openLink")}>
+                          <ExternalLink className="h-3.5 w-3.5" />
+                        </Button>
+                      )}
+                    </div>
                   </div>
 
                   <div className="space-y-1.5">
                     <UILabel className="text-xs font-mono uppercase text-muted-foreground flex items-center gap-1.5">
                       <Music2 className="h-3 w-3" /> {t(locale, "labels.soundcloudLink")}
                     </UILabel>
-                    <Input value={detailSoundcloudLink} onChange={(e) => setDetailSoundcloudLink(e.target.value)}
-                      onBlur={() => saveDetailField("soundcloudLink", detailSoundcloudLink)} placeholder="https://soundcloud.com/label" className="bg-secondary/50" />
+                    <div className="flex items-center gap-1.5">
+                      <Input value={detailSoundcloudLink} onChange={(e) => setDetailSoundcloudLink(e.target.value)}
+                        onBlur={() => saveDetailField("soundcloudLink", detailSoundcloudLink)} placeholder="https://soundcloud.com/label" className="bg-secondary/50 flex-1" />
+                      {detailSoundcloudLink?.trim() && (
+                        <Button variant="ghost" size="icon" className="shrink-0 h-9 w-9 text-cyan-400 hover:text-cyan-300 hover:bg-cyan-500/10"
+                          onClick={() => window.open(toClickableUrl(detailSoundcloudLink, "soundcloudLink") || "#", "_blank")}
+                          title={t(locale, "labels.openLink")}>
+                          <ExternalLink className="h-3.5 w-3.5" />
+                        </Button>
+                      )}
+                    </div>
                   </div>
 
                   <div className="grid grid-cols-2 gap-3">
