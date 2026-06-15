@@ -328,7 +328,7 @@ export function RankingsPage() {
     return { total, rising, falling, newEntries };
   }, [rankedList]);
 
-  // Top rising labels across ALL genres (for the spotlight section)
+  // Top rising labels across ALL genres (for the global spotlight section)
   const topRisers = useMemo(() => {
     const risers: { label: Label; genre: string; movement: number; rank: number }[] = [];
 
@@ -348,6 +348,25 @@ export function RankingsPage() {
 
     return risers.sort((a, b) => b.movement - a.movement).slice(0, 10);
   }, [labels]);
+
+  // Top rising labels for the SELECTED genre (genre-specific spotlight)
+  const topRisersForGenre = useMemo(() => {
+    if (!selectedGenre) return [];
+    const risers: { label: Label; genre: string; movement: number; rank: number }[] = [];
+
+    for (const label of labels) {
+      const currentRank = label.rankByGenre?.[selectedGenre];
+      const prevRank = label.prevRankByGenre?.[selectedGenre];
+      if (currentRank && prevRank) {
+        const movement = prevRank - currentRank;
+        if (movement > 0) {
+          risers.push({ label, genre: selectedGenre, movement, rank: currentRank });
+        }
+      }
+    }
+
+    return risers.sort((a, b) => b.movement - a.movement).slice(0, 10);
+  }, [labels, selectedGenre]);
 
   const hasPreviousData = useMemo(() => {
     return labels.some((l) => l.prevRankByGenre && Object.keys(l.prevRankByGenre).length > 0);
@@ -406,29 +425,52 @@ export function RankingsPage() {
         </div>
       )}
 
-      {/* Spotlight: Top Risers (only if we have previous data and viewing current) */}
-      {timePeriod === "current" && hasPreviousData && topRisers.length > 0 && (
-        <div className="space-y-3">
-          <div className="flex items-center gap-2">
-            <Flame className="h-5 w-5 text-orange-400" />
-            <h3 className="text-sm font-semibold text-foreground">{t(locale, "rankings.spotlight")}</h3>
-          </div>
-          <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-5 gap-2">
-            {topRisers.map((item, idx) => (
-              <div
-                key={`${item.label.id}-${item.genre}`}
-                className="flex items-center gap-2 p-2.5 rounded-lg bg-gradient-to-r from-emerald-500/10 to-transparent border border-emerald-500/20"
-              >
-                <span className="text-lg font-bold text-emerald-400 shrink-0">+{item.movement}</span>
-                <div className="min-w-0">
-                  <p className="text-xs font-medium text-foreground truncate">{item.label.name}</p>
-                  <p className="text-[10px] text-muted-foreground truncate">{item.genre}</p>
-                </div>
+      {/* Spotlight: Top Risers */}
+      {timePeriod === "current" && hasPreviousData && (() => {
+        // When a genre is selected, show genre-specific risers;
+        // otherwise show the global top risers across all genres
+        const risers = selectedGenre ? topRisersForGenre : topRisers;
+        if (risers.length === 0) return null;
+
+        return (
+          <div className="space-y-3">
+            <div className="flex items-center justify-between gap-2">
+              <div className="flex items-center gap-2">
+                <Flame className="h-5 w-5 text-orange-400" />
+                <h3 className="text-sm font-semibold text-foreground">
+                  {selectedGenre
+                    ? t(locale, "rankings.spotlightGenre")
+                    : t(locale, "rankings.spotlight")}
+                </h3>
               </div>
-            ))}
+              {selectedGenre && (
+                <span className="text-xs text-muted-foreground bg-secondary/50 px-2 py-0.5 rounded-full">
+                  {selectedGenre}
+                </span>
+              )}
+            </div>
+            <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-5 gap-2">
+              {risers.map((item, idx) => (
+                <div
+                  key={`${item.label.id}-${item.genre}`}
+                  className="flex items-center gap-2 p-2.5 rounded-lg bg-gradient-to-r from-emerald-500/10 to-transparent border border-emerald-500/20"
+                >
+                  <span className="text-lg font-bold text-emerald-400 shrink-0">+{item.movement}</span>
+                  <div className="min-w-0">
+                    <p className="text-xs font-medium text-foreground truncate">{item.label.name}</p>
+                    <p className="text-[10px] text-muted-foreground truncate">
+                      {selectedGenre
+                        ? `#${item.rank} · ${t(locale, "rankings.colMovement")} +${item.movement}`
+                        : item.genre}
+                    </p>
+                  </div>
+                </div>
+              ))}
+            </div>
           </div>
-        </div>
-      )}
+        );
+      })()}
+
 
       {/* Genre selector + Filters */}
       <div className="space-y-4">
