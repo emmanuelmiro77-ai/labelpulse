@@ -23,7 +23,7 @@ import {
   Infinity,
   History,
 } from "lucide-react";
-import { useState, useMemo, useCallback } from "react";
+import React, { useState, useMemo, useCallback } from "react";
 import { Button } from "@/components/ui/button";
 
 // ==================== TYPES ====================
@@ -82,13 +82,13 @@ function getPeriodLabel(period: RankingTimePeriod, locale: Locale): string {
   return t(locale, `rankings.period.${period}`);
 }
 
-function getPeriodIcon(period: RankingTimePeriod) {
+function getPeriodIcon(period: RankingTimePeriod): React.ComponentType<{ className?: string }> {
   switch (period) {
-    case "current": return <Flame className="h-3.5 w-3.5" />;
-    case "1m": return <Clock className="h-3.5 w-3.5" />;
-    case "3m": return <Calendar className="h-3.5 w-3.5" />;
-    case "1y": return <History className="h-3.5 w-3.5" />;
-    case "all": return <Infinity className="h-3.5 w-3.5" />;
+    case "current": return Flame;
+    case "1m": return Clock;
+    case "3m": return Calendar;
+    case "1y": return History;
+    case "all": return Infinity;
   }
 }
 
@@ -116,9 +116,19 @@ function aggregateSnapshots(
   snapshots: RankingSnapshot[],
   genre: string,
   period: RankingTimePeriod
-): Map<string, { totalPoints: number; bestRank: number; snapshotCount: number; averageRank: number }> {
+): Map<string, { totalPoints: number; bestRank: number; snapshotCount: number; averageRank: number; rankSum: number }> {
   const cutoff = getPeriodCutoff(period);
   const result = new Map<string, { totalPoints: number; bestRank: number; snapshotCount: number; averageRank: number; rankSum: number }>();
+
+  // Helper to get or create entry with defaults
+  function getOrCreate(name: string): { totalPoints: number; bestRank: number; snapshotCount: number; averageRank: number; rankSum: number } {
+    let entry = result.get(name);
+    if (!entry) {
+      entry = { totalPoints: 0, bestRank: 999, snapshotCount: 0, averageRank: 0, rankSum: 0 };
+      result.set(name, entry);
+    }
+    return entry;
+  }
 
   for (const snapshot of snapshots) {
     if (new Date(snapshot.timestamp).getTime() < cutoff) continue;
@@ -128,20 +138,11 @@ function aggregateSnapshots(
     if (!genreData) continue;
 
     for (const [labelName, data] of Object.entries(genreData)) {
-      const existing = result.get(labelName);
-      if (existing) {
-        existing.totalPoints += data.points;
-        existing.rankSum += data.rank;
-        existing.snapshotCount++;
-        if (data.rank < existing.bestRank) existing.bestRank = data.rank;
-      } else {
-        result.set(labelName, {
-          totalPoints: data.points,
-          bestRank: data.rank,
-          snapshotCount: 1,
-          rankSum: data.rank,
-        });
-      }
+      const existing = getOrCreate(labelName);
+      existing.totalPoints += data.points;
+      existing.rankSum += data.rank;
+      existing.snapshotCount++;
+      if (data.rank < existing.bestRank) existing.bestRank = data.rank;
     }
   }
 
