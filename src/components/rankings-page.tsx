@@ -250,6 +250,7 @@ function buildRankedList(
 
 export function RankingsPage() {
   const { labels, locale, rankingsUpdatedAt, rankingSnapshots } = useAppStore();
+  const snapshots = rankingSnapshots || []; // defensive: might be undefined for existing users
   const [selectedGenre, setSelectedGenre] = useState<string | null>(null);
   const [sortMode, setSortMode] = useState<SortMode>("rank");
   const [movementFilter, setMovementFilter] = useState<MovementFilter>("all");
@@ -272,8 +273,8 @@ export function RankingsPage() {
   // Build ranked list for selected genre and period
   const rankedList = useMemo((): RankedLabel[] => {
     if (!selectedGenre) return [];
-    return buildRankedList(labels, rankingSnapshots || [], selectedGenre, timePeriod);
-  }, [labels, rankingSnapshots, selectedGenre, timePeriod]);
+    return buildRankedList(labels, snapshots, selectedGenre, timePeriod);
+  }, [labels, snapshots, selectedGenre, timePeriod]);
 
   // Apply filters
   const filteredList = useMemo(() => {
@@ -353,16 +354,16 @@ export function RankingsPage() {
 
   // Snapshot stats for info display
   const snapshotStats = useMemo(() => {
-    if (!rankingSnapshots || rankingSnapshots.length === 0) return { count: 0, oldest: null as string | null, newest: null as string | null };
-    const sorted = [...rankingSnapshots].sort((a, b) => new Date(a.timestamp).getTime() - new Date(b.timestamp).getTime());
+    if (!snapshots || snapshots.length === 0) return { count: 0, oldest: null as string | null, newest: null as string | null };
+    const sorted = [...snapshots].sort((a, b) => new Date(a.timestamp).getTime() - new Date(b.timestamp).getTime());
     return {
-      count: rankingSnapshots.length,
+      count: snapshots.length,
       oldest: sorted[0].timestamp,
       newest: sorted[sorted.length - 1].timestamp,
     };
-  }, [rankingSnapshots]);
+  }, [snapshots]);
 
-  const hasSnapshots = rankingSnapshots && rankingSnapshots.length > 0;
+  const hasSnapshots = snapshots.length > 0;
 
   return (
     <div className="space-y-6">

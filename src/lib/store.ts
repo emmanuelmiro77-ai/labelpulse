@@ -333,7 +333,7 @@ interface AppState {
   advanceDemoStatus: (id: string) => void;
 
   // Navigation
-  setActiveTab: (tab: "dashboard" | "labels" | "demos" | "pitch") => void;
+  setActiveTab: (tab: "dashboard" | "labels" | "rankings" | "demos" | "pitch") => void;
 
   // Language
   setLocale: (locale: Locale) => void;
