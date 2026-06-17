@@ -1,0 +1,56 @@
+[
+  {
+    "url": "https://cyanite.ai/blog/music-analysis-api",
+    "name": "Music Analysis API: AI-Powered Tagging & Search - Cyanite.ai",
+    "snippet": "You can upload a file or paste a link, and the system analyzes the track before comparing it to your music library. We also store the reference ...",
+    "host_name": "cyanite.ai",
+    "rank": 0,
+    "date": "",
+    "favicon": ""
+  },
+  {
+    "url": "https://www.youtube.com/watch?v=VA7EzWSgMF4",
+    "name": "How Cinephonix integrated AI search into their music library",
+    "snippet": "... Cyanite's unique API. To register for Cyanite Web App: https://app.cyanite.ai/register To experience Cinephonix music library: https://www ...",
+    "host_name": "www.youtube.com",
+    "rank": 1,
+    "date": "",
+    "favicon": ""
+  },
+  {
+    "url": "https://api-docs.cyanite.ai/docs/analyze-youtube-tracks",
+    "name": "Analyze YouTube Tracks - Cyanite.ai API Documentation",
+    "snippet": "Analyze YouTube Tracks. The analysis of a YouTube track with all the available classifiers will automatically be started upon creation.",
+    "host_name": "api-docs.cyanite.ai",
+    "rank": 2,
+    "date": "",
+    "favicon": ""
+  },
+  {
+    "url": "https://www.reddit.com/r/reactjs/comments/lojnjg/i_made_a_desktop_streaming_site_that_combines",
+    "name": "I made a desktop streaming site that combines Spotify, Soundcloud",
+    "snippet": "I built a terminal app that downloads your YouTube, SoundCloud, and Spotify playlists to real local files and plays them offline",
+    "host_name": "www.reddit.com",
+    "rank": 3,
+    "date": "",
+    "favicon": ""
+  },
+  {
+    "url": "https://www.youtube.com/watch?v=wcoyoiENVwA",
+    "name": "AI for DJs, Producers and Labels: Cyanite - YouTube",
+    "snippet": "Diving into the world of AI and music. Jakob Höflich was so kind to introduce us to Cyanite and how it can help us: DJs, producers and ...",
+    "host_name": "www.youtube.com",
+    "rank": 4,
+    "date": "",
+    "favicon": ""
+  },
+  {
+    "url": "https://developers.soundcloud.com/docs/api/guide",
+    "name": "API - Guide - SoundCloud Developers",
+    "snippet": "The SoundCloud API provides endpoints for authentication, track upload and playback, social features, and search. This guide covers common integration patterns ...",
+    "host_name": "developers.soundcloud.com",
+    "rank": 5,
+    "date": "",
+    "favicon": ""
+  }
+]

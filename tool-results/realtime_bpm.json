@@ -1,0 +1,47 @@
+[
+  {
+    "url": "https://github.com/dlepaux/realtime-bpm-analyzer",
+    "name": "dlepaux/realtime-bpm-analyzer - GitHub",
+    "snippet": "Features · Zero dependencies - Uses native Web Audio API · Real-time analysis - Analyze audio/video as it plays · Multiple sources - Works with files, streams, ...",
+    "host_name": "github.com",
+    "rank": 0,
+    "date": "",
+    "favicon": ""
+  },
+  {
+    "url": "https://www.realtime-bpm-analyzer.com",
+    "name": "Realtime BPM Analyzer: Find the BPM of Any Song, Free",
+    "snippet": "Analyze BPM while audio or video is playing, with instant feedback and continuous monitoring capabilities. Zero Dependencies. Built entirely on the Web Audio ...\nYes. The analyzer is a zero-dependency TypeScript library published to npm. See the developer docs below. For developers realtime-bpm-analyzer is the same engine that powers this page, published as a standalone library. Zero runtime dependencies. Full TypeScript types. Works with vanilla JS, React, Vue, or any modern framework. Install bash",
+    "host_name": "www.realtime-bpm-analyzer.com",
+    "rank": 1,
+    "date": "",
+    "favicon": ""
+  },
+  {
+    "url": "https://npmtrends.com/bpm-detective-vs-realtime-bpm-analyzer-vs-web-audio-beat-detector",
+    "name": "bpm-detective vs realtime-bpm-analyzer vs web-audio-beat-detector",
+    "snippet": "bpm-detective vs realtime-bpm-analyzer vs web-audio-beat-detector. Bytes is a JavaScript newsletter you'll actually enjoy reading. Learn React with react.gg",
+    "host_name": "npmtrends.com",
+    "rank": 2,
+    "date": "",
+    "favicon": ""
+  },
+  {
+    "url": "https://www.reddit.com/r/DJs/comments/1ldp77l/does_this_exist_a_minimal_macos_or_ios",
+    "name": "Does this exist? A minimal macOS or iOS application for detecting",
+    "snippet": "A minimal macOS or iOS application for detecting real-time BPM from live audio input. Built-in Microphone Channel: a real-time BPM readout, ...",
+    "host_name": "www.reddit.com",
+    "rank": 3,
+    "date": "",
+    "favicon": ""
+  },
+  {
+    "url": "https://stackoverflow.com/questions/477944/bpm-audio-detection-library",
+    "name": "Bpm audio detection Library [closed] - Stack Overflow",
+    "snippet": "BPMDetect class from the SoundTouch library for BPM Detection. It can also do beat detection and onset detection. It also supports key ...",
+    "host_name": "stackoverflow.com",
+    "rank": 4,
+    "date": "",
+    "favicon": ""
+  }
+]

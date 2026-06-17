@@ -1,0 +1,74 @@
+[
+  {
+    "url": "https://transactions.ismir.net/articles/10.5334/tismir.111",
+    "name": "Audio and Music Analysis on the Web using Essentia.js",
+    "snippet": "In this article, we present Essentia.js, an open-source JavaScript (JS) library for audio and music analysis on both web clients and JS engines.",
+    "host_name": "transactions.ismir.net",
+    "rank": 0,
+    "date": "",
+    "favicon": ""
+  },
+  {
+    "url": "https://www.reddit.com/r/DSP/comments/1rh3r66/adding_key_detection_to_bandcamp_firefox",
+    "name": "Adding Key Detection to Bandcamp Firefox Extension (Essentia.js)",
+    "snippet": "BPM detection via Essentia.js (WebAssembly) – tuned for electronic tempo ranges, very accurate even on streaming audio · Manual tap-tempo for ear ...",
+    "host_name": "www.reddit.com",
+    "rank": 1,
+    "date": "",
+    "favicon": ""
+  },
+  {
+    "url": "https://mtg.github.io/essentia.js",
+    "name": "essentia.js | JavaScript library for music/audio analysis and",
+    "snippet": "It supports both real-time and offline audio analysis use-cases. The packaged add-on modules includes configurable feature extractors for some selected features ...",
+    "host_name": "mtg.github.io",
+    "rank": 2,
+    "date": "",
+    "favicon": ""
+  },
+  {
+    "url": "https://essentia.upf.edu",
+    "name": "Homepage — Essentia 2.1-beta6-dev documentation",
+    "snippet": "Essentia is an open-source C++ library for audio analysis and audio-based music information retrieval. It contains an extensive collection of algorithms.",
+    "host_name": "essentia.upf.edu",
+    "rank": 3,
+    "date": "",
+    "favicon": ""
+  },
+  {
+    "url": "https://www.youtube.com/watch?v=p23DfQ86SVM",
+    "name": "Introduction to Music Information Retrieval using Essentia.js - YouTube",
+    "snippet": "advances in web audio and software for audio analysis, music information retrieval (MIR), and machine learning open up exciting ...",
+    "host_name": "www.youtube.com",
+    "rank": 4,
+    "date": "",
+    "favicon": ""
+  },
+  {
+    "url": "https://cs310.hashnode.dev/audio-features-extraction-with-javascript-and-essentia",
+    "name": "Audio Features Extraction With JavaScript and Essentia - CS310",
+    "snippet": "It contains a corpus of analysis algorithms that can perform tasks such as tempo and key extraction, loudness detection and much more. Their ...",
+    "host_name": "cs310.hashnode.dev",
+    "rank": 5,
+    "date": "",
+    "favicon": ""
+  },
+  {
+    "url": "https://www.instagram.com/reel/DVwBaKau09K",
+    "name": "Introducing EssentiaTD (beta) — a real-time and offline audio",
+    "snippet": "Tonal analysis — pitch, key, HPCP chroma, dissonance. Rhythm — onset detection, BPM, beat phase. Loudness — EBU R128 metering ...",
+    "host_name": "www.instagram.com",
+    "rank": 6,
+    "date": "",
+    "favicon": ""
+  },
+  {
+    "url": "https://program.ismir2020.net/static/final_papers/260.pdf",
+    "name": "[PDF] ESSENTIA.JS: A JAVASCRIPT LIBRARY FOR MUSIC AND AUDIO",
+    "snippet": "Open-source software libraries for audio/music analysis and feature extraction have a significant impact on the de-.",
+    "host_name": "program.ismir2020.net",
+    "rank": 7,
+    "date": "",
+    "favicon": ""
+  }
+]

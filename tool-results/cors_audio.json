@@ -1,0 +1,56 @@
+[
+  {
+    "url": "https://github.com/soundcloud/soundcloud-javascript/issues/91",
+    "name": "Streaming breaks in Chrome v71+ with CORS errors due to  - GitHub",
+    "snippet": "Basically when I try to play the streaming URL of a SoundCloud track, I get the \"zero bytes output due to CORS\" type error. Somehow the 302 ...",
+    "host_name": "github.com",
+    "rank": 0,
+    "date": "",
+    "favicon": ""
+  },
+  {
+    "url": "https://stackoverflow.com/questions/31089417/soundcloud-cors-error-with-web-audio-api",
+    "name": "Soundcloud CORS error with web audio api - Stack Overflow",
+    "snippet": "This can be fixed by moving the resource to the same domain or enabling CORS. Is this the correct way to access soundcloud clips from web audio ...",
+    "host_name": "stackoverflow.com",
+    "rank": 1,
+    "date": "",
+    "favicon": ""
+  },
+  {
+    "url": "https://developers.soundcloud.com/docs/api/guide",
+    "name": "API - Guide - SoundCloud Developers",
+    "snippet": "The API supports CORS for browser-based JavaScript requests. JSONP is also supported via a callback query parameter. const response = await fetch(\"https ...",
+    "host_name": "developers.soundcloud.com",
+    "rank": 2,
+    "date": "",
+    "favicon": ""
+  },
+  {
+    "url": "https://developers.soundcloud.com/blog/api-streaming-urls",
+    "name": "Introducing AAC HLS on SoundCloud APIs [Deadline Extended]",
+    "snippet": "We're introducing an important change that will affect how you stream tracks!",
+    "host_name": "developers.soundcloud.com",
+    "rank": 3,
+    "date": "",
+    "favicon": ""
+  },
+  {
+    "url": "https://www.michaelbromley.co.uk/blog/audio-visualization-with-web-audio-canvas-and-the-soundcloud-api",
+    "name": "Audio Visualization with Web Audio, Canvas and the Soundcloud API",
+    "snippet": "I'm working on a new project to bring this (and many other) JS/Canvas visualizations onto your computer, allowing you to visualize the output of your sound ...",
+    "host_name": "www.michaelbromley.co.uk",
+    "rank": 4,
+    "date": "",
+    "favicon": ""
+  },
+  {
+    "url": "https://developers.soundcloud.com/blog/playback-on-web-at-soundcloud",
+    "name": "Playback on Web at SoundCloud",
+    "snippet": "Maestro is a library we have developed to handle all playback across SoundCloud web applications. It successfully handles tens of millions of plays per day.",
+    "host_name": "developers.soundcloud.com",
+    "rank": 5,
+    "date": "",
+    "favicon": ""
+  }
+]

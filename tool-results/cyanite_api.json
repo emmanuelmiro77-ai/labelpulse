@@ -1,0 +1,74 @@
+[
+  {
+    "url": "https://api-docs.cyanite.ai/docs/sending-api-requests",
+    "name": "Sending API requests | Cyanite.ai API Documentation",
+    "snippet": "The endpoint is compliant with the GraphQL over HTTP specification. Our API should be compatible with all major GraphQL clients. GraphQL over HTTP. You can ...",
+    "host_name": "api-docs.cyanite.ai",
+    "rank": 0,
+    "date": "",
+    "favicon": ""
+  },
+  {
+    "url": "https://api-docs.cyanite.ai",
+    "name": "Cyanite.ai API Documentation",
+    "snippet": "Visualize and learn about dynamic developments of distinctive moods in music. With in-depth information about any second of an audio file.",
+    "host_name": "api-docs.cyanite.ai",
+    "rank": 1,
+    "date": "",
+    "favicon": ""
+  },
+  {
+    "url": "https://api-docs.cyanite.ai/docs/graphql/enums/keyword-search-error-code",
+    "name": "KeywordSearchErrorCode - Cyanite.ai API Documentation",
+    "snippet": "Contact us via sales@cyanite.ai if you want to upgrade your account. rateLimitExceeded ​. Rate limit for keyword search has been exceeded. Previous.",
+    "host_name": "api-docs.cyanite.ai",
+    "rank": 2,
+    "date": "",
+    "favicon": ""
+  },
+  {
+    "url": "https://community.airtable.com/development-apis-11/how-does-the-api-rate-limit-work-3325",
+    "name": "How does the API rate limit work - Airtable Community",
+    "snippet": "The API is limited to 5 requests per second per base. If you exceed this rate, you will receive a 429 status code and will need to wait 30 ...",
+    "host_name": "community.airtable.com",
+    "rank": 3,
+    "date": "",
+    "favicon": ""
+  },
+  {
+    "url": "https://cyanite.ai/blog/music-analysis-api",
+    "name": "Music Analysis API: AI-Powered Tagging & Search - Cyanite.ai",
+    "snippet": "Bring AI tagging and music search into your platform with Cyanite's API — consistent metadata and smart discovery at catalog scale.",
+    "host_name": "cyanite.ai",
+    "rank": 4,
+    "date": "",
+    "favicon": ""
+  },
+  {
+    "url": "https://api-docs.cyanite.ai/blog/2024/02/01/2024-01-26-changelog-",
+    "name": "Changelog 2024-02-01 | Cyanite.ai API Documentation",
+    "snippet": "The new cyanite API playlist matching query can be used to get an array of matching playlists for your music. It will return an array of nodes ...",
+    "host_name": "api-docs.cyanite.ai",
+    "rank": 5,
+    "date": "",
+    "favicon": ""
+  },
+  {
+    "url": "https://www.youtube.com/watch?v=nj5anWY7_6Q&vl=en-US",
+    "name": "Secure Your AI API Endpoints (Rate Limiting, SQL, XSS, etc.)",
+    "snippet": "Consider adding a layer of defense for your (AI) API endpoints Arcjet for Shield + Rate Limiting + Email Validation & more (sponsored): ...",
+    "host_name": "www.youtube.com",
+    "rank": 6,
+    "date": "",
+    "favicon": ""
+  },
+  {
+    "url": "https://api.scite.ai/docs",
+    "name": "Scite API Docs",
+    "snippet": "Rate Limiting. Without an Authentication Token, the default rate limit is up to 10 requests per second, up to 40 requests per minute.",
+    "host_name": "api.scite.ai",
+    "rank": 7,
+    "date": "",
+    "favicon": ""
+  }
+]

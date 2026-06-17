@@ -1,0 +1,74 @@
+[
+  {
+    "url": "https://developers.soundcloud.com/docs/api/guide",
+    "name": "API - Guide - SoundCloud Developers",
+    "snippet": "Construct the authorization URL with the required parameters and redirect the user's browser to it. ... The API supports CORS for browser-based JavaScript ...",
+    "host_name": "developers.soundcloud.com",
+    "rank": 0,
+    "date": "",
+    "favicon": ""
+  },
+  {
+    "url": "https://stackoverflow.com/questions/31089417/soundcloud-cors-error-with-web-audio-api",
+    "name": "Soundcloud CORS error with web audio api - Stack Overflow",
+    "snippet": "How can I avoid CORS restriction for web audio api? 1 · SoundCloud Api redirect confusion and Audio Api Streams · 5 · MediaElementAudioSource ...",
+    "host_name": "stackoverflow.com",
+    "rank": 1,
+    "date": "",
+    "favicon": ""
+  },
+  {
+    "url": "https://github.com/soundcloud/soundcloud-javascript/issues/91",
+    "name": "Streaming breaks in Chrome v71+ with CORS errors due to  - GitHub",
+    "snippet": "Basically when I try to play the streaming URL of a SoundCloud track, I get the \"zero bytes output due to CORS\" type error. Somehow the 302 ...",
+    "host_name": "github.com",
+    "rank": 2,
+    "date": "",
+    "favicon": ""
+  },
+  {
+    "url": "https://yasoob.me/2018/04/15/reverse-engineering-soundcloud-api",
+    "name": "Reverse Engineering Soundcloud API - Yasoob Khalid",
+    "snippet": "In this post we will learn how to bypass downloading restrictions on Soundcloud. We will create a Python script which will allow us to download even those ...",
+    "host_name": "yasoob.me",
+    "rank": 3,
+    "date": "",
+    "favicon": ""
+  },
+  {
+    "url": "https://developers.soundcloud.com/blog/playback-on-web-at-soundcloud",
+    "name": "Playback on Web at SoundCloud",
+    "snippet": "Maestro is a library we have developed to handle all playback across SoundCloud web applications. It successfully handles tens of millions of plays per day.",
+    "host_name": "developers.soundcloud.com",
+    "rank": 4,
+    "date": "",
+    "favicon": ""
+  },
+  {
+    "url": "https://www.youtube.com/watch?v=BMgrLd-U4k0",
+    "name": "How to Scrape SoundCloud with Node.js | Get Audio for AI Training",
+    "snippet": "Extracting play counts, artist names, and track URLs. ⚙️ ... Yes, it's possible to download audio from SoundCloud when the Download file option is ...",
+    "host_name": "www.youtube.com",
+    "rank": 5,
+    "date": "",
+    "favicon": ""
+  },
+  {
+    "url": "https://zylalabs.com/en/api-marketplace/tag/soundcloud+downloader",
+    "name": "Best Soundcloud downloader APIs",
+    "snippet": "The SoundCloud Song Downloader API streamlines the extraction and downloading of audio content from SoundCloud, catering to diverse applications with ease.",
+    "host_name": "zylalabs.com",
+    "rank": 6,
+    "date": "",
+    "favicon": ""
+  },
+  {
+    "url": "https://chromewebstore.google.com/detail/soundcloud-track-download/ekmbbjdpakacalghjkikfppebgdpoebb",
+    "name": "SoundCloud Track Downloader - Chrome Web Store",
+    "snippet": "Download with one click from the extension popup, or use the inline download button next to Like, Repost, and Share — same flow, no popup needed ...",
+    "host_name": "chromewebstore.google.com",
+    "rank": 7,
+    "date": "Jun 14, 2026",
+    "favicon": ""
+  }
+]

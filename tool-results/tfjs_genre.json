@@ -1,0 +1,56 @@
+[
+  {
+    "url": "https://medium.com/@kaavyamaha12/training-a-tensorflow-model-for-predicting-the-genres-of-popular-songs-4286d87d71f6",
+    "name": "Training a TensorFlow model for predicting the Genres of Popular",
+    "snippet": "The aim in this post is to detail the process of building a Genre Classification Model in TensorFlow, as well as the different steps in ...",
+    "host_name": "medium.com",
+    "rank": 0,
+    "date": "",
+    "favicon": ""
+  },
+  {
+    "url": "https://www.facebook.com/groups/icthubkenya/posts/4056776977798958",
+    "name": "Building a mood classifier AI in browser - Facebook",
+    "snippet": "Create an AI that can predict the mood of a text based on user input , all without any backend or database. CSS, and JS.",
+    "host_name": "www.facebook.com",
+    "rank": 1,
+    "date": "",
+    "favicon": ""
+  },
+  {
+    "url": "https://www.tensorflow.org/js/demos",
+    "name": "TensorFlow.js demos",
+    "snippet": "See examples and live demos built with TensorFlow.js. See how to visualize in-browser training and model behaviour and training using tfjs-vis.",
+    "host_name": "www.tensorflow.org",
+    "rank": 2,
+    "date": "",
+    "favicon": ""
+  },
+  {
+    "url": "https://www.youtube.com/watch?v=_xcFAiufwd0",
+    "name": "13- Implementing a neural network for music genre classification",
+    "snippet": "In this video, l implement a music genre classifier using Tensorflow. The classifier is trained on MFCC features extracted from the music ...",
+    "host_name": "www.youtube.com",
+    "rank": 3,
+    "date": "",
+    "favicon": ""
+  },
+  {
+    "url": "https://stackoverflow.com/questions/49791076/using-tensorflow-js-to-predict-movie-desirability-based-on-genre",
+    "name": "Using tensorflow.js to predict movie desirability based on genre",
+    "snippet": "tensorflow.js model is not predicting correctly. Creating MLP model to predict the ratings that a user will give to an unseen movie using ...",
+    "host_name": "stackoverflow.com",
+    "rank": 4,
+    "date": "",
+    "favicon": ""
+  },
+  {
+    "url": "https://pmc.ncbi.nlm.nih.gov/articles/PMC10830873",
+    "name": "Optimizing the configuration of deep learning models for music",
+    "snippet": "This paper introduces a novel approach for accurately forecasting music genres by using deep learning methodologies.",
+    "host_name": "pmc.ncbi.nlm.nih.gov",
+    "rank": 5,
+    "date": "",
+    "favicon": ""
+  }
+]

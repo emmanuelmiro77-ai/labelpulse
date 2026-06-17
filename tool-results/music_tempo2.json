@@ -1,0 +1,56 @@
+[
+  {
+    "url": "https://npmjs.com/package/web-audio-beat-detector",
+    "name": "web-audio-beat-detector - NPM",
+    "snippet": "Using JavaScript and the Web Audio API. It retrieves the beats as BPM of a given AudioBuffer. especially for electronic music. available on npm",
+    "host_name": "npmjs.com",
+    "rank": 0,
+    "date": "",
+    "favicon": ""
+  },
+  {
+    "url": "https://www.jsdelivr.com/package/npm/music-tempo",
+    "name": "music-tempo CDN by jsDelivr - A CDN for npm and GitHub",
+    "snippet": "Description. Javascript-library for finding out tempo (BPM) of a song and beat tracking. It uses an algorithm \"Beatroot\" authored by Simon Dixon.",
+    "host_name": "www.jsdelivr.com",
+    "rank": 1,
+    "date": "",
+    "favicon": ""
+  },
+  {
+    "url": "https://stackoverflow.com/questions/30110701/how-can-i-use-js-webaudioapi-for-beat-detection",
+    "name": "How can I use JS WebAudioAPI for beat detection? - Stack Overflow",
+    "snippet": "I'm interested in using the JavaScript WebAudioAPI to detect song beats, and then render them in a canvas.",
+    "host_name": "stackoverflow.com",
+    "rank": 2,
+    "date": "",
+    "favicon": ""
+  },
+  {
+    "url": "https://www.reddit.com/r/javascript/comments/a7nzk7/music_beat_detector_with_javascript",
+    "name": "Music Beat Detector with Javascript - Reddit",
+    "snippet": "It's a library that is able to analyse any mp3 files or youtube video and detect music beat. I wrote it to control some lights in my room. ...",
+    "host_name": "www.reddit.com",
+    "rank": 3,
+    "date": "",
+    "favicon": ""
+  },
+  {
+    "url": "https://github.com/audiojs/beat-detection",
+    "name": "audiojs/beat-detection: Tempo/onset detection algorithms - GitHub",
+    "snippet": "Works in Node.js and browser. Estimates tempo (via ), then finds the globally optimal beat sequence. All algorithms run 250–8000× faster than real-time on a ...",
+    "host_name": "github.com",
+    "rank": 4,
+    "date": "",
+    "favicon": ""
+  },
+  {
+    "url": "https://arthurbeaulieu.github.io/BeatDetect.js/doc",
+    "name": "BeatDetect.js",
+    "snippet": "BeatDetect.js is a JavaScript ES6 component that calculates the BPM of a track, with its time offset and the time offset to its first true beat.",
+    "host_name": "arthurbeaulieu.github.io",
+    "rank": 5,
+    "date": "",
+    "favicon": ""
+  }
+]

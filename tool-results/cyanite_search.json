@@ -1,0 +1,92 @@
+[
+  {
+    "url": "https://cyanite.ai/faq",
+    "name": "Features, Pricing, Integration and Support - Cyanite FAQ",
+    "snippet": "Find answers to common questions about Cyanite's AI music tagging and search. Covering features, onboarding, integration, pricing, and data security.",
+    "host_name": "cyanite.ai",
+    "rank": 0,
+    "date": "",
+    "favicon": ""
+  },
+  {
+    "url": "https://api-docs.cyanite.ai",
+    "name": "Cyanite.ai API Documentation",
+    "snippet": "Visualize and learn about dynamic developments of distinctive moods in music. With in-depth information about any second of an audio file.",
+    "host_name": "api-docs.cyanite.ai",
+    "rank": 1,
+    "date": "",
+    "favicon": ""
+  },
+  {
+    "url": "https://cyanite.ai/blog/music-analysis-api",
+    "name": "Music Analysis API: AI-Powered Tagging & Search - Cyanite.ai",
+    "snippet": "A: The API usage fee is 290€/month. However, tuehe total price of the subscription depends on your catalog size and requested features.",
+    "host_name": "cyanite.ai",
+    "rank": 2,
+    "date": "",
+    "favicon": ""
+  },
+  {
+    "url": "https://cyanite.ai/wp-content/uploads/2023/06/Getting-Started-Guide-Cyanite.pdf",
+    "name": "[PDF] Getting-Started-Guide-Cyanite.pdf",
+    "snippet": "Cyanite is an AI-based music search and tagging engine that categorizes and qualifies your catalog for various search algorithms to unlock its full value.",
+    "host_name": "cyanite.ai",
+    "rank": 3,
+    "date": "",
+    "favicon": ""
+  },
+  {
+    "url": "https://cyanite.ai/integrate",
+    "name": "Integrate Cyanite: API, Web App, CMS and Export",
+    "snippet": "Connect Cyanite to your platform via API, web app, CMS, or CSV export. Find the right integration for your team and get started today.",
+    "host_name": "cyanite.ai",
+    "rank": 4,
+    "date": "",
+    "favicon": ""
+  },
+  {
+    "url": "https://api-docs.cyanite.ai/blog/2024/02/01/2024-01-26-changelog-",
+    "name": "Changelog 2024-02-01 | Cyanite.ai API Documentation",
+    "snippet": "The new cyanite API playlist matching query can be used to get an array of matching playlists for your music. It will return an array of nodes ...",
+    "host_name": "api-docs.cyanite.ai",
+    "rank": 5,
+    "date": "",
+    "favicon": ""
+  },
+  {
+    "url": "https://cyanite.ai/blog/advanced-search-api",
+    "name": "Cyanite Advanced Search: Smarter Music Discovery via API",
+    "snippet": "Advanced Search adds multi-track search, similarity scores, custom metadata filters, and 500 results to your catalog discovery workflows via ...",
+    "host_name": "cyanite.ai",
+    "rank": 6,
+    "date": "",
+    "favicon": ""
+  },
+  {
+    "url": "https://api-docs.cyanite.ai/blog",
+    "name": "Blog - Cyanite.ai API Documentation",
+    "snippet": "Announcing a change in the Cyanite API where Spotify audio analysis are now set behind a feature permission by default.",
+    "host_name": "api-docs.cyanite.ai",
+    "rank": 7,
+    "date": "",
+    "favicon": ""
+  },
+  {
+    "url": "https://apitracker.io/a/cyanite-ai",
+    "name": "Cyanite.ai API - Docs, SDKs & Integration",
+    "snippet": "Complete Cyanite.ai API documentation and developer resources. Innovative AI technology for music that enables music tagging, similarity search, ...",
+    "host_name": "apitracker.io",
+    "rank": 8,
+    "date": "",
+    "favicon": ""
+  },
+  {
+    "url": "https://www.saasworthy.com/product/cyanite-ai",
+    "name": "Cyanite - Features & Pricing (May 2026) - SaaSworthy",
+    "snippet": "Explore Cyanite pricing, reviews, features and compare other top New SaaS Software to Cyanite on SaaSworthy.com.",
+    "host_name": "www.saasworthy.com",
+    "rank": 9,
+    "date": "",
+    "favicon": ""
+  }
+]
