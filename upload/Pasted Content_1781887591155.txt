@@ -1,0 +1,1396 @@
+VM78 vendor.js:159 Uncaught (in promise) Error: Uncaught Error: No Listener: tabs:outgoing.message.ready
+(async function(){'use strict';
+var PERIOD_SUFFIX = "";
+var PERIOD_LABEL  = "current";
+var GENRES = [{"slug":"house","name":"House"},{"slug":"tech-house","name":"Tech House"},{"slug":"techno","name":"Techno"},{"slug":"deep-house","name":"Deep House"},{"slug":"progressive-house","name":"Progressive House"},{"slug":"electro-house","name":"Electro House"},{"slug":"minimal","name":"Minimal"},{"slug":"trance","name":"Trance"},{"slug":"hard-dance","name":"Hard Dance"},{"slug":"drum-and-bass","name":"Drum & Bass"},{"slug":"dubstep","name":"Dubstep"},{"slug":"breaks","name":"Breaks"},{"slug":"hip-hop","name":"Hip Hop"},{"slug":"r-and-b","name":"R & B"},{"slug":"reggae-dancehall","name":"Reggae / Dancehall"},{"slug":"latin","name":"Latin"},{"slug":"acoustic","name":"Acoustic"},{"slug":"classical","name":"Classical"},{"slug":"jazz","name":"Jazz"},{"slug":"soul-funk","name":"Soul / Funk"},{"slug":"nu-disco-disco","name":"Nu Disco / Disco"},{"slug":"indie-dance","name":"Indie Dance"},{"slug":"funky-house","name":"Funky House"},{"slug":"bass-club","name":"Bass / Club"},{"slug":"jackin-house","name":"Jackin House"},{"slug":"afro-house","name":"Afro House"},{"slug":"organic-house","name":"Organic House"},{"slug":"melodic-house-techno","name":"Melodic House & Techno"},{"slug":"psy-trance","name":"Psy-Trance"},{"slug":"uk-garage-bassline","name":"UK Garage / Bassline"},{"slug":"trap-future-bass","name":"Trap / Future Bass"},{"slug":"ambient-experimental","name":"Ambient / Experimental"}];
+var DELAY_MS = 600;
+var S='%c[LabelPulse]',c1='color:#8b5cf6;font-weight:bold',c2='color:#666',cOk='color:#22c55e;font-weight:bold',cErr='color:#ef4444';
+console.log(S+' %cBeatstats Scraper avviato',c1,c2);
+console.log(S+' %cPeriodo: '+PERIOD_LABEL,c1,c2);
+console.log(S+' %cGeneri: '+GENRES.length,c1,c2);
+var sleep=function(ms){return new Promise(function(r){setTimeout(r,ms)})};
+
+// Extract numeric values from a cell's text. Returns {num, isPoints}.
+function parseCell(text){
+  if(!text) return null;
+  var clean=text.replace(/[\s,]/g,'').replace(/\u2191|\u2193|\u2013|-|\+|\*/g,'').trim();
+  if(!clean) return null;
+  var m=clean.match(/^(-?\d+)$/);
+  if(!m) return null;
+  var n=parseInt(m[1],10);
+  if(isNaN(n)) return null;
+  return {num:n};
+}
+
+// Scrape a single genre page. Returns array of {name, rank, points, tracks}.
+// Tries multiple URL patterns because Beatstats has changed their URL structure
+// over time (older docs use /label-ranking/{slug}, newer ones /genre/{slug}).
+// All URLs are ABSOLUTE so the script works from any beatstats.com page.
+async function scrapeGenre(slug, name){
+  // Try patterns in order. /genre/{slug} is the current Beatstats pattern,
+  // /label-ranking/{slug} is the legacy one. We try both because we can't
+  // detect from outside which one is live.
+  var urlPatterns = [
+    'https://www.beatstats.com/genre/'+slug+PERIOD_SUFFIX,
+    'https://www.beatstats.com/label-ranking/'+slug+PERIOD_SUFFIX,
+    'https://beatstats.com/genre/'+slug+PERIOD_SUFFIX,
+    'https://beatstats.com/label-ranking/'+slug+PERIOD_SUFFIX
+  ];
+
+  for(var pi=0; pi<urlPatterns.length; pi++){
+    var url=urlPatterns[pi];
+    console.log(S+' %c  ['+(pi+1)+'/'+urlPatterns.length+'] GET '+url,c1,c2);
+    try{
+      var res=await fetch(url,{credentials:'include',headers:{'Accept':'text/html'}});
+      if(!res.ok){
+        console.log(S+' %c  HTTP '+res.status+', provo prossimo pattern',c1,cErr);
+        continue;
+      }
+      var html=await res.text();
+
+      // Cloudflare challenge page detection — beatstats is behind CF.
+      // If we get the "Just a moment..." challenge, fetch will return HTML
+      // but it won't contain any label data. Skip and try next pattern.
+      if(html.indexOf('Just a moment...')!==-1 || html.indexOf('__cf_chl_opt')!==-1){
+        console.log(S+' %c  Cloudflare challenge rilevato, provo prossimo',c1,cErr);
+        continue;
+      }
+
+      var doc=new DOMParser().parseFromString(html,'text/html');
+
+      // Strategy: find every <a href*="/label/"> link.
+      // Each label name on Beatstats links to /label/{slug}/{id}.
+      var labelLinks=doc.querySelectorAll('a[href*="/label/"]');
+      if(labelLinks.length===0){
+        // Try alternative patterns
+        labelLinks=doc.querySelectorAll('a[href*="/label."]');
+      }
+      if(labelLinks.length===0){
+        console.log(S+' %c  Nessun link label per '+name+' con pattern '+(pi+1)+', provo prossimo',c1,cErr);
+        continue;
+      }
+
+      var out=[];
+      var seen=new Set();
+      for(var i=0;i<labelLinks.length;i++){
+        var link=labelLinks[i];
+        var labelName=(link.textContent||'').trim();
+        if(!labelName||labelName.length<2) continue;
+        var key=labelName.toUpperCase().trim();
+        // Dedupe within same page (label name may appear in nav + ranking)
+        if(seen.has(key)) continue;
+
+        // Walk up to find the row container (tr, li, .row, .item...)
+        var row=link.closest('tr, li, [class*="row"], [class*="item"], [class*="label"]');
+        if(!row) continue;
+
+        // Skip if the row is in a sidebar/footer/header (heuristic: very short text content)
+        var rowText=(row.textContent||'').trim();
+        if(rowText.length<5) continue;
+
+        // Collect all numeric cells in the row
+        var cells=row.querySelectorAll('td, th, .cell, [class*="col"], span');
+        var nums=[];
+        for(var j=0;j<cells.length;j++){
+          var p=parseCell(cells[j].textContent||'');
+          if(p) nums.push(p.num);
+        }
+
+        // Heuristic: the FIRST positive small number (1-200) is the rank,
+        // the LARGEST number is points, the second-largest is tracks.
+        var rank=0, points=0, tracks=0;
+        var positiveNums=nums.filter(function(n){return n>0;});
+        if(positiveNums.length>0){
+          rank=positiveNums[0];
+          if(positiveNums.length>1){
+            // max = points
+            points=Math.max.apply(null,positiveNums.slice(1));
+            // second max = tracks (only if there are 3+ numbers)
+            if(positiveNums.length>2){
+              var sorted=positiveNums.slice(1).sort(function(a,b){return b-a;});
+              tracks=sorted[1]||0;
+            }
+          }
+        }
+        // Fallback rank: use position in labelLinks (1-based)
+        if(!rank) rank=out.length+1;
+        // Sanity: rank should be 1..500 ish
+        if(rank>1000) rank=out.length+1;
+
+        seen.add(key);
+        out.push({name:key,rank:rank,points:Math.max(0,points),tracks:tracks});
+      }
+
+      if(out.length===0){
+        console.log(S+' %c  0 label estratte da pattern '+(pi+1)+', provo prossimo',c1,cErr);
+        continue;
+      }
+
+      // Sort by points desc (Beatstats ranking is by points), then assign final rank
+      out.sort(function(a,b){
+        if(b.points!==a.points) return b.points-a.points;
+        return a.rank-b.rank;
+      });
+      out.forEach(function(l,i){l.rank=i+1;});
+
+      console.log(S+' %c  OK '+out.length+' label \u2014 #1: '+(out[0]?out[0].name:'-')+' ('+(out[0]?out[0].points:0)+' pts) [pattern '+(pi+1)+']',c1,cOk);
+      return out;
+    }catch(e){
+      console.log(S+' %c  Errore '+name+' pattern '+(pi+1)+': '+e.message,c1,cErr);
+      continue;
+    }
+  }
+
+  console.log(S+' %c  TUTTI i pattern falliti per '+name,c1,cErr);
+  return [];
+}
+
+console.log(S+' %c========================================',c1,c1);
+console.log(S+' %cINIZIO ESTRAZIONE BEATSTATS',c1,cOk);
+console.log(S+' %cPeriodo: '+PERIOD_LABEL+' \u2014 Generi: '+GENRES.length,c1,c2);
+console.log(S+' %c========================================',c1,c1);
+
+var gR={},tL=0,sC=0,fC=0;
+for(var gi=0;gi<GENRES.length;gi++){
+  var g=GENRES[gi];
+  var pct=Math.round(((gi+1)/GENRES.length)*100);
+  console.log(S+' %c['+pct+'%] '+g.name+'...',c1,c2);
+  var arr=await scrapeGenre(g.slug,g.name);
+  gR[g.name]=arr;
+  tL+=arr.length;
+  if(arr.length>0) sC++; else fC++;
+  await sleep(DELAY_MS);
+}
+
+console.log(S+' %cCostruzione JSON...',c1,c2);
+
+// Build labels map (same format as Beatport scraper)
+var lM={};
+for(var gn in gR){
+  for(var li=0;li<gR[gn].length;li++){
+    var lb=gR[gn][li];
+    var nm=lb.name.toUpperCase().trim();
+    if(!nm) continue;
+    if(!lM[nm]){
+      lM[nm]={
+        id:'lbl_'+nm.toLowerCase().replace(/[^a-z0-9]+/g,'_').replace(/_+$/,''),
+        name:nm,
+        genres:[],
+        rankByGenre:{},
+        pointsByGenre:{},
+        trending:false
+      };
+    }
+    if(lM[nm].genres.indexOf(gn)===-1) lM[nm].genres.push(gn);
+    lM[nm].rankByGenre[gn]=lb.rank;
+    lM[nm].pointsByGenre[gn]=lb.points;
+  }
+}
+
+// Mark trending: top 25 in any genre OR > 500 total points
+for(var k in lM){
+  var l=lM[k];
+  var ranks=Object.values(l.rankByGenre);
+  var minR=Math.min.apply(null,ranks);
+  var tPts=Object.values(l.pointsByGenre).reduce(function(a,b){return a+b;},0);
+  if(minR<=25||tPts>500){
+    l.trending=true;
+    l.trendingRankByGenre={};
+    l.trendingPointsByGenre={};
+    for(var gr in l.rankByGenre){
+      if(l.rankByGenre[gr]<=50){
+        l.trendingRankByGenre[gr]=l.rankByGenre[gr];
+        l.trendingPointsByGenre[gr]=l.pointsByGenre[gr];
+      }
+    }
+  }
+}
+
+// Build scrapedPeriod ISO timestamp for snapshot ordering.
+// "current" -> now
+// "2024"    -> 2024-12-31T23:59:59Z  (end of that year)
+// "2024-6"  -> 2024-06-30T23:59:59Z  (end of that month)
+var scrapedPeriod;
+if(PERIOD_LABEL==='current'){
+  scrapedPeriod=new Date().toISOString();
+}else if(PERIOD_LABEL.indexOf('-')===-1){
+  // Yearly
+  var y=parseInt(PERIOD_LABEL,10);
+  scrapedPeriod=new Date(Date.UTC(y,11,31,23,59,59)).toISOString();
+}else{
+  // Monthly
+  var parts=PERIOD_LABEL.split('-');
+  var yy=parseInt(parts[0],10);
+  var mm=parseInt(parts[1],10);
+  // Last day of that month
+  var lastDay=new Date(Date.UTC(yy,mm,0)).getUTCDate();
+  scrapedPeriod=new Date(Date.UTC(yy,mm-1,lastDay,23,59,59)).toISOString();
+}
+
+var out={
+  genres:GENRES.map(function(g){return g.name;}),
+  labels:Object.values(lM),
+  _meta:{
+    source:'beatstats',
+    scrapedAt:new Date().toISOString(),
+    scrapedPeriod:scrapedPeriod,
+    periodLabel:PERIOD_LABEL,
+    totalLabels:Object.keys(lM).length,
+    totalGenres:GENRES.length,
+    successGenres:sC,
+    failedGenres:fC
+  }
+};
+
+var js=JSON.stringify(out,null,2);
+var bl=new Blob([js],{type:'application/json'});
+var u=URL.createObjectURL(bl);
+var a=document.createElement('a');
+a.href=u;
+a.download='labelpulse_beatstats_'+PERIOD_LABEL.replace(/[^a-z0-9]+/gi,'_')+'_'+new Date().toISOString().split('T')[0]+'.json';
+document.body.appendChild(a);
+a.click();
+document.body.removeChild(a);
+URL.revokeObjectURL(u);
+
+console.log(S+' %c========================================',c1,c1);
+console.log(S+' %cCOMPLETATO!',c1,cOk);
+console.log(S+' %c'+Object.keys(lM).length+' label da '+sC+'/'+GENRES.length+' generi',c1,cOk);
+console.log(S+' %cPeriodo: '+PERIOD_LABEL+' (snapshot timestamp: '+scrapedPeriod+')',c1,c2);
+if(fC>0) console.log(S+' %c '+fC+' generi senza dati',c1,cErr);
+console.log(S+' %cFile JSON scaricato! Importa in LabelPulse',c1,cOk);
+console.log(S+' %c========================================',c1,c1);
+return out;
+})();
+VM103:7 [LabelPulse] Beatstats Scraper avviato
+VM103:8 [LabelPulse] Periodo: current
+VM103:9 [LabelPulse] Generi: 32
+VM103:147 [LabelPulse] ========================================
+VM103:148 [LabelPulse] INIZIO ESTRAZIONE BEATSTATS
+VM103:149 [LabelPulse] Periodo: current — Generi: 32
+VM103:150 [LabelPulse] ========================================
+VM103:156 [LabelPulse] [3%] House...
+VM103:41 [LabelPulse]   [1/4] GET https://www.beatstats.com/genre/house
+Promise {<pending>}
+VM103:43  GET https://www.beatstats.com/genre/house 404 (Not Found)
+scrapeGenre @ VM103:43
+(anonime) @ VM103:157
+(anonime) @ VM103:263
+VM103:45 [LabelPulse]   HTTP 404, provo prossimo pattern
+VM103:41 [LabelPulse]   [2/4] GET https://www.beatstats.com/label-ranking/house
+VM103:43  GET https://www.beatstats.com/label-ranking/house 404 (Not Found)
+scrapeGenre @ VM103:43
+await in scrapeGenre
+(anonime) @ VM103:157
+(anonime) @ VM103:263
+VM103:45 [LabelPulse]   HTTP 404, provo prossimo pattern
+VM103:41 [LabelPulse]   [3/4] GET https://beatstats.com/genre/house
+list?genre=0&period=2:1 Access to fetch at 'https://beatstats.com/genre/house' from origin 'https://www.beatstats.com' has been blocked by CORS policy: No 'Access-Control-Allow-Origin' header is present on the requested resource.
+VM103:43  GET https://beatstats.com/genre/house net::ERR_FAILED 404 (Not Found)
+scrapeGenre @ VM103:43
+await in scrapeGenre
+(anonime) @ VM103:157
+(anonime) @ VM103:263
+VM103:138 [LabelPulse]   Errore House pattern 3: Failed to fetch
+VM103:41 [LabelPulse]   [4/4] GET https://beatstats.com/label-ranking/house
+list?genre=0&period=2:1 Access to fetch at 'https://beatstats.com/label-ranking/house' from origin 'https://www.beatstats.com' has been blocked by CORS policy: No 'Access-Control-Allow-Origin' header is present on the requested resource.
+VM103:43  GET https://beatstats.com/label-ranking/house net::ERR_FAILED 404 (Not Found)
+scrapeGenre @ VM103:43
+await in scrapeGenre
+(anonime) @ VM103:157
+(anonime) @ VM103:263
+VM103:138 [LabelPulse]   Errore House pattern 4: Failed to fetch
+VM103:143 [LabelPulse]   TUTTI i pattern falliti per House
+VM103:156 [LabelPulse] [6%] Tech House...
+VM103:41 [LabelPulse]   [1/4] GET https://www.beatstats.com/genre/tech-house
+VM103:43  GET https://www.beatstats.com/genre/tech-house 404 (Not Found)
+scrapeGenre @ VM103:43
+(anonime) @ VM103:157
+await in (anonime)
+(anonime) @ VM103:263
+VM103:45 [LabelPulse]   HTTP 404, provo prossimo pattern
+VM103:41 [LabelPulse]   [2/4] GET https://www.beatstats.com/label-ranking/tech-house
+VM103:43  GET https://www.beatstats.com/label-ranking/tech-house 404 (Not Found)
+scrapeGenre @ VM103:43
+await in scrapeGenre
+(anonime) @ VM103:157
+await in (anonime)
+(anonime) @ VM103:263
+VM103:45 [LabelPulse]   HTTP 404, provo prossimo pattern
+VM103:41 [LabelPulse]   [3/4] GET https://beatstats.com/genre/tech-house
+list?genre=0&period=2:1 Access to fetch at 'https://beatstats.com/genre/tech-house' from origin 'https://www.beatstats.com' has been blocked by CORS policy: No 'Access-Control-Allow-Origin' header is present on the requested resource.
+VM103:43  GET https://beatstats.com/genre/tech-house net::ERR_FAILED 404 (Not Found)
+scrapeGenre @ VM103:43
+await in scrapeGenre
+(anonime) @ VM103:157
+await in (anonime)
+(anonime) @ VM103:263
+VM103:138 [LabelPulse]   Errore Tech House pattern 3: Failed to fetch
+VM103:41 [LabelPulse]   [4/4] GET https://beatstats.com/label-ranking/tech-house
+list?genre=0&period=2:1 Access to fetch at 'https://beatstats.com/label-ranking/tech-house' from origin 'https://www.beatstats.com' has been blocked by CORS policy: No 'Access-Control-Allow-Origin' header is present on the requested resource.
+VM103:43  GET https://beatstats.com/label-ranking/tech-house net::ERR_FAILED 404 (Not Found)
+scrapeGenre @ VM103:43
+await in scrapeGenre
+(anonime) @ VM103:157
+await in (anonime)
+(anonime) @ VM103:263
+VM103:138 [LabelPulse]   Errore Tech House pattern 4: Failed to fetch
+VM103:143 [LabelPulse]   TUTTI i pattern falliti per Tech House
+VM103:156 [LabelPulse] [9%] Techno...
+VM103:41 [LabelPulse]   [1/4] GET https://www.beatstats.com/genre/techno
+VM103:43  GET https://www.beatstats.com/genre/techno 404 (Not Found)
+scrapeGenre @ VM103:43
+(anonime) @ VM103:157
+await in (anonime)
+(anonime) @ VM103:263
+VM103:45 [LabelPulse]   HTTP 404, provo prossimo pattern
+VM103:41 [LabelPulse]   [2/4] GET https://www.beatstats.com/label-ranking/techno
+VM103:43  GET https://www.beatstats.com/label-ranking/techno 404 (Not Found)
+scrapeGenre @ VM103:43
+await in scrapeGenre
+(anonime) @ VM103:157
+await in (anonime)
+(anonime) @ VM103:263
+VM103:45 [LabelPulse]   HTTP 404, provo prossimo pattern
+VM103:41 [LabelPulse]   [3/4] GET https://beatstats.com/genre/techno
+list?genre=0&period=2:1 Access to fetch at 'https://beatstats.com/genre/techno' from origin 'https://www.beatstats.com' has been blocked by CORS policy: No 'Access-Control-Allow-Origin' header is present on the requested resource.
+VM103:43  GET https://beatstats.com/genre/techno net::ERR_FAILED 404 (Not Found)
+scrapeGenre @ VM103:43
+await in scrapeGenre
+(anonime) @ VM103:157
+await in (anonime)
+(anonime) @ VM103:263
+VM103:138 [LabelPulse]   Errore Techno pattern 3: Failed to fetch
+VM103:41 [LabelPulse]   [4/4] GET https://beatstats.com/label-ranking/techno
+list?genre=0&period=2:1 Access to fetch at 'https://beatstats.com/label-ranking/techno' from origin 'https://www.beatstats.com' has been blocked by CORS policy: No 'Access-Control-Allow-Origin' header is present on the requested resource.
+VM103:43  GET https://beatstats.com/label-ranking/techno net::ERR_FAILED 404 (Not Found)
+scrapeGenre @ VM103:43
+await in scrapeGenre
+(anonime) @ VM103:157
+await in (anonime)
+(anonime) @ VM103:263
+VM103:138 [LabelPulse]   Errore Techno pattern 4: Failed to fetch
+VM103:143 [LabelPulse]   TUTTI i pattern falliti per Techno
+VM103:156 [LabelPulse] [13%] Deep House...
+VM103:41 [LabelPulse]   [1/4] GET https://www.beatstats.com/genre/deep-house
+VM103:43  GET https://www.beatstats.com/genre/deep-house 404 (Not Found)
+scrapeGenre @ VM103:43
+(anonime) @ VM103:157
+await in (anonime)
+(anonime) @ VM103:263
+VM103:45 [LabelPulse]   HTTP 404, provo prossimo pattern
+VM103:41 [LabelPulse]   [2/4] GET https://www.beatstats.com/label-ranking/deep-house
+VM103:43  GET https://www.beatstats.com/label-ranking/deep-house 404 (Not Found)
+scrapeGenre @ VM103:43
+await in scrapeGenre
+(anonime) @ VM103:157
+await in (anonime)
+(anonime) @ VM103:263
+VM103:45 [LabelPulse]   HTTP 404, provo prossimo pattern
+VM103:41 [LabelPulse]   [3/4] GET https://beatstats.com/genre/deep-house
+list?genre=0&period=2:1 Access to fetch at 'https://beatstats.com/genre/deep-house' from origin 'https://www.beatstats.com' has been blocked by CORS policy: No 'Access-Control-Allow-Origin' header is present on the requested resource.
+VM103:43  GET https://beatstats.com/genre/deep-house net::ERR_FAILED 404 (Not Found)
+scrapeGenre @ VM103:43
+await in scrapeGenre
+(anonime) @ VM103:157
+await in (anonime)
+(anonime) @ VM103:263
+VM103:138 [LabelPulse]   Errore Deep House pattern 3: Failed to fetch
+VM103:41 [LabelPulse]   [4/4] GET https://beatstats.com/label-ranking/deep-house
+list?genre=0&period=2:1 Access to fetch at 'https://beatstats.com/label-ranking/deep-house' from origin 'https://www.beatstats.com' has been blocked by CORS policy: No 'Access-Control-Allow-Origin' header is present on the requested resource.
+VM103:43  GET https://beatstats.com/label-ranking/deep-house net::ERR_FAILED 404 (Not Found)
+scrapeGenre @ VM103:43
+await in scrapeGenre
+(anonime) @ VM103:157
+await in (anonime)
+(anonime) @ VM103:263
+VM103:138 [LabelPulse]   Errore Deep House pattern 4: Failed to fetch
+VM103:143 [LabelPulse]   TUTTI i pattern falliti per Deep House
+VM103:156 [LabelPulse] [16%] Progressive House...
+VM103:41 [LabelPulse]   [1/4] GET https://www.beatstats.com/genre/progressive-house
+VM103:43  GET https://www.beatstats.com/genre/progressive-house 404 (Not Found)
+scrapeGenre @ VM103:43
+(anonime) @ VM103:157
+await in (anonime)
+(anonime) @ VM103:263
+VM103:45 [LabelPulse]   HTTP 404, provo prossimo pattern
+VM103:41 [LabelPulse]   [2/4] GET https://www.beatstats.com/label-ranking/progressive-house
+VM103:43  GET https://www.beatstats.com/label-ranking/progressive-house 404 (Not Found)
+scrapeGenre @ VM103:43
+await in scrapeGenre
+(anonime) @ VM103:157
+await in (anonime)
+(anonime) @ VM103:263
+VM103:45 [LabelPulse]   HTTP 404, provo prossimo pattern
+VM103:41 [LabelPulse]   [3/4] GET https://beatstats.com/genre/progressive-house
+list?genre=0&period=2:1 Access to fetch at 'https://beatstats.com/genre/progressive-house' from origin 'https://www.beatstats.com' has been blocked by CORS policy: No 'Access-Control-Allow-Origin' header is present on the requested resource.
+VM103:43  GET https://beatstats.com/genre/progressive-house net::ERR_FAILED 404 (Not Found)
+scrapeGenre @ VM103:43
+await in scrapeGenre
+(anonime) @ VM103:157
+await in (anonime)
+(anonime) @ VM103:263
+VM103:138 [LabelPulse]   Errore Progressive House pattern 3: Failed to fetch
+VM103:41 [LabelPulse]   [4/4] GET https://beatstats.com/label-ranking/progressive-house
+list?genre=0&period=2:1 Access to fetch at 'https://beatstats.com/label-ranking/progressive-house' from origin 'https://www.beatstats.com' has been blocked by CORS policy: No 'Access-Control-Allow-Origin' header is present on the requested resource.
+VM103:43  GET https://beatstats.com/label-ranking/progressive-house net::ERR_FAILED 404 (Not Found)
+scrapeGenre @ VM103:43
+await in scrapeGenre
+(anonime) @ VM103:157
+await in (anonime)
+(anonime) @ VM103:263
+VM103:138 [LabelPulse]   Errore Progressive House pattern 4: Failed to fetch
+VM103:143 [LabelPulse]   TUTTI i pattern falliti per Progressive House
+VM103:156 [LabelPulse] [19%] Electro House...
+VM103:41 [LabelPulse]   [1/4] GET https://www.beatstats.com/genre/electro-house
+VM103:43  GET https://www.beatstats.com/genre/electro-house 404 (Not Found)
+scrapeGenre @ VM103:43
+(anonime) @ VM103:157
+await in (anonime)
+(anonime) @ VM103:263
+VM103:45 [LabelPulse]   HTTP 404, provo prossimo pattern
+VM103:41 [LabelPulse]   [2/4] GET https://www.beatstats.com/label-ranking/electro-house
+VM103:43  GET https://www.beatstats.com/label-ranking/electro-house 404 (Not Found)
+scrapeGenre @ VM103:43
+await in scrapeGenre
+(anonime) @ VM103:157
+await in (anonime)
+(anonime) @ VM103:263
+VM103:45 [LabelPulse]   HTTP 404, provo prossimo pattern
+VM103:41 [LabelPulse]   [3/4] GET https://beatstats.com/genre/electro-house
+list?genre=0&period=2:1 Access to fetch at 'https://beatstats.com/genre/electro-house' from origin 'https://www.beatstats.com' has been blocked by CORS policy: No 'Access-Control-Allow-Origin' header is present on the requested resource.
+VM103:43  GET https://beatstats.com/genre/electro-house net::ERR_FAILED 404 (Not Found)
+scrapeGenre @ VM103:43
+await in scrapeGenre
+(anonime) @ VM103:157
+await in (anonime)
+(anonime) @ VM103:263
+VM103:138 [LabelPulse]   Errore Electro House pattern 3: Failed to fetch
+VM103:41 [LabelPulse]   [4/4] GET https://beatstats.com/label-ranking/electro-house
+list?genre=0&period=2:1 Access to fetch at 'https://beatstats.com/label-ranking/electro-house' from origin 'https://www.beatstats.com' has been blocked by CORS policy: No 'Access-Control-Allow-Origin' header is present on the requested resource.
+VM103:43  GET https://beatstats.com/label-ranking/electro-house net::ERR_FAILED 404 (Not Found)
+scrapeGenre @ VM103:43
+await in scrapeGenre
+(anonime) @ VM103:157
+await in (anonime)
+(anonime) @ VM103:263
+VM103:138 [LabelPulse]   Errore Electro House pattern 4: Failed to fetch
+VM103:143 [LabelPulse]   TUTTI i pattern falliti per Electro House
+VM103:156 [LabelPulse] [22%] Minimal...
+VM103:41 [LabelPulse]   [1/4] GET https://www.beatstats.com/genre/minimal
+VM103:43  GET https://www.beatstats.com/genre/minimal 404 (Not Found)
+scrapeGenre @ VM103:43
+(anonime) @ VM103:157
+await in (anonime)
+(anonime) @ VM103:263
+VM103:45 [LabelPulse]   HTTP 404, provo prossimo pattern
+VM103:41 [LabelPulse]   [2/4] GET https://www.beatstats.com/label-ranking/minimal
+VM103:43  GET https://www.beatstats.com/label-ranking/minimal 404 (Not Found)
+scrapeGenre @ VM103:43
+await in scrapeGenre
+(anonime) @ VM103:157
+await in (anonime)
+(anonime) @ VM103:263
+VM103:45 [LabelPulse]   HTTP 404, provo prossimo pattern
+VM103:41 [LabelPulse]   [3/4] GET https://beatstats.com/genre/minimal
+list?genre=0&period=2:1 Access to fetch at 'https://beatstats.com/genre/minimal' from origin 'https://www.beatstats.com' has been blocked by CORS policy: No 'Access-Control-Allow-Origin' header is present on the requested resource.
+VM103:43  GET https://beatstats.com/genre/minimal net::ERR_FAILED 404 (Not Found)
+scrapeGenre @ VM103:43
+await in scrapeGenre
+(anonime) @ VM103:157
+await in (anonime)
+(anonime) @ VM103:263
+VM103:138 [LabelPulse]   Errore Minimal pattern 3: Failed to fetch
+VM103:41 [LabelPulse]   [4/4] GET https://beatstats.com/label-ranking/minimal
+list?genre=0&period=2:1 Access to fetch at 'https://beatstats.com/label-ranking/minimal' from origin 'https://www.beatstats.com' has been blocked by CORS policy: No 'Access-Control-Allow-Origin' header is present on the requested resource.
+VM103:43  GET https://beatstats.com/label-ranking/minimal net::ERR_FAILED 404 (Not Found)
+scrapeGenre @ VM103:43
+await in scrapeGenre
+(anonime) @ VM103:157
+await in (anonime)
+(anonime) @ VM103:263
+VM103:138 [LabelPulse]   Errore Minimal pattern 4: Failed to fetch
+VM103:143 [LabelPulse]   TUTTI i pattern falliti per Minimal
+VM103:156 [LabelPulse] [25%] Trance...
+VM103:41 [LabelPulse]   [1/4] GET https://www.beatstats.com/genre/trance
+VM103:43  GET https://www.beatstats.com/genre/trance 404 (Not Found)
+scrapeGenre @ VM103:43
+(anonime) @ VM103:157
+await in (anonime)
+(anonime) @ VM103:263
+VM103:45 [LabelPulse]   HTTP 404, provo prossimo pattern
+VM103:41 [LabelPulse]   [2/4] GET https://www.beatstats.com/label-ranking/trance
+VM103:43  GET https://www.beatstats.com/label-ranking/trance 404 (Not Found)
+scrapeGenre @ VM103:43
+await in scrapeGenre
+(anonime) @ VM103:157
+await in (anonime)
+(anonime) @ VM103:263
+VM103:45 [LabelPulse]   HTTP 404, provo prossimo pattern
+VM103:41 [LabelPulse]   [3/4] GET https://beatstats.com/genre/trance
+list?genre=0&period=2:1 Access to fetch at 'https://beatstats.com/genre/trance' from origin 'https://www.beatstats.com' has been blocked by CORS policy: No 'Access-Control-Allow-Origin' header is present on the requested resource.
+VM103:43  GET https://beatstats.com/genre/trance net::ERR_FAILED 404 (Not Found)
+scrapeGenre @ VM103:43
+await in scrapeGenre
+(anonime) @ VM103:157
+await in (anonime)
+(anonime) @ VM103:263
+VM103:138 [LabelPulse]   Errore Trance pattern 3: Failed to fetch
+VM103:41 [LabelPulse]   [4/4] GET https://beatstats.com/label-ranking/trance
+list?genre=0&period=2:1 Access to fetch at 'https://beatstats.com/label-ranking/trance' from origin 'https://www.beatstats.com' has been blocked by CORS policy: No 'Access-Control-Allow-Origin' header is present on the requested resource.
+VM103:43  GET https://beatstats.com/label-ranking/trance net::ERR_FAILED 404 (Not Found)
+scrapeGenre @ VM103:43
+await in scrapeGenre
+(anonime) @ VM103:157
+await in (anonime)
+(anonime) @ VM103:263
+VM103:138 [LabelPulse]   Errore Trance pattern 4: Failed to fetch
+VM103:143 [LabelPulse]   TUTTI i pattern falliti per Trance
+VM103:156 [LabelPulse] [28%] Hard Dance...
+VM103:41 [LabelPulse]   [1/4] GET https://www.beatstats.com/genre/hard-dance
+VM103:43  GET https://www.beatstats.com/genre/hard-dance 404 (Not Found)
+scrapeGenre @ VM103:43
+(anonime) @ VM103:157
+await in (anonime)
+(anonime) @ VM103:263
+VM103:45 [LabelPulse]   HTTP 404, provo prossimo pattern
+VM103:41 [LabelPulse]   [2/4] GET https://www.beatstats.com/label-ranking/hard-dance
+VM103:43  GET https://www.beatstats.com/label-ranking/hard-dance 404 (Not Found)
+scrapeGenre @ VM103:43
+await in scrapeGenre
+(anonime) @ VM103:157
+await in (anonime)
+(anonime) @ VM103:263
+VM103:45 [LabelPulse]   HTTP 404, provo prossimo pattern
+VM103:41 [LabelPulse]   [3/4] GET https://beatstats.com/genre/hard-dance
+list?genre=0&period=2:1 Access to fetch at 'https://beatstats.com/genre/hard-dance' from origin 'https://www.beatstats.com' has been blocked by CORS policy: No 'Access-Control-Allow-Origin' header is present on the requested resource.
+VM103:43  GET https://beatstats.com/genre/hard-dance net::ERR_FAILED 404 (Not Found)
+scrapeGenre @ VM103:43
+await in scrapeGenre
+(anonime) @ VM103:157
+await in (anonime)
+(anonime) @ VM103:263
+VM103:138 [LabelPulse]   Errore Hard Dance pattern 3: Failed to fetch
+VM103:41 [LabelPulse]   [4/4] GET https://beatstats.com/label-ranking/hard-dance
+list?genre=0&period=2:1 Access to fetch at 'https://beatstats.com/label-ranking/hard-dance' from origin 'https://www.beatstats.com' has been blocked by CORS policy: No 'Access-Control-Allow-Origin' header is present on the requested resource.
+VM103:43  GET https://beatstats.com/label-ranking/hard-dance net::ERR_FAILED 404 (Not Found)
+scrapeGenre @ VM103:43
+await in scrapeGenre
+(anonime) @ VM103:157
+await in (anonime)
+(anonime) @ VM103:263
+VM103:138 [LabelPulse]   Errore Hard Dance pattern 4: Failed to fetch
+VM103:143 [LabelPulse]   TUTTI i pattern falliti per Hard Dance
+VM103:156 [LabelPulse] [31%] Drum & Bass...
+VM103:41 [LabelPulse]   [1/4] GET https://www.beatstats.com/genre/drum-and-bass
+VM103:43  GET https://www.beatstats.com/genre/drum-and-bass 404 (Not Found)
+scrapeGenre @ VM103:43
+(anonime) @ VM103:157
+await in (anonime)
+(anonime) @ VM103:263
+VM103:45 [LabelPulse]   HTTP 404, provo prossimo pattern
+VM103:41 [LabelPulse]   [2/4] GET https://www.beatstats.com/label-ranking/drum-and-bass
+VM103:43  GET https://www.beatstats.com/label-ranking/drum-and-bass 404 (Not Found)
+scrapeGenre @ VM103:43
+await in scrapeGenre
+(anonime) @ VM103:157
+await in (anonime)
+(anonime) @ VM103:263
+VM103:45 [LabelPulse]   HTTP 404, provo prossimo pattern
+VM103:41 [LabelPulse]   [3/4] GET https://beatstats.com/genre/drum-and-bass
+list?genre=0&period=2:1 Access to fetch at 'https://beatstats.com/genre/drum-and-bass' from origin 'https://www.beatstats.com' has been blocked by CORS policy: No 'Access-Control-Allow-Origin' header is present on the requested resource.
+VM103:43  GET https://beatstats.com/genre/drum-and-bass net::ERR_FAILED 404 (Not Found)
+scrapeGenre @ VM103:43
+await in scrapeGenre
+(anonime) @ VM103:157
+await in (anonime)
+(anonime) @ VM103:263
+VM103:138 [LabelPulse]   Errore Drum & Bass pattern 3: Failed to fetch
+VM103:41 [LabelPulse]   [4/4] GET https://beatstats.com/label-ranking/drum-and-bass
+list?genre=0&period=2:1 Access to fetch at 'https://beatstats.com/label-ranking/drum-and-bass' from origin 'https://www.beatstats.com' has been blocked by CORS policy: No 'Access-Control-Allow-Origin' header is present on the requested resource.
+VM103:43  GET https://beatstats.com/label-ranking/drum-and-bass net::ERR_FAILED 404 (Not Found)
+scrapeGenre @ VM103:43
+await in scrapeGenre
+(anonime) @ VM103:157
+await in (anonime)
+(anonime) @ VM103:263
+VM103:138 [LabelPulse]   Errore Drum & Bass pattern 4: Failed to fetch
+VM103:143 [LabelPulse]   TUTTI i pattern falliti per Drum & Bass
+VM103:156 [LabelPulse] [34%] Dubstep...
+VM103:41 [LabelPulse]   [1/4] GET https://www.beatstats.com/genre/dubstep
+VM103:43  GET https://www.beatstats.com/genre/dubstep 404 (Not Found)
+scrapeGenre @ VM103:43
+(anonime) @ VM103:157
+await in (anonime)
+(anonime) @ VM103:263
+VM103:45 [LabelPulse]   HTTP 404, provo prossimo pattern
+VM103:41 [LabelPulse]   [2/4] GET https://www.beatstats.com/label-ranking/dubstep
+VM103:43  GET https://www.beatstats.com/label-ranking/dubstep 404 (Not Found)
+scrapeGenre @ VM103:43
+await in scrapeGenre
+(anonime) @ VM103:157
+await in (anonime)
+(anonime) @ VM103:263
+VM103:45 [LabelPulse]   HTTP 404, provo prossimo pattern
+VM103:41 [LabelPulse]   [3/4] GET https://beatstats.com/genre/dubstep
+list?genre=0&period=2:1 Access to fetch at 'https://beatstats.com/genre/dubstep' from origin 'https://www.beatstats.com' has been blocked by CORS policy: No 'Access-Control-Allow-Origin' header is present on the requested resource.
+VM103:43  GET https://beatstats.com/genre/dubstep net::ERR_FAILED 404 (Not Found)
+scrapeGenre @ VM103:43
+await in scrapeGenre
+(anonime) @ VM103:157
+await in (anonime)
+(anonime) @ VM103:263
+VM103:138 [LabelPulse]   Errore Dubstep pattern 3: Failed to fetch
+VM103:41 [LabelPulse]   [4/4] GET https://beatstats.com/label-ranking/dubstep
+list?genre=0&period=2:1 Access to fetch at 'https://beatstats.com/label-ranking/dubstep' from origin 'https://www.beatstats.com' has been blocked by CORS policy: No 'Access-Control-Allow-Origin' header is present on the requested resource.
+VM103:43  GET https://beatstats.com/label-ranking/dubstep net::ERR_FAILED 404 (Not Found)
+scrapeGenre @ VM103:43
+await in scrapeGenre
+(anonime) @ VM103:157
+await in (anonime)
+(anonime) @ VM103:263
+VM103:138 [LabelPulse]   Errore Dubstep pattern 4: Failed to fetch
+VM103:143 [LabelPulse]   TUTTI i pattern falliti per Dubstep
+VM103:156 [LabelPulse] [38%] Breaks...
+VM103:41 [LabelPulse]   [1/4] GET https://www.beatstats.com/genre/breaks
+VM103:43  GET https://www.beatstats.com/genre/breaks 404 (Not Found)
+scrapeGenre @ VM103:43
+(anonime) @ VM103:157
+await in (anonime)
+(anonime) @ VM103:263
+VM103:45 [LabelPulse]   HTTP 404, provo prossimo pattern
+VM103:41 [LabelPulse]   [2/4] GET https://www.beatstats.com/label-ranking/breaks
+VM103:43  GET https://www.beatstats.com/label-ranking/breaks 404 (Not Found)
+scrapeGenre @ VM103:43
+await in scrapeGenre
+(anonime) @ VM103:157
+await in (anonime)
+(anonime) @ VM103:263
+VM103:45 [LabelPulse]   HTTP 404, provo prossimo pattern
+VM103:41 [LabelPulse]   [3/4] GET https://beatstats.com/genre/breaks
+list?genre=0&period=2:1 Access to fetch at 'https://beatstats.com/genre/breaks' from origin 'https://www.beatstats.com' has been blocked by CORS policy: No 'Access-Control-Allow-Origin' header is present on the requested resource.
+VM103:43  GET https://beatstats.com/genre/breaks net::ERR_FAILED 404 (Not Found)
+scrapeGenre @ VM103:43
+await in scrapeGenre
+(anonime) @ VM103:157
+await in (anonime)
+(anonime) @ VM103:263
+VM103:138 [LabelPulse]   Errore Breaks pattern 3: Failed to fetch
+VM103:41 [LabelPulse]   [4/4] GET https://beatstats.com/label-ranking/breaks
+list?genre=0&period=2:1 Access to fetch at 'https://beatstats.com/label-ranking/breaks' from origin 'https://www.beatstats.com' has been blocked by CORS policy: No 'Access-Control-Allow-Origin' header is present on the requested resource.
+VM103:43  GET https://beatstats.com/label-ranking/breaks net::ERR_FAILED 404 (Not Found)
+scrapeGenre @ VM103:43
+await in scrapeGenre
+(anonime) @ VM103:157
+await in (anonime)
+(anonime) @ VM103:263
+VM103:138 [LabelPulse]   Errore Breaks pattern 4: Failed to fetch
+VM103:143 [LabelPulse]   TUTTI i pattern falliti per Breaks
+VM103:156 [LabelPulse] [41%] Hip Hop...
+VM103:41 [LabelPulse]   [1/4] GET https://www.beatstats.com/genre/hip-hop
+VM103:43  GET https://www.beatstats.com/genre/hip-hop 404 (Not Found)
+scrapeGenre @ VM103:43
+(anonime) @ VM103:157
+await in (anonime)
+(anonime) @ VM103:263
+VM103:45 [LabelPulse]   HTTP 404, provo prossimo pattern
+VM103:41 [LabelPulse]   [2/4] GET https://www.beatstats.com/label-ranking/hip-hop
+VM103:43  GET https://www.beatstats.com/label-ranking/hip-hop 404 (Not Found)
+scrapeGenre @ VM103:43
+await in scrapeGenre
+(anonime) @ VM103:157
+await in (anonime)
+(anonime) @ VM103:263
+VM103:45 [LabelPulse]   HTTP 404, provo prossimo pattern
+VM103:41 [LabelPulse]   [3/4] GET https://beatstats.com/genre/hip-hop
+list?genre=0&period=2:1 Access to fetch at 'https://beatstats.com/genre/hip-hop' from origin 'https://www.beatstats.com' has been blocked by CORS policy: No 'Access-Control-Allow-Origin' header is present on the requested resource.
+VM103:43  GET https://beatstats.com/genre/hip-hop net::ERR_FAILED 404 (Not Found)
+scrapeGenre @ VM103:43
+await in scrapeGenre
+(anonime) @ VM103:157
+await in (anonime)
+(anonime) @ VM103:263
+VM103:138 [LabelPulse]   Errore Hip Hop pattern 3: Failed to fetch
+VM103:41 [LabelPulse]   [4/4] GET https://beatstats.com/label-ranking/hip-hop
+list?genre=0&period=2:1 Access to fetch at 'https://beatstats.com/label-ranking/hip-hop' from origin 'https://www.beatstats.com' has been blocked by CORS policy: No 'Access-Control-Allow-Origin' header is present on the requested resource.
+VM103:43  GET https://beatstats.com/label-ranking/hip-hop net::ERR_FAILED 404 (Not Found)
+scrapeGenre @ VM103:43
+await in scrapeGenre
+(anonime) @ VM103:157
+await in (anonime)
+(anonime) @ VM103:263
+VM103:138 [LabelPulse]   Errore Hip Hop pattern 4: Failed to fetch
+VM103:143 [LabelPulse]   TUTTI i pattern falliti per Hip Hop
+VM103:156 [LabelPulse] [44%] R & B...
+VM103:41 [LabelPulse]   [1/4] GET https://www.beatstats.com/genre/r-and-b
+VM103:43  GET https://www.beatstats.com/genre/r-and-b 404 (Not Found)
+scrapeGenre @ VM103:43
+(anonime) @ VM103:157
+await in (anonime)
+(anonime) @ VM103:263
+VM103:45 [LabelPulse]   HTTP 404, provo prossimo pattern
+VM103:41 [LabelPulse]   [2/4] GET https://www.beatstats.com/label-ranking/r-and-b
+VM103:43  GET https://www.beatstats.com/label-ranking/r-and-b 404 (Not Found)
+scrapeGenre @ VM103:43
+await in scrapeGenre
+(anonime) @ VM103:157
+await in (anonime)
+(anonime) @ VM103:263
+VM103:45 [LabelPulse]   HTTP 404, provo prossimo pattern
+VM103:41 [LabelPulse]   [3/4] GET https://beatstats.com/genre/r-and-b
+list?genre=0&period=2:1 Access to fetch at 'https://beatstats.com/genre/r-and-b' from origin 'https://www.beatstats.com' has been blocked by CORS policy: No 'Access-Control-Allow-Origin' header is present on the requested resource.
+VM103:43  GET https://beatstats.com/genre/r-and-b net::ERR_FAILED 404 (Not Found)
+scrapeGenre @ VM103:43
+await in scrapeGenre
+(anonime) @ VM103:157
+await in (anonime)
+(anonime) @ VM103:263
+VM103:138 [LabelPulse]   Errore R & B pattern 3: Failed to fetch
+VM103:41 [LabelPulse]   [4/4] GET https://beatstats.com/label-ranking/r-and-b
+list?genre=0&period=2:1 Access to fetch at 'https://beatstats.com/label-ranking/r-and-b' from origin 'https://www.beatstats.com' has been blocked by CORS policy: No 'Access-Control-Allow-Origin' header is present on the requested resource.
+VM103:43  GET https://beatstats.com/label-ranking/r-and-b net::ERR_FAILED 404 (Not Found)
+scrapeGenre @ VM103:43
+await in scrapeGenre
+(anonime) @ VM103:157
+await in (anonime)
+(anonime) @ VM103:263
+VM103:138 [LabelPulse]   Errore R & B pattern 4: Failed to fetch
+VM103:143 [LabelPulse]   TUTTI i pattern falliti per R & B
+VM103:156 [LabelPulse] [47%] Reggae / Dancehall...
+VM103:41 [LabelPulse]   [1/4] GET https://www.beatstats.com/genre/reggae-dancehall
+VM103:43  GET https://www.beatstats.com/genre/reggae-dancehall 404 (Not Found)
+scrapeGenre @ VM103:43
+(anonime) @ VM103:157
+await in (anonime)
+(anonime) @ VM103:263
+VM103:45 [LabelPulse]   HTTP 404, provo prossimo pattern
+VM103:41 [LabelPulse]   [2/4] GET https://www.beatstats.com/label-ranking/reggae-dancehall
+VM103:43  GET https://www.beatstats.com/label-ranking/reggae-dancehall 404 (Not Found)
+scrapeGenre @ VM103:43
+await in scrapeGenre
+(anonime) @ VM103:157
+await in (anonime)
+(anonime) @ VM103:263
+VM103:45 [LabelPulse]   HTTP 404, provo prossimo pattern
+VM103:41 [LabelPulse]   [3/4] GET https://beatstats.com/genre/reggae-dancehall
+list?genre=0&period=2:1 Access to fetch at 'https://beatstats.com/genre/reggae-dancehall' from origin 'https://www.beatstats.com' has been blocked by CORS policy: No 'Access-Control-Allow-Origin' header is present on the requested resource.
+VM103:43  GET https://beatstats.com/genre/reggae-dancehall net::ERR_FAILED 404 (Not Found)
+scrapeGenre @ VM103:43
+await in scrapeGenre
+(anonime) @ VM103:157
+await in (anonime)
+(anonime) @ VM103:263
+VM103:138 [LabelPulse]   Errore Reggae / Dancehall pattern 3: Failed to fetch
+VM103:41 [LabelPulse]   [4/4] GET https://beatstats.com/label-ranking/reggae-dancehall
+list?genre=0&period=2:1 Access to fetch at 'https://beatstats.com/label-ranking/reggae-dancehall' from origin 'https://www.beatstats.com' has been blocked by CORS policy: No 'Access-Control-Allow-Origin' header is present on the requested resource.
+VM103:43  GET https://beatstats.com/label-ranking/reggae-dancehall net::ERR_FAILED 404 (Not Found)
+scrapeGenre @ VM103:43
+await in scrapeGenre
+(anonime) @ VM103:157
+await in (anonime)
+(anonime) @ VM103:263
+VM103:138 [LabelPulse]   Errore Reggae / Dancehall pattern 4: Failed to fetch
+VM103:143 [LabelPulse]   TUTTI i pattern falliti per Reggae / Dancehall
+VM103:156 [LabelPulse] [50%] Latin...
+VM103:41 [LabelPulse]   [1/4] GET https://www.beatstats.com/genre/latin
+VM103:43  GET https://www.beatstats.com/genre/latin 404 (Not Found)
+scrapeGenre @ VM103:43
+(anonime) @ VM103:157
+await in (anonime)
+(anonime) @ VM103:263
+VM103:45 [LabelPulse]   HTTP 404, provo prossimo pattern
+VM103:41 [LabelPulse]   [2/4] GET https://www.beatstats.com/label-ranking/latin
+VM103:43  GET https://www.beatstats.com/label-ranking/latin 404 (Not Found)
+scrapeGenre @ VM103:43
+await in scrapeGenre
+(anonime) @ VM103:157
+await in (anonime)
+(anonime) @ VM103:263
+VM103:45 [LabelPulse]   HTTP 404, provo prossimo pattern
+VM103:41 [LabelPulse]   [3/4] GET https://beatstats.com/genre/latin
+list?genre=0&period=2:1 Access to fetch at 'https://beatstats.com/genre/latin' from origin 'https://www.beatstats.com' has been blocked by CORS policy: No 'Access-Control-Allow-Origin' header is present on the requested resource.
+VM103:43  GET https://beatstats.com/genre/latin net::ERR_FAILED 404 (Not Found)
+scrapeGenre @ VM103:43
+await in scrapeGenre
+(anonime) @ VM103:157
+await in (anonime)
+(anonime) @ VM103:263
+VM103:138 [LabelPulse]   Errore Latin pattern 3: Failed to fetch
+VM103:41 [LabelPulse]   [4/4] GET https://beatstats.com/label-ranking/latin
+list?genre=0&period=2:1 Access to fetch at 'https://beatstats.com/label-ranking/latin' from origin 'https://www.beatstats.com' has been blocked by CORS policy: No 'Access-Control-Allow-Origin' header is present on the requested resource.
+VM103:43  GET https://beatstats.com/label-ranking/latin net::ERR_FAILED 404 (Not Found)
+scrapeGenre @ VM103:43
+await in scrapeGenre
+(anonime) @ VM103:157
+await in (anonime)
+(anonime) @ VM103:263
+VM103:138 [LabelPulse]   Errore Latin pattern 4: Failed to fetch
+VM103:143 [LabelPulse]   TUTTI i pattern falliti per Latin
+VM103:156 [LabelPulse] [53%] Acoustic...
+VM103:41 [LabelPulse]   [1/4] GET https://www.beatstats.com/genre/acoustic
+VM103:43  GET https://www.beatstats.com/genre/acoustic 404 (Not Found)
+scrapeGenre @ VM103:43
+(anonime) @ VM103:157
+await in (anonime)
+(anonime) @ VM103:263
+VM103:45 [LabelPulse]   HTTP 404, provo prossimo pattern
+VM103:41 [LabelPulse]   [2/4] GET https://www.beatstats.com/label-ranking/acoustic
+VM103:43  GET https://www.beatstats.com/label-ranking/acoustic 404 (Not Found)
+scrapeGenre @ VM103:43
+await in scrapeGenre
+(anonime) @ VM103:157
+await in (anonime)
+(anonime) @ VM103:263
+VM103:45 [LabelPulse]   HTTP 404, provo prossimo pattern
+VM103:41 [LabelPulse]   [3/4] GET https://beatstats.com/genre/acoustic
+list?genre=0&period=2:1 Access to fetch at 'https://beatstats.com/genre/acoustic' from origin 'https://www.beatstats.com' has been blocked by CORS policy: No 'Access-Control-Allow-Origin' header is present on the requested resource.
+VM103:43  GET https://beatstats.com/genre/acoustic net::ERR_FAILED 404 (Not Found)
+scrapeGenre @ VM103:43
+await in scrapeGenre
+(anonime) @ VM103:157
+await in (anonime)
+(anonime) @ VM103:263
+VM103:138 [LabelPulse]   Errore Acoustic pattern 3: Failed to fetch
+VM103:41 [LabelPulse]   [4/4] GET https://beatstats.com/label-ranking/acoustic
+list?genre=0&period=2:1 Access to fetch at 'https://beatstats.com/label-ranking/acoustic' from origin 'https://www.beatstats.com' has been blocked by CORS policy: No 'Access-Control-Allow-Origin' header is present on the requested resource.
+VM103:43  GET https://beatstats.com/label-ranking/acoustic net::ERR_FAILED 404 (Not Found)
+scrapeGenre @ VM103:43
+await in scrapeGenre
+(anonime) @ VM103:157
+await in (anonime)
+(anonime) @ VM103:263
+VM103:138 [LabelPulse]   Errore Acoustic pattern 4: Failed to fetch
+VM103:143 [LabelPulse]   TUTTI i pattern falliti per Acoustic
+VM103:156 [LabelPulse] [56%] Classical...
+VM103:41 [LabelPulse]   [1/4] GET https://www.beatstats.com/genre/classical
+VM103:43  GET https://www.beatstats.com/genre/classical 404 (Not Found)
+scrapeGenre @ VM103:43
+(anonime) @ VM103:157
+await in (anonime)
+(anonime) @ VM103:263
+VM103:45 [LabelPulse]   HTTP 404, provo prossimo pattern
+VM103:41 [LabelPulse]   [2/4] GET https://www.beatstats.com/label-ranking/classical
+VM103:43  GET https://www.beatstats.com/label-ranking/classical 404 (Not Found)
+scrapeGenre @ VM103:43
+await in scrapeGenre
+(anonime) @ VM103:157
+await in (anonime)
+(anonime) @ VM103:263
+VM103:45 [LabelPulse]   HTTP 404, provo prossimo pattern
+VM103:41 [LabelPulse]   [3/4] GET https://beatstats.com/genre/classical
+list?genre=0&period=2:1 Access to fetch at 'https://beatstats.com/genre/classical' from origin 'https://www.beatstats.com' has been blocked by CORS policy: No 'Access-Control-Allow-Origin' header is present on the requested resource.
+VM103:43  GET https://beatstats.com/genre/classical net::ERR_FAILED 404 (Not Found)
+scrapeGenre @ VM103:43
+await in scrapeGenre
+(anonime) @ VM103:157
+await in (anonime)
+(anonime) @ VM103:263
+VM103:138 [LabelPulse]   Errore Classical pattern 3: Failed to fetch
+VM103:41 [LabelPulse]   [4/4] GET https://beatstats.com/label-ranking/classical
+list?genre=0&period=2:1 Access to fetch at 'https://beatstats.com/label-ranking/classical' from origin 'https://www.beatstats.com' has been blocked by CORS policy: No 'Access-Control-Allow-Origin' header is present on the requested resource.
+VM103:43  GET https://beatstats.com/label-ranking/classical net::ERR_FAILED 404 (Not Found)
+scrapeGenre @ VM103:43
+await in scrapeGenre
+(anonime) @ VM103:157
+await in (anonime)
+(anonime) @ VM103:263
+VM103:138 [LabelPulse]   Errore Classical pattern 4: Failed to fetch
+VM103:143 [LabelPulse]   TUTTI i pattern falliti per Classical
+VM103:156 [LabelPulse] [59%] Jazz...
+VM103:41 [LabelPulse]   [1/4] GET https://www.beatstats.com/genre/jazz
+VM103:43  GET https://www.beatstats.com/genre/jazz 404 (Not Found)
+scrapeGenre @ VM103:43
+(anonime) @ VM103:157
+await in (anonime)
+(anonime) @ VM103:263
+VM103:45 [LabelPulse]   HTTP 404, provo prossimo pattern
+VM103:41 [LabelPulse]   [2/4] GET https://www.beatstats.com/label-ranking/jazz
+VM103:43  GET https://www.beatstats.com/label-ranking/jazz 404 (Not Found)
+scrapeGenre @ VM103:43
+await in scrapeGenre
+(anonime) @ VM103:157
+await in (anonime)
+(anonime) @ VM103:263
+VM103:45 [LabelPulse]   HTTP 404, provo prossimo pattern
+VM103:41 [LabelPulse]   [3/4] GET https://beatstats.com/genre/jazz
+list?genre=0&period=2:1 Access to fetch at 'https://beatstats.com/genre/jazz' from origin 'https://www.beatstats.com' has been blocked by CORS policy: No 'Access-Control-Allow-Origin' header is present on the requested resource.
+VM103:43  GET https://beatstats.com/genre/jazz net::ERR_FAILED 404 (Not Found)
+scrapeGenre @ VM103:43
+await in scrapeGenre
+(anonime) @ VM103:157
+await in (anonime)
+(anonime) @ VM103:263
+VM103:138 [LabelPulse]   Errore Jazz pattern 3: Failed to fetch
+VM103:41 [LabelPulse]   [4/4] GET https://beatstats.com/label-ranking/jazz
+list?genre=0&period=2:1 Access to fetch at 'https://beatstats.com/label-ranking/jazz' from origin 'https://www.beatstats.com' has been blocked by CORS policy: No 'Access-Control-Allow-Origin' header is present on the requested resource.
+VM103:43  GET https://beatstats.com/label-ranking/jazz net::ERR_FAILED 404 (Not Found)
+scrapeGenre @ VM103:43
+await in scrapeGenre
+(anonime) @ VM103:157
+await in (anonime)
+(anonime) @ VM103:263
+VM103:138 [LabelPulse]   Errore Jazz pattern 4: Failed to fetch
+VM103:143 [LabelPulse]   TUTTI i pattern falliti per Jazz
+VM103:156 [LabelPulse] [63%] Soul / Funk...
+VM103:41 [LabelPulse]   [1/4] GET https://www.beatstats.com/genre/soul-funk
+VM103:43  GET https://www.beatstats.com/genre/soul-funk 404 (Not Found)
+scrapeGenre @ VM103:43
+(anonime) @ VM103:157
+await in (anonime)
+(anonime) @ VM103:263
+VM103:45 [LabelPulse]   HTTP 404, provo prossimo pattern
+VM103:41 [LabelPulse]   [2/4] GET https://www.beatstats.com/label-ranking/soul-funk
+VM103:43  GET https://www.beatstats.com/label-ranking/soul-funk 404 (Not Found)
+scrapeGenre @ VM103:43
+await in scrapeGenre
+(anonime) @ VM103:157
+await in (anonime)
+(anonime) @ VM103:263
+VM103:45 [LabelPulse]   HTTP 404, provo prossimo pattern
+VM103:41 [LabelPulse]   [3/4] GET https://beatstats.com/genre/soul-funk
+list?genre=0&period=2:1 Access to fetch at 'https://beatstats.com/genre/soul-funk' from origin 'https://www.beatstats.com' has been blocked by CORS policy: No 'Access-Control-Allow-Origin' header is present on the requested resource.
+VM103:43  GET https://beatstats.com/genre/soul-funk net::ERR_FAILED 404 (Not Found)
+scrapeGenre @ VM103:43
+await in scrapeGenre
+(anonime) @ VM103:157
+await in (anonime)
+(anonime) @ VM103:263
+VM103:138 [LabelPulse]   Errore Soul / Funk pattern 3: Failed to fetch
+VM103:41 [LabelPulse]   [4/4] GET https://beatstats.com/label-ranking/soul-funk
+list?genre=0&period=2:1 Access to fetch at 'https://beatstats.com/label-ranking/soul-funk' from origin 'https://www.beatstats.com' has been blocked by CORS policy: No 'Access-Control-Allow-Origin' header is present on the requested resource.
+VM103:43  GET https://beatstats.com/label-ranking/soul-funk net::ERR_FAILED 404 (Not Found)
+scrapeGenre @ VM103:43
+await in scrapeGenre
+(anonime) @ VM103:157
+await in (anonime)
+(anonime) @ VM103:263
+VM103:138 [LabelPulse]   Errore Soul / Funk pattern 4: Failed to fetch
+VM103:143 [LabelPulse]   TUTTI i pattern falliti per Soul / Funk
+VM103:156 [LabelPulse] [66%] Nu Disco / Disco...
+VM103:41 [LabelPulse]   [1/4] GET https://www.beatstats.com/genre/nu-disco-disco
+VM103:43  GET https://www.beatstats.com/genre/nu-disco-disco 404 (Not Found)
+scrapeGenre @ VM103:43
+(anonime) @ VM103:157
+await in (anonime)
+(anonime) @ VM103:263
+VM103:45 [LabelPulse]   HTTP 404, provo prossimo pattern
+VM103:41 [LabelPulse]   [2/4] GET https://www.beatstats.com/label-ranking/nu-disco-disco
+VM103:43  GET https://www.beatstats.com/label-ranking/nu-disco-disco 404 (Not Found)
+scrapeGenre @ VM103:43
+await in scrapeGenre
+(anonime) @ VM103:157
+await in (anonime)
+(anonime) @ VM103:263
+VM103:45 [LabelPulse]   HTTP 404, provo prossimo pattern
+VM103:41 [LabelPulse]   [3/4] GET https://beatstats.com/genre/nu-disco-disco
+list?genre=0&period=2:1 Access to fetch at 'https://beatstats.com/genre/nu-disco-disco' from origin 'https://www.beatstats.com' has been blocked by CORS policy: No 'Access-Control-Allow-Origin' header is present on the requested resource.
+VM103:43  GET https://beatstats.com/genre/nu-disco-disco net::ERR_FAILED 404 (Not Found)
+scrapeGenre @ VM103:43
+await in scrapeGenre
+(anonime) @ VM103:157
+await in (anonime)
+(anonime) @ VM103:263
+VM103:138 [LabelPulse]   Errore Nu Disco / Disco pattern 3: Failed to fetch
+VM103:41 [LabelPulse]   [4/4] GET https://beatstats.com/label-ranking/nu-disco-disco
+list?genre=0&period=2:1 Access to fetch at 'https://beatstats.com/label-ranking/nu-disco-disco' from origin 'https://www.beatstats.com' has been blocked by CORS policy: No 'Access-Control-Allow-Origin' header is present on the requested resource.
+VM103:43  GET https://beatstats.com/label-ranking/nu-disco-disco net::ERR_FAILED 404 (Not Found)
+scrapeGenre @ VM103:43
+await in scrapeGenre
+(anonime) @ VM103:157
+await in (anonime)
+(anonime) @ VM103:263
+VM103:138 [LabelPulse]   Errore Nu Disco / Disco pattern 4: Failed to fetch
+VM103:143 [LabelPulse]   TUTTI i pattern falliti per Nu Disco / Disco
+VM103:156 [LabelPulse] [69%] Indie Dance...
+VM103:41 [LabelPulse]   [1/4] GET https://www.beatstats.com/genre/indie-dance
+VM103:43  GET https://www.beatstats.com/genre/indie-dance 404 (Not Found)
+scrapeGenre @ VM103:43
+(anonime) @ VM103:157
+await in (anonime)
+(anonime) @ VM103:263
+VM103:45 [LabelPulse]   HTTP 404, provo prossimo pattern
+VM103:41 [LabelPulse]   [2/4] GET https://www.beatstats.com/label-ranking/indie-dance
+VM103:43  GET https://www.beatstats.com/label-ranking/indie-dance 404 (Not Found)
+scrapeGenre @ VM103:43
+await in scrapeGenre
+(anonime) @ VM103:157
+await in (anonime)
+(anonime) @ VM103:263
+VM103:45 [LabelPulse]   HTTP 404, provo prossimo pattern
+VM103:41 [LabelPulse]   [3/4] GET https://beatstats.com/genre/indie-dance
+list?genre=0&period=2:1 Access to fetch at 'https://beatstats.com/genre/indie-dance' from origin 'https://www.beatstats.com' has been blocked by CORS policy: No 'Access-Control-Allow-Origin' header is present on the requested resource.
+VM103:43  GET https://beatstats.com/genre/indie-dance net::ERR_FAILED 404 (Not Found)
+scrapeGenre @ VM103:43
+await in scrapeGenre
+(anonime) @ VM103:157
+await in (anonime)
+(anonime) @ VM103:263
+VM103:138 [LabelPulse]   Errore Indie Dance pattern 3: Failed to fetch
+VM103:41 [LabelPulse]   [4/4] GET https://beatstats.com/label-ranking/indie-dance
+list?genre=0&period=2:1 Access to fetch at 'https://beatstats.com/label-ranking/indie-dance' from origin 'https://www.beatstats.com' has been blocked by CORS policy: No 'Access-Control-Allow-Origin' header is present on the requested resource.
+VM103:43  GET https://beatstats.com/label-ranking/indie-dance net::ERR_FAILED 404 (Not Found)
+scrapeGenre @ VM103:43
+await in scrapeGenre
+(anonime) @ VM103:157
+await in (anonime)
+(anonime) @ VM103:263
+VM103:138 [LabelPulse]   Errore Indie Dance pattern 4: Failed to fetch
+VM103:143 [LabelPulse]   TUTTI i pattern falliti per Indie Dance
+VM103:156 [LabelPulse] [72%] Funky House...
+VM103:41 [LabelPulse]   [1/4] GET https://www.beatstats.com/genre/funky-house
+VM103:43  GET https://www.beatstats.com/genre/funky-house 404 (Not Found)
+scrapeGenre @ VM103:43
+(anonime) @ VM103:157
+await in (anonime)
+(anonime) @ VM103:263
+VM103:45 [LabelPulse]   HTTP 404, provo prossimo pattern
+VM103:41 [LabelPulse]   [2/4] GET https://www.beatstats.com/label-ranking/funky-house
+VM103:43  GET https://www.beatstats.com/label-ranking/funky-house 404 (Not Found)
+scrapeGenre @ VM103:43
+await in scrapeGenre
+(anonime) @ VM103:157
+await in (anonime)
+(anonime) @ VM103:263
+VM103:45 [LabelPulse]   HTTP 404, provo prossimo pattern
+VM103:41 [LabelPulse]   [3/4] GET https://beatstats.com/genre/funky-house
+list?genre=0&period=2:1 Access to fetch at 'https://beatstats.com/genre/funky-house' from origin 'https://www.beatstats.com' has been blocked by CORS policy: No 'Access-Control-Allow-Origin' header is present on the requested resource.
+VM103:43  GET https://beatstats.com/genre/funky-house net::ERR_FAILED 404 (Not Found)
+scrapeGenre @ VM103:43
+await in scrapeGenre
+(anonime) @ VM103:157
+await in (anonime)
+(anonime) @ VM103:263
+VM103:138 [LabelPulse]   Errore Funky House pattern 3: Failed to fetch
+VM103:41 [LabelPulse]   [4/4] GET https://beatstats.com/label-ranking/funky-house
+list?genre=0&period=2:1 Access to fetch at 'https://beatstats.com/label-ranking/funky-house' from origin 'https://www.beatstats.com' has been blocked by CORS policy: No 'Access-Control-Allow-Origin' header is present on the requested resource.
+VM103:43  GET https://beatstats.com/label-ranking/funky-house net::ERR_FAILED 404 (Not Found)
+scrapeGenre @ VM103:43
+await in scrapeGenre
+(anonime) @ VM103:157
+await in (anonime)
+(anonime) @ VM103:263
+VM103:138 [LabelPulse]   Errore Funky House pattern 4: Failed to fetch
+VM103:143 [LabelPulse]   TUTTI i pattern falliti per Funky House
+VM103:156 [LabelPulse] [75%] Bass / Club...
+VM103:41 [LabelPulse]   [1/4] GET https://www.beatstats.com/genre/bass-club
+VM103:43  GET https://www.beatstats.com/genre/bass-club 404 (Not Found)
+scrapeGenre @ VM103:43
+(anonime) @ VM103:157
+await in (anonime)
+(anonime) @ VM103:263
+VM103:45 [LabelPulse]   HTTP 404, provo prossimo pattern
+VM103:41 [LabelPulse]   [2/4] GET https://www.beatstats.com/label-ranking/bass-club
+VM103:43  GET https://www.beatstats.com/label-ranking/bass-club 404 (Not Found)
+scrapeGenre @ VM103:43
+await in scrapeGenre
+(anonime) @ VM103:157
+await in (anonime)
+(anonime) @ VM103:263
+VM103:45 [LabelPulse]   HTTP 404, provo prossimo pattern
+VM103:41 [LabelPulse]   [3/4] GET https://beatstats.com/genre/bass-club
+list?genre=0&period=2:1 Access to fetch at 'https://beatstats.com/genre/bass-club' from origin 'https://www.beatstats.com' has been blocked by CORS policy: No 'Access-Control-Allow-Origin' header is present on the requested resource.
+VM103:43  GET https://beatstats.com/genre/bass-club net::ERR_FAILED 404 (Not Found)
+scrapeGenre @ VM103:43
+await in scrapeGenre
+(anonime) @ VM103:157
+await in (anonime)
+(anonime) @ VM103:263
+VM103:138 [LabelPulse]   Errore Bass / Club pattern 3: Failed to fetch
+VM103:41 [LabelPulse]   [4/4] GET https://beatstats.com/label-ranking/bass-club
+list?genre=0&period=2:1 Access to fetch at 'https://beatstats.com/label-ranking/bass-club' from origin 'https://www.beatstats.com' has been blocked by CORS policy: No 'Access-Control-Allow-Origin' header is present on the requested resource.
+VM103:43  GET https://beatstats.com/label-ranking/bass-club net::ERR_FAILED 404 (Not Found)
+scrapeGenre @ VM103:43
+await in scrapeGenre
+(anonime) @ VM103:157
+await in (anonime)
+(anonime) @ VM103:263
+VM103:138 [LabelPulse]   Errore Bass / Club pattern 4: Failed to fetch
+VM103:143 [LabelPulse]   TUTTI i pattern falliti per Bass / Club
+VM103:156 [LabelPulse] [78%] Jackin House...
+VM103:41 [LabelPulse]   [1/4] GET https://www.beatstats.com/genre/jackin-house
+VM103:43  GET https://www.beatstats.com/genre/jackin-house 404 (Not Found)
+scrapeGenre @ VM103:43
+(anonime) @ VM103:157
+await in (anonime)
+(anonime) @ VM103:263
+VM103:45 [LabelPulse]   HTTP 404, provo prossimo pattern
+VM103:41 [LabelPulse]   [2/4] GET https://www.beatstats.com/label-ranking/jackin-house
+VM103:43  GET https://www.beatstats.com/label-ranking/jackin-house 404 (Not Found)
+scrapeGenre @ VM103:43
+await in scrapeGenre
+(anonime) @ VM103:157
+await in (anonime)
+(anonime) @ VM103:263
+VM103:45 [LabelPulse]   HTTP 404, provo prossimo pattern
+VM103:41 [LabelPulse]   [3/4] GET https://beatstats.com/genre/jackin-house
+list?genre=0&period=2:1 Access to fetch at 'https://beatstats.com/genre/jackin-house' from origin 'https://www.beatstats.com' has been blocked by CORS policy: No 'Access-Control-Allow-Origin' header is present on the requested resource.
+VM103:43  GET https://beatstats.com/genre/jackin-house net::ERR_FAILED 404 (Not Found)
+scrapeGenre @ VM103:43
+await in scrapeGenre
+(anonime) @ VM103:157
+await in (anonime)
+(anonime) @ VM103:263
+VM103:138 [LabelPulse]   Errore Jackin House pattern 3: Failed to fetch
+VM103:41 [LabelPulse]   [4/4] GET https://beatstats.com/label-ranking/jackin-house
+list?genre=0&period=2:1 Access to fetch at 'https://beatstats.com/label-ranking/jackin-house' from origin 'https://www.beatstats.com' has been blocked by CORS policy: No 'Access-Control-Allow-Origin' header is present on the requested resource.
+VM103:43  GET https://beatstats.com/label-ranking/jackin-house net::ERR_FAILED 404 (Not Found)
+scrapeGenre @ VM103:43
+await in scrapeGenre
+(anonime) @ VM103:157
+await in (anonime)
+(anonime) @ VM103:263
+VM103:138 [LabelPulse]   Errore Jackin House pattern 4: Failed to fetch
+VM103:143 [LabelPulse]   TUTTI i pattern falliti per Jackin House
+VM103:156 [LabelPulse] [81%] Afro House...
+VM103:41 [LabelPulse]   [1/4] GET https://www.beatstats.com/genre/afro-house
+VM103:43  GET https://www.beatstats.com/genre/afro-house 404 (Not Found)
+scrapeGenre @ VM103:43
+(anonime) @ VM103:157
+await in (anonime)
+(anonime) @ VM103:263
+VM103:45 [LabelPulse]   HTTP 404, provo prossimo pattern
+VM103:41 [LabelPulse]   [2/4] GET https://www.beatstats.com/label-ranking/afro-house
+VM103:43  GET https://www.beatstats.com/label-ranking/afro-house 404 (Not Found)
+scrapeGenre @ VM103:43
+await in scrapeGenre
+(anonime) @ VM103:157
+await in (anonime)
+(anonime) @ VM103:263
+VM103:45 [LabelPulse]   HTTP 404, provo prossimo pattern
+VM103:41 [LabelPulse]   [3/4] GET https://beatstats.com/genre/afro-house
+list?genre=0&period=2:1 Access to fetch at 'https://beatstats.com/genre/afro-house' from origin 'https://www.beatstats.com' has been blocked by CORS policy: No 'Access-Control-Allow-Origin' header is present on the requested resource.
+VM103:43  GET https://beatstats.com/genre/afro-house net::ERR_FAILED 404 (Not Found)
+scrapeGenre @ VM103:43
+await in scrapeGenre
+(anonime) @ VM103:157
+await in (anonime)
+(anonime) @ VM103:263
+VM103:138 [LabelPulse]   Errore Afro House pattern 3: Failed to fetch
+VM103:41 [LabelPulse]   [4/4] GET https://beatstats.com/label-ranking/afro-house
+list?genre=0&period=2:1 Access to fetch at 'https://beatstats.com/label-ranking/afro-house' from origin 'https://www.beatstats.com' has been blocked by CORS policy: No 'Access-Control-Allow-Origin' header is present on the requested resource.
+VM103:43  GET https://beatstats.com/label-ranking/afro-house net::ERR_FAILED 404 (Not Found)
+scrapeGenre @ VM103:43
+await in scrapeGenre
+(anonime) @ VM103:157
+await in (anonime)
+(anonime) @ VM103:263
+VM103:138 [LabelPulse]   Errore Afro House pattern 4: Failed to fetch
+VM103:143 [LabelPulse]   TUTTI i pattern falliti per Afro House
+VM103:156 [LabelPulse] [84%] Organic House...
+VM103:41 [LabelPulse]   [1/4] GET https://www.beatstats.com/genre/organic-house
+VM103:43  GET https://www.beatstats.com/genre/organic-house 404 (Not Found)
+scrapeGenre @ VM103:43
+(anonime) @ VM103:157
+await in (anonime)
+(anonime) @ VM103:263
+VM103:45 [LabelPulse]   HTTP 404, provo prossimo pattern
+VM103:41 [LabelPulse]   [2/4] GET https://www.beatstats.com/label-ranking/organic-house
+VM103:43  GET https://www.beatstats.com/label-ranking/organic-house 404 (Not Found)
+scrapeGenre @ VM103:43
+await in scrapeGenre
+(anonime) @ VM103:157
+await in (anonime)
+(anonime) @ VM103:263
+VM103:45 [LabelPulse]   HTTP 404, provo prossimo pattern
+VM103:41 [LabelPulse]   [3/4] GET https://beatstats.com/genre/organic-house
+list?genre=0&period=2:1 Access to fetch at 'https://beatstats.com/genre/organic-house' from origin 'https://www.beatstats.com' has been blocked by CORS policy: No 'Access-Control-Allow-Origin' header is present on the requested resource.
+VM103:43  GET https://beatstats.com/genre/organic-house net::ERR_FAILED 404 (Not Found)
+scrapeGenre @ VM103:43
+await in scrapeGenre
+(anonime) @ VM103:157
+await in (anonime)
+(anonime) @ VM103:263
+VM103:138 [LabelPulse]   Errore Organic House pattern 3: Failed to fetch
+VM103:41 [LabelPulse]   [4/4] GET https://beatstats.com/label-ranking/organic-house
+list?genre=0&period=2:1 Access to fetch at 'https://beatstats.com/label-ranking/organic-house' from origin 'https://www.beatstats.com' has been blocked by CORS policy: No 'Access-Control-Allow-Origin' header is present on the requested resource.
+VM103:43  GET https://beatstats.com/label-ranking/organic-house net::ERR_FAILED 404 (Not Found)
+scrapeGenre @ VM103:43
+await in scrapeGenre
+(anonime) @ VM103:157
+await in (anonime)
+(anonime) @ VM103:263
+VM103:138 [LabelPulse]   Errore Organic House pattern 4: Failed to fetch
+VM103:143 [LabelPulse]   TUTTI i pattern falliti per Organic House
+VM103:156 [LabelPulse] [88%] Melodic House & Techno...
+VM103:41 [LabelPulse]   [1/4] GET https://www.beatstats.com/genre/melodic-house-techno
+VM103:43  GET https://www.beatstats.com/genre/melodic-house-techno 404 (Not Found)
+scrapeGenre @ VM103:43
+(anonime) @ VM103:157
+await in (anonime)
+(anonime) @ VM103:263
+VM103:45 [LabelPulse]   HTTP 404, provo prossimo pattern
+VM103:41 [LabelPulse]   [2/4] GET https://www.beatstats.com/label-ranking/melodic-house-techno
+VM103:43  GET https://www.beatstats.com/label-ranking/melodic-house-techno 404 (Not Found)
+scrapeGenre @ VM103:43
+await in scrapeGenre
+(anonime) @ VM103:157
+await in (anonime)
+(anonime) @ VM103:263
+VM103:45 [LabelPulse]   HTTP 404, provo prossimo pattern
+VM103:41 [LabelPulse]   [3/4] GET https://beatstats.com/genre/melodic-house-techno
+list?genre=0&period=2:1 Access to fetch at 'https://beatstats.com/genre/melodic-house-techno' from origin 'https://www.beatstats.com' has been blocked by CORS policy: No 'Access-Control-Allow-Origin' header is present on the requested resource.
+VM103:43  GET https://beatstats.com/genre/melodic-house-techno net::ERR_FAILED 404 (Not Found)
+scrapeGenre @ VM103:43
+await in scrapeGenre
+(anonime) @ VM103:157
+await in (anonime)
+(anonime) @ VM103:263
+VM103:138 [LabelPulse]   Errore Melodic House & Techno pattern 3: Failed to fetch
+VM103:41 [LabelPulse]   [4/4] GET https://beatstats.com/label-ranking/melodic-house-techno
+list?genre=0&period=2:1 Access to fetch at 'https://beatstats.com/label-ranking/melodic-house-techno' from origin 'https://www.beatstats.com' has been blocked by CORS policy: No 'Access-Control-Allow-Origin' header is present on the requested resource.
+VM103:43  GET https://beatstats.com/label-ranking/melodic-house-techno net::ERR_FAILED 404 (Not Found)
+scrapeGenre @ VM103:43
+await in scrapeGenre
+(anonime) @ VM103:157
+await in (anonime)
+(anonime) @ VM103:263
+VM103:138 [LabelPulse]   Errore Melodic House & Techno pattern 4: Failed to fetch
+VM103:143 [LabelPulse]   TUTTI i pattern falliti per Melodic House & Techno
+VM103:156 [LabelPulse] [91%] Psy-Trance...
+VM103:41 [LabelPulse]   [1/4] GET https://www.beatstats.com/genre/psy-trance
+VM103:43  GET https://www.beatstats.com/genre/psy-trance 404 (Not Found)
+scrapeGenre @ VM103:43
+(anonime) @ VM103:157
+await in (anonime)
+(anonime) @ VM103:263
+VM103:45 [LabelPulse]   HTTP 404, provo prossimo pattern
+VM103:41 [LabelPulse]   [2/4] GET https://www.beatstats.com/label-ranking/psy-trance
+VM103:43  GET https://www.beatstats.com/label-ranking/psy-trance 404 (Not Found)
+scrapeGenre @ VM103:43
+await in scrapeGenre
+(anonime) @ VM103:157
+await in (anonime)
+(anonime) @ VM103:263
+VM103:45 [LabelPulse]   HTTP 404, provo prossimo pattern
+VM103:41 [LabelPulse]   [3/4] GET https://beatstats.com/genre/psy-trance
+list?genre=0&period=2:1 Access to fetch at 'https://beatstats.com/genre/psy-trance' from origin 'https://www.beatstats.com' has been blocked by CORS policy: No 'Access-Control-Allow-Origin' header is present on the requested resource.
+VM103:43  GET https://beatstats.com/genre/psy-trance net::ERR_FAILED 404 (Not Found)
+scrapeGenre @ VM103:43
+await in scrapeGenre
+(anonime) @ VM103:157
+await in (anonime)
+(anonime) @ VM103:263
+VM103:138 [LabelPulse]   Errore Psy-Trance pattern 3: Failed to fetch
+VM103:41 [LabelPulse]   [4/4] GET https://beatstats.com/label-ranking/psy-trance
+list?genre=0&period=2:1 Access to fetch at 'https://beatstats.com/label-ranking/psy-trance' from origin 'https://www.beatstats.com' has been blocked by CORS policy: No 'Access-Control-Allow-Origin' header is present on the requested resource.
+VM103:43  GET https://beatstats.com/label-ranking/psy-trance net::ERR_FAILED 404 (Not Found)
+scrapeGenre @ VM103:43
+await in scrapeGenre
+(anonime) @ VM103:157
+await in (anonime)
+(anonime) @ VM103:263
+VM103:138 [LabelPulse]   Errore Psy-Trance pattern 4: Failed to fetch
+VM103:143 [LabelPulse]   TUTTI i pattern falliti per Psy-Trance
+VM103:156 [LabelPulse] [94%] UK Garage / Bassline...
+VM103:41 [LabelPulse]   [1/4] GET https://www.beatstats.com/genre/uk-garage-bassline
+VM103:43  GET https://www.beatstats.com/genre/uk-garage-bassline 404 (Not Found)
+scrapeGenre @ VM103:43
+(anonime) @ VM103:157
+await in (anonime)
+(anonime) @ VM103:263
+VM103:45 [LabelPulse]   HTTP 404, provo prossimo pattern
+VM103:41 [LabelPulse]   [2/4] GET https://www.beatstats.com/label-ranking/uk-garage-bassline
+VM103:43  GET https://www.beatstats.com/label-ranking/uk-garage-bassline 404 (Not Found)
+scrapeGenre @ VM103:43
+await in scrapeGenre
+(anonime) @ VM103:157
+await in (anonime)
+(anonime) @ VM103:263
+VM103:45 [LabelPulse]   HTTP 404, provo prossimo pattern
+VM103:41 [LabelPulse]   [3/4] GET https://beatstats.com/genre/uk-garage-bassline
+list?genre=0&period=2:1 Access to fetch at 'https://beatstats.com/genre/uk-garage-bassline' from origin 'https://www.beatstats.com' has been blocked by CORS policy: No 'Access-Control-Allow-Origin' header is present on the requested resource.
+VM103:43  GET https://beatstats.com/genre/uk-garage-bassline net::ERR_FAILED 404 (Not Found)
+scrapeGenre @ VM103:43
+await in scrapeGenre
+(anonime) @ VM103:157
+await in (anonime)
+(anonime) @ VM103:263
+VM103:138 [LabelPulse]   Errore UK Garage / Bassline pattern 3: Failed to fetch
+VM103:41 [LabelPulse]   [4/4] GET https://beatstats.com/label-ranking/uk-garage-bassline
+list?genre=0&period=2:1 Access to fetch at 'https://beatstats.com/label-ranking/uk-garage-bassline' from origin 'https://www.beatstats.com' has been blocked by CORS policy: No 'Access-Control-Allow-Origin' header is present on the requested resource.
+VM103:43  GET https://beatstats.com/label-ranking/uk-garage-bassline net::ERR_FAILED 404 (Not Found)
+scrapeGenre @ VM103:43
+await in scrapeGenre
+(anonime) @ VM103:157
+await in (anonime)
+(anonime) @ VM103:263
+VM103:138 [LabelPulse]   Errore UK Garage / Bassline pattern 4: Failed to fetch
+VM103:143 [LabelPulse]   TUTTI i pattern falliti per UK Garage / Bassline
+VM103:156 [LabelPulse] [97%] Trap / Future Bass...
+VM103:41 [LabelPulse]   [1/4] GET https://www.beatstats.com/genre/trap-future-bass
+VM103:43  GET https://www.beatstats.com/genre/trap-future-bass 404 (Not Found)
+scrapeGenre @ VM103:43
+(anonime) @ VM103:157
+await in (anonime)
+(anonime) @ VM103:263
+VM103:45 [LabelPulse]   HTTP 404, provo prossimo pattern
+VM103:41 [LabelPulse]   [2/4] GET https://www.beatstats.com/label-ranking/trap-future-bass
+VM103:43  GET https://www.beatstats.com/label-ranking/trap-future-bass 404 (Not Found)
+scrapeGenre @ VM103:43
+await in scrapeGenre
+(anonime) @ VM103:157
+await in (anonime)
+(anonime) @ VM103:263
+VM103:45 [LabelPulse]   HTTP 404, provo prossimo pattern
+VM103:41 [LabelPulse]   [3/4] GET https://beatstats.com/genre/trap-future-bass
+list?genre=0&period=2:1 Access to fetch at 'https://beatstats.com/genre/trap-future-bass' from origin 'https://www.beatstats.com' has been blocked by CORS policy: No 'Access-Control-Allow-Origin' header is present on the requested resource.
+VM103:43  GET https://beatstats.com/genre/trap-future-bass net::ERR_FAILED 404 (Not Found)
+scrapeGenre @ VM103:43
+await in scrapeGenre
+(anonime) @ VM103:157
+await in (anonime)
+(anonime) @ VM103:263
+VM103:138 [LabelPulse]   Errore Trap / Future Bass pattern 3: Failed to fetch
+VM103:41 [LabelPulse]   [4/4] GET https://beatstats.com/label-ranking/trap-future-bass
+list?genre=0&period=2:1 Access to fetch at 'https://beatstats.com/label-ranking/trap-future-bass' from origin 'https://www.beatstats.com' has been blocked by CORS policy: No 'Access-Control-Allow-Origin' header is present on the requested resource.
+VM103:43  GET https://beatstats.com/label-ranking/trap-future-bass net::ERR_FAILED 404 (Not Found)
+scrapeGenre @ VM103:43
+await in scrapeGenre
+(anonime) @ VM103:157
+await in (anonime)
+(anonime) @ VM103:263
+VM103:138 [LabelPulse]   Errore Trap / Future Bass pattern 4: Failed to fetch
+VM103:143 [LabelPulse]   TUTTI i pattern falliti per Trap / Future Bass
+VM103:156 [LabelPulse] [100%] Ambient / Experimental...
+VM103:41 [LabelPulse]   [1/4] GET https://www.beatstats.com/genre/ambient-experimental
+VM103:43  GET https://www.beatstats.com/genre/ambient-experimental 404 (Not Found)
+scrapeGenre @ VM103:43
+(anonime) @ VM103:157
+await in (anonime)
+(anonime) @ VM103:263
+VM103:45 [LabelPulse]   HTTP 404, provo prossimo pattern
+VM103:41 [LabelPulse]   [2/4] GET https://www.beatstats.com/label-ranking/ambient-experimental
+VM103:43  GET https://www.beatstats.com/label-ranking/ambient-experimental 404 (Not Found)
+scrapeGenre @ VM103:43
+await in scrapeGenre
+(anonime) @ VM103:157
+await in (anonime)
+(anonime) @ VM103:263
+VM103:45 [LabelPulse]   HTTP 404, provo prossimo pattern
+VM103:41 [LabelPulse]   [3/4] GET https://beatstats.com/genre/ambient-experimental
+list?genre=0&period=2:1 Access to fetch at 'https://beatstats.com/genre/ambient-experimental' from origin 'https://www.beatstats.com' has been blocked by CORS policy: No 'Access-Control-Allow-Origin' header is present on the requested resource.
+VM103:43  GET https://beatstats.com/genre/ambient-experimental net::ERR_FAILED 404 (Not Found)
+scrapeGenre @ VM103:43
+await in scrapeGenre
+(anonime) @ VM103:157
+await in (anonime)
+(anonime) @ VM103:263
+VM103:138 [LabelPulse]   Errore Ambient / Experimental pattern 3: Failed to fetch
+VM103:41 [LabelPulse]   [4/4] GET https://beatstats.com/label-ranking/ambient-experimental
+list?genre=0&period=2:1 Access to fetch at 'https://beatstats.com/label-ranking/ambient-experimental' from origin 'https://www.beatstats.com' has been blocked by CORS policy: No 'Access-Control-Allow-Origin' header is present on the requested resource.
+VM103:43  GET https://beatstats.com/label-ranking/ambient-experimental net::ERR_FAILED 404 (Not Found)
+scrapeGenre @ VM103:43
+await in scrapeGenre
+(anonime) @ VM103:157
+await in (anonime)
+(anonime) @ VM103:263
+VM103:138 [LabelPulse]   Errore Ambient / Experimental pattern 4: Failed to fetch
+VM103:143 [LabelPulse]   TUTTI i pattern falliti per Ambient / Experimental
+VM103:164 [LabelPulse] Costruzione JSON...
+VM103:255 [LabelPulse] ========================================
+VM103:256 [LabelPulse] COMPLETATO!
+VM103:257 [LabelPulse] 0 label da 0/32 generi
+VM103:258 [LabelPulse] Periodo: current (snapshot timestamp: 2026-06-19T16:43:22.182Z)
+VM103:259 [LabelPulse]  32 generi senza dati
+VM103:260 [LabelPulse] File JSON scaricato! Importa in LabelPulse
+VM103:261 [LabelPulse] ========================================
