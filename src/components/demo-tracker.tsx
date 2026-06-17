@@ -29,6 +29,7 @@ import {
   Activity,
   Loader2,
   X,
+  Upload,
 } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Badge } from "@/components/ui/badge";
@@ -221,7 +222,7 @@ export function DemoTracker() {
   const handleAnalyze = async () => {
     const audioSourceUrl = formLink.trim() || (formLinks.find(l => l.type === "soundcloud" || l.type === "audio")?.value?.trim() ?? "");
     if (!audioSourceUrl) {
-      setAnalysisError("Inserisci un link SoundCloud o URL audio diretto nel campo sopra");
+      setAnalysisError("Inserisci un link SoundCloud o URL audio diretto, oppure usa 'Carica file'");
       return;
     }
     setIsAnalyzing(true);
@@ -244,6 +245,27 @@ export function DemoTracker() {
     } catch (err: any) {
       console.error("[analyze]", err);
       setAnalysisError(err?.message || "Errore durante l'analisi");
+      setAnalysisProgress(null);
+    } finally {
+      setIsAnalyzing(false);
+    }
+  };
+
+  const handleAnalyzeFile = async (file: File) => {
+    setIsAnalyzing(true);
+    setAnalysisError(null);
+    setAnalysisProgress({ stage: "fetching", message: `Lettura ${file.name}...`, progress: 0.2 });
+    try {
+      const { analyzeAudioFile } = await import("@/lib/audio-analysis");
+      const result = await analyzeAudioFile(file, (p) => setAnalysisProgress(p));
+      setFormAnalysis(result);
+      setFormBpm(String(result.bpm));
+      setFormKey(result.key.name);
+      setAnalysisProgress({ stage: "done", message: "Analisi completata!", progress: 1 });
+      setTimeout(() => setAnalysisProgress(null), 2000);
+    } catch (err: any) {
+      console.error("[analyze file]", err);
+      setAnalysisError(err?.message || "Errore durante l'analisi del file");
       setAnalysisProgress(null);
     } finally {
       setIsAnalyzing(false);
@@ -663,24 +685,41 @@ export function DemoTracker() {
                     </Badge>
                   )}
                 </div>
-                <Button
-                  type="button"
-                  variant="default"
-                  size="sm"
-                  onClick={handleAnalyze}
-                  disabled={isAnalyzing || (!formLink.trim() && !formLinks.some(l => l.value.trim()))}
-                  className="h-7 text-xs"
-                >
-                  {isAnalyzing ? (
-                    <>
-                      <Loader2 className="h-3 w-3 mr-1 animate-spin" /> Analisi...
-                    </>
-                  ) : (
-                    <>
-                      <Zap className="h-3 w-3 mr-1" /> Analizza
-                    </>
-                  )}
-                </Button>
+                <div className="flex items-center gap-1.5">
+                  <label className="cursor-pointer">
+                    <input
+                      type="file"
+                      accept="audio/*,.mp3,.wav,.m4a,.ogg,.flac"
+                      className="hidden"
+                      onChange={(e) => {
+                        const f = e.target.files?.[0];
+                        if (f) handleAnalyzeFile(f);
+                        e.target.value = ""; // reset for reuse
+                      }}
+                    />
+                    <span className="inline-flex items-center gap-1 px-2.5 h-7 text-xs bg-secondary hover:bg-secondary/70 rounded-md border border-border/50 transition-colors">
+                      <Upload className="h-3 w-3" /> Carica file
+                    </span>
+                  </label>
+                  <Button
+                    type="button"
+                    variant="default"
+                    size="sm"
+                    onClick={handleAnalyze}
+                    disabled={isAnalyzing || (!formLink.trim() && !formLinks.some(l => l.value.trim()))}
+                    className="h-7 text-xs"
+                  >
+                    {isAnalyzing ? (
+                      <>
+                        <Loader2 className="h-3 w-3 mr-1 animate-spin" /> Analisi...
+                      </>
+                    ) : (
+                      <>
+                        <Zap className="h-3 w-3 mr-1" /> Analizza link
+                      </>
+                    )}
+                  </Button>
+                </div>
               </div>
 
               {/* Progress bar */}
@@ -756,6 +795,9 @@ export function DemoTracker() {
                 ) : (
                   <>Analisi gratuita in-browser (BPM, key, energia). Per genere/mood/strumenti, aggiungi un token <span className="text-primary">Cyanite</span> nel Profilo.</>
                 )}
+              </p>
+              <p className="text-[10px] text-muted-foreground/70 leading-tight">
+                💡 <strong>Suggerimento</strong>: se l'analisi del link SoundCloud fallisce, usa <span className="text-primary">"Carica file"</span> per analizzare direttamente il tuo MP3/WAV — è il metodo più affidabile.
               </p>
             </div>
 

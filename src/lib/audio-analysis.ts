@@ -198,6 +198,119 @@ export async function fetchAudioThroughProxy(
   return merged.buffer;
 }
 
+// ==================== DIRECT FILE ANALYSIS ====================
+
+/**
+ * Analyze a locally-uploaded audio File directly (no network needed).
+ * This is the most reliable path since it bypasses all CORS/proxy issues.
+ */
+export async function analyzeAudioFile(
+  file: File,
+  onProgress?: (p: AnalysisProgress) => void
+): Promise<AudioAnalysisResult> {
+  onProgress?.({
+    stage: "fetching",
+    message: `Lettura file ${file.name}...`,
+    progress: 0.2,
+  });
+
+  const arrayBuffer = await file.arrayBuffer();
+
+  return analyzeAudioBufferInternal(arrayBuffer, onProgress);
+}
+
+// ==================== SHARED ANALYSIS CORE ====================
+
+/**
+ * Internal: run Essentia.js analysis on a decoded ArrayBuffer.
+ */
+async function analyzeAudioBufferInternal(
+  arrayBuffer: ArrayBuffer,
+  onProgress?: (p: AnalysisProgress) => void
+): Promise<AudioAnalysisResult> {
+  onProgress?.({
+    stage: "decoding",
+    message: "Decodifica audio...",
+    progress: 0.5,
+  });
+
+  const { monoData, sampleRate, audioBuffer } = await decodeAudio(arrayBuffer);
+
+  onProgress?.({
+    stage: "analyzing",
+    message: "Analisi BPM, key e energia...",
+    progress: 0.7,
+  });
+
+  // Dynamic import to keep the initial bundle small
+  const EssentiaWASM = (await import("essentia.js/dist/essentia-wasm.web")).default;
+  const { Essentia } = await import("essentia.js/dist/essentia.js-core.es");
+
+  await EssentiaWASM();
+  const essentia = new Essentia(EssentiaWASM);
+
+  // BPM detection
+  const vectorSignal = essentia.arrayToVector(Float32Array.from(monoData));
+  const bpmResult = essentia.PercivalBpmEstimator(
+    vectorSignal,
+    1024, 128,
+    sampleRate,
+    1024, 512,
+    60, 180
+  );
+  const bpm = Math.round(bpmResult.bpm);
+  vectorSignal.delete?.();
+  bpmResult.delete?.();
+
+  // Key detection (first 60 seconds for stability)
+  const sixtySecSamples = Math.min(monoData.length, sampleRate * 60);
+  const sixtySecSlice = monoData.slice(0, sixtySecSamples);
+  const keyInput = essentia.arrayToVector(Float32Array.from(sixtySecSlice));
+  const keyResult = essentia.Key(keyInput, true, true, false, false, false);
+  keyInput.delete?.();
+
+  const noteNames = ["C", "C#", "D", "D#", "E", "F", "F#", "G", "G#", "A", "A#", "B"];
+  const keyName = keyResult.key || "C";
+  const scale = (keyResult.scale || "minor").toLowerCase();
+  const sharpIdx = keyName.indexOf("#");
+  let baseNote = keyName.charAt(0).toUpperCase();
+  if (sharpIdx > 0) baseNote += "#";
+  const pc = noteNames.indexOf(baseNote);
+  const pitchClass = pc >= 0 ? pc : 0;
+  const mode: 0 | 1 = scale === "major" ? 1 : 0;
+
+  const camelot = pitchToCamelot(pitchClass, mode);
+  keyResult.delete?.();
+
+  const energy = computeEnergy(monoData);
+  const loudness = computeLoudness(monoData);
+  const danceability = computeDanceability(monoData, sampleRate, bpm);
+
+  onProgress?.({
+    stage: "done",
+    message: "Analisi completata!",
+    progress: 1,
+  });
+
+  return {
+    bpm,
+    bpmConfidence: bpm > 0 ? 0.85 : 0,
+    key: {
+      pitchClass,
+      mode,
+      camelot: camelot.code,
+      name: camelot.name,
+      confidence: 0.8,
+    },
+    energy,
+    danceability,
+    loudness,
+    duration: audioBuffer.duration,
+    analysisSource: "essentia",
+    analysisDate: new Date().toISOString(),
+  };
+}
+
 // ==================== AUDIO DECODING ====================
 
 /**
@@ -576,104 +689,8 @@ export async function analyzeAudio(
     })
   );
 
-  onProgress?.({
-    stage: "decoding",
-    message: "Decodifica audio...",
-    progress: 0.55,
-  });
-
-  const { monoData, sampleRate, audioBuffer } = await decodeAudio(audioBytes);
-
-  onProgress?.({
-    stage: "analyzing",
-    message: "Analisi BPM, key e energia...",
-    progress: 0.7,
-  });
-
-  // Dynamic import to keep bundle size small for users who don't analyze
-  const EssentiaWASM = (await import("essentia.js/dist/essentia-wasm.web")).default;
-  const { Essentia } = await import("essentia.js/dist/essentia.js-core.es");
-
-  await EssentiaWASM();
-  const essentia = new Essentia(EssentiaWASM);
-
-  // BPM detection using PercivalBpmEstimator
-  // Convert Float32 to vector signal
-  const vectorSignal = essentia.arrayToVector(
-    Float32Array.from(monoData)
-  );
-  const bpmResult = essentia.PercivalBpmEstimator(
-    vectorSignal,
-    1024, // frameSize
-    128, // hopSize
-    sampleRate,
-    1024, // odfFrameSize
-    512, // odfHopSize
-    60, // minBpm
-    180 // maxBpm
-  );
-  const bpm = Math.round(bpmResult.bpm);
-  vectorSignal.delete?.();
-  bpmResult.delete?.();
-
-  // Key detection using Key
-  // Take first 60 seconds for key detection (faster, more stable)
-  const sixtySecSamples = Math.min(monoData.length, sampleRate * 60);
-  const sixtySecSlice = monoData.slice(0, sixtySecSamples);
-  const keyInput = essentia.arrayToVector(Float32Array.from(sixtySecSlice));
-  const keyResult = essentia.Key(keyInput, true, true, false, false, false);
-  keyInput.delete?.();
-
-  // Essentia returns key name and scale
-  // keyResult.key is the pitch class name, keyResult.scale is "minor" or "major"
-  const noteNames = ["C", "C#", "D", "D#", "E", "F", "F#", "G", "G#", "A", "A#", "B"];
-  let pitchClass = 0;
-  const keyNameUpper = (keyResult.key || "C").toUpperCase().replace("B", "A#").replace("#", "");
-  // Essentia uses pitch class numbers (0-11) directly when useMajMin=true
-  // Actually returns key name like "C", "C#", etc.
-  // Try to parse:
-  const keyName = keyResult.key || "C";
-  const scale = (keyResult.scale || "minor").toLowerCase();
-
-  // Essentia Key algorithm returns key as a string note name (e.g. "C", "F#")
-  const sharpIdx = keyName.indexOf("#");
-  let baseNote = keyName.charAt(0).toUpperCase();
-  if (sharpIdx > 0) baseNote += "#";
-  const pc = noteNames.indexOf(baseNote);
-  pitchClass = pc >= 0 ? pc : 0;
-  const mode: 0 | 1 = scale === "major" ? 1 : 0;
-
-  const camelot = pitchToCamelot(pitchClass, mode);
-  keyResult.delete?.();
-
-  // Energy and loudness from mono data
-  const energy = computeEnergy(monoData);
-  const loudness = computeLoudness(monoData);
-  const danceability = computeDanceability(monoData, sampleRate, bpm);
-
-  onProgress?.({
-    stage: "done",
-    message: "Analisi completata!",
-    progress: 1,
-  });
-
-  return {
-    bpm,
-    bpmConfidence: bpm > 0 ? 0.85 : 0,
-    key: {
-      pitchClass,
-      mode,
-      camelot: camelot.code,
-      name: camelot.name,
-      confidence: 0.8,
-    },
-    energy,
-    danceability,
-    loudness,
-    duration: audioBuffer.duration,
-    analysisSource: "essentia",
-    analysisDate: new Date().toISOString(),
-  };
+  // Use shared analysis core
+  return analyzeAudioBufferInternal(audioBytes, onProgress);
 }
 
 // ==================== DEMO-LABEL MATCHING ====================

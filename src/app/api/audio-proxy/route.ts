@@ -102,6 +102,83 @@ function isDirectAudioUrl(url: string): boolean {
   return /\.(mp3|wav|m4a|ogg|flac|aac)(\?|$)/i.test(url);
 }
 
+/**
+ * Fallback SoundCloud resolver: fetches the track page HTML and extracts
+ * the embedded JSON hydration data which contains stream URLs.
+ *
+ * SoundCloud embeds a JSON object in window.__sc_hydration = [...]
+ * that includes a "sound" object with media.transcodings[].
+ * Each transcoding has a URL that returns the actual stream URL when fetched
+ * with a client_id parameter.
+ */
+async function resolveSoundCloudViaHtml(
+  trackUrl: string
+): Promise<string | null> {
+  try {
+    const resp = await fetch(trackUrl, {
+      headers: {
+        "User-Agent":
+          "Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36",
+        Accept: "text/html,application/xhtml+xml",
+        "Accept-Language": "en-US,en;q=0.9",
+      },
+    });
+
+    if (!resp.ok) return null;
+    const html = await resp.text();
+
+    // Look for the hydration JSON blob: window.__sc_hydration = [...]
+    const hydrationMatch = html.match(
+      /window\.__sc_hydration\s*=\s*(\[[\s\S]*?\]);/
+    );
+    if (!hydrationMatch) return null;
+
+    let hydration: any[];
+    try {
+      hydration = JSON.parse(hydrationMatch[1]);
+    } catch {
+      return null;
+    }
+
+    // Find the "sound" hydration entry
+    const soundEntry = hydration.find(
+      (h: any) => h?.hydratable === "sound" && h?.data?.media?.transcodings
+    );
+    if (!soundEntry) return null;
+
+    const transcodings = soundEntry.data.media.transcodings;
+    if (!Array.isArray(transcodings) || transcodings.length === 0) return null;
+
+    // Prefer progressive MP3, fallback to first transcoding
+    const progressiveMp3 = transcodings.find(
+      (t: any) =>
+        t.format?.protocol === "progressive" &&
+        t.format?.mime_type === "audio/mpeg"
+    );
+    const chosen = progressiveMp3 || transcodings[0];
+    if (!chosen?.url) return null;
+
+    // The transcoding URL is an API endpoint that returns the stream URL
+    // Try with each client_id
+    for (const clientId of SOUNDCLOUD_CLIENT_IDS) {
+      try {
+        const streamResp = await fetch(`${chosen.url}?client_id=${clientId}`, {
+          headers: { Accept: "application/json" },
+        });
+        if (!streamResp.ok) continue;
+        const streamData = await streamResp.json();
+        if (streamData.url) return streamData.url;
+      } catch {
+        continue;
+      }
+    }
+
+    return null;
+  } catch {
+    return null;
+  }
+}
+
 export async function GET(req: NextRequest) {
   const url = new URL(req.url);
   const targetUrl = url.searchParams.get("url");
@@ -118,12 +195,17 @@ export async function GET(req: NextRequest) {
   try {
     // Step 1: Resolve SoundCloud URLs to a direct stream URL
     if (isSoundCloudUrl(targetUrl)) {
+      // Try API resolve first
       audioUrl = await resolveSoundCloudUrl(targetUrl);
+      // If API fails, try HTML scraping fallback
+      if (!audioUrl) {
+        audioUrl = await resolveSoundCloudViaHtml(targetUrl);
+      }
       if (!audioUrl) {
         return NextResponse.json(
           {
             error:
-              "Unable to resolve SoundCloud URL. The track may not be streamable, or SoundCloud has blocked this method.",
+              "Impossibile risolvere il link SoundCloud. SoundCloud ha bloccato l'accesso automatico. Prova a caricare direttamente il file audio usando il pulsante 'Carica file'.",
           },
           { status: 502 }
         );
@@ -132,7 +214,7 @@ export async function GET(req: NextRequest) {
       audioUrl = targetUrl;
     } else {
       return NextResponse.json(
-        { error: "URL must be a SoundCloud track URL or a direct audio file URL" },
+        { error: "L'URL deve essere un link SoundCloud o un file audio diretto (mp3, wav, m4a, ecc.)" },
         { status: 400 }
       );
     }
