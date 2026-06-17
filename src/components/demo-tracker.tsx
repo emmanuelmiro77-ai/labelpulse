@@ -25,6 +25,10 @@ import {
   FileText,
   Music2,
   ArrowLeft,
+  Zap,
+  Activity,
+  Loader2,
+  X,
 } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Badge } from "@/components/ui/badge";
@@ -117,6 +121,15 @@ export function DemoTracker() {
   const [formGenre, setFormGenre] = useState("");
   const [formBpm, setFormBpm] = useState("");
   const [formKey, setFormKey] = useState("");
+  // Audio analysis state
+  const [isAnalyzing, setIsAnalyzing] = useState(false);
+  const [analysisProgress, setAnalysisProgress] = useState<{
+    stage: string;
+    message: string;
+    progress: number;
+  } | null>(null);
+  const [analysisError, setAnalysisError] = useState<string | null>(null);
+  const [formAnalysis, setFormAnalysis] = useState<Demo["analysis"] | null>(null);
 
   const filteredDemos = useMemo(() => {
     return demos.filter((d) => {
@@ -157,6 +170,9 @@ export function DemoTracker() {
     setFormGenre("");
     setFormBpm("");
     setFormKey("");
+    setFormAnalysis(null);
+    setAnalysisError(null);
+    setAnalysisProgress(null);
   };
 
   const openAdd = () => { resetForm(); setEditingDemo(null); setShowAddDialog(true); };
@@ -172,6 +188,9 @@ export function DemoTracker() {
     setFormGenre(demo.genre || "");
     setFormBpm(demo.bpm || "");
     setFormKey(demo.key || "");
+    setFormAnalysis(demo.analysis || null);
+    setAnalysisError(null);
+    setAnalysisProgress(null);
     setEditingDemo(demo);
     setShowAddDialog(true);
   };
@@ -191,11 +210,44 @@ export function DemoTracker() {
       genre: formGenre.trim(),
       bpm: formBpm.trim(),
       key: formKey.trim(),
+      analysis: formAnalysis || undefined,
     };
     if (editingDemo) { updateDemo(editingDemo.id, data); }
     else { addDemo(data); }
     setShowAddDialog(false);
     resetForm();
+  };
+
+  const handleAnalyze = async () => {
+    const audioSourceUrl = formLink.trim() || (formLinks.find(l => l.type === "soundcloud" || l.type === "audio")?.value?.trim() ?? "");
+    if (!audioSourceUrl) {
+      setAnalysisError("Inserisci un link SoundCloud o URL audio diretto nel campo sopra");
+      return;
+    }
+    setIsAnalyzing(true);
+    setAnalysisError(null);
+    setAnalysisProgress({ stage: "fetching", message: "Inizio...", progress: 0 });
+    try {
+      // Dynamic import to keep the initial bundle small
+      const { analyzeAudio, analyzeWithCyanite } = await import("@/lib/audio-analysis");
+      const cyaniteToken = (userProfile as any)?.cyaniteApiToken?.trim?.() || "";
+      const result = cyaniteToken
+        ? await analyzeWithCyanite(audioSourceUrl, cyaniteToken, (p) => setAnalysisProgress(p))
+        : await analyzeAudio(audioSourceUrl, (p) => setAnalysisProgress(p));
+      setFormAnalysis(result);
+      // Auto-fill BPM and key if empty or always update with analysis values
+      setFormBpm(String(result.bpm));
+      setFormKey(result.key.name);
+      setAnalysisProgress({ stage: "done", message: "Analisi completata!", progress: 1 });
+      // Clear progress after 2 seconds
+      setTimeout(() => setAnalysisProgress(null), 2000);
+    } catch (err: any) {
+      console.error("[analyze]", err);
+      setAnalysisError(err?.message || "Errore durante l'analisi");
+      setAnalysisProgress(null);
+    } finally {
+      setIsAnalyzing(false);
+    }
   };
 
   const canAdvance = (status: DemoStatus) => STATUS_FLOW.indexOf(status) < STATUS_FLOW.length - 1;
@@ -397,6 +449,16 @@ export function DemoTracker() {
                             <FileText className="h-2.5 w-2.5" /> {t(locale, "demos.hasPitch")}
                           </div>
                         )}
+                        {demo.analysis && (
+                          <div className="flex items-center gap-1.5 text-[10px] text-muted-foreground pt-0.5">
+                            <Activity className={`h-2.5 w-2.5 ${demo.analysis.analysisSource === "cyanite" ? "text-primary" : "text-emerald-400"}`} />
+                            <span className="font-mono">
+                              {demo.analysis.bpm} BPM · {demo.analysis.key.camelot}
+                            </span>
+                            <span className="text-muted-foreground/60">·</span>
+                            <span>{Math.round(demo.analysis.energy * 100)}% E</span>
+                          </div>
+                        )}
                         {isOverdue && (
                           <div className="flex items-center gap-1 text-[11px] text-amber-400 font-medium">
                             <AlertTriangle className="h-3 w-3" />
@@ -588,6 +650,115 @@ export function DemoTracker() {
                 <Input value={formKey} onChange={(e) => setFormKey(e.target.value)} placeholder="Am" className="bg-secondary/50" />
               </div>
             </div>
+
+            {/* Audio Analysis */}
+            <div className="space-y-2 rounded-md border border-primary/30 bg-primary/5 p-3">
+              <div className="flex items-center justify-between gap-2 flex-wrap">
+                <div className="flex items-center gap-2">
+                  <Activity className="h-3.5 w-3.5 text-primary" />
+                  <span className="text-xs font-mono uppercase text-primary">Analisi Audio</span>
+                  {formAnalysis && (
+                    <Badge variant="outline" className="text-[10px] bg-primary/10 border-primary/30 text-primary">
+                      {formAnalysis.analysisSource === "cyanite" ? "Cyanite" : "Free"}
+                    </Badge>
+                  )}
+                </div>
+                <Button
+                  type="button"
+                  variant="default"
+                  size="sm"
+                  onClick={handleAnalyze}
+                  disabled={isAnalyzing || (!formLink.trim() && !formLinks.some(l => l.value.trim()))}
+                  className="h-7 text-xs"
+                >
+                  {isAnalyzing ? (
+                    <>
+                      <Loader2 className="h-3 w-3 mr-1 animate-spin" /> Analisi...
+                    </>
+                  ) : (
+                    <>
+                      <Zap className="h-3 w-3 mr-1" /> Analizza
+                    </>
+                  )}
+                </Button>
+              </div>
+
+              {/* Progress bar */}
+              {analysisProgress && analysisProgress.stage !== "done" && (
+                <div className="space-y-1">
+                  <div className="flex items-center justify-between text-[10px] text-muted-foreground">
+                    <span>{analysisProgress.message}</span>
+                    <span>{Math.round(analysisProgress.progress * 100)}%</span>
+                  </div>
+                  <div className="h-1 bg-secondary rounded-full overflow-hidden">
+                    <div
+                      className="h-full bg-primary transition-all"
+                      style={{ width: `${analysisProgress.progress * 100}%` }}
+                    />
+                  </div>
+                </div>
+              )}
+
+              {/* Error */}
+              {analysisError && (
+                <div className="flex items-start gap-1.5 text-[11px] text-destructive">
+                  <AlertTriangle className="h-3 w-3 mt-0.5 shrink-0" />
+                  <span>{analysisError}</span>
+                </div>
+              )}
+
+              {/* Results */}
+              {formAnalysis && (
+                <div className="space-y-2">
+                  <div className="grid grid-cols-4 gap-2 text-center">
+                    <div className="bg-secondary/40 rounded p-1.5">
+                      <p className="text-[9px] text-muted-foreground uppercase">BPM</p>
+                      <p className="text-sm font-mono font-semibold text-primary">{formAnalysis.bpm}</p>
+                    </div>
+                    <div className="bg-secondary/40 rounded p-1.5">
+                      <p className="text-[9px] text-muted-foreground uppercase">Key</p>
+                      <p className="text-sm font-mono font-semibold text-primary">{formAnalysis.key.camelot}</p>
+                    </div>
+                    <div className="bg-secondary/40 rounded p-1.5">
+                      <p className="text-[9px] text-muted-foreground uppercase">Energy</p>
+                      <p className="text-sm font-mono font-semibold text-primary">{Math.round(formAnalysis.energy * 100)}%</p>
+                    </div>
+                    <div className="bg-secondary/40 rounded p-1.5">
+                      <p className="text-[9px] text-muted-foreground uppercase">Dance</p>
+                      <p className="text-sm font-mono font-semibold text-primary">{Math.round(formAnalysis.danceability * 100)}%</p>
+                    </div>
+                  </div>
+                  <div className="flex items-center justify-between text-[10px] text-muted-foreground">
+                    <span>{formAnalysis.key.name}</span>
+                    <span>{Math.round(formAnalysis.duration)}s · {formAnalysis.loudness} dBFS</span>
+                  </div>
+                  {formAnalysis.analysisSource === "cyanite" && formAnalysis.cyaniteGenre && (
+                    <div className="text-[10px] text-muted-foreground">
+                      <span className="text-primary/70">Genere (Cyanite):</span> {formAnalysis.cyaniteGenre}
+                    </div>
+                  )}
+                  {formAnalysis.analysisSource === "cyanite" && formAnalysis.cyaniteMoods && formAnalysis.cyaniteMoods.length > 0 && (
+                    <div className="text-[10px] text-muted-foreground">
+                      <span className="text-primary/70">Mood:</span> {formAnalysis.cyaniteMoods.join(", ")}
+                    </div>
+                  )}
+                  {formAnalysis.analysisSource === "cyanite" && formAnalysis.cyaniteInstruments && formAnalysis.cyaniteInstruments.length > 0 && (
+                    <div className="text-[10px] text-muted-foreground">
+                      <span className="text-primary/70">Strumenti:</span> {formAnalysis.cyaniteInstruments.join(", ")}
+                    </div>
+                  )}
+                </div>
+              )}
+
+              <p className="text-[10px] text-muted-foreground leading-tight">
+                {userProfile.cyaniteApiToken ? (
+                  <>Analisi avanzata con <span className="text-primary">Cyanite</span> (BYOK). Rimuovi il token dal Profilo per usare l'analisi gratuita.</>
+                ) : (
+                  <>Analisi gratuita in-browser (BPM, key, energia). Per genere/mood/strumenti, aggiungi un token <span className="text-primary">Cyanite</span> nel Profilo.</>
+                )}
+              </p>
+            </div>
+
             <div className="grid grid-cols-2 gap-3">
               <div className="space-y-1.5">
                 <UILabel className="text-xs font-mono uppercase text-muted-foreground">{t(locale, "demos.dateSent")}</UILabel>

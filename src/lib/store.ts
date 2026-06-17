@@ -75,6 +75,27 @@ export interface Demo {
   genre: string; // demo genre
   bpm: string;
   key: string;
+  // Audio analysis (free in-browser or Cyanite BYOK)
+  analysis?: {
+    bpm: number;
+    bpmConfidence: number;
+    key: {
+      pitchClass: number;
+      mode: 0 | 1;
+      camelot: string;
+      name: string;
+      confidence: number;
+    };
+    energy: number;
+    danceability: number;
+    loudness: number;
+    duration: number;
+    analysisSource: "essentia" | "cyanite";
+    analysisDate: string;
+    cyaniteGenre?: string;
+    cyaniteMoods?: string[];
+    cyaniteInstruments?: string[];
+  };
 }
 
 // ==================== HELPERS ====================
@@ -311,6 +332,7 @@ interface UserProfile {
   email: string;
   photoUrl: string;
   links: { type: string; value: string }[];
+  cyaniteApiToken: string; // BYOK: user's Cyanite API token (optional)
 }
 
 interface GmailAuth {
@@ -511,7 +533,7 @@ export const useAppStore = create<AppState>()(
       demos: [] as Demo[],
       activeTab: "dashboard" as const,
       locale: "it" as Locale,
-      userProfile: { artistName: "", scLink: "", bio: "", email: "", photoUrl: "", links: [] } as UserProfile,
+      userProfile: { artistName: "", scLink: "", bio: "", email: "", photoUrl: "", links: [], cyaniteApiToken: "" } as UserProfile,
       gmailAuth: { isConnected: false, email: "", accessToken: "", expiresAt: 0 } as GmailAuth,
       rankingsUpdatedAt: null as string | null,
       lastSavedAt: null as string | null,
@@ -878,7 +900,10 @@ export const useAppStore = create<AppState>()(
             persisted.locale = "it";
           }
           if (!persisted.userProfile) {
-            persisted.userProfile = { artistName: "", scLink: "" };
+            persisted.userProfile = { artistName: "", scLink: "", cyaniteApiToken: "" };
+          }
+          if (!persisted.userProfile.cyaniteApiToken) {
+            persisted.userProfile.cyaniteApiToken = "";
           }
         }
         if (version < 6) {

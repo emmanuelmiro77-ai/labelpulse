@@ -455,6 +455,79 @@ export function ProducerProfile() {
           )}
         </CardContent>
       </Card>
+
+      {/* ==================== INTEGRATIONS SECTION ==================== */}
+      <Card className="bg-card/60 border-border/40">
+        <CardContent className="p-6">
+          <div className="flex items-center justify-between mb-4">
+            <p className="text-[10px] uppercase tracking-wider font-medium text-muted-foreground">
+              Integrazioni Audio
+            </p>
+          </div>
+          <div className="space-y-4">
+            {/* Cyanite BYOK */}
+            <div className="space-y-2">
+              <div className="flex items-start justify-between gap-3">
+                <div>
+                  <p className="text-sm font-semibold flex items-center gap-1.5">
+                    <span className="bg-gradient-to-r from-cyan-400 to-purple-400 bg-clip-text text-transparent">Cyanite</span>
+                    <span className="text-[9px] uppercase tracking-wider bg-secondary/60 px-1.5 py-0.5 rounded text-muted-foreground">BYOK</span>
+                  </p>
+                  <p className="text-[11px] text-muted-foreground mt-1">
+                    Analisi audio avanzata: BPM, key, genere, mood, strumenti.
+                    Senza token, LabelPulse usa un'analisi gratuita in-browser (solo BPM, key, energia).
+                  </p>
+                </div>
+              </div>
+              <div className="space-y-1.5">
+                <Input
+                  type="password"
+                  defaultValue={userProfile.cyaniteApiToken || ""}
+                  onBlur={(e) => {
+                    if ((userProfile.cyaniteApiToken || "") !== e.target.value) {
+                      setUserProfile({ cyaniteApiToken: e.target.value.trim() });
+                      triggerSaved();
+                    }
+                  }}
+                  placeholder="Token API Cyanite (opzionale) — inizia per sb_publishable_..."
+                  className="bg-secondary/50 font-mono text-xs"
+                />
+                <p className="text-[10px] text-muted-foreground">
+                  Ottieni il token da{" "}
+                  <a
+                    href="https://cyanite.ai/"
+                    target="_blank"
+                    rel="noopener noreferrer"
+                    className="text-primary hover:underline"
+                  >
+                    cyanite.ai
+                  </a>{" "}
+                  → Account → API. Lascia vuoto per usare l'analisi gratuita.
+                </p>
+              </div>
+              {userProfile.cyaniteApiToken && (
+                <div className="flex items-center justify-between gap-2 p-2 rounded bg-emerald-500/10 border border-emerald-500/20">
+                  <span className="text-[11px] text-emerald-400 flex items-center gap-1.5">
+                    <span className="h-1.5 w-1.5 rounded-full bg-emerald-400" />
+                    Cyanite attivo — l'analisi userà il tuo account
+                  </span>
+                  <Button
+                    variant="ghost"
+                    size="sm"
+                    className="h-6 text-[10px] text-destructive hover:bg-destructive/10"
+                    onClick={() => {
+                      setUserProfile({ cyaniteApiToken: "" });
+                      triggerSaved();
+                    }}
+                  >
+                    Rimuovi token
+                  </Button>
+                </div>
+              )}
+            </div>
+          </div>
+        </CardContent>
+      </Card>
     </div>
   );
 }
