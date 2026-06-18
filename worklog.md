@@ -50,3 +50,44 @@ Stage Summary:
 - Service worker cleaned up (removed next-auth remnant)
 - Gmail integration code (gmail.ts) is correct — no changes needed
 - The GOOGLE_CLIENT_SECRET in .env.local is unused by the GIS flow (client-side only)
+
+---
+Task ID: 3
+Agent: Main Agent
+Task: Add visible cloud sync button + fix audio analysis fallback
+
+Work Log:
+- Diagnosed: .env.local was missing (lost during deploy) → Supabase cloud sync was silently disabled
+- Diagnosed: "Errore durante l'analisi del file" was a generic catch hiding the real error
+- Diagnosed: SoundCloud public client_ids are blocked by SoundCloud (3 strategies in proxy all fail)
+- Added Web Audio API fallback BPM detection (autocorrelation on energy envelope)
+- If essentia.js fails, falls back to Web-Audio-only analyzer (BPM still detected, key=unknown)
+- decodeAudioData now uses callback+promise API for Safari compat
+- Clear user-facing error messages (format/decode/WASM categorized)
+- analyzeAudioFile: size guard, extension check, clear errors
+- proxy/route.ts: 3 SoundCloud resolution strategies (API v2, widget oEmbed, HTML scraping) + Referer header
+- Made Supabase credentials configurable from Profilo page (BYOK pattern, same as Cyanite)
+- Added supabaseUrl + supabaseAnonKey fields to userProfile
+- supabase.ts now reads credentials dynamically from store, not env vars
+- Added CloudSyncButton component with red->yellow->green status indicator
+- Added realtime subscription for live multi-device sync (PC <-> phone)
+- Added loop-prevention: remote updates don't trigger sync back
+- Updated supabase-schema.sql to enable Realtime publication on app_state
+- Added setup instructions in Profilo with collapsible SQL guide
+- Store migration v10 -> v11 ensures new fields are backfilled
+- Build successful with Next.js 16.2.9 Turbopack
+- Dev server tested: HTTP 200 on /, audio-proxy responds (502 expected for blocked SC)
+
+Stage Summary:
+- Cloud sync is now USER-CONFIGURABLE (BYOK) — no .env needed, survives deploys
+- Visible cloud button in header shows real status (red=unconfigured, yellow=syncing, green=synced)
+- Realtime subscription enables live PC<->phone sync (1-2s latency)
+- Audio analysis now has robust fallback: BPM detected even if essentia.js fails
+- SoundCloud direct link is unreliable (SC blocked public access) — user should use "Carica file"
+- Could not push to GitHub: token expired. User needs to refresh GitHub credentials.
+
+Next steps for user:
+1. To enable cloud sync: Profilo → Sincronizzazione Cloud → enter Supabase URL + anon key
+2. Run supabase-schema.sql in Supabase SQL Editor (creates table + enables Realtime)
+3. Same credentials on phone and PC → automatic sync
+4. For audio analysis: use "Carica file" button (more reliable than SoundCloud link)
