@@ -981,12 +981,38 @@ export const useAppStore = create<AppState>()(
           const isRankingsImport = parsed._meta?.source === 'beatport' || parsed._meta?.source === 'beatstats';
           const hasGenresAndLabels = parsed.genres && parsed.labels && Array.isArray(parsed.labels);
 
-          // Before overwriting ranking data, save a snapshot of current rankings for historical tracking
+          // === BUILD SNAPSHOT OF THIS IMPORT ===
+          // Create ONE snapshot representing the state AFTER this import (the
+          // merged labels). For Beatstats historical imports, use _meta.scrapedPeriod
+          // as the timestamp so the snapshot is correctly dated in the past
+          // (e.g., 2024-12-31T23:59:59Z for "December 2024"). This lets the user
+          // build up months/years of historical rankings in minutes and have them
+          // sort chronologically in the Classifiche page period filters.
+          //
+          // CRITICAL FIX: the previous implementation created the snapshot via a
+          // separate `set()` call BEFORE the final `set()`, but the final `set()`
+          // overwrote rankingSnapshots with `mergedSnapshots` (which did NOT
+          // include the pre-merge snapshot). Result: every import's snapshot was
+          // silently discarded. The user's "storico caricamenti" never accumulated
+          // — explaining the original data-loss report.
+          let snapshotOfThisImport: RankingSnapshot | null = null;
           if (isRankingsImport || hasGenresAndLabels) {
-            const currentLabels = get().labels;
-            const snapshotId = genId();
+            const source = parsed._meta?.source || 'import';
+            // For beatstats historical imports, use the scraped period as the
+            // snapshot timestamp. For everything else (beatport current, generic
+            // imports), use "now".
+            const snapshotTimestamp =
+              source === 'beatstats' && parsed._meta?.scrapedPeriod
+                ? parsed._meta.scrapedPeriod
+                : new Date().toISOString();
+
             const snapshotGenres: RankingSnapshot["genres"] = {};
-            for (const label of currentLabels) {
+            // Build from the MERGED labels — this captures the state AS OF this
+            // import (the new rankings are the data we just imported).
+            // Cast to Label[] because earlier merge logic uses untyped maps (TS
+            // infers `unknown[]`); at runtime the array contains valid Label objects.
+            const mergedLabelsForSnapshot = mergedLabels as Label[];
+            for (const label of mergedLabelsForSnapshot) {
               if (!label.rankByGenre || Object.keys(label.rankByGenre).length === 0) continue;
               for (const genre of Object.keys(label.rankByGenre)) {
                 if (!snapshotGenres[genre]) snapshotGenres[genre] = {};
@@ -996,42 +1022,39 @@ export const useAppStore = create<AppState>()(
                 };
               }
             }
-            const snapshot: RankingSnapshot = {
-              id: snapshotId,
-              timestamp: new Date().toISOString(),
-              source: parsed._meta?.source || 'import',
+            snapshotOfThisImport = {
+              id: genId(),
+              timestamp: snapshotTimestamp,
+              source,
               genres: snapshotGenres,
             };
-
-            set((state) => ({
-              rankingSnapshots: [...(state.rankingSnapshots || []), snapshot],
-            }));
           }
 
           // === SNAPSHOT MERGE ===
           // Never let an import wipe existing snapshots. Merge by id+timestamp+source.
-          // Also fold in the sidecar backup (emergency backup slot) so a re-import
-          // after a data-loss event can still recover whatever survived.
+          // Sources merged:
+          //   1. currentSnapshots  — already in the live store
+          //   2. snapshotOfThisImport — the snapshot we just built for THIS import
+          //   3. importedSnapshots — from the backup file (if user is restoring a backup)
+          //   4. sidecarSnaps     — from the emergency backup slot (labelpulse-snapshots-backup)
+          // mergeSnapshots dedupes by id first, then by `timestamp|source`. This
+          // means re-importing the same Beatstats period (e.g., "Dec 2024" twice)
+          // is idempotent — the second import does not create a duplicate.
           const sidecarSnaps =
             typeof window !== "undefined"
               ? extractSnapshotsFromRaw(safeLocalStorageGet(SNAPSHOTS_BACKUP_KEY))
               : [];
+          const thisSnapshotArr = snapshotOfThisImport ? [snapshotOfThisImport] : [];
+          // Order matters for dedup: we want currentSnapshots + thisSnapshot first
+          // (so the just-imported snapshot wins over a duplicate from the backup
+          // file or sidecar — the user's fresh data should be the source of truth).
           const mergedSnapshots = mergeSnapshots(
-            currentSnapshots,
+            mergeSnapshots(currentSnapshots, thisSnapshotArr),
             mergeSnapshots(importedSnapshots, sidecarSnaps)
           );
-          if (
-            mergedSnapshots.length === 0 &&
-            currentSnapshots.length === 0 &&
-            importedSnapshots.length === 0 &&
-            sidecarSnaps.length === 0 &&
-            (isRankingsImport || hasGenresAndLabels)
-          ) {
-            // First-ever rankings import on a fresh install — nothing to recover.
-          }
-          if (mergedSnapshots.length !== currentSnapshots.length) {
+          if (snapshotOfThisImport) {
             console.info(
-              `[LabelPulse Import] Snapshots: ${currentSnapshots.length} → ${mergedSnapshots.length} (after merge with ${importedSnapshots.length} from backup + ${sidecarSnaps.length} from sidecar)`
+              `[LabelPulse Import] Created snapshot: source=${snapshotOfThisImport.source}, timestamp=${snapshotOfThisImport.timestamp}, genres=${Object.keys(snapshotOfThisImport.genres).length}. Total snapshots: ${currentSnapshots.length} → ${mergedSnapshots.length}.`
             );
           }
 
@@ -1041,13 +1064,16 @@ export const useAppStore = create<AppState>()(
             userProfile: userProfile || get().userProfile,
             locale: importedLocale || get().locale,
             rankingSnapshots: mergedSnapshots,
-            // Preserve rankingsUpdatedAt from the backup if the backup has one
-            // and the current store does not. Otherwise keep the current value.
+            // For beatstats historical imports, use scrapedPeriod as rankingsUpdatedAt
+            // so the UI shows the actual period of the data (e.g., "dicembre 2024").
+            // For everything else, use "now".
             rankingsUpdatedAt:
-              parsed.data?.rankingsUpdatedAt ||
-              (isRankingsImport || hasGenresAndLabels
-                ? new Date().toISOString()
-                : get().rankingsUpdatedAt),
+              parsed._meta?.source === 'beatstats' && parsed._meta?.scrapedPeriod
+                ? parsed._meta.scrapedPeriod
+                : (parsed.data?.rankingsUpdatedAt ||
+                  (isRankingsImport || hasGenresAndLabels
+                    ? new Date().toISOString()
+                    : get().rankingsUpdatedAt)),
             lastSavedAt: new Date().toISOString(),
           });
           syncToCloud();
