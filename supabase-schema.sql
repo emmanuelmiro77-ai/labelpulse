@@ -29,3 +29,23 @@ ON CONFLICT (id) DO NOTHING;
 
 -- Indice per velocizzare le query
 CREATE INDEX IF NOT EXISTS idx_app_state_updated_at ON app_state (updated_at);
+
+-- ========================================
+-- REALTIME: abilita le notifiche per la sincronizzazione tra device
+-- ========================================
+-- Senza questo blocco, l'app deve fare polling per vedere le modifiche fatte
+-- da altri dispositivi. Con Realtime, riceve una notifica push nell'arco di
+-- 1-2 secondi quando PC/telefono salva qualcosa.
+
+-- Aggiungi la tabella app_state alla pubblicazione "supabase_realtime"
+-- (default di Supabase). Se la pubblicazione non esiste, creala.
+DO $$
+BEGIN
+  IF NOT EXISTS (SELECT 1 FROM pg_publication WHERE pubname = 'supabase_realtime') THEN
+    CREATE PUBLICATION supabase_realtime WITH (publish = 'insert, update, delete');
+  END IF;
+END
+$$;
+
+ALTER PUBLICATION supabase_realtime ADD TABLE app_state;
+

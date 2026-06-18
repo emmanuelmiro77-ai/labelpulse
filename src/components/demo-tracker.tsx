@@ -245,13 +245,31 @@ export function DemoTracker() {
       setFormAnalysis(result);
       // Auto-fill BPM and key if empty or always update with analysis values
       setFormBpm(String(result.bpm));
-      setFormKey(result.key.name);
+      // Only auto-fill key if it was actually detected (confidence > 0)
+      if (result.key.confidence > 0) {
+        setFormKey(result.key.name);
+      }
       setAnalysisProgress({ stage: "done", message: "Analisi completata!", progress: 1 });
       // Clear progress after 2 seconds
       setTimeout(() => setAnalysisProgress(null), 2000);
     } catch (err: any) {
       console.error("[analyze]", err);
-      setAnalysisError(err?.message || "Errore durante l'analisi");
+      let userMsg = "Errore durante l'analisi";
+      if (err?.message) {
+        const m = err.message;
+        if (/soundcloud|risolvere/i.test(m)) {
+          userMsg = m; // already user-friendly from proxy
+        } else if (/format|corrupt|decode/i.test(m)) {
+          userMsg = `Il browser non è riuscito a decodificare l'audio scaricato. SoundCloud potrebbe aver restituito un formato non supportato. Prova con 'Carica file'. Dettagli: ${m}`;
+        } else if (/wasm|essentia|memory/i.test(m)) {
+          userMsg = `Errore del motore di analisi: ${m}. Prova con 'Carica file' (più affidabile).`;
+        } else {
+          userMsg = m;
+        }
+      } else if (typeof err === "string") {
+        userMsg = err;
+      }
+      setAnalysisError(userMsg);
       setAnalysisProgress(null);
     } finally {
       setIsAnalyzing(false);
@@ -274,12 +292,29 @@ export function DemoTracker() {
       ]);
       setFormAnalysis(result);
       setFormBpm(String(result.bpm));
-      setFormKey(result.key.name);
+      // Only auto-fill key if it was actually detected (confidence > 0)
+      if (result.key.confidence > 0) {
+        setFormKey(result.key.name);
+      }
       setAnalysisProgress({ stage: "done", message: "Analisi completata!", progress: 1 });
       setTimeout(() => setAnalysisProgress(null), 2000);
     } catch (err: any) {
       console.error("[analyze file]", err);
-      setAnalysisError(err?.message || "Errore durante l'analisi del file");
+      // Build a clear user-facing message
+      let userMsg = "Errore durante l'analisi del file";
+      if (err?.message) {
+        const m = err.message;
+        if (/format|corrupt|decode/i.test(m)) {
+          userMsg = `Formato non supportato o file corrotto: ${m}`;
+        } else if (/wasm|essentia|memory/i.test(m)) {
+          userMsg = `Errore interno del motore di analisi (essentia.js): ${m}. Prova con un file più piccolo o un formato diverso (MP3 consigliato).`;
+        } else {
+          userMsg = m;
+        }
+      } else if (typeof err === "string") {
+        userMsg = err;
+      }
+      setAnalysisError(userMsg);
       setAnalysisProgress(null);
     } finally {
       setIsAnalyzing(false);

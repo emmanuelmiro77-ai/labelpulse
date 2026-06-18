@@ -528,6 +528,129 @@ export function ProducerProfile() {
           </div>
         </CardContent>
       </Card>
+
+      {/* ==================== CLOUD SYNC SECTION ==================== */}
+      <Card className="bg-card/60 border-border/40">
+        <CardContent className="p-6">
+          <div className="flex items-center justify-between mb-4">
+            <p className="text-[10px] uppercase tracking-wider font-medium text-muted-foreground">
+              Sincronizzazione Cloud
+            </p>
+          </div>
+          <div className="space-y-4">
+            <div>
+              <p className="text-sm font-semibold flex items-center gap-1.5">
+                <span className="bg-gradient-to-r from-emerald-400 to-cyan-400 bg-clip-text text-transparent">Supabase</span>
+                <span className="text-[9px] uppercase tracking-wider bg-secondary/60 px-1.5 py-0.5 rounded text-muted-foreground">BYOK</span>
+              </p>
+              <p className="text-[11px] text-muted-foreground mt-1 leading-relaxed">
+                Sincronizza demo, label, pitch e profilo tra PC e telefono in tempo reale.
+                Crea un account gratuito su{" "}
+                <a
+                  href="https://supabase.com"
+                  target="_blank"
+                  rel="noopener noreferrer"
+                  className="text-primary hover:underline"
+                >
+                  supabase.com
+                </a>{" "}
+                → New Project → Project Settings → API. Copia la
+                <strong className="text-foreground"> Project URL</strong> e la <strong className="text-foreground">anon key</strong> qui sotto.
+                Usa le stesse credenziali su tutti i tuoi dispositivi.
+              </p>
+            </div>
+
+            <div className="space-y-2">
+              <label className="text-[10px] uppercase tracking-wider font-medium text-muted-foreground">
+                Project URL
+              </label>
+              <Input
+                type="text"
+                defaultValue={userProfile.supabaseUrl || ""}
+                onBlur={(e) => {
+                  const v = e.target.value.trim();
+                  if ((userProfile.supabaseUrl || "") !== v) {
+                    setUserProfile({ supabaseUrl: v });
+                    triggerSaved();
+                  }
+                }}
+                placeholder="https://tuo-progetto.supabase.co"
+                className="bg-secondary/50 font-mono text-xs"
+              />
+            </div>
+
+            <div className="space-y-2">
+              <label className="text-[10px] uppercase tracking-wider font-medium text-muted-foreground">
+                Anon Key
+              </label>
+              <Input
+                type="password"
+                defaultValue={userProfile.supabaseAnonKey || ""}
+                onBlur={(e) => {
+                  const v = e.target.value.trim();
+                  if ((userProfile.supabaseAnonKey || "") !== v) {
+                    setUserProfile({ supabaseAnonKey: v });
+                    triggerSaved();
+                  }
+                }}
+                placeholder="eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9..."
+                className="bg-secondary/50 font-mono text-xs"
+              />
+              <p className="text-[10px] text-muted-foreground">
+                La anon key è pubblica (sicura nel browser). Non usare la service_role key.
+              </p>
+            </div>
+
+            {/* Setup status */}
+            {userProfile.supabaseUrl && userProfile.supabaseAnonKey ? (
+              <div className="flex items-center justify-between gap-2 p-2 rounded bg-emerald-500/10 border border-emerald-500/20">
+                <span className="text-[11px] text-emerald-400 flex items-center gap-1.5">
+                  <span className="h-1.5 w-1.5 rounded-full bg-emerald-400 animate-pulse" />
+                  Cloud sync attivo — guardia l'icona cloud nell'header per lo stato
+                </span>
+                <Button
+                  variant="ghost"
+                  size="sm"
+                  className="h-6 text-[10px] text-destructive hover:bg-destructive/10"
+                  onClick={() => {
+                    setUserProfile({ supabaseUrl: "", supabaseAnonKey: "" });
+                    triggerSaved();
+                  }}
+                >
+                  Disconnetti
+                </Button>
+              </div>
+            ) : (
+              <div className="p-2 rounded bg-secondary/30 border border-border/30">
+                <p className="text-[11px] text-muted-foreground leading-relaxed">
+                  ℹ️ Una volta inserite le credenziali, l'icona cloud nell'header diventerà
+                  verde e i tuoi dati verranno sincronizzati automaticamente tra tutti i
+                  dispositivi su cui inserirai le stesse credenziali.
+                </p>
+              </div>
+            )}
+
+            {/* SQL setup instructions */}
+            <details className="text-[10px] text-muted-foreground">
+              <summary className="cursor-pointer hover:text-foreground transition-colors">
+                Come creare la tabella su Supabase (primo setup)
+              </summary>
+              <ol className="list-decimal pl-4 mt-2 space-y-1 leading-relaxed">
+                <li>Crea un progetto su{" "}
+                  <a href="https://supabase.com" target="_blank" rel="noopener noreferrer" className="text-primary hover:underline">
+                    supabase.com
+                  </a> (gratuito, 500MB e 50K richieste/mese)
+                </li>
+                <li>Vai su <strong>SQL Editor</strong> → New query</li>
+                <li>Incolla il contenuto di <code className="bg-secondary/50 px-1 rounded">supabase-schema.sql</code> (disponibile nel repo) ed esegui</li>
+                <li>Vai su <strong>Project Settings → API</strong></li>
+                <li>Copia <strong>Project URL</strong> e <strong>anon public key</strong></li>
+                <li>Incollale qui sopra e salva</li>
+              </ol>
+            </details>
+          </div>
+        </CardContent>
+      </Card>
     </div>
   );
 }

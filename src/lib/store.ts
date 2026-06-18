@@ -4,7 +4,7 @@ import { create } from "zustand";
 import { persist, createJSONStorage, StateStorage } from "zustand/middleware";
 import type { Locale } from "./i18n";
 import labelData from "./labels-data.json";
-import { saveStateToCloud, loadStateFromCloud, isSupabaseConfigured } from "./supabase";
+import { saveStateToCloud, loadStateFromCloud, isSupabaseConfigured, isApplyingRemoteUpdate } from "./supabase";
 
 // ==================== TYPES ====================
 
@@ -333,6 +333,8 @@ interface UserProfile {
   photoUrl: string;
   links: { type: string; value: string }[];
   cyaniteApiToken: string; // BYOK: user's Cyanite API token (optional)
+  supabaseUrl: string;     // BYOK: user's Supabase project URL (optional, for cloud sync)
+  supabaseAnonKey: string; // BYOK: user's Supabase anon key (optional, for cloud sync)
 }
 
 interface GmailAuth {
@@ -533,7 +535,7 @@ export const useAppStore = create<AppState>()(
       demos: [] as Demo[],
       activeTab: "dashboard" as const,
       locale: "it" as Locale,
-      userProfile: { artistName: "", scLink: "", bio: "", email: "", photoUrl: "", links: [], cyaniteApiToken: "" } as UserProfile,
+      userProfile: { artistName: "", scLink: "", bio: "", email: "", photoUrl: "", links: [], cyaniteApiToken: "", supabaseUrl: "", supabaseAnonKey: "" } as UserProfile,
       gmailAuth: { isConnected: false, email: "", accessToken: "", expiresAt: 0 } as GmailAuth,
       rankingsUpdatedAt: null as string | null,
       lastSavedAt: null as string | null,
@@ -859,7 +861,7 @@ export const useAppStore = create<AppState>()(
     }),
     {
       name: PRIMARY_KEY,
-      version: 10,
+      version: 11,
       storage: createJSONStorage(() => robustStorage),
       migrate: (persisted: any, version: number) => {
         if (version < 5) {
@@ -900,10 +902,16 @@ export const useAppStore = create<AppState>()(
             persisted.locale = "it";
           }
           if (!persisted.userProfile) {
-            persisted.userProfile = { artistName: "", scLink: "", cyaniteApiToken: "" };
+            persisted.userProfile = { artistName: "", scLink: "", cyaniteApiToken: "", supabaseUrl: "", supabaseAnonKey: "" };
           }
           if (!persisted.userProfile.cyaniteApiToken) {
             persisted.userProfile.cyaniteApiToken = "";
+          }
+          if (!persisted.userProfile.supabaseUrl) {
+            persisted.userProfile.supabaseUrl = "";
+          }
+          if (!persisted.userProfile.supabaseAnonKey) {
+            persisted.userProfile.supabaseAnonKey = "";
           }
         }
         if (version < 6) {
@@ -938,6 +946,17 @@ export const useAppStore = create<AppState>()(
               ...l,
               prevRankByGenre: l.prevRankByGenre || {},
             }));
+          }
+        }
+        if (version < 11) {
+          // Ensure userProfile has the new BYOK cloud sync fields
+          if (persisted.userProfile) {
+            if (!persisted.userProfile.supabaseUrl) {
+              persisted.userProfile.supabaseUrl = "";
+            }
+            if (!persisted.userProfile.supabaseAnonKey) {
+              persisted.userProfile.supabaseAnonKey = "";
+            }
           }
         }
         return persisted;
@@ -1048,7 +1067,9 @@ const CLOUD_SYNC_DEBOUNCE_MS = 3000; // 3 secondi di debounce
  * Chiamata dopo ogni azione utente che modifica i dati.
  */
 export function syncToCloud(): void {
-  if (!isSupabaseConfigured) return;
+  if (!isSupabaseConfigured()) return;
+  // Skip if we're applying a remote update (avoids feedback loop)
+  if (isApplyingRemoteUpdate()) return;
 
   if (_cloudSyncTimer) {
     clearTimeout(_cloudSyncTimer);
@@ -1056,7 +1077,11 @@ export function syncToCloud(): void {
 
   _cloudSyncTimer = setTimeout(async () => {
     _cloudSyncTimer = null;
+    if (isApplyingRemoteUpdate()) return;
     const state = useAppStore.getState();
+    // Update lastSavedAt to track which device last wrote
+    const lastSavedAt = new Date().toISOString();
+    useAppStore.setState({ lastSavedAt });
     const dataToSync = {
       labels: state.labels,
       demos: state.demos,
@@ -1065,7 +1090,7 @@ export function syncToCloud(): void {
       userProfile: state.userProfile,
       gmailAuth: state.gmailAuth,
       rankingsUpdatedAt: state.rankingsUpdatedAt,
-      lastSavedAt: state.lastSavedAt,
+      lastSavedAt,
       rankingSnapshots: state.rankingSnapshots,
     };
     await saveStateToCloud(dataToSync);
@@ -1073,11 +1098,12 @@ export function syncToCloud(): void {
 }
 
 /**
- * Forza la sincronizzazione immediata con Supabae (senza debounce).
+ * Forza la sincronizzazione immediata con Supabase (senza debounce).
  * Usata quando la pagina sta per essere chiusa o nascosta.
  */
 export async function forceCloudSync(): Promise<void> {
-  if (!isSupabaseConfigured) return;
+  if (!isSupabaseConfigured()) return;
+  if (isApplyingRemoteUpdate()) return;
 
   if (_cloudSyncTimer) {
     clearTimeout(_cloudSyncTimer);
@@ -1085,6 +1111,8 @@ export async function forceCloudSync(): Promise<void> {
   }
 
   const state = useAppStore.getState();
+  const lastSavedAt = new Date().toISOString();
+  useAppStore.setState({ lastSavedAt });
   const dataToSync = {
     labels: state.labels,
     demos: state.demos,
@@ -1093,7 +1121,7 @@ export async function forceCloudSync(): Promise<void> {
     userProfile: state.userProfile,
     gmailAuth: state.gmailAuth,
     rankingsUpdatedAt: state.rankingsUpdatedAt,
-    lastSavedAt: state.lastSavedAt,
+    lastSavedAt,
     rankingSnapshots: state.rankingSnapshots,
   };
   await saveStateToCloud(dataToSync);
@@ -1104,7 +1132,7 @@ export async function forceCloudSync(): Promise<void> {
  * Chiamata una volta all'avvio dell'app, dopo la reidratazione da localStorage.
  */
 export async function loadFromCloud(): Promise<void> {
-  if (!isSupabaseConfigured) {
+  if (!isSupabaseConfigured()) {
     console.log("[LabelPulse Cloud] Supabase not configured, skipping cloud load");
     useAppStore.setState({ hasCloudSynced: true });
     return;
@@ -1117,6 +1145,8 @@ export async function loadFromCloud(): Promise<void> {
       console.log("[LabelPulse Cloud] No cloud data, uploading local data as initial sync");
       await forceCloudSync();
       useAppStore.setState({ hasCloudSynced: true });
+      // Setup realtime subscription for future updates
+      setupRealtimeSubscriptionSafe();
       return;
     }
 
@@ -1144,10 +1174,33 @@ export async function loadFromCloud(): Promise<void> {
       console.log("[LabelPulse Cloud] Local data is up to date. Cloud sync complete.");
       useAppStore.setState({ hasCloudSynced: true });
     }
+
+    // Setup realtime subscription to receive future updates from other devices
+    setupRealtimeSubscriptionSafe();
   } catch (err) {
     console.error("[LabelPulse Cloud] Load from cloud failed:", err);
     useAppStore.setState({ hasCloudSynced: true });
   }
+}
+
+/**
+ * Setup the realtime subscription safely (only on client, only if configured).
+ * Re-imported lazily to avoid circular deps at module load.
+ */
+function setupRealtimeSubscriptionSafe(): void {
+  if (typeof window === "undefined") return;
+  if (!isSupabaseConfigured()) return;
+  // Defer to next tick so we don't block the initial render
+  setTimeout(() => {
+    try {
+      // Re-import to avoid circular dependency
+      import("./supabase").then(({ setupRealtimeSubscription }) => {
+        setupRealtimeSubscription();
+      });
+    } catch (err) {
+      console.warn("[LabelPulse Cloud] Realtime subscription setup failed:", err);
+    }
+  }, 100);
 }
 
 /**

@@ -1,7 +1,6 @@
 "use client";
 
 import { useAppStore, loadFromCloud, forceCloudSync } from "@/lib/store";
-import { isSupabaseConfigured } from "@/lib/supabase";
 import { t, LOCALE_NAMES, LOCALE_FLAGS, type Locale } from "@/lib/i18n";
 import {
   LayoutDashboard,
@@ -33,6 +32,7 @@ import { DataBackup } from "@/components/data-backup";
 import { AutoSave } from "@/components/auto-save";
 import { RankingsPage } from "@/components/rankings-page";
 import { ProducerProfile } from "@/components/producer-profile";
+import { CloudSyncButton } from "@/components/cloud-sync-button";
 import { BarChart3 } from "lucide-react";
 
 const NAV_KEYS = [
@@ -192,6 +192,9 @@ export default function Home() {
 
             {/* Gmail Connection */}
             <GmailSettings />
+
+            {/* Cloud Sync (multi-device via Supabase BYOK) */}
+            <CloudSyncButton />
 
             {/* Data Backup */}
             <DataBackup />
