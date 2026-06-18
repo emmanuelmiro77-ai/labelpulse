@@ -119,8 +119,18 @@ CREATE POLICY "Allow anon insert" ON beta_feedback FOR INSERT WITH CHECK (true);
           { status: 500 }
         );
       }
+      // RLS blocking the insert
+      if (error.message.includes("row-level security")) {
+        return NextResponse.json(
+          {
+            error: "RLS is blocking inserts. Run this SQL on Supabase: CREATE POLICY \"Allow anon insert\" ON beta_feedback FOR INSERT WITH CHECK (true);",
+            details: error.message,
+          },
+          { status: 500 }
+        );
+      }
       return NextResponse.json(
-        { error: "Failed to save feedback" },
+        { error: "Failed to save feedback", details: error.message },
         { status: 500 }
       );
     }
