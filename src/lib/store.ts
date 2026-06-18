@@ -1163,6 +1163,31 @@ export async function loadFromCloud(): Promise<void> {
         `[LabelPulse Cloud] Cloud data is newer (cloud: ${cloud.lastSavedAt}, local: ${localState.lastSavedAt}). Updating local store.`
       );
 
+      // SAFETY CHECK: se il cloud è "più recente" ma ha array vuoti dove
+      // il locale ha dati, NON fidarti — è probabile che il cloud sia stato
+      // resettato / corrotto. Mantieni i dati locali e basta.
+      const cloudHasLabels = Array.isArray(cloud.labels) && cloud.labels.length > 0;
+      const cloudHasSnapshots = Array.isArray(cloud.rankingSnapshots) && cloud.rankingSnapshots.length > 0;
+      const cloudHasDemos = Array.isArray(cloud.demos) && cloud.demos.length > 0;
+      const localHasLabels = (localState.labels?.length ?? 0) > 0;
+      const localHasSnapshots = (localState.rankingSnapshots?.length ?? 0) > 0;
+      const localHasDemos = (localState.demos?.length ?? 0) > 0;
+
+      if (
+        (localHasLabels && !cloudHasLabels) ||
+        (localHasSnapshots && !cloudHasSnapshots) ||
+        (localHasDemos && !cloudHasDemos)
+      ) {
+        console.warn(
+          "[LabelPulse Cloud] CLOUD DATA LOSS DETECTED — cloud is newer but has empty arrays where local has data. Skipping merge to preserve local data. Run a manual sync to upload local to cloud."
+        );
+        useAppStore.setState({ hasCloudSynced: true });
+        // Trigger upload of local data so cloud gets repopulated
+        setTimeout(() => forceCloudSync(), 500);
+        setupRealtimeSubscriptionSafe();
+        return;
+      }
+
       // Usa la stessa logica di merge della reidratazione
       const merged = mergeCloudData(cloud, localState);
       useAppStore.setState({
@@ -1206,6 +1231,11 @@ function setupRealtimeSubscriptionSafe(): void {
 /**
  * Merge dei dati cloud con quelli locali, preservando i dati utente.
  * Usa la stessa logica della funzione merge di Zustand persist.
+ *
+ * CRITICAL SAFETY RULE: mai sovrascrivere array locali non-vuoti con
+ * array cloud vuoti. Se il cloud ha perso dati (es. tabella corrotta,
+ * sync parziale, progetto Supabase resettato), non vogliamo propagare
+ * la perdita ai dispositivi che hanno ancora i dati.
  */
 function mergeCloudData(cloudData: any, localState: any): Partial<AppState> {
   const merged: Partial<AppState> = {};
@@ -1232,11 +1262,21 @@ function mergeCloudData(cloudData: any, localState: any): Partial<AppState> {
     // Repair corrupted data
     merged.labels = repairLabelData(merged.labels);
   } else {
+    // Cloud non ha labels (o array vuoto) → mantieni locali
     merged.labels = localState.labels;
   }
 
-  // Demos
-  merged.demos = Array.isArray(cloudData.demos) ? cloudData.demos : localState.demos;
+  // Demos: SOLO se cloud ha effettivamente demos, mantieni locali altrimenti
+  // (before: `Array.isArray(cloudData.demos) ? cloudData.demos : localState.demos`
+  //  sovrascriveva demos locali con [] se cloud aveva demos:[])
+  if (Array.isArray(cloudData.demos) && cloudData.demos.length > 0) {
+    merged.demos = cloudData.demos;
+  } else if (Array.isArray(cloudData.demos) && (!localState.demos || localState.demos.length === 0)) {
+    // Cloud ha demos:[] e locale è vuoto → ok a usare [] (no-op)
+    merged.demos = cloudData.demos;
+  } else {
+    merged.demos = localState.demos;
+  }
 
   // Simple fields
   merged.activeTab = cloudData.activeTab || localState.activeTab;
@@ -1245,7 +1285,19 @@ function mergeCloudData(cloudData: any, localState: any): Partial<AppState> {
   merged.gmailAuth = cloudData.gmailAuth || localState.gmailAuth;
   merged.rankingsUpdatedAt = cloudData.rankingsUpdatedAt ?? localState.rankingsUpdatedAt;
   merged.lastSavedAt = cloudData.lastSavedAt ?? localState.lastSavedAt;
-  merged.rankingSnapshots = Array.isArray(cloudData.rankingSnapshots) ? cloudData.rankingSnapshots : (localState.rankingSnapshots || []);
+
+  // rankingSnapshots: STesso principio — non sovrascrivere snapshots locali
+  // con array vuoto dal cloud. Gli snapshots sono il cuore delle classifiche
+  // storiche, perderli significa perdere mesi di import Beatport/Beatstats.
+  if (Array.isArray(cloudData.rankingSnapshots) && cloudData.rankingSnapshots.length > 0) {
+    merged.rankingSnapshots = cloudData.rankingSnapshots;
+  } else if (Array.isArray(cloudData.rankingSnapshots) && (!localState.rankingSnapshots || localState.rankingSnapshots.length === 0)) {
+    // Cloud vuoto e locale vuoto → ok a usare []
+    merged.rankingSnapshots = cloudData.rankingSnapshots;
+  } else {
+    // Locale ha dati, cloud vuoto → mantieni locali
+    merged.rankingSnapshots = localState.rankingSnapshots || [];
+  }
 
   return merged;
 }

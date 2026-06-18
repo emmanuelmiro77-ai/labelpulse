@@ -451,6 +451,10 @@ export function isApplyingRemoteUpdate(): boolean {
 /**
  * Apply remote data to the local store. Uses the same merge logic
  * as loadFromCloud().
+ *
+ * CRITICAL SAFETY RULE: same as mergeCloudData in store.ts — never
+ * overwrite local non-empty arrays with empty cloud arrays. This is
+ * the realtime-update path, and we want the same protection here.
  */
 function applyRemoteData(cloudData: any): void {
   // Lazy require to avoid circular import
@@ -467,23 +471,22 @@ function applyRemoteData(cloudData: any): void {
     return;
   }
 
-  // Use the existing mergeCloudData by importing it from store
-  // (dynamic to avoid circular deps at module load)
-  // We'll just call setState with the relevant fields.
   const merged: any = {};
 
-  if (cloudData.labels && Array.isArray(cloudData.labels)) {
+  // Labels: only apply if cloud has non-empty labels (don't wipe local)
+  if (cloudData.labels && Array.isArray(cloudData.labels) && cloudData.labels.length > 0) {
     merged.labels = cloudData.labels;
   }
-  if (cloudData.demos && Array.isArray(cloudData.demos)) {
+
+  // Demos: only apply if cloud has non-empty demos OR local is empty
+  if (Array.isArray(cloudData.demos) && (cloudData.demos.length > 0 || !store.demos || store.demos.length === 0)) {
     merged.demos = cloudData.demos;
   }
+
   if (cloudData.userProfile) {
     // Preserve BYOK credentials — never overwrite with cloud versions
-    // (they're already the same since they ARE the cloud credentials)
     merged.userProfile = {
       ...cloudData.userProfile,
-      // Keep local BYOK fields as source of truth
       supabaseUrl: store.userProfile.supabaseUrl,
       supabaseAnonKey: store.userProfile.supabaseAnonKey,
       cyaniteApiToken: store.userProfile.cyaniteApiToken,
@@ -494,7 +497,9 @@ function applyRemoteData(cloudData: any): void {
     merged.rankingsUpdatedAt = cloudData.rankingsUpdatedAt;
   }
   if (cloudData.lastSavedAt) merged.lastSavedAt = cloudData.lastSavedAt;
-  if (Array.isArray(cloudData.rankingSnapshots)) {
+
+  // rankingSnapshots: NEVER wipe local snapshots with empty cloud array
+  if (Array.isArray(cloudData.rankingSnapshots) && (cloudData.rankingSnapshots.length > 0 || !store.rankingSnapshots || store.rankingSnapshots.length === 0)) {
     merged.rankingSnapshots = cloudData.rankingSnapshots;
   }
   if (cloudData.locale) merged.locale = cloudData.locale;
