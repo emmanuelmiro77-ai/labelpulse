@@ -243,14 +243,17 @@ async function analyzeAudioBufferInternal(
   });
 
   // Dynamic import to keep the initial bundle small
-  const EssentiaWASMModule = (await import("essentia.js/dist/essentia-wasm.web")).default;
+  const essentiaWasmFactory = (await import("essentia.js/dist/essentia-wasm.web")).default
+    || (await import("essentia.js/dist/essentia-wasm.web"));
   const { Essentia } = await import("essentia.js/dist/essentia.js-core.es");
 
   // Point WASM loader to the file we copied to public/
   // Without this, Next.js bundling breaks the relative path and the WASM silently fails to load
   const wasmUrl = "/essentia-wasm.web.wasm";
-  await EssentiaWASMModule({ locateFile: () => wasmUrl });
-  const essentia = new Essentia(EssentiaWASMModule);
+  // The factory returns a Promise — we MUST capture the resolved WASM module instance
+  // and pass THAT to new Essentia(), not the factory function itself.
+  const wasmModule = await essentiaWasmFactory({ locateFile: () => wasmUrl });
+  const essentia = new Essentia(wasmModule);
 
   // BPM detection
   const vectorSignal = essentia.arrayToVector(Float32Array.from(monoData));
