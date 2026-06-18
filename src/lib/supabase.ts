@@ -68,22 +68,117 @@ function setStatus(newStatus: CloudSyncStatus, errorMsg: string | null = null) {
 /**
  * Read Supabase credentials from the Zustand store (userProfile).
  * Falls back to env vars if set (for backward compatibility).
+ *
+ * IMPORTANT: The URL is normalized via normalizeSupabaseUrl() before use.
+ * This handles common user mistakes like pasting the dashboard URL
+ * (https://supabase.com/dashboard/project/<ref>) instead of the API URL
+ * (https://<ref>.supabase.co).
  */
 function readCredentials(): { url: string; anonKey: string } {
   if (typeof window !== "undefined") {
     try {
       const state = useAppStore.getState();
-      const url = (state.userProfile as any)?.supabaseUrl?.trim() || "";
+      const rawUrl = (state.userProfile as any)?.supabaseUrl?.trim() || "";
       const anonKey = (state.userProfile as any)?.supabaseAnonKey?.trim() || "";
+      const url = normalizeSupabaseUrl(rawUrl);
       if (url && anonKey) return { url, anonKey };
+      // If only URL is present (no anon key), still return normalized url
+      // so we can produce a clearer "missing anon key" error downstream.
+      if (url && !anonKey) return { url, anonKey: "" };
     } catch {
       // store not ready yet
     }
   }
   // Fallback to env vars (legacy)
-  const envUrl = process.env.NEXT_PUBLIC_SUPABASE_URL || "";
+  const envUrl = normalizeSupabaseUrl(
+    process.env.NEXT_PUBLIC_SUPABASE_URL || ""
+  );
   const envKey = process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY || "";
   return { url: envUrl, anonKey: envKey };
+}
+
+/**
+ * Normalize a user-supplied Supabase URL into the API format
+ * (https://<project-ref>.supabase.co).
+ *
+ * Handles:
+ *   - Dashboard URLs: https://supabase.com/dashboard/project/<ref>/...
+ *     → https://<ref>.supabase.co
+ *   - URLs with trailing slash or path: stripped
+ *   - URLs without protocol: https:// prefix added
+ *   - URLs that are already correct: returned unchanged
+ *
+ * Returns "" if the input is empty or doesn't look like a Supabase URL.
+ */
+export function normalizeSupabaseUrl(input: string): string {
+  if (!input) return "";
+  let url = input.trim();
+
+  // Add protocol if missing
+  if (!/^https?:\/\//i.test(url)) {
+    url = "https://" + url;
+  }
+
+  // Case 1: Dashboard URL → extract project ref
+  //   https://supabase.com/dashboard/project/<ref>
+  //   https://supabase.com/dashboard/project/<ref>/settings/api
+  const dashMatch = url.match(
+    /supabase\.com\/dashboard\/project\/([a-z0-9]+)/i
+  );
+  if (dashMatch) {
+    return `https://${dashMatch[1].toLowerCase()}.supabase.co`;
+  }
+
+  // Case 2: Already in API format (https://<ref>.supabase.co[/...])
+  const apiMatch = url.match(/^(https?:\/\/)([a-z0-9]+)\.supabase\.(co|com|in)/i);
+  if (apiMatch) {
+    // Strip any trailing path/slash, keep just the host
+    try {
+      const u = new URL(url);
+      return `${u.protocol}//${u.hostname.toLowerCase()}`;
+    } catch {
+      return url;
+    }
+  }
+
+  // Case 3: Unknown format — return as-is, will fail at fetch time
+  // (better to let the user see the error than silently mangle it)
+  return url;
+}
+
+/**
+ * Returns a human-readable validation error for the current credentials,
+ * or null if credentials look valid. Used to give the user actionable
+ * feedback in the Profilo UI before they even try to sync.
+ */
+export function validateSupabaseCredentials(): string | null {
+  if (typeof window === "undefined") return null;
+  const state = useAppStore.getState();
+  const rawUrl = (state.userProfile as any)?.supabaseUrl?.trim() || "";
+  const anonKey = (state.userProfile as any)?.supabaseAnonKey?.trim() || "";
+
+  if (!rawUrl && !anonKey) return null; // nothing configured yet, no error
+  if (!rawUrl) return "Manca il Project URL.";
+  if (!anonKey) return "Manca la anon key — copiala da Supabase → Project Settings → API.";
+
+  // Check if user pasted a dashboard URL (we'll auto-fix it, but warn)
+  if (/supabase\.com\/dashboard\/project\//i.test(rawUrl)) {
+    // Already auto-normalized — no error needed, just inform
+    return null;
+  }
+
+  // Check URL format
+  const normalized = normalizeSupabaseUrl(rawUrl);
+  if (!/^https:\/\/[a-z0-9]+\.supabase\.(co|com|in)/i.test(normalized)) {
+    return "L'URL non è nel formato corretto. Deve essere https://<project-ref>.supabase.co";
+  }
+
+  // Check anon key length (typical Supabase anon keys are JWT, ~200+ chars)
+  if (anonKey.length < 30) {
+    return "La anon key sembra troppo corta. Assicurati di aver copiato la 'anon public' key intera.";
+  }
+
+  return null;
 }
 
 /**
@@ -92,6 +187,45 @@ function readCredentials(): { url: string; anonKey: string } {
 export function isSupabaseConfigured(): boolean {
   const { url, anonKey } = readCredentials();
   return !!(url && anonKey);
+}
+
+/**
+ * Translate a low-level fetch/supabase error into an actionable Italian
+ * message. The browser surfaces network errors (CORS, DNS, refused
+ * connection) as "TypeError: Failed to fetch" which is useless to the
+ * user — we replace it with a hint about URL/key correctness.
+ */
+function humanizeCloudError(err: any): string {
+  const raw = err?.message || err?.toString?.() || String(err);
+  const lower = raw.toLowerCase();
+
+  if (lower.includes("failed to fetch") || lower.includes("networkerror")) {
+    return (
+      "Impossibile contattare Supabase. Cause possibili:\n" +
+      "• URL non corretto (deve essere https://<project-ref>.supabase.co, NON l'URL del dashboard)\n" +
+      "• Anon key mancante o sbagliata\n" +
+      "• Il progetto Supabase è in pausa (riattivalo dal dashboard)"
+    );
+  }
+  if (lower.includes("cors")) {
+    return "Blocco CORS: verifica che l'URL sia https://<project-ref>.supabase.co e che la anon key sia corretta.";
+  }
+  if (lower.includes("jwt") || lower.includes("invalid api key")) {
+    return "Anon key non valida. Copia da Supabase → Project Settings → API → 'anon public' (NON la service_role key).";
+  }
+  if (lower.includes("relation") && lower.includes("does not exist")) {
+    return (
+      "La tabella 'app_state' non esiste su Supabase. Vai in Supabase → SQL Editor " +
+      "→ incolla il contenuto di supabase-schema.sql → esegui."
+    );
+  }
+  if (lower.includes("permission denied") || lower.includes("rls")) {
+    return (
+      "Permessi insufficienti sulla tabella 'app_state'. Esegui di nuovo " +
+      "supabase-schema.sql in Supabase → SQL Editor (contiene i GRANT necessari)."
+    );
+  }
+  return raw;
 }
 
 /**
@@ -110,7 +244,13 @@ export function getSupabase(): SupabaseClient | null {
       _supabase = null;
       _currentCredsKey = "";
     }
-    if (_status !== "unconfigured" && _status !== "error") {
+    // Surface a clear error if URL is present but anon key is missing
+    if (url && !anonKey) {
+      setStatus(
+        "error",
+        "Manca la anon key — copiala da Supabase → Project Settings → API → 'anon public'"
+      );
+    } else if (_status !== "unconfigured" && _status !== "error") {
       setStatus("unconfigured");
     }
     return null;
@@ -166,7 +306,7 @@ export async function saveStateToCloud(data: object): Promise<boolean> {
 
     if (error) {
       console.error("[LabelPulse Cloud] Save error:", error.message);
-      setStatus("error", error.message);
+      setStatus("error", humanizeCloudError(error));
       return false;
     }
 
@@ -174,7 +314,7 @@ export async function saveStateToCloud(data: object): Promise<boolean> {
     return true;
   } catch (err) {
     console.error("[LabelPulse Cloud] Save exception:", err);
-    setStatus("error", err instanceof Error ? err.message : String(err));
+    setStatus("error", humanizeCloudError(err));
     return false;
   }
 }
@@ -200,7 +340,7 @@ export async function loadStateFromCloud(): Promise<object | null> {
         return null;
       }
       console.error("[LabelPulse Cloud] Load error:", error.message);
-      setStatus("error", error.message);
+      setStatus("error", humanizeCloudError(error));
       return null;
     }
 
@@ -212,7 +352,7 @@ export async function loadStateFromCloud(): Promise<object | null> {
     return data.data as object;
   } catch (err) {
     console.error("[LabelPulse Cloud] Load exception:", err);
-    setStatus("error", err instanceof Error ? err.message : String(err));
+    setStatus("error", humanizeCloudError(err));
     return null;
   }
 }

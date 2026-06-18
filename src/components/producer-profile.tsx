@@ -2,7 +2,8 @@
 
 import { useAppStore } from "@/lib/store";
 import { t } from "@/lib/i18n";
-import React, { useState, useCallback } from "react";
+import { normalizeSupabaseUrl, validateSupabaseCredentials } from "@/lib/supabase";
+import React, { useState, useCallback, useMemo } from "react";
 import {
   Pencil,
   Plus,
@@ -574,9 +575,31 @@ export function ProducerProfile() {
                     triggerSaved();
                   }
                 }}
-                placeholder="https://tuo-progetto.supabase.co"
+                placeholder="https://tuo-progetto.supabase.co oppure https://supabase.com/dashboard/project/<ref>"
                 className="bg-secondary/50 font-mono text-xs"
               />
+              {/* Normalized URL preview — helps the user see what we'll actually use */}
+              {userProfile.supabaseUrl && (
+                (() => {
+                  const raw = userProfile.supabaseUrl.trim();
+                  const normalized = normalizeSupabaseUrl(raw);
+                  const wasDashboard = /supabase\.com\/dashboard\/project\//i.test(raw);
+                  const wasChanged = normalized !== raw;
+                  if (!wasChanged) return null;
+                  return (
+                    <div className="flex items-start gap-1.5 p-2 rounded bg-blue-500/10 border border-blue-500/20">
+                      <span className="text-[10px] text-blue-300 leading-relaxed">
+                        ↳ Auto-normalizzato in: <code className="font-mono text-blue-200">{normalized}</code>
+                        {wasDashboard && (
+                          <span className="block mt-0.5 text-blue-300/80">
+                            (URL del dashboard rilevato — usiamo l'endpoint API del progetto)
+                          </span>
+                        )}
+                      </span>
+                    </div>
+                  );
+                })()
+              )}
             </div>
 
             <div className="space-y-2">
@@ -601,8 +624,22 @@ export function ProducerProfile() {
               </p>
             </div>
 
-            {/* Setup status */}
-            {userProfile.supabaseUrl && userProfile.supabaseAnonKey ? (
+            {/* Validation error — shown when something is wrong before user even tries to sync */}
+            {(() => {
+              const err = validateSupabaseCredentials();
+              if (!err) return null;
+              return (
+                <div className="p-2 rounded bg-amber-500/10 border border-amber-500/30">
+                  <p className="text-[11px] text-amber-400 leading-relaxed flex items-start gap-1.5">
+                    <span>⚠</span>
+                    <span>{err}</span>
+                  </p>
+                </div>
+              );
+            })()}
+
+            {/* Setup status — only shown when validation passes */}
+            {userProfile.supabaseUrl && userProfile.supabaseAnonKey && !validateSupabaseCredentials() ? (
               <div className="flex items-center justify-between gap-2 p-2 rounded bg-emerald-500/10 border border-emerald-500/20">
                 <span className="text-[11px] text-emerald-400 flex items-center gap-1.5">
                   <span className="h-1.5 w-1.5 rounded-full bg-emerald-400 animate-pulse" />
