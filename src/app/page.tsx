@@ -36,6 +36,8 @@ import { RankingsPage } from "@/components/rankings-page";
 import { ProducerProfile } from "@/components/producer-profile";
 import { CloudSyncButton } from "@/components/cloud-sync-button";
 import { AuthButton } from "@/components/auth-button";
+import { BetaFeedbackButton } from "@/components/beta-feedback-button";
+import { WelcomeOnboarding } from "@/components/welcome-onboarding";
 import { BarChart3 } from "lucide-react";
 import { LogIn, AlertTriangle } from "lucide-react";
 
@@ -208,6 +210,9 @@ export default function Home() {
             {/* Auth (Google login — multi-device profile) */}
             <AuthButton />
 
+            {/* Beta Feedback (only shows when authenticated) */}
+            <BetaFeedbackButton />
+
             {/* Data Backup */}
             <DataBackup />
 
@@ -328,6 +333,9 @@ export default function Home() {
 
       {/* Help Modal */}
       <HelpModal open={helpOpen} onOpenChange={setHelpOpen} />
+
+      {/* Welcome onboarding (shows once per device on first login) */}
+      <WelcomeOnboarding />
     </div>
   );
 }

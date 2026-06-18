@@ -65,3 +65,46 @@ $$;
 
 ALTER PUBLICATION supabase_realtime ADD TABLE app_state;
 
+-- ========================================
+-- BETA FEEDBACK TABLE
+-- ========================================
+-- Tabella per raccogliere i feedback dei beta tester.
+-- Ogni feedback viene inviato dal pulsante "Feedback" nell'header dell'app
+-- (visibile solo agli utenti autenticati).
+--
+-- L'endpoint /api/beta-feedback (POST) scrive qui dentro.
+-- L'endpoint /api/beta-feedback (GET) legge da qui, protetto da BETA_ADMIN_TOKEN.
+
+CREATE TABLE IF NOT EXISTS beta_feedback (
+  id BIGSERIAL PRIMARY KEY,
+  email TEXT NOT NULL,                    -- email dell'utente (lowercase)
+  category TEXT NOT NULL CHECK (category IN ('bug', 'feature', 'other')),
+  subject TEXT,                           -- oggetto opzionale (max 200 char)
+  message TEXT NOT NULL,                  -- corpo del feedback (max 5000 char)
+  user_agent TEXT,                        -- browser/OS dell'utente
+  url TEXT,                               -- URL da cui è stato inviato
+  app_version TEXT,                       -- es. 'v2.1'
+  label_count INTEGER DEFAULT 0,          -- quante label ha l'utente (gauge di utilizzo)
+  demo_count INTEGER DEFAULT 0,           -- quanti demo ha l'utente
+  locale TEXT,                            -- 'it' / 'en' / etc.
+  status TEXT DEFAULT 'new' CHECK (status IN ('new', 'read', 'resolved', 'ignored')),
+  created_at TIMESTAMPTZ DEFAULT NOW()
+);
+
+-- Indici per query comuni
+CREATE INDEX IF NOT EXISTS idx_beta_feedback_status ON beta_feedback (status);
+CREATE INDEX IF NOT EXISTS idx_beta_feedback_email ON beta_feedback (email);
+CREATE INDEX IF NOT EXISTS idx_beta_feedback_created_at ON beta_feedback (created_at DESC);
+
+-- RLS: permetti INSERT anonimo (i beta tester scrivono senza essere utenti Supabase)
+-- ma blocca SELECT/UPDATE/DELETE anonimo (solo l'admin con service_role key può leggere)
+ALTER TABLE beta_feedback ENABLE ROW LEVEL SECURITY;
+
+DROP POLICY IF EXISTS "Allow anon insert" ON beta_feedback;
+CREATE POLICY "Allow anon insert" ON beta_feedback
+  FOR INSERT WITH CHECK (true);
+
+-- Nota: non creiamo policy SELECT — quindi SELECT anonimo è bloccato da RLS.
+-- Per leggere i feedback, usa la Service Role Key di Supabase (non l'anon key)
+-- oppure usa l'endpoint /api/beta-feedback?token=BETA_ADMIN_TOKEN
+
