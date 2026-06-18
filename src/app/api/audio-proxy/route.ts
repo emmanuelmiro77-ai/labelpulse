@@ -33,14 +33,35 @@ interface ScResolveResponse {
 }
 
 /**
+ * Follow HTTP redirects and return the final URL.
+ * Used to resolve SoundCloud short links (on.soundcloud.com/xxx → soundcloud.com/user/track)
+ */
+async function followRedirects(url: string, maxRedirects = 5): Promise<string> {
+  try {
+    const resp = await fetch(url, { redirect: "manual" });
+    if (resp.status >= 300 && resp.status < 400 && resp.headers.get("location")) {
+      const next = resp.headers.get("location")!;
+      if (maxRedirects <= 0 || next === url) return url;
+      return followRedirects(next, maxRedirects - 1);
+    }
+  } catch {
+    // If redirect check fails, return original URL
+  }
+  return url;
+}
+
+/**
  * Resolve a SoundCloud URL to a streamable audio URL via the public API.
  * Returns the progressive MP3 128kbps URL if available.
  */
 async function resolveSoundCloudUrl(trackUrl: string): Promise<string | null> {
+  // Pre-resolve short links (on.soundcloud.com → soundcloud.com/...)
+  const resolvedUrl = await followRedirects(trackUrl);
+
   for (const clientId of SOUNDCLOUD_CLIENT_IDS) {
     try {
       const resolveApiUrl = `https://api-v2.soundcloud.com/resolve?url=${encodeURIComponent(
-        trackUrl
+        resolvedUrl
       )}&client_id=${clientId}`;
 
       const resp = await fetch(resolveApiUrl, {
@@ -92,7 +113,8 @@ async function resolveSoundCloudUrl(trackUrl: string): Promise<string | null> {
  * Determine if a URL is a SoundCloud track URL.
  */
 function isSoundCloudUrl(url: string): boolean {
-  return /https?:\/\/(www\.)?soundcloud\.com\//i.test(url);
+  // Matches both soundcloud.com/... and on.soundcloud.com/... (short links)
+  return /https?:\/\/(www\.|on\.)?soundcloud\.com\//i.test(url);
 }
 
 /**
