@@ -35,6 +35,75 @@ export const authOptions: AuthOptions = {
   // "Server error - There is a problem with the server configuration" page.
   trustHost: true,
 
+  // ⚠️ Disable __Secure- cookie prefix.
+  // On iOS Safari (especially in PWA standalone mode = "Added to Home Screen")
+  // and on some Android WebView configurations, cookies with the __Secure-
+  // prefix are dropped or behave inconsistently during the OAuth redirect
+  // chain. This causes the PKCE/state cookie to be missing when the user
+  // returns from Google, which manifests as the "Try signing in with a
+  // different account" error.
+  //
+  // Disabling the prefix makes cookies behave the same way on every browser
+  // and in every context (browser tab, PWA standalone, WebView). The cookies
+  // are still marked Secure + HttpOnly + SameSite=Lax, so security is intact.
+  cookies: {
+    pkceCodeVerifier: {
+      name: `next-auth.pkce.code_verifier`,
+      options: {
+        httpOnly: true,
+        sameSite: "lax",
+        path: "/",
+        secure: true,
+        maxAge: 900,
+      },
+    },
+    state: {
+      name: `next-auth.state`,
+      options: {
+        httpOnly: true,
+        sameSite: "lax",
+        path: "/",
+        secure: true,
+        maxAge: 900,
+      },
+    },
+    nonce: {
+      name: `next-auth.nonce`,
+      options: {
+        httpOnly: true,
+        sameSite: "lax",
+        path: "/",
+        secure: true,
+      },
+    },
+    callbackUrl: {
+      name: `next-auth.callback-url`,
+      options: {
+        sameSite: "lax",
+        path: "/",
+        secure: true,
+      },
+    },
+    csrfToken: {
+      name: `next-auth.csrf-token`,
+      options: {
+        httpOnly: true,
+        sameSite: "lax",
+        path: "/",
+        secure: true,
+      },
+    },
+    sessionToken: {
+      name: `next-auth.session-token`,
+      options: {
+        httpOnly: true,
+        sameSite: "lax",
+        path: "/",
+        secure: true,
+      },
+    },
+  },
+
   providers: [
     GoogleProvider({
       clientId: process.env.GOOGLE_CLIENT_ID!,
@@ -68,7 +137,26 @@ export const authOptions: AuthOptions = {
   // leaked to the client.
   events: {
     async error(message) {
-      console.error("[NextAuth] event:error:", message);
+      console.error("[NextAuth] event:error:", JSON.stringify(message, null, 2));
+    },
+  },
+  // Custom error page — instead of the generic "Try signing in with a
+  // different account" message, show the actual error code so we can debug.
+  pages: {
+    error: "/auth/error",
+  },
+  // Verbose debug logging on the server. Visible in Vercel → Functions → Logs.
+  // Safe to leave on — these logs don't contain secrets, just error names.
+  debug: true,
+  logger: {
+    error(code, metadata) {
+      console.error(`[NextAuth][error] ${code}:`, JSON.stringify(metadata, null, 2));
+    },
+    warn(code) {
+      console.warn(`[NextAuth][warn] ${code}`);
+    },
+    debug(code, metadata) {
+      console.log(`[NextAuth][debug] ${code}`, metadata ? JSON.stringify(metadata, null, 2) : "");
     },
   },
 }
