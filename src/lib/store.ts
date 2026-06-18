@@ -146,6 +146,20 @@ const BACKUP_KEY = "labelpulse-storage-backup";
 // (or its backup) gets wiped by a bad cloud sync, a rehydrate, a migration bug,
 // or a localStorage quota error, the snapshots survive in their own slot.
 const SNAPSHOTS_BACKUP_KEY = "labelpulse-snapshots-backup";
+
+// ==================== USER PROFILE BACKUP (SIDE CAR) ====================
+// Like SNAPSHOTS_BACKUP_KEY but for the user profile (artistName, bio, email,
+// scLink, photoUrl, links, cyaniteApiToken, supabaseUrl, supabaseAnonKey).
+//
+// This is the user's identity card. Even if cloud sync wipes the main store
+// (rare but has happened), or the user logs in from a new device and the
+// cloud has nothing yet, the user can still recover their profile from this
+// sidecar slot.
+//
+// Strategy: write on every setItem (merged, never overwrite), never clear
+// except via explicit reset.
+const PROFILE_BACKUP_KEY = "labelpulse-profile-backup";
+
 const SEED_LABEL_COUNT = labelData.labels.length;
 
 // Rehydration guard: blocks ALL writes until Zustand persist has loaded data from localStorage.
@@ -348,6 +362,43 @@ const robustStorage: StateStorage = {
       console.warn("[LabelPulse Storage] Snapshots sidecar recovery failed:", e);
     }
 
+    // CRITICAL SAFETY NET for userProfile:
+    // Same logic as snapshots. If the chosen result has an empty/seed profile
+    // but PROFILE_BACKUP_KEY has real data, splice it in. This is the user's
+    // identity card — losing artistName, bio, email, links is catastrophic.
+    try {
+      const currentProfile = extractProfileFromRaw(result);
+      const sidecarProfile = extractProfileFromRaw(safeLocalStorageGet(PROFILE_BACKUP_KEY));
+      if (sidecarProfile && !currentProfile) {
+        console.warn(
+          `[LabelPulse Storage] PROFILE RECOVERY: result has empty profile, sidecar has data (artistName=${!!sidecarProfile.artistName}, bio=${!!sidecarProfile.bio}). Merging sidecar into result.`
+        );
+        const parsed = result ? safeJsonParse(result) : {};
+        if (parsed && typeof parsed === "object") {
+          if (parsed.state && typeof parsed.state === "object") {
+            parsed.state.userProfile = sidecarProfile;
+          } else {
+            parsed.userProfile = sidecarProfile;
+          }
+          result = JSON.stringify(parsed);
+        }
+      } else if (sidecarProfile && currentProfile) {
+        // Both have data — merge (sidecar fills empty fields in current)
+        const mergedProfile = mergeProfiles(sidecarProfile, currentProfile);
+        const parsed = result ? safeJsonParse(result) : {};
+        if (parsed && typeof parsed === "object" && mergedProfile) {
+          if (parsed.state && typeof parsed.state === "object") {
+            parsed.state.userProfile = mergedProfile;
+          } else {
+            parsed.userProfile = mergedProfile;
+          }
+          result = JSON.stringify(parsed);
+        }
+      }
+    } catch (e) {
+      console.warn("[LabelPulse Storage] Profile sidecar recovery failed:", e);
+    }
+
     // CRITICAL: Mark rehydrated BEFORE returning — Zustand will call setItem with
     // merged data immediately after this getItem returns, and we MUST allow that write.
     // This ensures seed data (initial state) writes are blocked, but merged data writes pass.
@@ -401,6 +452,26 @@ const robustStorage: StateStorage = {
       console.warn("[LabelPulse Storage] Snapshots-sidecar write failed:", e);
     }
 
+    // CRITICAL: also persist userProfile to a dedicated slot.
+    // Same pattern as snapshots. The profile is the user's identity card —
+    // artistName, bio, email, social links, photo. We can NEVER lose this,
+    // even if cloud sync wipes the main store.
+    try {
+      const profile = extractProfileFromRaw(value);
+      if (profile) {
+        const existing = extractProfileFromRaw(safeLocalStorageGet(PROFILE_BACKUP_KEY));
+        const merged = mergeProfiles(existing, profile);
+        if (merged) {
+          safeLocalStorageSet(
+            PROFILE_BACKUP_KEY,
+            JSON.stringify({ userProfile: merged })
+          );
+        }
+      }
+    } catch (e) {
+      console.warn("[LabelPulse Storage] Profile-sidecar write failed:", e);
+    }
+
     if (!primaryOk) {
       console.error("[LabelPulse Storage] Primary write failed!");
     }
@@ -409,10 +480,11 @@ const robustStorage: StateStorage = {
   removeItem: (name: string): void => {
     safeLocalStorageRemove(PRIMARY_KEY);
     safeLocalStorageRemove(BACKUP_KEY);
-    // NOTE: do NOT remove SNAPSHOTS_BACKUP_KEY here. It is the user's permanent
-    // historical record — clearing the main store should never nuke months of
-    // ranking history. The only way to clear it is an explicit user action
-    // ("reset all data" button) which calls safeLocalStorageRemove directly.
+    // NOTE: do NOT remove SNAPSHOTS_BACKUP_KEY or PROFILE_BACKUP_KEY here.
+    // These are the user's permanent records (months of ranking history +
+    // artist identity) — clearing the main store should NEVER nuke them.
+    // The only way to clear them is an explicit user action ("reset all data"
+    // button) which calls safeLocalStorageRemove directly.
   },
 };
 
@@ -464,6 +536,119 @@ export function restoreSnapshotsFromSidecar(): number {
     );
   }
   return Math.max(added, 0);
+}
+
+// ==================== USER PROFILE BACKUP HELPERS ====================
+
+/**
+ * Extract userProfile from a raw JSON string (main store JSON, backup JSON,
+ * or sidecar JSON). Returns null if missing/invalid.
+ */
+function extractProfileFromRaw(raw: string | null): any | null {
+  if (!raw) return null;
+  try {
+    const parsed = JSON.parse(raw);
+    const profile = parsed?.state?.userProfile ?? parsed?.userProfile ?? null;
+    if (profile && typeof profile === "object") {
+      // Must have at least one non-empty field to be considered "real"
+      const hasData =
+        !!profile.artistName ||
+        !!profile.bio ||
+        !!profile.email ||
+        !!profile.scLink ||
+        !!profile.photoUrl ||
+        (Array.isArray(profile.links) && profile.links.length > 0) ||
+        !!profile.cyaniteApiToken ||
+        !!profile.supabaseUrl;
+      if (hasData) return profile;
+    }
+  } catch {
+    /* ignore */
+  }
+  return null;
+}
+
+/**
+ * Merge two user profiles — non-empty fields win.
+ * This is the safety net: if the cloud ever sends a profile with empty
+ * artistName, but the sidecar has the real artistName, we keep the real one.
+ */
+function mergeProfiles(base: any | null, incoming: any | null): any | null {
+  if (!base && !incoming) return null;
+  if (!base) return incoming;
+  if (!incoming) return base;
+  const merged: any = { ...base };
+  for (const k of Object.keys(incoming)) {
+    const v = incoming[k];
+    if (k === "links") {
+      // Merge link arrays (dedupe by type|value)
+      const a = Array.isArray(base.links) ? base.links : [];
+      const b = Array.isArray(v) ? v : [];
+      const seen = new Set<string>();
+      const out: { type: string; value: string }[] = [];
+      for (const link of [...a, ...b]) {
+        if (!link || typeof link !== "object") continue;
+        const key = `${link.type}|${link.value}`;
+        if (seen.has(key)) continue;
+        seen.add(key);
+        out.push(link);
+      }
+      merged.links = out;
+    } else if (typeof v === "string") {
+      // Non-empty string wins over empty
+      if (v && !merged[k]) merged[k] = v;
+    } else {
+      // For any other type, prefer defined over undefined
+      if (v !== undefined && v !== null && !merged[k]) merged[k] = v;
+    }
+  }
+  return merged;
+}
+
+/**
+ * Returns the most recently saved userProfile from the sidecar backup.
+ */
+export function readProfileSidecar(): any | null {
+  if (typeof window === "undefined") return null;
+  return extractProfileFromRaw(safeLocalStorageGet(PROFILE_BACKUP_KEY));
+}
+
+/**
+ * Force-restore userProfile from the sidecar into the live store, IF the
+ * current live profile is empty/seed AND the sidecar has real data.
+ *
+ * Returns true if a restore happened, false otherwise.
+ */
+export function restoreProfileFromSidecar(): boolean {
+  if (typeof window === "undefined") return false;
+  const sidecarProfile = extractProfileFromRaw(safeLocalStorageGet(PROFILE_BACKUP_KEY));
+  if (!sidecarProfile) return false;
+
+  const current = useAppStore.getState().userProfile;
+  const currentHasData =
+    !!current.artistName ||
+    !!current.bio ||
+    !!current.email ||
+    !!current.scLink ||
+    !!current.photoUrl ||
+    (Array.isArray(current.links) && current.links.length > 0) ||
+    !!current.cyaniteApiToken ||
+    !!current.supabaseUrl;
+
+  // If current profile has data, merge (sidecar can fill empty fields)
+  // If current profile is empty, replace with sidecar
+  const merged = currentHasData
+    ? mergeProfiles(sidecarProfile, current)
+    : sidecarProfile;
+
+  if (merged && merged !== current) {
+    useAppStore.setState({ userProfile: merged });
+    console.info(
+      `[LabelPulse] Restored user profile from sidecar backup (had: ${currentHasData ? "partial" : "empty"}, now has: artistName=${!!merged.artistName}, bio=${!!merged.bio}, email=${!!merged.email}).`
+    );
+    return true;
+  }
+  return false;
 }
 
 // ==================== NO SEED DEMOS ====================

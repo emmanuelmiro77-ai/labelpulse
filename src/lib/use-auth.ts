@@ -3,7 +3,13 @@
 import { useEffect, useRef } from "react";
 import { useSession } from "next-auth/react";
 import { setCurrentUserEmail, isSupabaseConfigured } from "./supabase";
-import { useAppStore, loadFromCloud, forceCloudSync } from "./store";
+import {
+  useAppStore,
+  loadFromCloud,
+  forceCloudSync,
+  restoreProfileFromSidecar,
+  restoreSnapshotsFromSidecar,
+} from "./store";
 
 /**
  * Hook that bridges NextAuth session ↔ LabelPulse cloud sync.
@@ -16,7 +22,12 @@ import { useAppStore, loadFromCloud, forceCloudSync } from "./store";
  *     loadFromCloud() so that the local store gets populated from the user's
  *     cloud row. This is what makes "open the app on a new phone → login →
  *     all my data appears" work.
- *  3. When a session becomes unauthenticated (user logged out), optionally
+ *  3. BEFORE pulling from cloud, restore the user profile from the sidecar
+ *     backup. This is the safety net: if the cloud has no data for this
+ *     email yet (first login from this account) but the user has a profile
+ *     saved locally in PROFILE_BACKUP_KEY, that profile gets restored so
+ *     the user doesn't see an empty artistName/bio/links after login.
+ *  4. When a session becomes unauthenticated (user logged out), optionally
  *     reset the local store to seed data so the next user starts fresh.
  *
  * Must be mounted ONCE at the top of the app (inside AuthProvider, e.g., in
@@ -46,6 +57,23 @@ export function useAuthEffect(): void {
     if (lastActedEmailRef.current === email) return;
     lastActedEmailRef.current = email;
 
+    // ⚠️ BEFORE doing anything with the cloud, restore the user profile
+    // from the sidecar backup. This ensures that even if the cloud sync
+    // ends up pulling nothing (first login from this email) or wiping
+    // the store, the user's identity (artistName, bio, email, links)
+    // is preserved from local sidecar.
+    try {
+      const profileRestored = restoreProfileFromSidecar();
+      const snapshotsRestored = restoreSnapshotsFromSidecar();
+      if (profileRestored || snapshotsRestored > 0) {
+        console.info(
+          `[LabelPulse Auth] Pre-cloud-restore: profile=${profileRestored ? "OK" : "niente"}, snapshots=${snapshotsRestored} recuperati.`
+        );
+      }
+    } catch (e) {
+      console.warn("[LabelPulse Auth] Sidecar restore failed:", e);
+    }
+
     // Only trigger cloud pull if Supabase is configured (BYOK or env vars).
     // If not configured, the user can still use the app locally — they'll
     // just not have multi-device sync until they set credentials in Profile.
@@ -66,6 +94,21 @@ export function useAuthEffect(): void {
       // cloud. loadFromCloud already does this if cloud was empty, but if the
       // cloud had data we want to ensure local newer changes are not lost.
       setTimeout(() => forceCloudSync(), 1000);
+
+      // ⚠️ POST-CLOUD SAFETY NET: after cloud sync, the cloud might have
+      // sent an empty/partial profile (e.g., a fresh cloud row). Re-restore
+      // from sidecar if the live profile is now empty but the sidecar had data.
+      setTimeout(() => {
+        try {
+          const again = restoreProfileFromSidecar();
+          if (again) {
+            console.info(
+              "[LabelPulse Auth] Post-cloud profile restore triggered — re-pushing to cloud."
+            );
+            setTimeout(() => forceCloudSync(), 500);
+          }
+        } catch {}
+      }, 2500);
     });
   }, [status, session?.user?.email, hasRehydrated, hasCloudSynced]);
 
