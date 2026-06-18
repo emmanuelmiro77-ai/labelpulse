@@ -238,16 +238,19 @@ async function analyzeAudioBufferInternal(
 
   onProgress?.({
     stage: "analyzing",
-    message: "Analisi BPM, key e energia...",
-    progress: 0.7,
+    message: "Caricamento motore di analisi (WASM ~2MB)...",
+    progress: 0.65,
   });
 
   // Dynamic import to keep the initial bundle small
-  const EssentiaWASM = (await import("essentia.js/dist/essentia-wasm.web")).default;
+  const EssentiaWASMModule = (await import("essentia.js/dist/essentia-wasm.web")).default;
   const { Essentia } = await import("essentia.js/dist/essentia.js-core.es");
 
-  await EssentiaWASM();
-  const essentia = new Essentia(EssentiaWASM);
+  // Point WASM loader to the file we copied to public/
+  // Without this, Next.js bundling breaks the relative path and the WASM silently fails to load
+  const wasmUrl = "/essentia-wasm.web.wasm";
+  await EssentiaWASMModule({ locateFile: () => wasmUrl });
+  const essentia = new Essentia(EssentiaWASMModule);
 
   // BPM detection
   const vectorSignal = essentia.arrayToVector(Float32Array.from(monoData));
@@ -281,6 +284,12 @@ async function analyzeAudioBufferInternal(
 
   const camelot = pitchToCamelot(pitchClass, mode);
   keyResult.delete?.();
+
+  onProgress?.({
+    stage: "analyzing",
+    message: "Calcolo energia e danceability...",
+    progress: 0.9,
+  });
 
   const energy = computeEnergy(monoData);
   const loudness = computeLoudness(monoData);

@@ -232,9 +232,16 @@ export function DemoTracker() {
       // Dynamic import to keep the initial bundle small
       const { analyzeAudio, analyzeWithCyanite } = await import("@/lib/audio-analysis");
       const cyaniteToken = (userProfile as any)?.cyaniteApiToken?.trim?.() || "";
-      const result = cyaniteToken
-        ? await analyzeWithCyanite(audioSourceUrl, cyaniteToken, (p) => setAnalysisProgress(p))
-        : await analyzeAudio(audioSourceUrl, (p) => setAnalysisProgress(p));
+      // Safety timeout: abort analysis after 120s
+      const timeoutMs = 120_000;
+      const result = await Promise.race([
+        cyaniteToken
+          ? analyzeWithCyanite(audioSourceUrl, cyaniteToken, (p) => setAnalysisProgress(p))
+          : analyzeAudio(audioSourceUrl, (p) => setAnalysisProgress(p)),
+        new Promise<never>((_, reject) =>
+          setTimeout(() => reject(new Error("Timeout: analisi troppo lunga (>120s). Prova con 'Carica file' o ricarica la pagina.")), timeoutMs)
+        ),
+      ]);
       setFormAnalysis(result);
       // Auto-fill BPM and key if empty or always update with analysis values
       setFormBpm(String(result.bpm));
@@ -257,7 +264,14 @@ export function DemoTracker() {
     setAnalysisProgress({ stage: "fetching", message: `Lettura ${file.name}...`, progress: 0.2 });
     try {
       const { analyzeAudioFile } = await import("@/lib/audio-analysis");
-      const result = await analyzeAudioFile(file, (p) => setAnalysisProgress(p));
+      // Safety timeout: abort analysis after 120s to prevent infinite hang
+      const timeoutMs = 120_000;
+      const result = await Promise.race([
+        analyzeAudioFile(file, (p) => setAnalysisProgress(p)),
+        new Promise<never>((_, reject) =>
+          setTimeout(() => reject(new Error("Timeout: analisi troppo lunga (>120s). Prova con un file più corto (max 60s) o ricarica la pagina.")), timeoutMs)
+        ),
+      ]);
       setFormAnalysis(result);
       setFormBpm(String(result.bpm));
       setFormKey(result.key.name);
