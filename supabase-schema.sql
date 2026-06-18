@@ -5,6 +5,18 @@
 -- (Dashboard → SQL Editor → New query → Incolla ed esegui)
 -- ========================================
 
+-- ⚠️ IMPORTANTE: se hai già creato la tabella app_state con il wizard
+-- di Supabase (che usa `id uuid` invece di `id text`), il comando
+-- CREATE TABLE IF NOT EXISTS qui sotto NON la sovrascriverà — e avrai
+-- l'errore "invalid input syntax for type uuid: 'default'" quando
+-- l'app prova a sincronizzare.
+--
+-- Per fixare, esegui PRIMA questo blocco (la tabella viene ricreata vuota):
+--
+--   DROP TABLE IF EXISTS app_state CASCADE;
+--
+-- Poi esegui il resto di questo file.
+
 -- Tabella principale: memorizza lo stato completo dell'app come JSONB.
 -- Questo approccio è semplice, robusto e permette di salvare tutti i dati
 -- (labels, demos, impostazioni) in un'unica operazione.
@@ -18,6 +30,10 @@ CREATE TABLE IF NOT EXISTS app_state (
 
 -- Disabilita RLS per accesso diretto con anon key (app single-user)
 ALTER TABLE app_state ENABLE ROW LEVEL SECURITY;
+
+-- Rimuovi eventuali policy pre-esistenti create dal wizard di Supabase
+-- (che richiederebbero auth.uid() e bloccherebbero l'accesso con anon key)
+DROP POLICY IF EXISTS "Allow all operations on app_state" ON app_state;
 
 -- Policy: permetti tutte le operazioni con la anon key
 CREATE POLICY "Allow all operations on app_state" ON app_state
