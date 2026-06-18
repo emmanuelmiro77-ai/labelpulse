@@ -284,6 +284,14 @@ function loadScriptTag(src: string): Promise<void> {
 
 /**
  * Internal: run Essentia.js analysis on a decoded ArrayBuffer.
+ *
+ * Wrapped in try/catch with a Web-Audio-only fallback. Essentia.js is
+ * compiled with -s DISABLE_EXCEPTION_CATCHING=1, so any C++ exception
+ * (input too short, unsupported sample rate, NaN in signal) becomes a
+ * hard abort — the browser shows "73028368 - Exception catching is
+ * disabled, this exception cannot be caught". When that happens we
+ * fall back to a Web-Audio-only BPM estimator so the user still gets
+ * a usable result instead of an error.
  */
 async function analyzeAudioBufferInternal(
   arrayBuffer: ArrayBuffer,
@@ -297,83 +305,254 @@ async function analyzeAudioBufferInternal(
 
   const { monoData, sampleRate, audioBuffer } = await decodeAudio(arrayBuffer);
 
+  // Pre-analysis validation — prevents most essentia.js aborts.
+  // Essentia requires at least ~5 seconds of audio for reliable BPM,
+  // and accepts standard sample rates (8000/16000/22050/32000/44100/48000).
+  const MIN_SAMPLES = sampleRate * 5; // 5 seconds minimum
+  const SUPPORTED_RATES = [8000, 16000, 22050, 32000, 44100, 48000];
+  const isSampleRateOk = SUPPORTED_RATES.includes(sampleRate);
+  const isLengthOk = monoData.length >= MIN_SAMPLES;
+
   onProgress?.({
     stage: "analyzing",
     message: "Caricamento motore di analisi (WASM ~2MB)...",
     progress: 0.65,
   });
 
-  // Load Essentia.js via script tags to bypass Next.js bundler completely.
-  // The bundler (Turbopack/webpack) breaks the ESM↔WASM interop of essentia.js,
-  // causing "u is not a constructor" errors. Loading from /public avoids this entirely.
-  const essentia = await loadEssentiaEngine();
+  // If pre-conditions fail, skip essentia entirely and go straight to fallback
+  if (!isSampleRateOk || !isLengthOk) {
+    console.warn(
+      "[audio-analysis] Skipping Essentia.js — pre-conditions not met:",
+      `sampleRate=${sampleRate} (supported: ${SUPPORTED_RATES.join(",")})`,
+      `length=${monoData.length} samples (${(monoData.length / sampleRate).toFixed(1)}s, min 5s)`
+    );
+    return runWebAudioFallback(monoData, sampleRate, audioBuffer.duration, onProgress, {
+      reason: !isSampleRateOk ? "sample rate non supportato" : "audio troppo corto (<5s)",
+    });
+  }
 
-  // BPM detection
-  const vectorSignal = essentia.arrayToVector(Float32Array.from(monoData));
-  const bpmResult = essentia.PercivalBpmEstimator(
-    vectorSignal,
-    1024, 128,
-    sampleRate,
-    1024, 512,
-    60, 180
-  );
-  const bpm = Math.round(bpmResult.bpm);
-  vectorSignal.delete?.();
-  bpmResult.delete?.();
+  // Try Essentia.js — wrap every call so an abort in any of them
+  // triggers the fallback instead of crashing the whole analysis.
+  try {
+    // Load Essentia.js via script tags to bypass Next.js bundler completely.
+    const essentia = await loadEssentiaEngine();
 
-  // Key detection (first 60 seconds for stability)
-  const sixtySecSamples = Math.min(monoData.length, sampleRate * 60);
-  const sixtySecSlice = monoData.slice(0, sixtySecSamples);
-  const keyInput = essentia.arrayToVector(Float32Array.from(sixtySecSlice));
-  const keyResult = essentia.Key(keyInput, true, true, false, false, false);
-  keyInput.delete?.();
+    // BPM detection
+    const vectorSignal = essentia.arrayToVector(Float32Array.from(monoData));
+    const bpmResult = essentia.PercivalBpmEstimator(
+      vectorSignal,
+      1024, 128,
+      sampleRate,
+      1024, 512,
+      60, 180
+    );
+    const bpm = Math.round(bpmResult.bpm);
+    vectorSignal.delete?.();
+    bpmResult.delete?.();
 
-  const noteNames = ["C", "C#", "D", "D#", "E", "F", "F#", "G", "G#", "A", "A#", "B"];
-  const keyName = keyResult.key || "C";
-  const scale = (keyResult.scale || "minor").toLowerCase();
-  const sharpIdx = keyName.indexOf("#");
-  let baseNote = keyName.charAt(0).toUpperCase();
-  if (sharpIdx > 0) baseNote += "#";
-  const pc = noteNames.indexOf(baseNote);
-  const pitchClass = pc >= 0 ? pc : 0;
-  const mode: 0 | 1 = scale === "major" ? 1 : 0;
+    // Validate BPM result — essentia sometimes returns 0 or NaN on
+    // problematic input without throwing, leaving a useless result.
+    if (!Number.isFinite(bpm) || bpm < 30 || bpm > 250) {
+      console.warn(
+        `[audio-analysis] Essentia returned invalid BPM (${bpm}), using fallback`
+      );
+      return runWebAudioFallback(monoData, sampleRate, audioBuffer.duration, onProgress, {
+        reason: `BPM essentia non valido (${bpm})`,
+      });
+    }
 
-  const camelot = pitchToCamelot(pitchClass, mode);
-  keyResult.delete?.();
+    // Key detection (first 60 seconds for stability)
+    const sixtySecSamples = Math.min(monoData.length, sampleRate * 60);
+    const sixtySecSlice = monoData.slice(0, sixtySecSamples);
+    const keyInput = essentia.arrayToVector(Float32Array.from(sixtySecSlice));
+    const keyResult = essentia.Key(keyInput, true, true, false, false, false);
+    keyInput.delete?.();
 
+    const noteNames = ["C", "C#", "D", "D#", "E", "F", "F#", "G", "G#", "A", "A#", "B"];
+    const keyName = keyResult.key || "C";
+    const scale = (keyResult.scale || "minor").toLowerCase();
+    const sharpIdx = keyName.indexOf("#");
+    let baseNote = keyName.charAt(0).toUpperCase();
+    if (sharpIdx > 0) baseNote += "#";
+    const pc = noteNames.indexOf(baseNote);
+    const pitchClass = pc >= 0 ? pc : 0;
+    const mode: 0 | 1 = scale === "major" ? 1 : 0;
+
+    const camelot = pitchToCamelot(pitchClass, mode);
+    keyResult.delete?.();
+
+    onProgress?.({
+      stage: "analyzing",
+      message: "Calcolo energia e danceability...",
+      progress: 0.9,
+    });
+
+    const energy = computeEnergy(monoData);
+    const loudness = computeLoudness(monoData);
+    const danceability = computeDanceability(monoData, sampleRate, bpm);
+
+    onProgress?.({
+      stage: "done",
+      message: "Analisi completata!",
+      progress: 1,
+    });
+
+    return {
+      bpm,
+      bpmConfidence: 0.85,
+      key: {
+        pitchClass,
+        mode,
+        camelot: camelot.code,
+        name: camelot.name,
+        confidence: 0.8,
+      },
+      energy,
+      danceability,
+      loudness,
+      duration: audioBuffer.duration,
+      analysisSource: "essentia",
+      analysisDate: new Date().toISOString(),
+    };
+  } catch (essentiaErr: any) {
+    // Essentia.js WASM abort (the infamous "73028368 - Exception catching
+    // is disabled" message). The abort actually terminates the script,
+    // but if we got here it means the exception was catchable — fall back.
+    console.warn(
+      "[audio-analysis] Essentia.js failed, falling back to Web Audio analyzer:",
+      essentiaErr?.message || essentiaErr
+    );
+    return runWebAudioFallback(monoData, sampleRate, audioBuffer.duration, onProgress, {
+      reason: essentiaErr?.message || "errore essentia.js",
+    });
+  }
+}
+
+/**
+ * Web-Audio-only fallback: gives BPM + energy + loudness + danceability
+ * without essentia.js. Key detection is not possible, so we mark it as
+ * "Sconosciuta" with confidence 0 (the UI knows to display it differently).
+ *
+ * Used when:
+ *   - Essentia.js fails to load or aborts
+ *   - Audio is too short (<5s) for reliable essentia analysis
+ *   - Sample rate is non-standard
+ *   - Essentia returns an invalid BPM (0, NaN, out of range)
+ */
+async function runWebAudioFallback(
+  monoData: Float32Array,
+  sampleRate: number,
+  durationSec: number,
+  onProgress?: (p: AnalysisProgress) => void,
+  failureInfo?: { reason: string }
+): Promise<AudioAnalysisResult> {
   onProgress?.({
     stage: "analyzing",
-    message: "Calcolo energia e danceability...",
-    progress: 0.9,
+    message: failureInfo
+      ? `Modalità fallback (${failureInfo.reason})...`
+      : "Modalità fallback (analisi BPM semplificata)...",
+    progress: 0.85,
   });
 
+  const bpm = computeBpmWebAudio(monoData, sampleRate);
   const energy = computeEnergy(monoData);
   const loudness = computeLoudness(monoData);
   const danceability = computeDanceability(monoData, sampleRate, bpm);
 
   onProgress?.({
     stage: "done",
-    message: "Analisi completata!",
+    message: "Analisi completata (modalità fallback)",
     progress: 1,
   });
 
+  // Fallback result: key is unknown, marked as C Major (8B) for compatibility
+  // but with confidence 0 so the UI can show it as "sconosciuta"
+  const camelot = pitchToCamelot(0, 1);
   return {
     bpm,
-    bpmConfidence: bpm > 0 ? 0.85 : 0,
+    bpmConfidence: 0.6, // lower confidence for fallback
     key: {
-      pitchClass,
-      mode,
+      pitchClass: 0,
+      mode: 1,
       camelot: camelot.code,
-      name: camelot.name,
-      confidence: 0.8,
+      name: "Sconosciuta",
+      confidence: 0,
     },
     energy,
     danceability,
     loudness,
-    duration: audioBuffer.duration,
-    analysisSource: "essentia",
+    duration: durationSec,
+    analysisSource: "essentia", // keep source type for UI compat
     analysisDate: new Date().toISOString(),
   };
+}
+
+/**
+ * Pure-JS BPM estimator using autocorrelation on the audio envelope.
+ * Less accurate than essentia.js's PercivalBpmEstimator but works on
+ * any input without external dependencies. Range: 60-180 BPM.
+ *
+ * Algorithm:
+ *   1. Compute envelope via low-pass on |signal|
+ *   2. Find autocorrelation peaks in the lag range [SR/180, SR/60]
+ *   3. The lag with the highest autocorrelation → BPM = 60 * SR / lag
+ */
+export function computeBpmWebAudio(
+  mono: Float32Array,
+  sampleRate: number,
+  minBpm = 60,
+  maxBpm = 180
+): number {
+  if (!mono || mono.length < sampleRate * 2) return 0;
+
+  // Downsample to ~110 Hz envelope for speed (1 sample per 400 samples)
+  const envelopeHop = 400;
+  const envelopeLength = Math.floor(mono.length / envelopeHop);
+  const envelope = new Float32Array(envelopeLength);
+
+  for (let i = 0; i < envelopeLength; i++) {
+    let sum = 0;
+    const start = i * envelopeHop;
+    const end = Math.min(start + envelopeHop, mono.length);
+    for (let j = start; j < end; j++) {
+      sum += Math.abs(mono[j]);
+    }
+    envelope[i] = sum / (end - start);
+  }
+
+  // Effective sample rate of the envelope
+  const envSampleRate = sampleRate / envelopeHop;
+
+  // Autocorrelation lag range corresponding to BPM range
+  const minLag = Math.floor(envSampleRate * 60 / maxBpm);
+  const maxLag = Math.ceil(envSampleRate * 60 / minBpm);
+
+  let bestLag = 0;
+  let bestCorr = -Infinity;
+
+  for (let lag = minLag; lag <= Math.min(maxLag, envelopeLength - 1); lag++) {
+    let corr = 0;
+    // Sample 2000 pairs for speed
+    const sampleStep = Math.max(1, Math.floor((envelopeLength - lag) / 2000));
+    for (let i = 0; i < envelopeLength - lag; i += sampleStep) {
+      corr += envelope[i] * envelope[i + lag];
+    }
+    if (corr > bestCorr) {
+      bestCorr = corr;
+      bestLag = lag;
+    }
+  }
+
+  if (bestLag === 0) return 0;
+
+  let bpm = Math.round((envSampleRate * 60) / bestLag);
+
+  // Octave correction: if BPM is in the upper half of the range, it might
+  // be a double of the true BPM; if in the lower half, half of it.
+  if (bpm > 0 && bpm < minBpm) bpm *= 2;
+  if (bpm > maxBpm) bpm = Math.round(bpm / 2);
+
+  return Math.max(minBpm, Math.min(maxBpm, bpm));
 }
 
 // ==================== AUDIO DECODING ====================

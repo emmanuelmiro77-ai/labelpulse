@@ -3,6 +3,7 @@
 import { useAppStore, getLabelTier } from "@/lib/store";
 import type { Label, RankingSnapshot, RankingTimePeriod } from "@/lib/store";
 import { t, type Locale } from "@/lib/i18n";
+import { getLabelDiscoveryUrls } from "@/lib/label-links";
 import {
   Trophy,
   TrendingUp,
@@ -22,6 +23,8 @@ import {
   Calendar,
   Infinity,
   History,
+  ExternalLink,
+  Music2,
 } from "lucide-react";
 import React, { useState, useMemo, useCallback } from "react";
 import { Button } from "@/components/ui/button";
@@ -41,6 +44,128 @@ interface RankedLabel {
 }
 
 // ==================== HELPERS ====================
+
+/**
+ * Compact row of clickable discovery icons for a label.
+ * Renders tiny icon-buttons that open Beatport / Beatstats / SoundCloud /
+ * Website in a new tab. Hidden entirely if the label has no name (defensive).
+ *
+ * @param size icon size in px (default 12 for inline use in dense rows)
+ */
+function LabelDiscoveryIcons({
+  label,
+  size = 12,
+  showLabels = false,
+}: {
+  label: Label;
+  size?: number;
+  showLabels?: boolean;
+}) {
+  if (!label?.name) return null;
+  const urls = getLabelDiscoveryUrls(label);
+
+  const btnClass =
+    "inline-flex items-center gap-1 px-1.5 py-0.5 rounded text-[10px] font-medium transition-colors hover:bg-accent/40 shrink-0";
+
+  return (
+    <div className="inline-flex items-center gap-0.5 ml-1">
+      {/* Beatport — direct (green) if user-saved, search (muted) otherwise */}
+      <a
+        href={urls.beatport}
+        target="_blank"
+        rel="noopener noreferrer"
+        title={
+          urls.beatportIsDirect
+            ? `Apri ${label.name} su Beatport (link diretto)`
+            : `Cerca ${label.name} su Beatport`
+        }
+        className={`${btnClass} ${
+          urls.beatportIsDirect
+            ? "text-emerald-400 hover:text-emerald-300"
+            : "text-muted-foreground hover:text-emerald-400"
+        }`}
+        onClick={(e) => e.stopPropagation()}
+      >
+        <ExternalLink style={{ width: size, height: size }} />
+        {showLabels && <span>Beatport</span>}
+      </a>
+
+      {/* Beatstats — always search (no direct-link field in schema yet) */}
+      <a
+        href={urls.beatstats}
+        target="_blank"
+        rel="noopener noreferrer"
+        title={`Cerca ${label.name} su Beatstats`}
+        className={`${btnClass} text-muted-foreground hover:text-amber-400`}
+        onClick={(e) => e.stopPropagation()}
+      >
+        <BarChart3 style={{ width: size, height: size }} />
+        {showLabels && <span>Beatstats</span>}
+      </a>
+
+      {/* SoundCloud — only if a direct link exists (skip search, too noisy) */}
+      {label.soundcloudLink && (
+        <a
+          href={urls.soundcloud}
+          target="_blank"
+          rel="noopener noreferrer"
+          title={`Apri ${label.name} su SoundCloud`}
+          className={`${btnClass} text-muted-foreground hover:text-orange-400`}
+          onClick={(e) => e.stopPropagation()}
+        >
+          <Music2 style={{ width: size, height: size }} />
+          {showLabels && <span>SoundCloud</span>}
+        </a>
+      )}
+
+      {/* Website — only if user provided one */}
+      {label.website && (
+        <a
+          href={urls.website}
+          target="_blank"
+          rel="noopener noreferrer"
+          title={`Apri sito ufficiale di ${label.name}`}
+          className={`${btnClass} text-muted-foreground hover:text-primary`}
+          onClick={(e) => e.stopPropagation()}
+        >
+          <ExternalLink style={{ width: size, height: size }} />
+          {showLabels && <span>Sito</span>}
+        </a>
+      )}
+    </div>
+  );
+}
+
+/**
+ * Clickable label name — opens Beatport (direct if user provided a link,
+ * search otherwise) in a new tab. Falls back to plain text if no name.
+ */
+function ClickableLabelName({
+  label,
+  className = "",
+}: {
+  label: Label;
+  className?: string;
+}) {
+  if (!label?.name) return null;
+  const urls = getLabelDiscoveryUrls(label);
+  return (
+    <a
+      href={urls.beatport}
+      target="_blank"
+      rel="noopener noreferrer"
+      onClick={(e) => e.stopPropagation()}
+      title={
+        urls.beatportIsDirect
+          ? `Apri ${label.name} su Beatport (link diretto)`
+          : `Cerca ${label.name} su Beatport`
+      }
+      className={`hover:text-primary hover:underline cursor-pointer transition-colors ${className}`}
+    >
+      {label.name}
+    </a>
+  );
+}
 
 function getMovementIcon(movement: number | null): React.ReactNode {
   if (movement === null) return <ArrowUpRight className="h-3.5 w-3.5 text-cyan-400" />;
@@ -481,13 +606,21 @@ export function RankingsPage() {
                   className="flex items-center gap-2 p-2.5 rounded-lg bg-gradient-to-r from-emerald-500/10 to-transparent border border-emerald-500/20"
                 >
                   <span className="text-lg font-bold text-emerald-400 shrink-0">+{item.movement}</span>
-                  <div className="min-w-0">
-                    <p className="text-xs font-medium text-foreground truncate">{item.label.name}</p>
-                    <p className="text-[10px] text-muted-foreground truncate">
-                      {selectedGenre && !spotlightShowAll
-                        ? `#${item.rank} · ${t(locale, "rankings.colMovement")} +${item.movement}`
-                        : item.genre}
-                    </p>
+                  <div className="min-w-0 flex-1">
+                    <div className="flex items-center gap-1 min-w-0">
+                      <ClickableLabelName
+                        label={item.label}
+                        className="text-xs font-medium text-foreground truncate"
+                      />
+                    </div>
+                    <div className="flex items-center gap-1 mt-0.5">
+                      <p className="text-[10px] text-muted-foreground truncate">
+                        {selectedGenre && !spotlightShowAll
+                          ? `#${item.rank} · +${item.movement}`
+                          : item.genre}
+                      </p>
+                      <LabelDiscoveryIcons label={item.label} size={10} />
+                    </div>
                   </div>
                 </div>
               ))}
@@ -687,7 +820,10 @@ export function RankingsPage() {
 
                     {/* Label name + tier */}
                     <div className="flex items-center gap-2 min-w-0">
-                      <span className="font-medium text-foreground truncate">{item.label.name}</span>
+                      <ClickableLabelName
+                        label={item.label}
+                        className="font-medium text-foreground truncate"
+                      />
                       {timePeriod === "current" && (
                         <>
                           <span className={`shrink-0 flex items-center gap-0.5 px-1.5 py-0.5 rounded text-[10px] border ${tierBadge.color}`}>
@@ -697,6 +833,7 @@ export function RankingsPage() {
                           {item.label.trending && <Flame className="h-3 w-3 text-orange-400 shrink-0" />}
                         </>
                       )}
+                      <LabelDiscoveryIcons label={item.label} size={11} />
                     </div>
 
                     {/* Current rank */}
