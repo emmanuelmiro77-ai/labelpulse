@@ -140,6 +140,12 @@ function buildLabelsFromData(): Label[] {
 
 const PRIMARY_KEY = "labelpulse-storage";
 const BACKUP_KEY = "labelpulse-storage-backup";
+// CRITICAL: dedicated, append-only backup slot for rankingSnapshots.
+// This is the user's "storico caricamenti" — months of Beatport/Beatstats imports.
+// We persist it SEPARATELY from the main store so that even if the main store
+// (or its backup) gets wiped by a bad cloud sync, a rehydrate, a migration bug,
+// or a localStorage quota error, the snapshots survive in their own slot.
+const SNAPSHOTS_BACKUP_KEY = "labelpulse-snapshots-backup";
 const SEED_LABEL_COUNT = labelData.labels.length;
 
 // Rehydration guard: blocks ALL writes until Zustand persist has loaded data from localStorage.
@@ -179,6 +185,46 @@ function safeLocalStorageRemove(key: string): void {
   } catch {
     // Ignore
   }
+}
+
+/**
+ * Extract rankingSnapshots array from a raw localStorage JSON string.
+ * Returns [] if not found / invalid.
+ */
+function extractSnapshotsFromRaw(raw: string | null): RankingSnapshot[] {
+  if (!raw) return [];
+  const data = safeJsonParse(raw);
+  if (!data) return [];
+  const snaps = data.state?.rankingSnapshots ?? data.rankingSnapshots;
+  return Array.isArray(snaps) ? snaps : [];
+}
+
+/**
+ * Merge two snapshot arrays, deduping by `id` first, then by `timestamp+source`.
+ * Always returns ascending-by-timestamp order.
+ * Used by: importData (backup file), robustStorage.getItem (safety-net restore),
+ * and loadFromCloud (cloud merge).
+ */
+function mergeSnapshots(
+  base: RankingSnapshot[] | null | undefined,
+  incoming: RankingSnapshot[] | null | undefined
+): RankingSnapshot[] {
+  const a = Array.isArray(base) ? base : [];
+  const b = Array.isArray(incoming) ? incoming : [];
+  const seen = new Set<string>();
+  const out: RankingSnapshot[] = [];
+  for (const s of [...a, ...b]) {
+    if (!s || typeof s !== "object") continue;
+    const key = s.id || `${s.timestamp}|${s.source}`;
+    if (seen.has(key)) continue;
+    seen.add(key);
+    out.push(s);
+  }
+  out.sort(
+    (x, y) =>
+      new Date(x.timestamp || 0).getTime() - new Date(y.timestamp || 0).getTime()
+  );
+  return out;
 }
 
 /**
@@ -229,6 +275,7 @@ const robustStorage: StateStorage = {
     const backupData = safeJsonParse(backupRaw);
 
     let result: string | null = null;
+    let usedSidecarSnapshots = false;
 
     // If primary is missing/corrupt, try backup
     if (!primaryData) {
@@ -271,10 +318,44 @@ const robustStorage: StateStorage = {
       result = primaryRaw;
     }
 
+    // CRITICAL SAFETY NET for rankingSnapshots:
+    // If the chosen result has 0 snapshots but the dedicated SNAPSHOTS_BACKUP_KEY
+    // has snapshots, splice them in. This handles the scenario where the main
+    // store got wiped (bad cloud sync, migration bug, partial overwrite) but the
+    // snapshots sidecar survived. Without this, the user loses months of
+    // "storico caricamenti" and the Classifiche page resets to "first time".
+    try {
+      const currentSnaps = extractSnapshotsFromRaw(result);
+      const sidecarRaw = safeLocalStorageGet(SNAPSHOTS_BACKUP_KEY);
+      const sidecarSnaps = extractSnapshotsFromRaw(sidecarRaw);
+      if (sidecarSnaps.length > 0 && sidecarSnaps.length > currentSnaps.length) {
+        console.warn(
+          `[LabelPulse Storage] SNAPSHOTS RECOVERY: result has ${currentSnaps.length} snapshots, sidecar has ${sidecarSnaps.length}. Merging sidecar into result.`
+        );
+        const mergedSnaps = mergeSnapshots(currentSnaps, sidecarSnaps);
+        const parsed = result ? safeJsonParse(result) : {};
+        if (parsed && typeof parsed === "object") {
+          if (parsed.state && typeof parsed.state === "object") {
+            parsed.state.rankingSnapshots = mergedSnaps;
+          } else {
+            parsed.rankingSnapshots = mergedSnaps;
+          }
+          result = JSON.stringify(parsed);
+          usedSidecarSnapshots = true;
+        }
+      }
+    } catch (e) {
+      console.warn("[LabelPulse Storage] Snapshots sidecar recovery failed:", e);
+    }
+
     // CRITICAL: Mark rehydrated BEFORE returning — Zustand will call setItem with
     // merged data immediately after this getItem returns, and we MUST allow that write.
     // This ensures seed data (initial state) writes are blocked, but merged data writes pass.
     _rehydrated = true;
+
+    if (usedSidecarSnapshots) {
+      console.info("[LabelPulse Storage] rankingSnapshots restored from sidecar backup.");
+    }
 
     return result;
   },
@@ -298,6 +379,28 @@ const robustStorage: StateStorage = {
     // Previous 60s debounce caused data loss if browser crashed before backup was written.
     safeLocalStorageSet(BACKUP_KEY, value);
 
+    // CRITICAL: also persist rankingSnapshots to a dedicated slot.
+    // This is the user's "storico caricamenti" — months of imports that cannot
+    // be regenerated. Keeping it in a separate key means even a catastrophic
+    // main-store wipe (bad cloud sync, migration bug, quota error) leaves the
+    // snapshots recoverable.
+    try {
+      const snaps = extractSnapshotsFromRaw(value);
+      if (snaps.length > 0) {
+        // Merge with whatever's already in the snapshots slot — NEVER overwrite
+        // existing snapshots with fewer snapshots (would happen if the current
+        // write had a partial/empty snapshot array due to some upstream bug).
+        const existing = extractSnapshotsFromRaw(safeLocalStorageGet(SNAPSHOTS_BACKUP_KEY));
+        const merged = mergeSnapshots(existing, snaps);
+        safeLocalStorageSet(
+          SNAPSHOTS_BACKUP_KEY,
+          JSON.stringify(merged)
+        );
+      }
+    } catch (e) {
+      console.warn("[LabelPulse Storage] Snapshots-sidecar write failed:", e);
+    }
+
     if (!primaryOk) {
       console.error("[LabelPulse Storage] Primary write failed!");
     }
@@ -306,6 +409,10 @@ const robustStorage: StateStorage = {
   removeItem: (name: string): void => {
     safeLocalStorageRemove(PRIMARY_KEY);
     safeLocalStorageRemove(BACKUP_KEY);
+    // NOTE: do NOT remove SNAPSHOTS_BACKUP_KEY here. It is the user's permanent
+    // historical record — clearing the main store should never nuke months of
+    // ranking history. The only way to clear it is an explicit user action
+    // ("reset all data" button) which calls safeLocalStorageRemove directly.
   },
 };
 
@@ -319,6 +426,44 @@ export function forceBackupNow(): void {
   if (primaryRaw) {
     safeLocalStorageSet(BACKUP_KEY, primaryRaw);
   }
+  // Also touch the snapshots sidecar so it stays warm.
+  const snaps = extractSnapshotsFromRaw(primaryRaw);
+  if (snaps.length > 0) {
+    const existing = extractSnapshotsFromRaw(safeLocalStorageGet(SNAPSHOTS_BACKUP_KEY));
+    const merged = mergeSnapshots(existing, snaps);
+    safeLocalStorageSet(SNAPSHOTS_BACKUP_KEY, JSON.stringify(merged));
+  }
+}
+
+/**
+ * Returns the current rankingSnapshots from the dedicated sidecar backup.
+ * Used by the UI to offer "restore history from emergency backup" if the
+ * main store ever shows 0 snapshots.
+ */
+export function readSnapshotsSidecar(): RankingSnapshot[] {
+  if (typeof window === "undefined") return [];
+  return extractSnapshotsFromRaw(safeLocalStorageGet(SNAPSHOTS_BACKUP_KEY));
+}
+
+/**
+ * Force-restore rankingSnapshots from the sidecar into the live store.
+ * Returns the number of snapshots restored, or 0 if the sidecar was empty
+ * / already in sync.
+ */
+export function restoreSnapshotsFromSidecar(): number {
+  if (typeof window === "undefined") return 0;
+  const sidecarSnaps = extractSnapshotsFromRaw(safeLocalStorageGet(SNAPSHOTS_BACKUP_KEY));
+  if (sidecarSnaps.length === 0) return 0;
+  const current = useAppStore.getState().rankingSnapshots || [];
+  const merged = mergeSnapshots(current, sidecarSnaps);
+  const added = merged.length - current.length;
+  if (added > 0) {
+    useAppStore.setState({ rankingSnapshots: merged });
+    console.info(
+      `[LabelPulse] Restored ${added} snapshot(s) from sidecar backup.`
+    );
+  }
+  return Math.max(added, 0);
 }
 
 // ==================== NO SEED DEMOS ====================
@@ -696,8 +841,19 @@ export const useAppStore = create<AppState>()(
 
       exportData: () => {
         const state = get();
+        // CRITICAL: include rankingSnapshots in the backup. Without this, the
+        // user's "storico caricamenti" (months of Beatport/Beatstats imports)
+        // is lost when they restore from backup — Classifiche page resets to
+        // "first time" and historical chart movement is gone forever.
+        // Also include the sidecar snapshots so a backup taken after a partial
+        // loss still captures whatever survived in the sidecar.
+        const sidecarSnaps =
+          typeof window !== "undefined"
+            ? extractSnapshotsFromRaw(safeLocalStorageGet(SNAPSHOTS_BACKUP_KEY))
+            : [];
+        const rankingSnapshots = mergeSnapshots(state.rankingSnapshots, sidecarSnaps);
         const exportObj = {
-          version: 1,
+          version: 2,
           app: "labelpulse",
           exportedAt: new Date().toISOString(),
           data: {
@@ -705,6 +861,9 @@ export const useAppStore = create<AppState>()(
             demos: state.demos,
             userProfile: state.userProfile,
             locale: state.locale,
+            rankingSnapshots,
+            rankingsUpdatedAt: state.rankingsUpdatedAt,
+            lastSavedAt: state.lastSavedAt,
           }
         };
         return JSON.stringify(exportObj, null, 2);
@@ -716,8 +875,13 @@ export const useAppStore = create<AppState>()(
           if (parsed.app !== "labelpulse" || !parsed.data) return false;
           
           const { labels: importedLabels = [], demos: importedDemos = [], userProfile, locale: importedLocale } = parsed.data;
+          // Read snapshots from the backup file (new field, may be absent in old backups).
+          const importedSnapshots: RankingSnapshot[] = Array.isArray(parsed.data?.rankingSnapshots)
+            ? parsed.data.rankingSnapshots
+            : [];
           const currentLabels = get().labels;
           const currentDemos = get().demos;
+          const currentSnapshots = get().rankingSnapshots || [];
 
           // === LABEL MERGE ===
           const currentLabelById = new Map(currentLabels.map(l => [l.id, l]));
@@ -844,12 +1008,46 @@ export const useAppStore = create<AppState>()(
             }));
           }
 
+          // === SNAPSHOT MERGE ===
+          // Never let an import wipe existing snapshots. Merge by id+timestamp+source.
+          // Also fold in the sidecar backup (emergency backup slot) so a re-import
+          // after a data-loss event can still recover whatever survived.
+          const sidecarSnaps =
+            typeof window !== "undefined"
+              ? extractSnapshotsFromRaw(safeLocalStorageGet(SNAPSHOTS_BACKUP_KEY))
+              : [];
+          const mergedSnapshots = mergeSnapshots(
+            currentSnapshots,
+            mergeSnapshots(importedSnapshots, sidecarSnaps)
+          );
+          if (
+            mergedSnapshots.length === 0 &&
+            currentSnapshots.length === 0 &&
+            importedSnapshots.length === 0 &&
+            sidecarSnaps.length === 0 &&
+            (isRankingsImport || hasGenresAndLabels)
+          ) {
+            // First-ever rankings import on a fresh install — nothing to recover.
+          }
+          if (mergedSnapshots.length !== currentSnapshots.length) {
+            console.info(
+              `[LabelPulse Import] Snapshots: ${currentSnapshots.length} → ${mergedSnapshots.length} (after merge with ${importedSnapshots.length} from backup + ${sidecarSnaps.length} from sidecar)`
+            );
+          }
+
           set({
             labels: mergedLabels,
             demos: mergedDemos,
             userProfile: userProfile || get().userProfile,
             locale: importedLocale || get().locale,
-            ...(isRankingsImport || hasGenresAndLabels ? { rankingsUpdatedAt: new Date().toISOString() } : {}),
+            rankingSnapshots: mergedSnapshots,
+            // Preserve rankingsUpdatedAt from the backup if the backup has one
+            // and the current store does not. Otherwise keep the current value.
+            rankingsUpdatedAt:
+              parsed.data?.rankingsUpdatedAt ||
+              (isRankingsImport || hasGenresAndLabels
+                ? new Date().toISOString()
+                : get().rankingsUpdatedAt),
             lastSavedAt: new Date().toISOString(),
           });
           syncToCloud();

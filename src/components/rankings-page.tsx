@@ -1,6 +1,6 @@
 "use client";
 
-import { useAppStore, getLabelTier } from "@/lib/store";
+import { useAppStore, getLabelTier, readSnapshotsSidecar, restoreSnapshotsFromSidecar } from "@/lib/store";
 import type { Label, RankingSnapshot, RankingTimePeriod } from "@/lib/store";
 import { t, type Locale } from "@/lib/i18n";
 import { getLabelDiscoveryUrls } from "@/lib/label-links";
@@ -25,8 +25,9 @@ import {
   History,
   ExternalLink,
   Music2,
+  RotateCcw,
 } from "lucide-react";
-import React, { useState, useMemo, useCallback } from "react";
+import React, { useState, useMemo, useCallback, useEffect } from "react";
 import { Button } from "@/components/ui/button";
 
 // ==================== TYPES ====================
@@ -520,16 +521,73 @@ export function RankingsPage() {
 
   const hasSnapshots = snapshots.length > 0;
 
+  // === EMERGENCY HISTORY RECOVERY ===
+  // If the live store has 0 snapshots but the dedicated sidecar backup slot
+  // (labelpulse-snapshots-backup) has snapshots, show a one-click "restore history"
+  // button. This is the safety-net UI for the scenario where a bad cloud sync,
+  // a partial import, or a localStorage hiccup wipes the live rankingSnapshots
+  // array but the sidecar survived.
+  const [sidecarCount, setSidecarCount] = useState(0);
+  const [restoredMsg, setRestoredMsg] = useState<string | null>(null);
+  useEffect(() => {
+    setSidecarCount(readSnapshotsSidecar().length);
+  }, [snapshots.length]);
+  const showRestoreHistoryBtn =
+    !hasSnapshots && sidecarCount > 0 && labels.length > 0;
+  const handleRestoreHistory = () => {
+    const added = restoreSnapshotsFromSidecar();
+    if (added > 0) {
+      setRestoredMsg(
+        locale === "it"
+          ? `Storico recuperato: ${added} snapshot importati dal backup di emergenza.`
+          : `History recovered: ${added} snapshot(s) imported from emergency backup.`
+      );
+    } else {
+      setRestoredMsg(
+        locale === "it"
+          ? "Nessuno snapshot nuovo da recuperare (già sincronizzati)."
+          : "No new snapshots to recover (already in sync)."
+      );
+    }
+    setSidecarCount(readSnapshotsSidecar().length);
+  };
+
   return (
     <div className="space-y-6">
       {/* Alert if no previous data */}
       {!hasPreviousData && timePeriod === "current" && (
         <div className="flex items-start gap-3 p-4 rounded-lg bg-amber-500/10 border border-amber-500/30">
           <AlertTriangle className="h-5 w-5 text-amber-400 shrink-0 mt-0.5" />
-          <div>
+          <div className="flex-1">
             <p className="text-sm text-amber-400 font-medium">{t(locale, "rankings.noHistory")}</p>
             <p className="text-xs text-muted-foreground mt-1">{t(locale, "rankings.noHistoryDesc")}</p>
+            {showRestoreHistoryBtn && (
+              <div className="mt-3 flex flex-col gap-2">
+                <Button
+                  onClick={handleRestoreHistory}
+                  size="sm"
+                  variant="outline"
+                  className="gap-1.5 border-cyan-500/50 text-cyan-400 hover:bg-cyan-500/10 w-fit"
+                >
+                  <RotateCcw className="h-3.5 w-3.5" />
+                  {locale === "it"
+                    ? `Recupera storico dal backup di emergenza (${sidecarCount} snapshot)`
+                    : `Restore history from emergency backup (${sidecarCount} snapshots)`}
+                </Button>
+                {restoredMsg && (
+                  <p className="text-xs text-emerald-400">{restoredMsg}</p>
+                )}
+              </div>
+            )}
           </div>
+        </div>
+      )}
+
+      {/* If restore happened while history is now present, show success banner */}
+      {restoredMsg && hasPreviousData && (
+        <div className="flex items-start gap-3 p-3 rounded-lg bg-emerald-500/10 border border-emerald-500/30">
+          <History className="h-4 w-4 text-emerald-400 shrink-0 mt-0.5" />
+          <p className="text-xs text-emerald-400">{restoredMsg}</p>
         </div>
       )}
 
