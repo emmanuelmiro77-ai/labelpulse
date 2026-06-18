@@ -219,6 +219,67 @@ export async function analyzeAudioFile(
   return analyzeAudioBufferInternal(arrayBuffer, onProgress);
 }
 
+// ==================== ESSENTIA LOADER (script-tag based) ====================
+/**
+ * Load Essentia.js engine via <script> tags from /public.
+ * This completely bypasses the Next.js bundler (Turbopack/webpack) which breaks
+ * the ESM↔WASM interop of essentia.js, causing "u is not a constructor" errors.
+ *
+ * Returns a fully initialized Essentia instance ready for analysis.
+ * Cached after first load — subsequent calls return instantly.
+ */
+let _essentiaCache: any = null;
+let _essentiaLoading: Promise<any> | null = null;
+
+async function loadEssentiaEngine(): Promise<any> {
+  if (_essentiaCache) return _essentiaCache;
+  if (_essentiaLoading) return _essentiaLoading;
+
+  _essentiaLoading = (async () => {
+    const w = window as any;
+
+    // 1. Load WASM factory script (if not already loaded)
+    if (!w.EssentiaWASM) {
+      await loadScriptTag("/essentia-wasm.web.js");
+    }
+
+    // 2. Initialize WASM module with correct WASM file path
+    const wasmModule = await w.EssentiaWASM({
+      locateFile: (path: string) => `/essentia-wasm.web.wasm`,
+    });
+
+    // 3. Load Essentia core (if not already loaded)
+    if (!w.EssentiaCore) {
+      await loadScriptTag("/essentia.js-core.js");
+    }
+
+    // 4. Create Essentia instance with the initialized WASM module
+    const essentia = new w.EssentiaCore(wasmModule);
+
+    _essentiaCache = essentia;
+    return essentia;
+  })();
+
+  try {
+    return await _essentiaLoading;
+  } catch (err) {
+    _essentiaLoading = null;
+    throw err;
+  }
+}
+
+function loadScriptTag(src: string): Promise<void> {
+  return new Promise((resolve, reject) => {
+    const existing = document.querySelector(`script[src="${src}"]`);
+    if (existing) { resolve(); return; }
+    const s = document.createElement("script");
+    s.src = src;
+    s.onload = () => resolve();
+    s.onerror = () => reject(new Error(`Failed to load script: ${src}`));
+    document.head.appendChild(s);
+  });
+}
+
 // ==================== SHARED ANALYSIS CORE ====================
 
 /**
@@ -242,18 +303,10 @@ async function analyzeAudioBufferInternal(
     progress: 0.65,
   });
 
-  // Dynamic import to keep the initial bundle small
-  const essentiaWasmFactory = (await import("essentia.js/dist/essentia-wasm.web")).default
-    || (await import("essentia.js/dist/essentia-wasm.web"));
-  const { Essentia } = await import("essentia.js/dist/essentia.js-core.es");
-
-  // Point WASM loader to the file we copied to public/
-  // Without this, Next.js bundling breaks the relative path and the WASM silently fails to load
-  const wasmUrl = "/essentia-wasm.web.wasm";
-  // The factory returns a Promise — we MUST capture the resolved WASM module instance
-  // and pass THAT to new Essentia(), not the factory function itself.
-  const wasmModule = await essentiaWasmFactory({ locateFile: () => wasmUrl });
-  const essentia = new Essentia(wasmModule);
+  // Load Essentia.js via script tags to bypass Next.js bundler completely.
+  // The bundler (Turbopack/webpack) breaks the ESM↔WASM interop of essentia.js,
+  // causing "u is not a constructor" errors. Loading from /public avoids this entirely.
+  const essentia = await loadEssentiaEngine();
 
   // BPM detection
   const vectorSignal = essentia.arrayToVector(Float32Array.from(monoData));
