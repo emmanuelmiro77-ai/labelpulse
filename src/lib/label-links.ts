@@ -18,6 +18,15 @@
  *     which blocks server-side scraping with a JS challenge.
  *   - The pragmatic solution: link to the search page. The user clicks
  *     through and lands on the right results in <1s.
+ *
+ * Beatstats search URL note:
+ *   Beatstats does NOT use the conventional `?q=...&type=label` pattern.
+ *   Its search form (verified from the homepage markup) uses:
+ *     - Route: /search/search/index  (Symfony-style SPA route)
+ *     - Query param name: searchresult  (NOT q)
+ *   Using `?q=Drumcode&type=label` redirects to a blank/empty page.
+ *   Using `?searchresult=Drumcode` lands on the actual search results
+ *   with the label pre-filled.
  */
 
 export interface LabelLike {
@@ -50,7 +59,7 @@ export interface LabelDiscoveryUrls {
  *   getLabelDiscoveryUrls({ name: "Drumcode" })
  *   // → {
  *   //     beatport: "https://www.beatport.com/search?q=Drumcode&type=labels",
- *   //     beatstats: "https://www.beatstats.com/search?q=Drumcode&type=label",
+ *   //     beatstats: "https://www.beatstats.com/search/search/index?searchresult=Drumcode",
  *   //     soundcloud: "https://soundcloud.com/search?q=Drumcode",
  *   //     website: "",
  *   //     beatportIsDirect: false
@@ -70,8 +79,13 @@ export function getLabelDiscoveryUrls(label: LabelLike): LabelDiscoveryUrls {
     /beatport\.com\/label\//i.test(userBeatport);
   const beatport = userBeatport || `https://www.beatport.com/search?q=${encodedName}&type=labels`;
 
-  // Beatstats: search URL (no direct link field exists in our schema yet)
-  const beatstats = `https://www.beatstats.com/search?q=${encodedName}&type=label`;
+  // Beatstats: correct search URL using their actual form action + param name.
+  // The form on beatstats.com homepage is:
+  //   <form action="/search/search/index" method="get">
+  //     <input name="searchresult" ...>
+  // So the working URL is /search/search/index?searchresult=NAME
+  // (NOT /search?q=NAME&type=label which returns a blank page).
+  const beatstats = `https://www.beatstats.com/search/search/index?searchresult=${encodedName}`;
 
   // SoundCloud: direct link if user provided one, otherwise search
   const userSc = (label.soundcloudLink || "").trim();
