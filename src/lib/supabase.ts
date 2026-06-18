@@ -282,7 +282,38 @@ export function getSupabase(): SupabaseClient | null {
 // ==================== CLOUD SYNC FUNCTIONS ====================
 
 const CLOUD_TABLE = "app_state";
-const CLOUD_ROW_ID = "default";
+// Backward-compat default for users who have not logged in with Google yet.
+// Once they do, the row id becomes their lowercased email — so each Google
+// account maps to its own isolated row in app_state (multi-profile support).
+const DEFAULT_CLOUD_ROW_ID = "default";
+
+// Module-level holder for the current user's email. Populated by
+// useAuthEffect() (see use-auth.ts) — must be set BEFORE any cloud sync
+// operation, otherwise we'd fall back to "default" and mix profiles.
+let _currentUserEmail: string | null = null;
+
+/**
+ * Set the current user's email (called from useAuthEffect on session change).
+ * Pass null on logout. When null, cloud sync falls back to the legacy "default"
+ * row id (so existing users without Google login keep their data).
+ */
+export function setCurrentUserEmail(email: string | null): void {
+  const normalized = email?.trim().toLowerCase() || null;
+  if (_currentUserEmail !== normalized) {
+    _currentUserEmail = normalized;
+    // Invalidate the cached Supabase client so the next call re-evaluates
+    // credentials + row id. Not strictly required (creds don't depend on email)
+    // but keeps the state consistent.
+  }
+}
+
+/**
+ * Returns the row id to use for cloud sync. Uses the logged-in user's email
+ * if available, falls back to "default" for legacy / unauthenticated users.
+ */
+function getCloudRowId(): string {
+  return _currentUserEmail || DEFAULT_CLOUD_ROW_ID;
+}
 
 /**
  * Salva lo stato completo dell'app su Supabase.
@@ -297,7 +328,7 @@ export async function saveStateToCloud(data: object): Promise<boolean> {
   try {
     const { error } = await supabase.from(CLOUD_TABLE).upsert(
       {
-        id: CLOUD_ROW_ID,
+        id: getCloudRowId(),
         data: data,
         updated_at: new Date().toISOString(),
       },
@@ -331,7 +362,7 @@ export async function loadStateFromCloud(): Promise<object | null> {
     const { data, error } = await supabase
       .from(CLOUD_TABLE)
       .select("data, updated_at")
-      .eq("id", CLOUD_ROW_ID)
+      .eq("id", getCloudRowId())
       .single();
 
     if (error) {
@@ -385,7 +416,7 @@ export function setupRealtimeSubscription(): () => void {
           event: "UPDATE",
           schema: "public",
           table: CLOUD_TABLE,
-          filter: `id=eq.${CLOUD_ROW_ID}`,
+          filter: `id=eq.${getCloudRowId()}`,
         },
         (payload: any) => {
           // Skip our own updates to avoid feedback loops

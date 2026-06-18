@@ -2,6 +2,8 @@
 
 import { useAppStore, loadFromCloud, forceCloudSync } from "@/lib/store";
 import { t, LOCALE_NAMES, LOCALE_FLAGS, type Locale } from "@/lib/i18n";
+import { useAuthEffect } from "@/lib/use-auth";
+import { useSession } from "next-auth/react";
 import {
   LayoutDashboard,
   Music2,
@@ -33,7 +35,9 @@ import { AutoSave } from "@/components/auto-save";
 import { RankingsPage } from "@/components/rankings-page";
 import { ProducerProfile } from "@/components/producer-profile";
 import { CloudSyncButton } from "@/components/cloud-sync-button";
+import { AuthButton } from "@/components/auth-button";
 import { BarChart3 } from "lucide-react";
+import { LogIn, AlertTriangle } from "lucide-react";
 
 const NAV_KEYS = [
   { id: "dashboard" as const, labelKey: "nav.dashboard" as const, icon: LayoutDashboard },
@@ -64,8 +68,13 @@ const SECTION_SUBTITLES = {
 
 export default function Home() {
   const { activeTab, setActiveTab, locale, setLocale, hasRehydrated } = useAppStore();
+  const { data: session, status: authStatus } = useSession();
   const [mobileMenuOpen, setMobileMenuOpen] = useState(false);
   const [helpOpen, setHelpOpen] = useState(false);
+
+  // Bridge NextAuth session ↔ cloud sync. Mounts the email-based row id,
+  // triggers loadFromCloud() on login, and resets state on logout.
+  useAuthEffect();
 
   // Carica i dati dal cloud dopo la reidratazione da localStorage
   useEffect(() => {
@@ -196,6 +205,9 @@ export default function Home() {
             {/* Cloud Sync (multi-device via Supabase BYOK) */}
             <CloudSyncButton />
 
+            {/* Auth (Google login — multi-device profile) */}
+            <AuthButton />
+
             {/* Data Backup */}
             <DataBackup />
 
@@ -256,6 +268,22 @@ export default function Home() {
           </nav>
         )}
       </header>
+
+      {/* Auth banner — shown only when user is not logged in.
+          Reminds them that their data is local-only and won't sync to other
+          devices until they click "Accedi" in the top right. */}
+      {authStatus === "unauthenticated" && hasRehydrated && (
+        <div className="bg-amber-500/10 border-b border-amber-500/30 px-4 sm:px-6 py-2">
+          <div className="max-w-7xl mx-auto flex items-center gap-2 text-xs">
+            <AlertTriangle className="h-3.5 w-3.5 text-amber-400 shrink-0" />
+            <span className="text-amber-400 flex-1">
+              {locale === "it"
+                ? "Non sei loggato. I tuoi dati sono salvati solo su questo dispositivo. Clicca \"Accedi\" in alto a destra per sincronizzarli su tutti i tuoi dispositivi."
+                : "You are not logged in. Your data is stored only on this device. Click \"Login\" in the top right to sync across all your devices."}
+            </span>
+          </div>
+        </div>
+      )}
 
       {/* Main Content */}
       <main className="flex-1 px-4 sm:px-6 py-6 max-w-7xl w-full mx-auto">
