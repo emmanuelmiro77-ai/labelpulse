@@ -1,7 +1,7 @@
 "use client";
 
 import { createClient, SupabaseClient } from "@supabase/supabase-js";
-import { useAppStore } from "./store";
+import { useAppStore, mergeProfiles } from "./store";
 
 // ==================== SUPABASE CLIENT (BYOK) ====================
 // Client-side Supabase per la sincronizzazione cloud dei dati.
@@ -497,8 +497,46 @@ function applyRemoteData(cloudData: any): void {
     ? new Date(cloudData.lastSavedAt).getTime()
     : 0;
 
-  // Only apply if cloud is newer than local
-  if (cloudLastSavedAt <= localLastSavedAt) {
+  // ⚠️ CRITICAL: Content-aware merge decision (same as loadFromCloud).
+  // The old code did `if (cloudLastSavedAt <= localLastSavedAt) return;`
+  // which would silently DROP realtime updates if the local timestamp was
+  // newer or equal — even if the cloud had profile data local didn't have.
+  //
+  // This was the realtime-update variant of the same bug that wiped user
+  // data on re-login. Always apply if cloud brings new profile data, even
+  // if its timestamp looks "older".
+  const cloudProfileHasData =
+    !!cloudData?.userProfile?.artistName ||
+    !!cloudData?.userProfile?.bio ||
+    !!cloudData?.userProfile?.email ||
+    !!cloudData?.userProfile?.scLink ||
+    !!cloudData?.userProfile?.photoUrl ||
+    (Array.isArray(cloudData?.userProfile?.links) && cloudData.userProfile.links.length > 0);
+  const localProfileHasData =
+    !!store.userProfile?.artistName ||
+    !!store.userProfile?.bio ||
+    !!store.userProfile?.email ||
+    !!store.userProfile?.scLink ||
+    !!store.userProfile?.photoUrl ||
+    (Array.isArray(store.userProfile?.links) && store.userProfile.links.length > 0);
+
+  const cloudBringsNewProfile = cloudProfileHasData && !localProfileHasData;
+  const cloudHasLabels = Array.isArray(cloudData?.labels) && cloudData.labels.length > 0;
+  const cloudHasDemos = Array.isArray(cloudData?.demos) && cloudData.demos.length > 0;
+  const cloudHasSnapshots = Array.isArray(cloudData?.rankingSnapshots) && cloudData.rankingSnapshots.length > 0;
+  const cloudBringsNewLabels = cloudHasLabels && (store.labels?.length ?? 0) === 0;
+  const cloudBringsNewDemos = cloudHasDemos && (store.demos?.length ?? 0) === 0;
+  const cloudBringsNewSnapshots = cloudHasSnapshots && (store.rankingSnapshots?.length ?? 0) === 0;
+
+  const cloudIsNewerByTimestamp = cloudLastSavedAt > localLastSavedAt;
+  const shouldApply =
+    cloudBringsNewProfile ||
+    cloudBringsNewLabels ||
+    cloudBringsNewDemos ||
+    cloudBringsNewSnapshots ||
+    cloudIsNewerByTimestamp;
+
+  if (!shouldApply) {
     return;
   }
 
@@ -515,9 +553,15 @@ function applyRemoteData(cloudData: any): void {
   }
 
   if (cloudData.userProfile) {
-    // Preserve BYOK credentials — never overwrite with cloud versions
+    // ⚠️ CRITICAL: Use mergeProfiles so that non-empty fields from BOTH
+    // local and cloud win. Previously this was a spread that OVERWROTE
+    // local with cloud — so if cloud had artistName="" and local had
+    // artistName="Emmanuel Miro", the local data was silently lost.
+    // mergeProfiles ensures non-empty wins in both directions.
+    const mergedProfile = mergeProfiles(store.userProfile, cloudData.userProfile);
     merged.userProfile = {
-      ...cloudData.userProfile,
+      ...(mergedProfile || cloudData.userProfile),
+      // Preserve BYOK credentials — never overwrite with cloud versions
       supabaseUrl: store.userProfile.supabaseUrl,
       supabaseAnonKey: store.userProfile.supabaseAnonKey,
       cyaniteApiToken: store.userProfile.cyaniteApiToken,

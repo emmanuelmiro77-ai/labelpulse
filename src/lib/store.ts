@@ -573,7 +573,7 @@ function extractProfileFromRaw(raw: string | null): any | null {
  * This is the safety net: if the cloud ever sends a profile with empty
  * artistName, but the sidecar has the real artistName, we keep the real one.
  */
-function mergeProfiles(base: any | null, incoming: any | null): any | null {
+export function mergeProfiles(base: any | null, incoming: any | null): any | null {
   if (!base && !incoming) return null;
   if (!base) return incoming;
   if (!incoming) return base;
@@ -1599,22 +1599,71 @@ export async function loadFromCloud(): Promise<void> {
     const localSavedAt = localState.lastSavedAt ? new Date(localState.lastSavedAt).getTime() : 0;
     const cloudSavedAt = cloud.lastSavedAt ? new Date(cloud.lastSavedAt).getTime() : 0;
 
-    if (cloudSavedAt > localSavedAt) {
-      // I dati cloud sono più recenti — aggiorna lo store locale
+    // ⚠️ CRITICAL: Content-aware merge decision.
+    // The old code only used timestamps: `if (cloudSavedAt > localSavedAt) merge else skip`.
+    // This was BRITTLE because:
+    //   1. If both timestamps are 0 (e.g., null on both sides), `0 > 0` is false → SKIP merge
+    //      → cloud data is ignored even when local is empty seed.
+    //   2. If local was the last writer (e.g., same device that just saved), local timestamp
+    //      equals cloud timestamp → SKIP merge → if local was wiped (e.g., fresh incognito
+    //      after a force-sync), cloud data is also ignored.
+    //   3. After the skip, useAuthEffect's forceCloudSync() would push the EMPTY local state
+    //      back to cloud, OVERWRITING the cloud's good data.
+    //
+    // FIX: Always merge if cloud has profile data that local doesn't have, regardless of
+    // timestamps. Timestamps are only used as a tiebreaker when both have data.
+    const cloudProfileHasData =
+      !!cloud.userProfile?.artistName ||
+      !!cloud.userProfile?.bio ||
+      !!cloud.userProfile?.email ||
+      !!cloud.userProfile?.scLink ||
+      !!cloud.userProfile?.photoUrl ||
+      (Array.isArray(cloud.userProfile?.links) && cloud.userProfile.links.length > 0);
+    const localProfileHasData =
+      !!localState.userProfile?.artistName ||
+      !!localState.userProfile?.bio ||
+      !!localState.userProfile?.email ||
+      !!localState.userProfile?.scLink ||
+      !!localState.userProfile?.photoUrl ||
+      (Array.isArray(localState.userProfile?.links) && localState.userProfile.links.length > 0);
+
+    const cloudHasLabels = Array.isArray(cloud.labels) && cloud.labels.length > 0;
+    const cloudHasSnapshots = Array.isArray(cloud.rankingSnapshots) && cloud.rankingSnapshots.length > 0;
+    const cloudHasDemos = Array.isArray(cloud.demos) && cloud.demos.length > 0;
+    const localHasLabels = (localState.labels?.length ?? 0) > 0;
+    const localHasSnapshots = (localState.rankingSnapshots?.length ?? 0) > 0;
+    const localHasDemos = (localState.demos?.length ?? 0) > 0;
+
+    // Force merge if cloud has profile data local doesn't have
+    const cloudBringsNewProfile = cloudProfileHasData && !localProfileHasData;
+    // Force merge if cloud has labels/snapshots/demos that local doesn't have
+    const cloudBringsNewLabels = cloudHasLabels && !localHasLabels;
+    const cloudBringsNewSnapshots = cloudHasSnapshots && !localHasSnapshots;
+    const cloudBringsNewDemos = cloudHasDemos && !localHasDemos;
+
+    const cloudIsNewerByTimestamp = cloudSavedAt > localSavedAt;
+    const shouldMergeFromCloud =
+      cloudBringsNewProfile ||
+      cloudBringsNewLabels ||
+      cloudBringsNewSnapshots ||
+      cloudBringsNewDemos ||
+      cloudIsNewerByTimestamp;
+
+    if (shouldMergeFromCloud) {
+      // I dati cloud sono più recenti O hanno contenuti che il locale non ha — mergia
       console.log(
-        `[LabelPulse Cloud] Cloud data is newer (cloud: ${cloud.lastSavedAt}, local: ${localState.lastSavedAt}). Updating local store.`
+        `[LabelPulse Cloud] Merging from cloud. Reasons: ` +
+        `cloudBringsNewProfile=${cloudBringsNewProfile}, ` +
+        `cloudBringsNewLabels=${cloudBringsNewLabels}, ` +
+        `cloudBringsNewSnapshots=${cloudBringsNewSnapshots}, ` +
+        `cloudBringsNewDemos=${cloudBringsNewDemos}, ` +
+        `cloudIsNewerByTimestamp=${cloudIsNewerByTimestamp} ` +
+        `(cloud: ${cloud.lastSavedAt}, local: ${localState.lastSavedAt}).`
       );
 
       // SAFETY CHECK: se il cloud è "più recente" ma ha array vuoti dove
       // il locale ha dati, NON fidarti — è probabile che il cloud sia stato
       // resettato / corrotto. Mantieni i dati locali e basta.
-      const cloudHasLabels = Array.isArray(cloud.labels) && cloud.labels.length > 0;
-      const cloudHasSnapshots = Array.isArray(cloud.rankingSnapshots) && cloud.rankingSnapshots.length > 0;
-      const cloudHasDemos = Array.isArray(cloud.demos) && cloud.demos.length > 0;
-      const localHasLabels = (localState.labels?.length ?? 0) > 0;
-      const localHasSnapshots = (localState.rankingSnapshots?.length ?? 0) > 0;
-      const localHasDemos = (localState.demos?.length ?? 0) > 0;
-
       if (
         (localHasLabels && !cloudHasLabels) ||
         (localHasSnapshots && !cloudHasSnapshots) ||

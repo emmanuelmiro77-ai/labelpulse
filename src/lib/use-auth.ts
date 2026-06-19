@@ -89,11 +89,42 @@ export function useAuthEffect(): void {
       `[LabelPulse Auth] User authenticated (${email}). Triggering cloud load.`
     );
     loadFromCloud().then(() => {
-      // After loading, force an upload so any local-only changes (e.g., labels
-      // the user edited on this device before logging in) get pushed to the
-      // cloud. loadFromCloud already does this if cloud was empty, but if the
-      // cloud had data we want to ensure local newer changes are not lost.
-      setTimeout(() => forceCloudSync(), 1000);
+      // ⚠️ CRITICAL FIX: do NOT blindly forceCloudSync after loadFromCloud.
+      // The old code did `setTimeout(() => forceCloudSync(), 1000)` which
+      // would take the local state (possibly empty seed) and write it to
+      // cloud, OVERWRITING the user's cloud profile with empty data.
+      // This was the root cause of the "profile data loss on re-login" bug.
+      //
+      // Instead, only push to cloud if local genuinely has real data that
+      // cloud doesn't (e.g., the user entered data on this device before
+      // logging in, or restored from sidecar). When in doubt, do nothing —
+      // the user's next edit will trigger syncToCloud naturally.
+      setTimeout(() => {
+        try {
+          const s = useAppStore.getState();
+          const localProfileHasData =
+            !!s.userProfile?.artistName ||
+            !!s.userProfile?.bio ||
+            !!s.userProfile?.email ||
+            !!s.userProfile?.scLink ||
+            !!s.userProfile?.photoUrl ||
+            (Array.isArray(s.userProfile?.links) && s.userProfile.links.length > 0);
+          const localHasDemos = s.demos.length > 0;
+          const localHasSnapshots = s.rankingSnapshots.length > 0;
+          if (localProfileHasData || localHasDemos || localHasSnapshots) {
+            console.info(
+              "[LabelPulse Auth] Local has real data after cloud load — pushing to cloud to backfill."
+            );
+            forceCloudSync();
+          } else {
+            console.info(
+              "[LabelPulse Auth] Local is empty after cloud load — NOT pushing to cloud (would overwrite cloud with empty data)."
+            );
+          }
+        } catch (e) {
+          console.warn("[LabelPulse Auth] Post-cloud sync check failed:", e);
+        }
+      }, 1000);
 
       // ⚠️ POST-CLOUD SAFETY NET: after cloud sync, the cloud might have
       // sent an empty/partial profile (e.g., a fresh cloud row). Re-restore
