@@ -1632,6 +1632,11 @@ export async function loadFromCloud(): Promise<void> {
 
       // Usa la stessa logica di merge della reidratazione
       const merged = mergeCloudData(cloud, localState);
+      console.log(
+        `[LabelPulse Cloud] MERGE RESULT — profile from cloud: artistName=${cloud.userProfile?.artistName || "(empty)"}, bio=${cloud.userProfile?.bio ? "yes" : "no"}, links=${cloud.userProfile?.links?.length || 0}; ` +
+        `local profile: artistName=${localState.userProfile?.artistName || "(empty)"}; ` +
+        `merged profile: artistName=${(merged as any).userProfile?.artistName || "(empty)"}, bio=${(merged as any).userProfile?.bio ? "yes" : "no"}, links=${(merged as any).userProfile?.links?.length || 0}.`
+      );
       useAppStore.setState({
         ...merged,
         hasCloudSynced: true,
