@@ -151,6 +151,9 @@ CREATE POLICY "Allow anon insert" ON beta_feedback FOR INSERT WITH CHECK (true);
  * Lists all feedback (for the app owner to review). Protected by a secret
  * token in the BETA_ADMIN_TOKEN env var.
  *
+ * Uses the SERVICE_ROLE key (not anon) to bypass RLS — the table only allows
+ * INSERT for anon (so users can submit feedback), but only the admin can read.
+ *
  * Query params:
  *   - status: filter by status (new | read | resolved | ignored)
  *   - limit: max items (default 100)
@@ -163,7 +166,11 @@ export async function GET(req: NextRequest) {
   }
 
   const supabaseUrl = process.env.NEXT_PUBLIC_SUPABASE_URL;
-  const supabaseKey = process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY;
+  // Prefer SERVICE_ROLE_KEY to bypass RLS; fall back to anon if not set
+  // (in which case GET will return empty because RLS blocks anon SELECT).
+  const supabaseKey =
+    process.env.SUPABASE_SERVICE_ROLE_KEY ||
+    process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY;
   if (!supabaseUrl || !supabaseKey) {
     return NextResponse.json(
       { error: "Server not configured" },
