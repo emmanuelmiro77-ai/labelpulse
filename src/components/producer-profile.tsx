@@ -4,6 +4,7 @@ import { useAppStore } from "@/lib/store";
 import { t } from "@/lib/i18n";
 import { normalizeSupabaseUrl, validateSupabaseCredentials } from "@/lib/supabase";
 import React, { useState, useCallback, useMemo } from "react";
+import { useSession } from "next-auth/react";
 import {
   Pencil,
   Plus,
@@ -15,6 +16,7 @@ import {
   Disc3,
   Link2,
   Camera,
+  Cloud,
 } from "lucide-react";
 import { Input } from "@/components/ui/input";
 import { Button } from "@/components/ui/button";
@@ -29,6 +31,19 @@ import {
 import { Label as UILabel } from "@/components/ui/label";
 import { Textarea } from "@/components/ui/textarea";
 import { Avatar, AvatarImage, AvatarFallback } from "@/components/ui/avatar";
+
+// ==================== ADMIN EMAILS ====================
+// Only these emails see the BYOK (Bring Your Own Key) Supabase config UI.
+// Regular users get a friendly "Cloud sync is automatic" message instead —
+// they should never have to configure Supabase credentials themselves.
+const ADMIN_EMAILS = new Set<string>([
+  "emmanuel.miro77@gmail.com",
+]);
+
+function isAdminEmail(email: string | null | undefined): boolean {
+  if (!email) return false;
+  return ADMIN_EMAILS.has(email.toLowerCase().trim());
+}
 
 // ==================== LINK TYPES ====================
 
@@ -95,6 +110,8 @@ function getLinkColor(linkType: string): string {
 
 export function ProducerProfile() {
   const { userProfile, setUserProfile, locale } = useAppStore();
+  const { data: session } = useSession();
+  const isAdmin = isAdminEmail(session?.user?.email as string | undefined);
   const [detailSaved, setDetailSaved] = useState(false);
   const [showPhotoInput, setShowPhotoInput] = useState(false);
   const [photoUrlDraft, setPhotoUrlDraft] = useState(userProfile.photoUrl);
@@ -538,154 +555,185 @@ export function ProducerProfile() {
               Sincronizzazione Cloud
             </p>
           </div>
-          <div className="space-y-4">
-            <div>
-              <p className="text-sm font-semibold flex items-center gap-1.5">
-                <span className="bg-gradient-to-r from-emerald-400 to-cyan-400 bg-clip-text text-transparent">Supabase</span>
-                <span className="text-[9px] uppercase tracking-wider bg-secondary/60 px-1.5 py-0.5 rounded text-muted-foreground">BYOK</span>
-              </p>
-              <p className="text-[11px] text-muted-foreground mt-1 leading-relaxed">
-                Sincronizza demo, label, pitch e profilo tra PC e telefono in tempo reale.
-                Crea un account gratuito su{" "}
-                <a
-                  href="https://supabase.com"
-                  target="_blank"
-                  rel="noopener noreferrer"
-                  className="text-primary hover:underline"
-                >
-                  supabase.com
-                </a>{" "}
-                → New Project → Project Settings → API. Copia la
-                <strong className="text-foreground"> Project URL</strong> e la <strong className="text-foreground">anon key</strong> qui sotto.
-                Usa le stesse credenziali su tutti i tuoi dispositivi.
-              </p>
-            </div>
 
-            <div className="space-y-2">
-              <label className="text-[10px] uppercase tracking-wider font-medium text-muted-foreground">
-                Project URL
-              </label>
-              <Input
-                type="text"
-                defaultValue={userProfile.supabaseUrl || ""}
-                onBlur={(e) => {
-                  const v = e.target.value.trim();
-                  if ((userProfile.supabaseUrl || "") !== v) {
-                    setUserProfile({ supabaseUrl: v });
-                    triggerSaved();
-                  }
-                }}
-                placeholder="https://tuo-progetto.supabase.co oppure https://supabase.com/dashboard/project/<ref>"
-                className="bg-secondary/50 font-mono text-xs"
-              />
-              {/* Normalized URL preview — helps the user see what we'll actually use */}
-              {userProfile.supabaseUrl && (
-                (() => {
-                  const raw = userProfile.supabaseUrl.trim();
-                  const normalized = normalizeSupabaseUrl(raw);
-                  const wasDashboard = /supabase\.com\/dashboard\/project\//i.test(raw);
-                  const wasChanged = normalized !== raw;
-                  if (!wasChanged) return null;
-                  return (
-                    <div className="flex items-start gap-1.5 p-2 rounded bg-blue-500/10 border border-blue-500/20">
-                      <span className="text-[10px] text-blue-300 leading-relaxed">
-                        ↳ Auto-normalizzato in: <code className="font-mono text-blue-200">{normalized}</code>
-                        {wasDashboard && (
-                          <span className="block mt-0.5 text-blue-300/80">
-                            (URL del dashboard rilevato — usiamo l'endpoint API del progetto)
-                          </span>
-                        )}
-                      </span>
-                    </div>
-                  );
-                })()
-              )}
-            </div>
-
-            <div className="space-y-2">
-              <label className="text-[10px] uppercase tracking-wider font-medium text-muted-foreground">
-                Anon Key
-              </label>
-              <Input
-                type="password"
-                defaultValue={userProfile.supabaseAnonKey || ""}
-                onBlur={(e) => {
-                  const v = e.target.value.trim();
-                  if ((userProfile.supabaseAnonKey || "") !== v) {
-                    setUserProfile({ supabaseAnonKey: v });
-                    triggerSaved();
-                  }
-                }}
-                placeholder="eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9..."
-                className="bg-secondary/50 font-mono text-xs"
-              />
-              <p className="text-[10px] text-muted-foreground">
-                La anon key è pubblica (sicura nel browser). Non usare la service_role key.
-              </p>
-            </div>
-
-            {/* Validation error — shown when something is wrong before user even tries to sync */}
-            {(() => {
-              const err = validateSupabaseCredentials();
-              if (!err) return null;
-              return (
-                <div className="p-2 rounded bg-amber-500/10 border border-amber-500/30">
-                  <p className="text-[11px] text-amber-400 leading-relaxed flex items-start gap-1.5">
-                    <span>⚠</span>
-                    <span>{err}</span>
-                  </p>
-                </div>
-              );
-            })()}
-
-            {/* Setup status — only shown when validation passes */}
-            {userProfile.supabaseUrl && userProfile.supabaseAnonKey && !validateSupabaseCredentials() ? (
-              <div className="flex items-center justify-between gap-2 p-2 rounded bg-emerald-500/10 border border-emerald-500/20">
-                <span className="text-[11px] text-emerald-400 flex items-center gap-1.5">
-                  <span className="h-1.5 w-1.5 rounded-full bg-emerald-400 animate-pulse" />
-                  Cloud sync attivo — guardia l'icona cloud nell'header per lo stato
-                </span>
-                <Button
-                  variant="ghost"
-                  size="sm"
-                  className="h-6 text-[10px] text-destructive hover:bg-destructive/10"
-                  onClick={() => {
-                    setUserProfile({ supabaseUrl: "", supabaseAnonKey: "" });
-                    triggerSaved();
-                  }}
-                >
-                  Disconnetti
-                </Button>
-              </div>
-            ) : (
-              <div className="p-2 rounded bg-secondary/30 border border-border/30">
-                <p className="text-[11px] text-muted-foreground leading-relaxed">
-                  ℹ️ Una volta inserite le credenziali, l'icona cloud nell'header diventerà
-                  verde e i tuoi dati verranno sincronizzati automaticamente tra tutti i
-                  dispositivi su cui inserirai le stesse credenziali.
+          {isAdmin ? (
+            /* ==================== ADMIN VIEW (BYOK) ==================== */
+            /* Only admin sees the Supabase BYOK config — so they can debug
+               or test with their own Supabase project. Regular users see a
+               friendly "cloud sync is automatic" message below. */
+            <div className="space-y-4">
+              <div>
+                <p className="text-sm font-semibold flex items-center gap-1.5">
+                  <span className="bg-gradient-to-r from-emerald-400 to-cyan-400 bg-clip-text text-transparent">Supabase</span>
+                  <span className="text-[9px] uppercase tracking-wider bg-secondary/60 px-1.5 py-0.5 rounded text-muted-foreground">BYOK · ADMIN</span>
+                </p>
+                <p className="text-[11px] text-muted-foreground mt-1 leading-relaxed">
+                  Sincronizza demo, label, pitch e profilo tra PC e telefono in tempo reale.
+                  Crea un account gratuito su{" "}
+                  <a
+                    href="https://supabase.com"
+                    target="_blank"
+                    rel="noopener noreferrer"
+                    className="text-primary hover:underline"
+                  >
+                    supabase.com
+                  </a>{" "}
+                  → New Project → Project Settings → API. Copia la
+                  <strong className="text-foreground"> Project URL</strong> e la <strong className="text-foreground">anon key</strong> qui sotto.
+                  Usa le stesse credenziali su tutti i tuoi dispositivi.
                 </p>
               </div>
-            )}
 
-            {/* SQL setup instructions */}
-            <details className="text-[10px] text-muted-foreground">
-              <summary className="cursor-pointer hover:text-foreground transition-colors">
-                Come creare la tabella su Supabase (primo setup)
-              </summary>
-              <ol className="list-decimal pl-4 mt-2 space-y-1 leading-relaxed">
-                <li>Crea un progetto su{" "}
-                  <a href="https://supabase.com" target="_blank" rel="noopener noreferrer" className="text-primary hover:underline">
-                    supabase.com
-                  </a> (gratuito, 500MB e 50K richieste/mese)
-                </li>
-                <li>Vai su <strong>SQL Editor</strong> → New query</li>
-                <li>Incolla il contenuto di <code className="bg-secondary/50 px-1 rounded">supabase-schema.sql</code> (disponibile nel repo) ed esegui</li>
-                <li>Vai su <strong>Project Settings → API</strong></li>
-                <li>Copia <strong>Project URL</strong> e <strong>anon public key</strong></li>
-                <li>Incollale qui sopra e salva</li>
-              </ol>
-            </details>
-          </div>
+              <div className="space-y-2">
+                <label className="text-[10px] uppercase tracking-wider font-medium text-muted-foreground">
+                  Project URL
+                </label>
+                <Input
+                  type="text"
+                  defaultValue={userProfile.supabaseUrl || ""}
+                  onBlur={(e) => {
+                    const v = e.target.value.trim();
+                    if ((userProfile.supabaseUrl || "") !== v) {
+                      setUserProfile({ supabaseUrl: v });
+                      triggerSaved();
+                    }
+                  }}
+                  placeholder="https://tuo-progetto.supabase.co oppure https://supabase.com/dashboard/project/<ref>"
+                  className="bg-secondary/50 font-mono text-xs"
+                />
+                {/* Normalized URL preview — helps the user see what we'll actually use */}
+                {userProfile.supabaseUrl && (
+                  (() => {
+                    const raw = userProfile.supabaseUrl.trim();
+                    const normalized = normalizeSupabaseUrl(raw);
+                    const wasDashboard = /supabase\.com\/dashboard\/project\//i.test(raw);
+                    const wasChanged = normalized !== raw;
+                    if (!wasChanged) return null;
+                    return (
+                      <div className="flex items-start gap-1.5 p-2 rounded bg-blue-500/10 border border-blue-500/20">
+                        <span className="text-[10px] text-blue-300 leading-relaxed">
+                          ↳ Auto-normalizzato in: <code className="font-mono text-blue-200">{normalized}</code>
+                          {wasDashboard && (
+                            <span className="block mt-0.5 text-blue-300/80">
+                              (URL del dashboard rilevato — usiamo l'endpoint API del progetto)
+                            </span>
+                          )}
+                        </span>
+                      </div>
+                    );
+                  })()
+                )}
+              </div>
+
+              <div className="space-y-2">
+                <label className="text-[10px] uppercase tracking-wider font-medium text-muted-foreground">
+                  Anon Key
+                </label>
+                <Input
+                  type="password"
+                  defaultValue={userProfile.supabaseAnonKey || ""}
+                  onBlur={(e) => {
+                    const v = e.target.value.trim();
+                    if ((userProfile.supabaseAnonKey || "") !== v) {
+                      setUserProfile({ supabaseAnonKey: v });
+                      triggerSaved();
+                    }
+                  }}
+                  placeholder="eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9..."
+                  className="bg-secondary/50 font-mono text-xs"
+                />
+                <p className="text-[10px] text-muted-foreground">
+                  La anon key è pubblica (sicura nel browser). Non usare la service_role key.
+                </p>
+              </div>
+
+              {/* Validation error — shown when something is wrong before user even tries to sync */}
+              {(() => {
+                const err = validateSupabaseCredentials();
+                if (!err) return null;
+                return (
+                  <div className="p-2 rounded bg-amber-500/10 border border-amber-500/30">
+                    <p className="text-[11px] text-amber-400 leading-relaxed flex items-start gap-1.5">
+                      <span>⚠</span>
+                      <span>{err}</span>
+                    </p>
+                  </div>
+                );
+              })()}
+
+              {/* Setup status — only shown when validation passes */}
+              {userProfile.supabaseUrl && userProfile.supabaseAnonKey && !validateSupabaseCredentials() ? (
+                <div className="flex items-center justify-between gap-2 p-2 rounded bg-emerald-500/10 border border-emerald-500/20">
+                  <span className="text-[11px] text-emerald-400 flex items-center gap-1.5">
+                    <span className="h-1.5 w-1.5 rounded-full bg-emerald-400 animate-pulse" />
+                    Cloud sync attivo — guarda l'icona cloud nell'header per lo stato
+                  </span>
+                  <Button
+                    variant="ghost"
+                    size="sm"
+                    className="h-6 text-[10px] text-destructive hover:bg-destructive/10"
+                    onClick={() => {
+                      setUserProfile({ supabaseUrl: "", supabaseAnonKey: "" });
+                      triggerSaved();
+                    }}
+                  >
+                    Disconnetti
+                  </Button>
+                </div>
+              ) : (
+                <div className="p-2 rounded bg-secondary/30 border border-border/30">
+                  <p className="text-[11px] text-muted-foreground leading-relaxed">
+                    ℹ️ Una volta inserite le credenziali, l'icona cloud nell'header diventerà
+                    verde e i tuoi dati verranno sincronizzati automaticamente tra tutti i
+                    dispositivi su cui inserirai le stesse credenziali.
+                  </p>
+                </div>
+              )}
+
+              {/* SQL setup instructions */}
+              <details className="text-[10px] text-muted-foreground">
+                <summary className="cursor-pointer hover:text-foreground transition-colors">
+                  Come creare la tabella su Supabase (primo setup)
+                </summary>
+                <ol className="list-decimal pl-4 mt-2 space-y-1 leading-relaxed">
+                  <li>Crea un progetto su{" "}
+                    <a href="https://supabase.com" target="_blank" rel="noopener noreferrer" className="text-primary hover:underline">
+                      supabase.com
+                    </a> (gratuito, 500MB e 50K richieste/mese)
+                  </li>
+                  <li>Vai su <strong>SQL Editor</strong> → New query</li>
+                  <li>Incolla il contenuto di <code className="bg-secondary/50 px-1 rounded">supabase-schema.sql</code> (disponibile nel repo) ed esegui</li>
+                  <li>Vai su <strong>Project Settings → API</strong></li>
+                  <li>Copia <strong>Project URL</strong> e <strong>anon public key</strong></li>
+                  <li>Incollale qui sopra e salva</li>
+                </ol>
+              </details>
+            </div>
+          ) : (
+            /* ==================== REGULAR USER VIEW ==================== */
+            /* Regular users don't need to know anything about Supabase.
+               Cloud sync "just works" via the project's env vars. */
+            <div className="space-y-3">
+              <div className="flex items-start gap-3 p-3 rounded-lg bg-emerald-500/5 border border-emerald-500/20">
+                <Cloud className="h-4 w-4 text-emerald-400 mt-0.5 flex-shrink-0" />
+                <div className="space-y-1">
+                  <p className="text-sm font-medium text-emerald-400">
+                    {locale === "it" ? "Sincronizzazione cloud attiva" : "Cloud sync active"}
+                  </p>
+                  <p className="text-[11px] text-muted-foreground leading-relaxed">
+                    {locale === "it"
+                      ? "I tuoi dati (profilo, demo, label, pitch) sono sincronizzati automaticamente nel cloud quando fai login. Puoi accedere da qualsiasi dispositivo con lo stesso account Google — tutto sarà già lì che ti aspetta."
+                      : "Your data (profile, demos, labels, pitches) is automatically synced to the cloud when you log in. You can access it from any device with the same Google account — everything will be there waiting for you."}
+                  </p>
+                </div>
+              </div>
+              <p className="text-[10px] text-muted-foreground leading-relaxed">
+                {locale === "it"
+                  ? "Guarda l'icona cloud nell'header per verificare lo stato della sincronizzazione in tempo reale."
+                  : "Check the cloud icon in the header to see real-time sync status."}
+              </p>
+            </div>
+          )}
         </CardContent>
       </Card>
     </div>
