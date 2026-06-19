@@ -91,3 +91,45 @@ Next steps for user:
 2. Run supabase-schema.sql in Supabase SQL Editor (creates table + enables Realtime)
 3. Same credentials on phone and PC → automatic sync
 4. For audio analysis: use "Carica file" button (more reliable than SoundCloud link)
+
+---
+Task ID: 4
+Agent: Main Agent
+Task: Fix Beatstats scraper — all genres returning 404 (URL pattern changed)
+
+Work Log:
+- Analyzed console log from user: scraper was running but every URL pattern (4 per genre × 32 genres = 128 attempts) returned 404
+- The user shared the page URL they were on: `list?genre=0&period=2` — this revealed the new Beatstats URL structure
+- Old patterns (all dead):
+  - https://www.beatstats.com/genre/{slug}
+  - https://www.beatstats.com/label-ranking/{slug}
+- New pattern (observed):
+  - https://www.beatstats.com/list?genre={numericId}&period={numericId}
+- Genres are now NUMERIC IDs, not slugs — and Beatstats has reshuffled them more than once, so hardcoding is fragile
+- Rewrote `buildBeatstatsScript()` in src/components/rankings-wizard.tsx:
+  - Phase 1: Discover genres dynamically from homepage
+    - Strategy A: parse all <a href*="?genre=N"> links in nav
+    - Strategy B: parse __NEXT_DATA__ JSON for a genres array
+    - Strategy C: parse any embedded <script type="application/json">
+    - Strategy D: parse <select><option value="N">Name</option></select>
+  - Phase 2: For each genre, fetch /list?genre={id}&period={periodId}
+    - Period mapping (best-guess based on observed URL):
+      - current → period=2
+      - yearly (2024) → period=3&year=2024
+      - monthly (2024-6) → period=2&year=2024&month=6
+  - Phase 3: Extract labels with 3 fallback strategies:
+    - __NEXT_DATA__ JSON (recursive search for arrays of label-shaped objects)
+    - HTML <a href*="/label/"> links with row-walking for rank/points
+    - Generic table rows
+- Sanity check at top: aborts with clear error if user runs the script from non-beatstats.com page
+- Empty-result JSON now includes an `error` field ("NOT_ON_BEATSTATS" or "GENRE_DISCOVERY_FAILED") so the import flow can show a specific error
+- Updated UI warning text in rankings-wizard.tsx to reflect new behavior (no more manual navigation needed; script auto-discovers)
+- TypeScript: clean (no errors in rankings-wizard.tsx)
+- Next.js build: ✅ successful (5.2s)
+
+Stage Summary:
+- ROOT CAUSE: Beatstats rewrote URL structure — old /genre/{slug} and /label-ranking/{slug} both 404
+- FIX: Scraper v2 dynamically discovers genre IDs from homepage + uses correct /list?genre={id}&period={periodId} URL
+- Multiple fallback strategies (4 for genre discovery, 3 for label extraction) make it resilient to Beatstats HTML/CSS changes
+- Clear error reporting in JSON _meta field when something fails
+- Build verified: compiles + builds cleanly

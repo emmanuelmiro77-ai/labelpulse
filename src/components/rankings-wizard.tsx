@@ -23,225 +23,416 @@ import { useToast } from "@/hooks/use-toast";
 // Original minified script — scrapes Beatport's current top-100 across all genres.
 const BEATPORT_SCRAPER_SCRIPT = `(async function(){'use strict';var D=800,G=[{id:81,slug:'140-deep-dubstep-grime',name:'140 / Deep Dubstep / Grime'},{id:89,slug:'afro-house',name:'Afro House'},{id:99,slug:'amapiano',name:'Amapiano'},{id:85,slug:'ambient-experimental',name:'Ambient / Experimental'},{id:87,slug:'bass-club',name:'Bass / Club'},{id:91,slug:'bass-house',name:'Bass House'},{id:101,slug:'brazilian-funk',name:'Brazilian Funk'},{id:9,slug:'breaks-breakbeat-uk-bass',name:'Breaks / Breakbeat / Uk Bass'},{id:39,slug:'dance-pop',name:'Dance / Pop'},{id:12,slug:'deep-house',name:'Deep House'},{id:82,slug:'downtempo',name:'Downtempo'},{id:1,slug:'drum-and-bass',name:'Drum & Bass'},{id:18,slug:'dubstep',name:'Dubstep'},{id:84,slug:'electro-classic-detroit-modern',name:'Electro Classic / Detroit / Modern'},{id:3,slug:'electronica',name:'Electronica'},{id:97,slug:'funky-house',name:'Funky House'},{id:8,slug:'hard-dance-hardcore-neo-rave',name:'Hard Dance / Hardcore / Neo Rave'},{id:98,slug:'hard-techno',name:'Hard Techno'},{id:5,slug:'house',name:'House'},{id:37,slug:'indie-dance',name:'Indie Dance'},{id:96,slug:'jackin-house',name:'Jackin House'},{id:100,slug:'mainstage',name:'Mainstage'},{id:90,slug:'melodic-house-techno',name:'Melodic House & Techno'},{id:14,slug:'minimal-deep-tech',name:'Minimal / Deep Tech'},{id:50,slug:'nu-disco-disco',name:'Nu Disco / Disco'},{id:88,slug:'organic-house',name:'Organic House'},{id:15,slug:'progressive-house',name:'Progressive House'},{id:13,slug:'psy-trance',name:'Psy-Trance'},{id:11,slug:'tech-house',name:'Tech House'},{id:6,slug:'techno-peak-time-driving',name:'Techno Peak Time / Driving'},{id:92,slug:'techno-raw-deep-hypnotic',name:'Techno Raw / Deep / Hypnotic'},{id:7,slug:'trance-main-floor',name:'Trance Main Floor'},{id:38,slug:'trap-future-bass',name:'Trap / Future Bass'},{id:86,slug:'uk-garage-bassline',name:'Uk Garage / Bassline'}];var S='%c[LabelPulse]',c1='color:#8b5cf6;font-weight:bold',c2='color:#666',cOk='color:#22c55e;font-weight:bold',cErr='color:#ef4444';console.log(S+' %cBeatport Scraper avviato',c1,c2);console.log(S+' %cGeneri: '+G.length,c1,c2);var sleep=function(ms){return new Promise(function(r){setTimeout(r,ms)})};function processTracks(tracks,lm){for(var i=0;i<tracks.length;i++){var t=tracks[i],label=null;if(t.release&&t.release.label)label=t.release.label;else if(t.label)label=t.label;else if(t.release&&t.release.release&&t.release.release.label)label=t.release.release.label;if(!label||!label.name)continue;var n=label.name.toUpperCase().trim(),pos=t._position||(i+1),pts=Math.max(0,101-pos);if(!lm.has(n)){lm.set(n,{id:label.id||null,name:n,slug:label.slug||'',trackCount:0,totalPoints:0,bestPosition:pos})}var e=lm.get(n);e.trackCount++;e.totalPoints+=pts;if(pos<e.bestPosition)e.bestPosition=pos}}async function fetchGenre(gid,slug){var lm=new Map();try{var r=await fetch('/api/catalog/genres/'+gid+'/top-100/',{credentials:'include'});if(r.ok){var d=await r.json(),tr=d.results||d.tracks||d;if(Array.isArray(tr)&&tr.length>0){console.log(S+' %c API interna: '+tr.length+' tracce',c1,cOk);processTracks(tr,lm);return lm}}}catch(e){}try{var r2=await fetch('https://api.beatport.com/v4/catalog/genres/'+gid+'/top-10-tracks/?per_page=100',{credentials:'include'});if(r2.ok){var d2=await r2.json(),tr2=d2.results||d2;if(Array.isArray(tr2)&&tr2.length>0){console.log(S+' %c API v4: '+tr2.length+' tracce',c1,cOk);processTracks(tr2,lm);return lm}}}catch(e){}try{var r3=await fetch('https://www.beatport.com/genre/'+slug+'/'+gid+'/top-100',{credentials:'include'});if(r3.ok){var html=await r3.text(),p=new DOMParser(),doc=p.parseFromString(html,'text/html'),nd=doc.getElementById('__NEXT_DATA__');if(nd){var nData=JSON.parse(nd.textContent),q=nData&&nData.props&&nData.props.pageProps&&nData.props.pageProps.dehydratedState&&nData.props.pageProps.dehydratedState.queries;if(q){for(var qi=0;qi<q.length;qi++){var res=q[qi].state&&q[qi].state.data&&q[qi].state.data.results;if(Array.isArray(res)&&res.length>0){console.log(S+' %c Next.js data: '+res.length+' tracce',c1,cOk);processTracks(res,lm);return lm}var trk=q[qi].state&&q[qi].state.data&&q[qi].state.data.tracks;if(Array.isArray(trk)&&trk.length>0){console.log(S+' %c Next.js data: '+trk.length+' tracce',c1,cOk);processTracks(trk,lm);return lm}}}}var tEls=doc.querySelectorAll('[data-testid="track-row"],.track-grid-content,.bucket-item');var htmlTracks=[];tEls.forEach(function(el,idx){try{var lEl=el.querySelector('[data-testid="label-name"],.buk-track-labels a,.track-label a');var lName=lEl?lEl.textContent.trim():null;var lHref=lEl?lEl.getAttribute('href'):'';var lIdM=lHref.match(/\\/label\\/(\\d+)/);if(lName){htmlTracks.push({release:{label:{id:lIdM?parseInt(lIdM[1]):null,name:lName,slug:lHref.split('/').pop()||''}},_position:idx+1})}}catch(e){}});if(htmlTracks.length>0){console.log(S+' %c HTML parsing: '+htmlTracks.length+' tracce',c1,cOk);processTracks(htmlTracks,lm);return lm}}}catch(e){console.log(S+' %c Errore: '+e.message,c1,cErr)}if(lm.size===0)console.log(S+' %c Nessun dato',c1,cErr);return lm}console.log(S+' %c========================================',c1,c1);console.log(S+' %cINIZIO ESTRAZIONE',c1,cOk);console.log(S+' %c========================================',c1,c1);var gR={},tL=0,sC=0,fC=0;for(var gi=0;gi<G.length;gi++){var g=G[gi],pct=Math.round(((gi+1)/G.length)*100);console.log(S+' %c['+pct+'%] '+g.name+'...',c1,c2);var lm=await fetchGenre(g.id,g.slug),la=Array.from(lm.values());la.sort(function(a,b){return b.totalPoints-a.totalPoints});la.forEach(function(l,i){l.rank=i+1});gR[g.name]=la;tL+=la.length;if(la.length>0){sC++;console.log(S+' %c  OK '+la.length+' label \\u2014 #1: '+la[0].name,c1,cOk)}else{fC++}await sleep(D)}console.log(S+' %cCostruzione JSON...',c1,c2);var lM={};for(var gn in gR){for(var li=0;li<gR[gn].length;li++){var lb=gR[gn][li],nm=lb.name.toUpperCase().trim();if(!nm)continue;if(!lM[nm]){lM[nm]={id:'lbl_'+nm.toLowerCase().replace(/[^a-z0-9]+/g,'_').replace(/_+$/,''),name:nm,genres:[],rankByGenre:{},pointsByGenre:{},trending:false};if(lb.id)lM[nm].beatportId=lb.id}if(lM[nm].genres.indexOf(gn)===-1)lM[nm].genres.push(gn);lM[nm].rankByGenre[gn]=lb.rank;lM[nm].pointsByGenre[gn]=lb.totalPoints}}for(var k in lM){var l=lM[k],ranks=Object.values(l.rankByGenre),minR=Math.min.apply(null,ranks),tPts=Object.values(l.pointsByGenre).reduce(function(a,b){return a+b},0);if(minR<=25||tPts>500){l.trending=true;l.trendingRankByGenre={};l.trendingPointsByGenre={};for(var gr in l.rankByGenre){if(l.rankByGenre[gr]<=50){l.trendingRankByGenre[gr]=l.rankByGenre[gr];l.trendingPointsByGenre[gr]=l.pointsByGenre[gr]}}}}var out={genres:G.map(function(g){return g.name}),labels:Object.values(lM),_meta:{source:'beatport',scrapedAt:new Date().toISOString(),totalLabels:Object.keys(lM).length,totalGenres:G.length,successGenres:sC,failedGenres:fC}};var js=JSON.stringify(out,null,2),bl=new Blob([js],{type:'application/json'}),u=URL.createObjectURL(bl),a=document.createElement('a');a.href=u;a.download='labelpulse_beatport_'+new Date().toISOString().split('T')[0]+'.json';document.body.appendChild(a);a.click();document.body.removeChild(a);URL.revokeObjectURL(u);console.log(S+' %c========================================',c1,c1);console.log(S+' %cCOMPLETATO!',c1,cOk);console.log(S+' %c'+Object.keys(lM).length+' label da '+sC+'/'+G.length+' generi',c1,cOk);if(fC>0)console.log(S+' %c '+fC+' generi senza dati',c1,cErr);console.log(S+' %cFile JSON scaricato! Importa in LabelPulse',c1,cOk);console.log(S+' %c========================================',c1,c1);return out})();`;
 
-// ==================== BEATSTATS SCRAPER ====================
+// ==================== BEATSTATS SCRAPER v2 ====================
 // Generates a scraper script for Beatstats. Supports current period + historical
 // (yearly / monthly) archives. Same output format as Beatport scraper so the
 // existing import flow works unchanged.
 //
-// Strategy: on each /genre/{slug}[/year][/month] page, find all <a href*="/label/">
-// links. Each label name links to its Beatstats label page, so this pattern is
-// stable across CSS refactors. Walk up to the row container, extract rank and
-// points from sibling cells.
+// BACKGROUND:
+//   Beatstats rewrote their URL structure. Old patterns /genre/{slug} and
+//   /label-ranking/{slug} all return 404. The new pattern (as of 2026) is:
+//       https://www.beatstats.com/list?genre={numericId}&period={numericId}
+//   Genres are identified by NUMERIC IDs (not slugs), and the genre list
+//   itself is rendered dynamically on the homepage. Hardcoding the IDs is
+//   fragile because Beatstats has reshuffled them more than once.
+//
+// STRATEGY (v2):
+//   Phase 1 — discover genres dynamically: fetch the homepage, parse any
+//             link matching ?genre=N or any embedded JSON containing a
+//             "genres" array with {id, name} objects.
+//   Phase 2 — for each genre, fetch /list?genre={id}&period={periodId}
+//             (periodId mapping: 2=current, 3=year, 2=month with extra
+//             year/month params; this is best-guess based on the URL the
+//             user was observed on).
+//   Phase 3 — extract labels from the response using multiple strategies:
+//             __NEXT_DATA__ JSON → table rows → label links. First match
+//             wins.
 //
 // The script is generated dynamically so we can inject the chosen period.
 function buildBeatstatsScript(period: "current" | string, month: string | null): string {
-  // Build the path suffix: "" for current, "/2024" for yearly, "/2024/6" for monthly
-  let pathSuffix = "";
+  // Build the period label used in the JSON _meta + snapshot timestamp.
   let periodLabel = "current";
   if (period !== "current") {
-    pathSuffix = `/${period}`;
     periodLabel = period;
     if (month && month !== "all") {
-      pathSuffix += `/${month}`;
       periodLabel = `${period}-${month}`;
     }
   }
 
-  // Beatstats genre list. Hardcoded because the homepage navigation is JS-rendered
-  // and not always discoverable via simple fetch. If Beatstats adds/removes genres,
-  // this list needs updating — but it's been stable for years.
-  const genresJson = JSON.stringify([
-    { slug: "house", name: "House" },
-    { slug: "tech-house", name: "Tech House" },
-    { slug: "techno", name: "Techno" },
-    { slug: "deep-house", name: "Deep House" },
-    { slug: "progressive-house", name: "Progressive House" },
-    { slug: "electro-house", name: "Electro House" },
-    { slug: "minimal", name: "Minimal" },
-    { slug: "trance", name: "Trance" },
-    { slug: "hard-dance", name: "Hard Dance" },
-    { slug: "drum-and-bass", name: "Drum & Bass" },
-    { slug: "dubstep", name: "Dubstep" },
-    { slug: "breaks", name: "Breaks" },
-    { slug: "hip-hop", name: "Hip Hop" },
-    { slug: "r-and-b", name: "R & B" },
-    { slug: "reggae-dancehall", name: "Reggae / Dancehall" },
-    { slug: "latin", name: "Latin" },
-    { slug: "acoustic", name: "Acoustic" },
-    { slug: "classical", name: "Classical" },
-    { slug: "jazz", name: "Jazz" },
-    { slug: "soul-funk", name: "Soul / Funk" },
-    { slug: "nu-disco-disco", name: "Nu Disco / Disco" },
-    { slug: "indie-dance", name: "Indie Dance" },
-    { slug: "funky-house", name: "Funky House" },
-    { slug: "bass-club", name: "Bass / Club" },
-    { slug: "jackin-house", name: "Jackin House" },
-    { slug: "afro-house", name: "Afro House" },
-    { slug: "organic-house", name: "Organic House" },
-    { slug: "melodic-house-techno", name: "Melodic House & Techno" },
-    { slug: "psy-trance", name: "Psy-Trance" },
-    { slug: "uk-garage-bassline", name: "UK Garage / Bassline" },
-    { slug: "trap-future-bass", name: "Trap / Future Bass" },
-    { slug: "ambient-experimental", name: "Ambient / Experimental" },
-  ]);
-
   return `(async function(){'use strict';
-var PERIOD_SUFFIX = ${JSON.stringify(pathSuffix)};
-var PERIOD_LABEL  = ${JSON.stringify(periodLabel)};
-var GENRES = ${genresJson};
+var PERIOD_LABEL = ${JSON.stringify(periodLabel)};
 var DELAY_MS = 600;
 var S='%c[LabelPulse]',c1='color:#8b5cf6;font-weight:bold',c2='color:#666',cOk='color:#22c55e;font-weight:bold',cErr='color:#ef4444';
-console.log(S+' %cBeatstats Scraper avviato',c1,c2);
+console.log(S+' %cBeatstats Scraper v2 avviato',c1,c2);
 console.log(S+' %cPeriodo: '+PERIOD_LABEL,c1,c2);
-console.log(S+' %cGeneri: '+GENRES.length,c1,c2);
 var sleep=function(ms){return new Promise(function(r){setTimeout(r,ms)})};
 
-// Extract numeric values from a cell's text. Returns {num, isPoints}.
+// === Sanity check: must be on beatstats.com (Cloudflare session required) ===
+if(location.hostname.indexOf('beatstats.com')===-1){
+  console.log(S+' %cERRORE FATALE: non sei su beatstats.com!',c1,cErr);
+  console.log(S+' %cApri https://www.beatstats.com/ , aspetta che carichi, poi rilancia lo script.',c1,cErr);
+  var errOut={genres:[],labels:[],_meta:{source:'beatstats',scrapedAt:new Date().toISOString(),periodLabel:PERIOD_LABEL,totalLabels:0,totalGenres:0,successGenres:0,failedGenres:0,error:'NOT_ON_BEATSTATS'}};
+  var errJs=JSON.stringify(errOut,null,2),errBl=new Blob([errJs],{type:'application/json'}),errU=URL.createObjectURL(errBl),errA=document.createElement('a');
+  errA.href=errU;errA.download='labelpulse_beatstats_ERROR.json';document.body.appendChild(errA);errA.click();document.body.removeChild(errA);URL.revokeObjectURL(errU);
+  return errOut;
+}
+var ORIGIN=location.origin;
+
+// === Build URL for a genre + period ===
+function buildGenreUrl(genreId){
+  // Period mapping (best-guess based on observed URL list?genre=0&period=2):
+  //   current  -> period=2 (this month)
+  //   2024     -> period=3&year=2024 (yearly archive)
+  //   2024-6   -> period=2&year=2024&month=6 (specific month)
+  if(PERIOD_LABEL==='current'){
+    return ORIGIN+'/list?genre='+genreId+'&period=2';
+  }
+  if(PERIOD_LABEL.indexOf('-')===-1){
+    var y=parseInt(PERIOD_LABEL,10);
+    return ORIGIN+'/list?genre='+genreId+'&period=3&year='+y;
+  }
+  var parts=PERIOD_LABEL.split('-');
+  return ORIGIN+'/list?genre='+genreId+'&period=2&year='+parts[0]+'&month='+parts[1];
+}
+
+// === Phase 1: Discover genres dynamically from homepage ===
+async function discoverGenres(){
+  var genres=[];
+  console.log(S+' %cFase 1: Scoperta generi da homepage...',c1,c2);
+  try{
+    var res=await fetch(ORIGIN+'/',{credentials:'include',headers:{'Accept':'text/html'}});
+    if(!res.ok){
+      console.log(S+' %c  Homepage HTTP '+res.status+', provo URL alternativo',c1,cErr);
+      res=await fetch(ORIGIN+'/list?genre=0&period=2',{credentials:'include',headers:{'Accept':'text/html'}});
+    }
+    if(!res.ok){
+      console.log(S+' %c  Impossibile caricare pagina iniziale: HTTP '+res.status,c1,cErr);
+      return [];
+    }
+    var html=await res.text();
+    if(html.indexOf('Just a moment...')!==-1||html.indexOf('__cf_chl_opt')!==-1){
+      console.log(S+' %c  Cloudflare challenge rilevato. Aspetta che la pagina carichi completamente e riprova.',c1,cErr);
+      return [];
+    }
+    var doc=new DOMParser().parseFromString(html,'text/html');
+
+    // --- Strategy A: parse <a href="?genre=N"> links ---
+    var genreLinks=doc.querySelectorAll('a[href*="genre="]');
+    var seen=new Set();
+    genreLinks.forEach(function(link){
+      var href=link.getAttribute('href')||'';
+      var match=href.match(/[?&]genre=(\\d+)/);
+      if(match){
+        var id=parseInt(match[1],10);
+        var name=(link.textContent||'').trim();
+        if(name&&name.length>1&&!seen.has(id)){
+          seen.add(id);
+          genres.push({id:id,name:name});
+        }
+      }
+    });
+    if(genres.length>0){
+      console.log(S+' %c  Trovati '+genres.length+' generi via link analysis',c1,cOk);
+      return genres;
+    }
+
+    // --- Strategy B: parse __NEXT_DATA__ JSON for a genres array ---
+    var nextData=doc.getElementById('__NEXT_DATA__');
+    if(nextData){
+      try{
+        var data=JSON.parse(nextData.textContent);
+        function findGenres(obj,depth){
+          if(depth>7||!obj||typeof obj!=='object') return null;
+          if(Array.isArray(obj)){
+            if(obj.length>5&&obj[0]&&typeof obj[0]==='object'&&((obj[0].id!==undefined)||(obj[0].genreId!==undefined))&&((obj[0].name)||(obj[0].slug))){
+              return obj;
+            }
+            for(var i=0;i<obj.length;i++){var r=findGenres(obj[i],depth+1);if(r)return r;}
+          }else{
+            for(var k in obj){
+              if((k==='genres'||k==='genreList')&&Array.isArray(obj[k])&&obj[k].length>5) return obj[k];
+              var r=findGenres(obj[k],depth+1);if(r)return r;
+            }
+          }
+          return null;
+        }
+        var found=findGenres(data,0);
+        if(found){
+          found.forEach(function(g){
+            if(((g.id!==undefined)||(g.genreId!==undefined))&&(g.name||g.slug)){
+              genres.push({id:g.id!==undefined?g.id:g.genreId,name:g.name||g.slug});
+            }
+          });
+          if(genres.length>0){
+            console.log(S+' %c  Trovati '+genres.length+' generi via __NEXT_DATA__',c1,cOk);
+            return genres;
+          }
+        }
+      }catch(e){
+        console.log(S+' %c  __NEXT_DATA__ parse error: '+e.message,c1,cErr);
+      }
+    }
+
+    // --- Strategy C: parse any embedded <script type="application/json"> ---
+    var scripts=doc.querySelectorAll('script[type="application/json"], script[type="application/ld+json"], script#__NEXT_DATA__, script#__NUXT_DATA__');
+    scripts.forEach(function(s){
+      if(genres.length>0) return;
+      try{
+        var data=JSON.parse(s.textContent);
+        function findGenres2(obj,depth){
+          if(depth>7||!obj||typeof obj!=='object') return null;
+          if(Array.isArray(obj)){
+            if(obj.length>5&&obj[0]&&typeof obj[0]==='object'&&((obj[0].id!==undefined)||(obj[0].genreId!==undefined))&&((obj[0].name)||(obj[0].slug))){
+              return obj;
+            }
+            for(var i=0;i<obj.length;i++){var r=findGenres2(obj[i],depth+1);if(r)return r;}
+          }else{
+            for(var k in obj){
+              if((k==='genres'||k==='genreList')&&Array.isArray(obj[k])&&obj[k].length>5) return obj[k];
+              var r=findGenres2(obj[k],depth+1);if(r)return r;
+            }
+          }
+          return null;
+        }
+        var found=findGenres2(data,0);
+        if(found){
+          found.forEach(function(g){
+            if(((g.id!==undefined)||(g.genreId!==undefined))&&(g.name||g.slug)){
+              genres.push({id:g.id!==undefined?g.id:g.genreId,name:g.name||g.slug});
+            }
+          });
+        }
+      }catch(e){}
+    });
+    if(genres.length>0){
+      console.log(S+' %c  Trovati '+genres.length+' generi via embedded JSON',c1,cOk);
+      return genres;
+    }
+
+    // --- Strategy D: scrape <select> <option value="N">Name</option> ---
+    var selects=doc.querySelectorAll('select');
+    selects.forEach(function(sel){
+      if(genres.length>0) return;
+      var opts=sel.querySelectorAll('option');
+      opts.forEach(function(opt){
+        var v=opt.getAttribute('value');
+        var n=parseInt(v,10);
+        var name=(opt.textContent||'').trim();
+        if(!isNaN(n)&&name&&name.length>1){
+          genres.push({id:n,name:name});
+        }
+      });
+    });
+    if(genres.length>0){
+      console.log(S+' %c  Trovati '+genres.length+' generi via <select>',c1,cOk);
+      return genres;
+    }
+
+    console.log(S+' %c  NESSUN genere trovato in homepage. Beatstats potrebbe aver cambiato layout.',c1,cErr);
+    console.log(S+' %c  Debug: prova ad aprire manualmente https://www.beatstats.com/ e guarda il sorgente HTML.',c1,cErr);
+    return [];
+  }catch(e){
+    console.log(S+' %c  Errore fetch homepage: '+e.message,c1,cErr);
+    return [];
+  }
+}
+
+// === Phase 2: Extract labels from a /list page ===
 function parseCell(text){
   if(!text) return null;
-  var clean=text.replace(/[\\s,]/g,'').replace(/\\u2191|\\u2193|\\u2013|-|\\+|\\*/g,'').trim();
+  var clean=text.replace(/[\\s,]/g,'').replace(/[\\u2191\\u2193\\u2013\\u2014\\u2212-+*]/g,'').trim();
   if(!clean) return null;
-  var m=clean.match(/^(-?\\d+)$/);
+  var m=clean.match(/^(\\d+)$/);
   if(!m) return null;
   var n=parseInt(m[1],10);
   if(isNaN(n)) return null;
   return {num:n};
 }
 
-// Scrape a single genre page. Returns array of {name, rank, points, tracks}.
-// Tries multiple URL patterns because Beatstats has changed their URL structure
-// over time (older docs use /label-ranking/{slug}, newer ones /genre/{slug}).
-// All URLs are ABSOLUTE so the script works from any beatstats.com page.
-async function scrapeGenre(slug, name){
-  // Try patterns in order. /genre/{slug} is the current Beatstats pattern,
-  // /label-ranking/{slug} is the legacy one. We try both because we can't
-  // detect from outside which one is live.
-  var urlPatterns = [
-    'https://www.beatstats.com/genre/'+slug+PERIOD_SUFFIX,
-    'https://www.beatstats.com/label-ranking/'+slug+PERIOD_SUFFIX,
-    'https://beatstats.com/genre/'+slug+PERIOD_SUFFIX,
-    'https://beatstats.com/label-ranking/'+slug+PERIOD_SUFFIX
-  ];
+function extractLabelsFromDoc(doc){
+  var out=[];
+  var seen=new Set();
 
-  for(var pi=0; pi<urlPatterns.length; pi++){
-    var url=urlPatterns[pi];
-    console.log(S+' %c  ['+(pi+1)+'/'+urlPatterns.length+'] GET '+url,c1,c2);
+  // --- Strategy A: __NEXT_DATA__ with embedded label rankings ---
+  var nextData=doc.getElementById('__NEXT_DATA__');
+  if(nextData){
     try{
-      var res=await fetch(url,{credentials:'include',headers:{'Accept':'text/html'}});
-      if(!res.ok){
-        console.log(S+' %c  HTTP '+res.status+', provo prossimo pattern',c1,cErr);
-        continue;
-      }
-      var html=await res.text();
-
-      // Cloudflare challenge page detection — beatstats is behind CF.
-      // If we get the "Just a moment..." challenge, fetch will return HTML
-      // but it won't contain any label data. Skip and try next pattern.
-      if(html.indexOf('Just a moment...')!==-1 || html.indexOf('__cf_chl_opt')!==-1){
-        console.log(S+' %c  Cloudflare challenge rilevato, provo prossimo',c1,cErr);
-        continue;
-      }
-
-      var doc=new DOMParser().parseFromString(html,'text/html');
-
-      // Strategy: find every <a href*="/label/"> link.
-      // Each label name on Beatstats links to /label/{slug}/{id}.
-      var labelLinks=doc.querySelectorAll('a[href*="/label/"]');
-      if(labelLinks.length===0){
-        // Try alternative patterns
-        labelLinks=doc.querySelectorAll('a[href*="/label."]');
-      }
-      if(labelLinks.length===0){
-        console.log(S+' %c  Nessun link label per '+name+' con pattern '+(pi+1)+', provo prossimo',c1,cErr);
-        continue;
-      }
-
-      var out=[];
-      var seen=new Set();
-      for(var i=0;i<labelLinks.length;i++){
-        var link=labelLinks[i];
-        var labelName=(link.textContent||'').trim();
-        if(!labelName||labelName.length<2) continue;
-        var key=labelName.toUpperCase().trim();
-        // Dedupe within same page (label name may appear in nav + ranking)
-        if(seen.has(key)) continue;
-
-        // Walk up to find the row container (tr, li, .row, .item...)
-        var row=link.closest('tr, li, [class*="row"], [class*="item"], [class*="label"]');
-        if(!row) continue;
-
-        // Skip if the row is in a sidebar/footer/header (heuristic: very short text content)
-        var rowText=(row.textContent||'').trim();
-        if(rowText.length<5) continue;
-
-        // Collect all numeric cells in the row
-        var cells=row.querySelectorAll('td, th, .cell, [class*="col"], span');
-        var nums=[];
-        for(var j=0;j<cells.length;j++){
-          var p=parseCell(cells[j].textContent||'');
-          if(p) nums.push(p.num);
-        }
-
-        // Heuristic: the FIRST positive small number (1-200) is the rank,
-        // the LARGEST number is points, the second-largest is tracks.
-        var rank=0, points=0, tracks=0;
-        var positiveNums=nums.filter(function(n){return n>0;});
-        if(positiveNums.length>0){
-          rank=positiveNums[0];
-          if(positiveNums.length>1){
-            // max = points
-            points=Math.max.apply(null,positiveNums.slice(1));
-            // second max = tracks (only if there are 3+ numbers)
-            if(positiveNums.length>2){
-              var sorted=positiveNums.slice(1).sort(function(a,b){return b-a;});
-              tracks=sorted[1]||0;
+      var data=JSON.parse(nextData.textContent);
+      function findLabels(obj,depth){
+        if(depth>8||!obj||typeof obj!=='object') return null;
+        if(Array.isArray(obj)){
+          // Look for arrays of objects that look like label rankings
+          if(obj.length>3&&obj[0]&&typeof obj[0]==='object'){
+            var first=obj[0];
+            if((first.name||first.label||first.labelName||first.label_name)&&
+               (first.rank!==undefined||first.position!==undefined||first.points!==undefined||first.score!==undefined||first.totalPoints!==undefined)){
+              return obj;
             }
           }
+          for(var i=0;i<obj.length;i++){var r=findLabels(obj[i],depth+1);if(r)return r;}
+        }else{
+          for(var k in obj){
+            if((k==='labels'||k==='ranking'||k==='results'||k==='items'||k==='data')&&
+               Array.isArray(obj[k])&&obj[k].length>3){
+              var arr=obj[k];
+              if(arr[0]&&typeof arr[0]==='object'&&
+                 (arr[0].name||arr[0].label||arr[0].labelName||arr[0].label_name)){
+                return arr;
+              }
+            }
+            var r=findLabels(obj[k],depth+1);if(r)return r;
+          }
         }
-        // Fallback rank: use position in labelLinks (1-based)
-        if(!rank) rank=out.length+1;
-        // Sanity: rank should be 1..500 ish
-        if(rank>1000) rank=out.length+1;
-
-        seen.add(key);
-        out.push({name:key,rank:rank,points:Math.max(0,points),tracks:tracks});
+        return null;
       }
-
-      if(out.length===0){
-        console.log(S+' %c  0 label estratte da pattern '+(pi+1)+', provo prossimo',c1,cErr);
-        continue;
+      var found=findLabels(data,0);
+      if(found){
+        found.forEach(function(item,idx){
+          var name=(item.name||item.label||item.labelName||item.label_name||'').toString().toUpperCase().trim();
+          if(!name||name.length<2) return;
+          if(seen.has(name)) return;
+          seen.add(name);
+          var rank=item.rank||item.position||(idx+1);
+          var points=item.points||item.score||item.totalPoints||0;
+          var tracks=item.tracks||item.trackCount||item.totalTracks||0;
+          out.push({name:name,rank:parseInt(rank)||(idx+1),points:parseInt(points)||0,tracks:parseInt(tracks)||0});
+        });
+        if(out.length>0){
+          console.log(S+' %c    Estratte '+out.length+' label via __NEXT_DATA__',c1,cOk);
+          return out;
+        }
       }
-
-      // Sort by points desc (Beatstats ranking is by points), then assign final rank
-      out.sort(function(a,b){
-        if(b.points!==a.points) return b.points-a.points;
-        return a.rank-b.rank;
-      });
-      out.forEach(function(l,i){l.rank=i+1;});
-
-      console.log(S+' %c  OK '+out.length+' label \\u2014 #1: '+(out[0]?out[0].name:'-')+' ('+(out[0]?out[0].points:0)+' pts) [pattern '+(pi+1)+']',c1,cOk);
-      return out;
     }catch(e){
-      console.log(S+' %c  Errore '+name+' pattern '+(pi+1)+': '+e.message,c1,cErr);
-      continue;
+      console.log(S+' %c    __NEXT_DATA__ parse error: '+e.message,c1,cErr);
     }
   }
 
-  console.log(S+' %c  TUTTI i pattern falliti per '+name,c1,cErr);
-  return [];
+  // --- Strategy B: HTML <a href*="/label/"> links ---
+  var labelLinks=doc.querySelectorAll('a[href*="/label/"], a[href*="/label."]');
+  if(labelLinks.length>0){
+    for(var i=0;i<labelLinks.length;i++){
+      var link=labelLinks[i];
+      var labelName=(link.textContent||'').trim();
+      if(!labelName||labelName.length<2) continue;
+      var key=labelName.toUpperCase().trim();
+      if(seen.has(key)) continue;
+      var row=link.closest('tr, li, [class*="row"], [class*="item"], [class*="label"], [class*="rank"]');
+      if(!row) continue;
+      var rowText=(row.textContent||'').trim();
+      if(rowText.length<5) continue;
+      var cells=row.querySelectorAll('td, th, .cell, [class*="col"], span');
+      var nums=[];
+      for(var j=0;j<cells.length;j++){
+        var p=parseCell(cells[j].textContent||'');
+        if(p) nums.push(p.num);
+      }
+      var rank=0, points=0, tracks=0;
+      var positiveNums=nums.filter(function(n){return n>0;});
+      if(positiveNums.length>0){
+        rank=positiveNums[0];
+        if(positiveNums.length>1){
+          points=Math.max.apply(null,positiveNums.slice(1));
+          if(positiveNums.length>2){
+            var sorted=positiveNums.slice(1).sort(function(a,b){return b-a;});
+            tracks=sorted[1]||0;
+          }
+        }
+      }
+      if(!rank) rank=out.length+1;
+      if(rank>1000) rank=out.length+1;
+      seen.add(key);
+      out.push({name:key,rank:rank,points:Math.max(0,points),tracks:tracks});
+    }
+    if(out.length>0){
+      console.log(S+' %c    Estratte '+out.length+' label via HTML link analysis',c1,cOk);
+      return out;
+    }
+  }
+
+  // --- Strategy C: generic table rows ---
+  var rows=doc.querySelectorAll('table tbody tr, .ranking-row, .label-row, [data-label]');
+  if(rows.length>0){
+    rows.forEach(function(row,idx){
+      var cells=row.querySelectorAll('td, .cell');
+      if(cells.length<2) return;
+      var rank=parseInt((cells[0].textContent||'').trim())||(idx+1);
+      var name=(cells[1].textContent||'').trim().toUpperCase();
+      var points=0;
+      if(cells[2]) points=parseInt((cells[2].textContent||'').replace(/[^0-9]/g,''))||0;
+      if(name&&name.length>1&&!seen.has(name)){
+        seen.add(name);
+        out.push({name:name,rank:rank,points:points,tracks:0});
+      }
+    });
+    if(out.length>0){
+      console.log(S+' %c    Estratte '+out.length+' label via table parsing',c1,cOk);
+      return out;
+    }
+  }
+
+  return out;
 }
 
+// === Phase 3: Scrape a single genre ===
+async function scrapeGenre(genre){
+  var url=buildGenreUrl(genre.id);
+  console.log(S+' %c  GET '+url,c1,c2);
+  try{
+    var res=await fetch(url,{credentials:'include',headers:{'Accept':'text/html'}});
+    if(!res.ok){
+      console.log(S+' %c  HTTP '+res.status+' per '+genre.name,c1,cErr);
+      return [];
+    }
+    var html=await res.text();
+    if(html.indexOf('Just a moment...')!==-1||html.indexOf('__cf_chl_opt')!==-1){
+      console.log(S+' %c  Cloudflare challenge per '+genre.name,c1,cErr);
+      return [];
+    }
+    var doc=new DOMParser().parseFromString(html,'text/html');
+    var labels=extractLabelsFromDoc(doc);
+    if(labels.length===0){
+      console.log(S+' %c  0 label per '+genre.name,c1,cErr);
+      return [];
+    }
+    labels.sort(function(a,b){
+      if(b.points!==a.points) return b.points-a.points;
+      return a.rank-b.rank;
+    });
+    labels.forEach(function(l,i){l.rank=i+1;});
+    console.log(S+' %c  OK '+labels.length+' label \\u2014 #1: '+(labels[0]?labels[0].name:'-')+' ('+(labels[0]?labels[0].points:0)+' pts)',c1,cOk);
+    return labels;
+  }catch(e){
+    console.log(S+' %c  Errore '+genre.name+': '+e.message,c1,cErr);
+    return [];
+  }
+}
+
+// === MAIN ===
 console.log(S+' %c========================================',c1,c1);
-console.log(S+' %cINIZIO ESTRAZIONE BEATSTATS',c1,cOk);
-console.log(S+' %cPeriodo: '+PERIOD_LABEL+' \\u2014 Generi: '+GENRES.length,c1,c2);
+console.log(S+' %cINIZIO ESTRAZIONE BEATSTATS v2',c1,cOk);
+console.log(S+' %cPeriodo: '+PERIOD_LABEL,c1,c2);
+console.log(S+' %c========================================',c1,c1);
+
+var GENRES=await discoverGenres();
+if(GENRES.length===0){
+  console.log(S+' %cERRORE FATALE: Impossibile scoprire i generi.',c1,cErr);
+  console.log(S+' %cAssicurati di essere su https://www.beatstats.com/ e che la pagina abbia caricato completamente.',c1,cErr);
+  var emptyOut={genres:[],labels:[],_meta:{source:'beatstats',scrapedAt:new Date().toISOString(),scrapedPeriod:new Date().toISOString(),periodLabel:PERIOD_LABEL,totalLabels:0,totalGenres:0,successGenres:0,failedGenres:0,error:'GENRE_DISCOVERY_FAILED'}};
+  var emptyJs=JSON.stringify(emptyOut,null,2),emptyBl=new Blob([emptyJs],{type:'application/json'}),emptyU=URL.createObjectURL(emptyBl),emptyA=document.createElement('a');
+  emptyA.href=emptyU;emptyA.download='labelpulse_beatstats_'+PERIOD_LABEL.replace(/[^a-z0-9]+/gi,'_')+'_'+new Date().toISOString().split('T')[0]+'.json';
+  document.body.appendChild(emptyA);emptyA.click();document.body.removeChild(emptyA);URL.revokeObjectURL(emptyU);
+  return emptyOut;
+}
+
+console.log(S+' %cGeneri scoperti: '+GENRES.length,c1,cOk);
 console.log(S+' %c========================================',c1,c1);
 
 var gR={},tL=0,sC=0,fC=0;
 for(var gi=0;gi<GENRES.length;gi++){
   var g=GENRES[gi];
   var pct=Math.round(((gi+1)/GENRES.length)*100);
-  console.log(S+' %c['+pct+'%] '+g.name+'...',c1,c2);
-  var arr=await scrapeGenre(g.slug,g.name);
+  console.log(S+' %c['+pct+'%] '+g.name+' (id='+g.id+')...',c1,c2);
+  var arr=await scrapeGenre(g);
   gR[g.name]=arr;
   tL+=arr.length;
   if(arr.length>0) sC++; else fC++;
@@ -293,22 +484,16 @@ for(var k in lM){
 }
 
 // Build scrapedPeriod ISO timestamp for snapshot ordering.
-// "current" -> now
-// "2024"    -> 2024-12-31T23:59:59Z  (end of that year)
-// "2024-6"  -> 2024-06-30T23:59:59Z  (end of that month)
 var scrapedPeriod;
 if(PERIOD_LABEL==='current'){
   scrapedPeriod=new Date().toISOString();
 }else if(PERIOD_LABEL.indexOf('-')===-1){
-  // Yearly
   var y=parseInt(PERIOD_LABEL,10);
   scrapedPeriod=new Date(Date.UTC(y,11,31,23,59,59)).toISOString();
 }else{
-  // Monthly
   var parts=PERIOD_LABEL.split('-');
   var yy=parseInt(parts[0],10);
   var mm=parseInt(parts[1],10);
-  // Last day of that month
   var lastDay=new Date(Date.UTC(yy,mm,0)).getUTCDate();
   scrapedPeriod=new Date(Date.UTC(yy,mm-1,lastDay,23,59,59)).toISOString();
 }
@@ -707,8 +892,8 @@ export function RankingsWizard() {
                 <AlertTriangle className="h-3.5 w-3.5 text-orange-400 shrink-0 mt-0.5" />
                 <p className="text-xs text-orange-300 leading-relaxed">
                   {locale === "it"
-                    ? "Beatstats è protetto da Cloudflare. Apri il sito, ASPETTA che la pagina carichi completamente (vedrai la classifica), SOLO ALLORA apri la console (F12) e incolla lo script. Se lo script restituisce \"0 label\" significa che non hai superato il controllo Cloudflare — ricarica la pagina e riprova."
-                    : "Beatstats is protected by Cloudflare. Open the site, WAIT for the page to fully load (you'll see the chart), ONLY THEN open the console (F12) and paste the script. If the script returns \"0 labels\" it means you didn't pass the Cloudflare check — reload the page and try again."}
+                    ? "Apri https://www.beatstats.com/ , ASPETTA che la pagina carichi completamente (vedrai la classifica con le label). SOLO ALLORA apri la console (F12) e incolla lo script. Lo script v2 scopre automaticamente i generi dalla homepage, non serve più navigare a mano. Se vedi \"GENRE_DISCOVERY_FAILED\" nel JSON ricarica la pagina e riprova."
+                    : "Open https://www.beatstats.com/, WAIT for the page to fully load (you'll see the chart with labels). ONLY THEN open the console (F12) and paste the script. The v2 script auto-discovers genres from the homepage — no manual navigation needed. If you see \"GENRE_DISCOVERY_FAILED\" in the JSON, reload the page and try again."}
                 </p>
               </div>
             )}
