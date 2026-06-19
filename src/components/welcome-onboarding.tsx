@@ -102,8 +102,8 @@ export function WelcomeOnboarding() {
       icon: BarChart3,
       title: isItalian ? "Classifiche" : "Rankings",
       desc: isItalian
-        ? "Importa le classifiche Beatport/Beatstats. Traccia il movimento mensile."
-        : "Import Beatport/Beatstats rankings. Track monthly movement.",
+        ? "Classifiche label curate dal team LabelPulse. Aggiornate periodicamente con dati Beatport."
+        : "Label rankings curated by the LabelPulse team. Updated periodically with Beatport data.",
       color: "text-amber-400",
     },
     {
