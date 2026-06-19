@@ -983,6 +983,19 @@ export const useAppStore = create<AppState>()(
       setUserProfile: (profile) => {
         set((state) => ({ userProfile: { ...state.userProfile, ...profile }, lastSavedAt: new Date().toISOString() }));
         syncToCloud();
+        // ⚠️ CRITICAL: also trigger an IMMEDIATE (non-debounced) cloud sync.
+        // syncToCloud is debounced 3 seconds — if the user saves and closes
+        // the window within 3s, the cloud sync never fires and the profile
+        // is lost. forceCloudSync uploads right now so the cloud always has
+        // the latest profile, even if the user closes immediately after.
+        // Use a tiny timeout (0ms) to let the state settle before reading.
+        setTimeout(() => {
+          try {
+            forceCloudSync();
+          } catch (e) {
+            console.warn("[LabelPulse] Immediate profile sync failed:", e);
+          }
+        }, 0);
       },
 
       getGenres: () => labelData.genres,
@@ -1550,9 +1563,29 @@ export async function loadFromCloud(): Promise<void> {
   try {
     const cloudData = await loadStateFromCloud();
     if (!cloudData) {
-      // Nessun dato nel cloud — facciamo il primo upload dei dati locali
-      console.log("[LabelPulse Cloud] No cloud data, uploading local data as initial sync");
-      await forceCloudSync();
+      // Nessun dato nel cloud.
+      // ⚠️ CRITICAL: only upload local data if it actually has real user data.
+      // If the local state is just seed data (empty profile, default labels),
+      // uploading it would create a cloud row with empty data — and future
+      // logins would pull that empty data, making the user think their data
+      // was lost. Only upload if the user has actually entered something
+      // (artistName, bio, links, custom labels, demos, etc.).
+      const localState = useAppStore.getState();
+      const localHasRealData =
+        !!localState.userProfile?.artistName ||
+        !!localState.userProfile?.bio ||
+        (Array.isArray(localState.userProfile?.links) && localState.userProfile.links.length > 0) ||
+        !!localState.userProfile?.cyaniteApiToken ||
+        !!localState.userProfile?.supabaseUrl ||
+        localState.demos.length > 0 ||
+        localState.rankingSnapshots.length > 0;
+
+      if (localHasRealData) {
+        console.log("[LabelPulse Cloud] No cloud data, uploading local data as initial sync");
+        await forceCloudSync();
+      } else {
+        console.log("[LabelPulse Cloud] No cloud data and local is seed — skipping upload to avoid creating empty cloud row.");
+      }
       useAppStore.setState({ hasCloudSynced: true });
       // Setup realtime subscription for future updates
       setupRealtimeSubscriptionSafe();
@@ -1690,7 +1723,15 @@ function mergeCloudData(cloudData: any, localState: any): Partial<AppState> {
   // Simple fields
   merged.activeTab = cloudData.activeTab || localState.activeTab;
   merged.locale = cloudData.locale || localState.locale;
-  merged.userProfile = cloudData.userProfile || localState.userProfile;
+  // ⚠️ CRITICAL: use mergeProfiles (non-empty fields win) instead of `||`.
+  // If cloud has an empty {} profile (e.g., from a fresh seed upload),
+  // `cloudData.userProfile || localState.userProfile` returns the empty cloud
+  // profile (because {} is truthy), wiping the local profile. mergeProfiles
+  // correctly keeps non-empty fields from BOTH sources.
+  merged.userProfile =
+    mergeProfiles(localState.userProfile, cloudData.userProfile) ||
+    cloudData.userProfile ||
+    localState.userProfile;
   merged.gmailAuth = cloudData.gmailAuth || localState.gmailAuth;
   merged.rankingsUpdatedAt = cloudData.rankingsUpdatedAt ?? localState.rankingsUpdatedAt;
   merged.lastSavedAt = cloudData.lastSavedAt ?? localState.lastSavedAt;
