@@ -109,94 +109,126 @@ function parseCell(text){
 }
 
 // Scrape a single genre page. Returns array of {name, rank, points, tracks}.
+// Tries multiple URL patterns because Beatstats has changed their URL structure
+// over time (older docs use /label-ranking/{slug}, newer ones /genre/{slug}).
+// All URLs are ABSOLUTE so the script works from any beatstats.com page.
 async function scrapeGenre(slug, name){
-  var url='/genre/'+slug+PERIOD_SUFFIX;
-  console.log(S+' %c  GET '+url,c1,c2);
-  try{
-    var res=await fetch(url,{credentials:'include',headers:{'Accept':'text/html'}});
-    if(!res.ok){
-      console.log(S+' %c  HTTP '+res.status+' per '+name,c1,cErr);
-      return [];
-    }
-    var html=await res.text();
-    var doc=new DOMParser().parseFromString(html,'text/html');
+  // Try patterns in order. /genre/{slug} is the current Beatstats pattern,
+  // /label-ranking/{slug} is the legacy one. We try both because we can't
+  // detect from outside which one is live.
+  var urlPatterns = [
+    'https://www.beatstats.com/genre/'+slug+PERIOD_SUFFIX,
+    'https://www.beatstats.com/label-ranking/'+slug+PERIOD_SUFFIX,
+    'https://beatstats.com/genre/'+slug+PERIOD_SUFFIX,
+    'https://beatstats.com/label-ranking/'+slug+PERIOD_SUFFIX
+  ];
 
-    // Strategy: find every <a href*="/label/"> link.
-    // Each label name on Beatstats links to /label/{slug}/{id}.
-    var labelLinks=doc.querySelectorAll('a[href*="/label/"]');
-    if(labelLinks.length===0){
-      // Try alternative patterns
-      labelLinks=doc.querySelectorAll('a[href*="/label."]');
-    }
-    if(labelLinks.length===0){
-      console.log(S+' %c  Nessun link label trovato per '+name,c1,cErr);
-      return [];
-    }
+  for(var pi=0; pi<urlPatterns.length; pi++){
+    var url=urlPatterns[pi];
+    console.log(S+' %c  ['+(pi+1)+'/'+urlPatterns.length+'] GET '+url,c1,c2);
+    try{
+      var res=await fetch(url,{credentials:'include',headers:{'Accept':'text/html'}});
+      if(!res.ok){
+        console.log(S+' %c  HTTP '+res.status+', provo prossimo pattern',c1,cErr);
+        continue;
+      }
+      var html=await res.text();
 
-    var out=[];
-    var seen=new Set();
-    for(var i=0;i<labelLinks.length;i++){
-      var link=labelLinks[i];
-      var labelName=(link.textContent||'').trim();
-      if(!labelName||labelName.length<2) continue;
-      var key=labelName.toUpperCase().trim();
-      // Dedupe within same page (label name may appear in nav + ranking)
-      if(seen.has(key)) continue;
-
-      // Walk up to find the row container (tr, li, .row, .item...)
-      var row=link.closest('tr, li, [class*="row"], [class*="item"], [class*="label"]');
-      if(!row) continue;
-
-      // Skip if the row is in a sidebar/footer/header (heuristic: very short text content)
-      var rowText=(row.textContent||'').trim();
-      if(rowText.length<5) continue;
-
-      // Collect all numeric cells in the row
-      var cells=row.querySelectorAll('td, th, .cell, [class*="col"], span');
-      var nums=[];
-      for(var j=0;j<cells.length;j++){
-        var p=parseCell(cells[j].textContent||'');
-        if(p) nums.push(p.num);
+      // Cloudflare challenge page detection — beatstats is behind CF.
+      // If we get the "Just a moment..." challenge, fetch will return HTML
+      // but it won't contain any label data. Skip and try next pattern.
+      if(html.indexOf('Just a moment...')!==-1 || html.indexOf('__cf_chl_opt')!==-1){
+        console.log(S+' %c  Cloudflare challenge rilevato, provo prossimo',c1,cErr);
+        continue;
       }
 
-      // Heuristic: the FIRST positive small number (1-200) is the rank,
-      // the LARGEST number is points, the second-largest is tracks.
-      var rank=0, points=0, tracks=0;
-      var positiveNums=nums.filter(function(n){return n>0;});
-      if(positiveNums.length>0){
-        rank=positiveNums[0];
-        if(positiveNums.length>1){
-          // max = points
-          points=Math.max.apply(null,positiveNums.slice(1));
-          // second max = tracks (only if there are 3+ numbers)
-          if(positiveNums.length>2){
-            var sorted=positiveNums.slice(1).sort(function(a,b){return b-a;});
-            tracks=sorted[1]||0;
+      var doc=new DOMParser().parseFromString(html,'text/html');
+
+      // Strategy: find every <a href*="/label/"> link.
+      // Each label name on Beatstats links to /label/{slug}/{id}.
+      var labelLinks=doc.querySelectorAll('a[href*="/label/"]');
+      if(labelLinks.length===0){
+        // Try alternative patterns
+        labelLinks=doc.querySelectorAll('a[href*="/label."]');
+      }
+      if(labelLinks.length===0){
+        console.log(S+' %c  Nessun link label per '+name+' con pattern '+(pi+1)+', provo prossimo',c1,cErr);
+        continue;
+      }
+
+      var out=[];
+      var seen=new Set();
+      for(var i=0;i<labelLinks.length;i++){
+        var link=labelLinks[i];
+        var labelName=(link.textContent||'').trim();
+        if(!labelName||labelName.length<2) continue;
+        var key=labelName.toUpperCase().trim();
+        // Dedupe within same page (label name may appear in nav + ranking)
+        if(seen.has(key)) continue;
+
+        // Walk up to find the row container (tr, li, .row, .item...)
+        var row=link.closest('tr, li, [class*="row"], [class*="item"], [class*="label"]');
+        if(!row) continue;
+
+        // Skip if the row is in a sidebar/footer/header (heuristic: very short text content)
+        var rowText=(row.textContent||'').trim();
+        if(rowText.length<5) continue;
+
+        // Collect all numeric cells in the row
+        var cells=row.querySelectorAll('td, th, .cell, [class*="col"], span');
+        var nums=[];
+        for(var j=0;j<cells.length;j++){
+          var p=parseCell(cells[j].textContent||'');
+          if(p) nums.push(p.num);
+        }
+
+        // Heuristic: the FIRST positive small number (1-200) is the rank,
+        // the LARGEST number is points, the second-largest is tracks.
+        var rank=0, points=0, tracks=0;
+        var positiveNums=nums.filter(function(n){return n>0;});
+        if(positiveNums.length>0){
+          rank=positiveNums[0];
+          if(positiveNums.length>1){
+            // max = points
+            points=Math.max.apply(null,positiveNums.slice(1));
+            // second max = tracks (only if there are 3+ numbers)
+            if(positiveNums.length>2){
+              var sorted=positiveNums.slice(1).sort(function(a,b){return b-a;});
+              tracks=sorted[1]||0;
+            }
           }
         }
+        // Fallback rank: use position in labelLinks (1-based)
+        if(!rank) rank=out.length+1;
+        // Sanity: rank should be 1..500 ish
+        if(rank>1000) rank=out.length+1;
+
+        seen.add(key);
+        out.push({name:key,rank:rank,points:Math.max(0,points),tracks:tracks});
       }
-      // Fallback rank: use position in labelLinks (1-based)
-      if(!rank) rank=out.length+1;
-      // Sanity: rank should be 1..500 ish
-      if(rank>1000) rank=out.length+1;
 
-      seen.add(key);
-      out.push({name:key,rank:rank,points:Math.max(0,points),tracks:tracks});
+      if(out.length===0){
+        console.log(S+' %c  0 label estratte da pattern '+(pi+1)+', provo prossimo',c1,cErr);
+        continue;
+      }
+
+      // Sort by points desc (Beatstats ranking is by points), then assign final rank
+      out.sort(function(a,b){
+        if(b.points!==a.points) return b.points-a.points;
+        return a.rank-b.rank;
+      });
+      out.forEach(function(l,i){l.rank=i+1;});
+
+      console.log(S+' %c  OK '+out.length+' label \\u2014 #1: '+(out[0]?out[0].name:'-')+' ('+(out[0]?out[0].points:0)+' pts) [pattern '+(pi+1)+']',c1,cOk);
+      return out;
+    }catch(e){
+      console.log(S+' %c  Errore '+name+' pattern '+(pi+1)+': '+e.message,c1,cErr);
+      continue;
     }
-
-    // Sort by points desc (Beatstats ranking is by points), then assign final rank
-    out.sort(function(a,b){
-      if(b.points!==a.points) return b.points-a.points;
-      return a.rank-b.rank;
-    });
-    out.forEach(function(l,i){l.rank=i+1;});
-
-    console.log(S+' %c  OK '+out.length+' label \\u2014 #1: '+(out[0]?out[0].name:'-')+' ('+(out[0]?out[0].points:0)+' pts)',c1,cOk);
-    return out;
-  }catch(e){
-    console.log(S+' %c  Errore '+name+': '+e.message,c1,cErr);
-    return [];
   }
+
+  console.log(S+' %c  TUTTI i pattern falliti per '+name,c1,cErr);
+  return [];
 }
 
 console.log(S+' %c========================================',c1,c1);
@@ -386,13 +418,12 @@ export function RankingsWizard() {
     if (source === "beatport") {
       window.open("https://www.beatport.com", "_blank");
     } else {
-      // For Beatstats, open the period URL directly so user lands on the right page.
-      let path = "";
-      if (period !== "current") {
-        path = `/${period}`;
-        if (month !== "all") path += `/${month}`;
-      }
-      window.open(`https://www.beatstats.com/genre/house${path}`, "_blank");
+      // For Beatstats, ALWAYS open the homepage. Period-specific URLs like
+      // /genre/house/2024 may not exist or may 404 — and the user just needs
+      // to be ON beatstats.com (any page) to run the console scraper.
+      // Cloudflare will challenge them on first visit; once they pass, the
+      // scraper's fetch() calls inherit their session cookies and work.
+      window.open("https://www.beatstats.com/", "_blank");
     }
   };
 
@@ -420,6 +451,25 @@ export function RankingsWizard() {
         if (!isRankingsFile) {
           toast({
             title: t(locale, "data.importError"),
+            variant: "destructive",
+          });
+          return;
+        }
+
+        // ⚠️ Detect empty scrapes (scraper failed — usually Cloudflare block
+        // or user ran the script from a non-beatstats page). Warn the user
+        // instead of silently importing 0 labels.
+        const totalLabels = Array.isArray(parsed.labels) ? parsed.labels.length : 0;
+        const failedGenres = parsed._meta?.failedGenres ?? 0;
+        const successGenres = parsed._meta?.successGenres ?? 0;
+        if (totalLabels === 0 || (failedGenres > 0 && successGenres === 0)) {
+          toast({
+            title: locale === "it"
+              ? `Scraper fallito: 0 label estratte (${failedGenres}/${parsed._meta?.totalGenres ?? 32} generi senza dati)`
+              : `Scraper failed: 0 labels extracted (${failedGenres}/${parsed._meta?.totalGenres ?? 32} genres with no data)`,
+            description: locale === "it"
+              ? "Probabilmente Cloudflare ha bloccato le richieste. Apri beatstats.com, aspetta che la pagina carichi completamente, poi rifai lo script dalla console."
+              : "Cloudflare likely blocked the requests. Open beatstats.com, wait for the page to fully load, then re-run the script from the console.",
             variant: "destructive",
           });
           return;
@@ -652,6 +702,16 @@ export function RankingsWizard() {
               <AlertTriangle className="h-3.5 w-3.5 text-amber-400 shrink-0 mt-0.5" />
               <p className="text-xs text-amber-400">{t(locale, "data.rankingsStep2Warn")}</p>
             </div>
+            {source === "beatstats" && (
+              <div className="flex items-start gap-2 pl-7">
+                <AlertTriangle className="h-3.5 w-3.5 text-orange-400 shrink-0 mt-0.5" />
+                <p className="text-xs text-orange-300 leading-relaxed">
+                  {locale === "it"
+                    ? "Beatstats è protetto da Cloudflare. Apri il sito, ASPETTA che la pagina carichi completamente (vedrai la classifica), SOLO ALLORA apri la console (F12) e incolla lo script. Se lo script restituisce \"0 label\" significa che non hai superato il controllo Cloudflare — ricarica la pagina e riprova."
+                    : "Beatstats is protected by Cloudflare. Open the site, WAIT for the page to fully load (you'll see the chart), ONLY THEN open the console (F12) and paste the script. If the script returns \"0 labels\" it means you didn't pass the Cloudflare check — reload the page and try again."}
+                </p>
+              </div>
+            )}
             <div className="pl-7 flex items-center gap-2">
               <Button
                 onClick={handleOpenSite}
