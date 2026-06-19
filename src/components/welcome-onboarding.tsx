@@ -56,24 +56,73 @@ export function WelcomeOnboarding() {
     if (status !== "authenticated") return;
     if (!session?.user?.email) return;
 
-    // Check if user has seen onboarding before
+    // Check if user has seen onboarding before.
+    // ⚠️ Use a PER-EMAIL key so that:
+    //   - Different users on the same device each see their own onboarding
+    //   - The same user on a fresh incognito window won't see it again IF
+    //     they already have profile data (heuristic: a user with profile
+    //     data has clearly already been onboarded on another device)
+    const email = session.user.email;
+    const perUserKey = `${ONBOARDED_KEY}:${email.toLowerCase()}`;
+
     try {
-      const seen = localStorage.getItem(ONBOARDED_KEY);
+      const seen = localStorage.getItem(perUserKey);
       if (seen) return;
+
+      // HEURISTIC: if the user already has profile data (artistName, bio,
+      // or any links), they've clearly been onboarded before — skip the
+      // modal. This handles the incognito re-login case where the localStorage
+      // flag is gone but the cloud-pulled profile proves prior onboarding.
+      const hasProfileData =
+        !!userProfile?.artistName ||
+        !!userProfile?.bio ||
+        !!userProfile?.email ||
+        !!userProfile?.scLink ||
+        !!userProfile?.photoUrl ||
+        (Array.isArray(userProfile?.links) && userProfile.links.length > 0);
+      if (hasProfileData) {
+        // Mark as seen so we don't re-check on every render
+        localStorage.setItem(perUserKey, new Date().toISOString());
+        return;
+      }
     } catch {
       // localStorage might be unavailable (private mode, etc.) — skip onboarding
       return;
     }
 
     // Show onboarding after a tiny delay so the auth banner doesn't flash
-    const timer = setTimeout(() => setOpen(true), 800);
+    // AND so the cloud sync has time to populate the profile (avoids
+    // flashing the modal then immediately hiding it once profile loads)
+    const timer = setTimeout(() => {
+      // ⚠️ Read fresh state inside the timeout — the userProfile from the
+      // effect closure may be stale (cloud sync may have completed in the
+      // meantime). Always read the LATEST profile from the store.
+      const latestProfile = useAppStore.getState().userProfile;
+      const hasProfileDataNow =
+        !!latestProfile?.artistName ||
+        !!latestProfile?.bio ||
+        !!latestProfile?.email ||
+        !!latestProfile?.scLink ||
+        !!latestProfile?.photoUrl ||
+        (Array.isArray(latestProfile?.links) && latestProfile.links.length > 0);
+      if (hasProfileDataNow) {
+        try {
+          localStorage.setItem(perUserKey, new Date().toISOString());
+        } catch {}
+        return;
+      }
+      setOpen(true);
+    }, 1500);
     return () => clearTimeout(timer);
-  }, [status, session?.user?.email]);
+  }, [status, session?.user?.email, userProfile?.artistName, userProfile?.bio, userProfile?.email, userProfile?.scLink, userProfile?.photoUrl, userProfile?.links]);
 
   const handleDismiss = () => {
     setOpen(false);
     try {
-      localStorage.setItem(ONBOARDED_KEY, new Date().toISOString());
+      if (session?.user?.email) {
+        const perUserKey = `${ONBOARDED_KEY}:${session.user.email.toLowerCase()}`;
+        localStorage.setItem(perUserKey, new Date().toISOString());
+      }
     } catch {
       // Ignore — we already skipped showing it
     }
