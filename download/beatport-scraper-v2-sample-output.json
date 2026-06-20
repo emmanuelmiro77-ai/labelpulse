@@ -1,0 +1,742 @@
+{
+  "genres": [
+    "Tech House",
+    "Techno Peak Time / Driving",
+    "Minimal / Deep Tech"
+  ],
+  "labels": [
+    {
+      "id": "lbl_experts_only",
+      "name": "EXPERTS ONLY",
+      "genres": [
+        "Tech House"
+      ],
+      "rankByGenre": {
+        "Tech House": 1
+      },
+      "pointsByGenre": {
+        "Tech House": 196
+      },
+      "trending": true,
+      "beatportId": 103008,
+      "slug": "experts-only",
+      "imageUrl": "https://example.com/label-experts.jpg",
+      "trendingRankByGenre": {
+        "Tech House": 1
+      },
+      "trendingPointsByGenre": {
+        "Tech House": 196
+      }
+    },
+    {
+      "id": "lbl_solid_grooves",
+      "name": "SOLID GROOVES",
+      "genres": [
+        "Tech House",
+        "Minimal / Deep Tech"
+      ],
+      "rankByGenre": {
+        "Tech House": 2,
+        "Minimal / Deep Tech": 1
+      },
+      "pointsByGenre": {
+        "Tech House": 89,
+        "Minimal / Deep Tech": 175
+      },
+      "trending": true,
+      "beatportId": 9001,
+      "slug": "solid-grooves",
+      "trendingRankByGenre": {
+        "Tech House": 2,
+        "Minimal / Deep Tech": 1
+      },
+      "trendingPointsByGenre": {
+        "Tech House": 89,
+        "Minimal / Deep Tech": 175
+      }
+    },
+    {
+      "id": "lbl_drumcode",
+      "name": "DRUMCODE",
+      "genres": [
+        "Techno Peak Time / Driving"
+      ],
+      "rankByGenre": {
+        "Techno Peak Time / Driving": 1
+      },
+      "pointsByGenre": {
+        "Techno Peak Time / Driving": 191
+      },
+      "trending": true,
+      "beatportId": 1234,
+      "slug": "drumcode",
+      "trendingRankByGenre": {
+        "Techno Peak Time / Driving": 1
+      },
+      "trendingPointsByGenre": {
+        "Techno Peak Time / Driving": 191
+      }
+    },
+    {
+      "id": "lbl_truesoul",
+      "name": "TRUESOUL",
+      "genres": [
+        "Techno Peak Time / Driving"
+      ],
+      "rankByGenre": {
+        "Techno Peak Time / Driving": 2
+      },
+      "pointsByGenre": {
+        "Techno Peak Time / Driving": 83
+      },
+      "trending": true,
+      "beatportId": 5678,
+      "slug": "truesoul",
+      "trendingRankByGenre": {
+        "Techno Peak Time / Driving": 2
+      },
+      "trendingPointsByGenre": {
+        "Techno Peak Time / Driving": 83
+      }
+    }
+  ],
+  "artists": [
+    {
+      "id": "bp_1456",
+      "beatportId": 1456,
+      "name": "Adam Beyer",
+      "slug": "adam-beyer",
+      "imageUrl": "",
+      "genres": [
+        "Techno Peak Time / Driving"
+      ],
+      "tracksByGenre": {
+        "Techno Peak Time / Driving": [
+          {
+            "id": 19711260,
+            "name": "code reader",
+            "mixName": "Original Mix",
+            "position": 3,
+            "points": 98,
+            "label": "DRUMCODE",
+            "labelId": 1234,
+            "labelSlug": "drumcode",
+            "releaseDate": "2024-08-20",
+            "bpm": 135,
+            "keyCamelot": "4A",
+            "keyName": "F Minor",
+            "coverArt": "",
+            "sampleUrl": "",
+            "seenAt": "2026-06-21T10:00:00.000Z"
+          },
+          {
+            "id": 19711261,
+            "name": "server farm",
+            "mixName": "Original Mix",
+            "position": 8,
+            "points": 93,
+            "label": "DRUMCODE",
+            "labelId": 1234,
+            "labelSlug": "drumcode",
+            "releaseDate": "2024-07-10",
+            "bpm": 133,
+            "keyCamelot": "5A",
+            "keyName": "C Minor",
+            "coverArt": "",
+            "sampleUrl": "",
+            "seenAt": "2026-06-21T10:00:00.000Z"
+          },
+          {
+            "id": 19711262,
+            "name": "industrial zone",
+            "mixName": "Original Mix",
+            "position": 18,
+            "points": 83,
+            "label": "TRUESOUL",
+            "labelId": 5678,
+            "labelSlug": "truesoul",
+            "releaseDate": "2024-09-05",
+            "bpm": 138,
+            "keyCamelot": "6A",
+            "keyName": "G Minor",
+            "coverArt": "",
+            "sampleUrl": "",
+            "seenAt": "2026-06-21T10:00:00.000Z"
+          }
+        ]
+      },
+      "labelsPublishedOn": [
+        "DRUMCODE",
+        "TRUESOUL"
+      ],
+      "totalPoints": 274,
+      "bestPosition": 3,
+      "isRemixerOnly": false,
+      "trending": true,
+      "trendingRankByGenre": {
+        "Techno Peak Time / Driving": 3
+      },
+      "trendingPointsByGenre": {
+        "Techno Peak Time / Driving": 274
+      }
+    },
+    {
+      "id": "bp_770001",
+      "beatportId": 770001,
+      "name": "Mochakk",
+      "slug": "mochakk",
+      "imageUrl": "",
+      "genres": [
+        "Tech House",
+        "Minimal / Deep Tech"
+      ],
+      "tracksByGenre": {
+        "Tech House": [
+          {
+            "id": 19711256,
+            "name": "lose control",
+            "mixName": "Original Mix",
+            "position": 12,
+            "points": 89,
+            "label": "SOLID GROOVES",
+            "labelId": 9001,
+            "labelSlug": "solid-grooves",
+            "releaseDate": "2024-10-01",
+            "bpm": 128,
+            "keyCamelot": "6A",
+            "keyName": "G Minor",
+            "coverArt": "",
+            "sampleUrl": "",
+            "seenAt": "2026-06-21T10:00:00.000Z"
+          }
+        ],
+        "Minimal / Deep Tech": [
+          {
+            "id": 19711256,
+            "name": "lose control",
+            "mixName": "Original Mix",
+            "position": 2,
+            "points": 99,
+            "label": "SOLID GROOVES",
+            "labelId": 9001,
+            "labelSlug": "solid-grooves",
+            "releaseDate": "2024-10-01",
+            "bpm": 128,
+            "keyCamelot": "6A",
+            "keyName": "G Minor",
+            "coverArt": "",
+            "sampleUrl": "",
+            "seenAt": "2026-06-21T10:00:00.000Z"
+          },
+          {
+            "id": 19711270,
+            "name": "dub layers",
+            "mixName": "Dub Mix",
+            "position": 25,
+            "points": 76,
+            "label": "SOLID GROOVES",
+            "labelId": 9001,
+            "labelSlug": "solid-grooves",
+            "releaseDate": "2024-11-01",
+            "bpm": 127,
+            "keyCamelot": "8A",
+            "keyName": "A Minor",
+            "coverArt": "",
+            "sampleUrl": "",
+            "seenAt": "2026-06-21T10:00:00.000Z"
+          }
+        ]
+      },
+      "labelsPublishedOn": [
+        "SOLID GROOVES"
+      ],
+      "totalPoints": 264,
+      "bestPosition": 2,
+      "isRemixerOnly": false,
+      "trending": true,
+      "trendingRankByGenre": {
+        "Tech House": 12,
+        "Minimal / Deep Tech": 2
+      },
+      "trendingPointsByGenre": {
+        "Tech House": 89,
+        "Minimal / Deep Tech": 175
+      }
+    },
+    {
+      "id": "bp_610028",
+      "beatportId": 610028,
+      "name": "John Summit",
+      "slug": "john-summit",
+      "imageUrl": "https://example.com/summit.jpg",
+      "genres": [
+        "Tech House"
+      ],
+      "tracksByGenre": {
+        "Tech House": [
+          {
+            "id": 19711254,
+            "name": "palm of my hands",
+            "mixName": "Odd Mob Extended Remix",
+            "position": 1,
+            "points": 100,
+            "label": "EXPERTS ONLY",
+            "labelId": 103008,
+            "labelSlug": "experts-only",
+            "releaseDate": "2024-11-08",
+            "bpm": 132,
+            "keyCamelot": "2A",
+            "keyName": "Eb Minor",
+            "coverArt": "https://example.com/cover1.jpg",
+            "sampleUrl": "https://example.com/sample1.mp3",
+            "seenAt": "2026-06-21T10:00:00.000Z"
+          },
+          {
+            "id": 19711255,
+            "name": "walls",
+            "mixName": "Original Mix",
+            "position": 5,
+            "points": 96,
+            "label": "EXPERTS ONLY",
+            "labelId": 103008,
+            "labelSlug": "experts-only",
+            "releaseDate": "2024-09-15",
+            "bpm": 126,
+            "keyCamelot": "5A",
+            "keyName": "A Minor",
+            "coverArt": "https://example.com/cover2.jpg",
+            "sampleUrl": "",
+            "seenAt": "2026-06-21T10:00:00.000Z"
+          }
+        ]
+      },
+      "labelsPublishedOn": [
+        "EXPERTS ONLY"
+      ],
+      "totalPoints": 196,
+      "bestPosition": 1,
+      "isRemixerOnly": false,
+      "trending": true,
+      "trendingRankByGenre": {
+        "Tech House": 1
+      },
+      "trendingPointsByGenre": {
+        "Tech House": 196
+      }
+    },
+    {
+      "id": "bp_1068825",
+      "beatportId": 1068825,
+      "name": "venbee",
+      "slug": "venbee",
+      "imageUrl": "https://example.com/venbee.jpg",
+      "genres": [
+        "Tech House"
+      ],
+      "tracksByGenre": {
+        "Tech House": [
+          {
+            "id": 19711254,
+            "name": "palm of my hands",
+            "mixName": "Odd Mob Extended Remix",
+            "position": 1,
+            "points": 100,
+            "label": "EXPERTS ONLY",
+            "labelId": 103008,
+            "labelSlug": "experts-only",
+            "releaseDate": "2024-11-08",
+            "bpm": 132,
+            "keyCamelot": "2A",
+            "keyName": "Eb Minor",
+            "coverArt": "https://example.com/cover1.jpg",
+            "sampleUrl": "https://example.com/sample1.mp3",
+            "seenAt": "2026-06-21T10:00:00.000Z"
+          }
+        ]
+      },
+      "labelsPublishedOn": [
+        "EXPERTS ONLY"
+      ],
+      "totalPoints": 100,
+      "bestPosition": 1,
+      "isRemixerOnly": false,
+      "trending": true,
+      "trendingRankByGenre": {
+        "Tech House": 1
+      },
+      "trendingPointsByGenre": {
+        "Tech House": 100
+      }
+    },
+    {
+      "id": "bp_7800",
+      "beatportId": 7800,
+      "name": "Layton Giordani",
+      "slug": "layton-giordani",
+      "imageUrl": "",
+      "genres": [
+        "Techno Peak Time / Driving"
+      ],
+      "tracksByGenre": {
+        "Techno Peak Time / Driving": [
+          {
+            "id": 19711261,
+            "name": "server farm",
+            "mixName": "Original Mix",
+            "position": 8,
+            "points": 93,
+            "label": "DRUMCODE",
+            "labelId": 1234,
+            "labelSlug": "drumcode",
+            "releaseDate": "2024-07-10",
+            "bpm": 133,
+            "keyCamelot": "5A",
+            "keyName": "C Minor",
+            "coverArt": "",
+            "sampleUrl": "",
+            "seenAt": "2026-06-21T10:00:00.000Z"
+          }
+        ]
+      },
+      "labelsPublishedOn": [
+        "DRUMCODE"
+      ],
+      "totalPoints": 93,
+      "bestPosition": 8,
+      "isRemixerOnly": false,
+      "trending": true,
+      "trendingRankByGenre": {
+        "Techno Peak Time / Driving": 8
+      },
+      "trendingPointsByGenre": {
+        "Techno Peak Time / Driving": 93
+      }
+    },
+    {
+      "id": "bp_353575",
+      "beatportId": 353575,
+      "name": "Odd Mob",
+      "slug": "odd-mob",
+      "imageUrl": "https://example.com/odd.jpg",
+      "genres": [
+        "Tech House"
+      ],
+      "tracksByGenre": {},
+      "labelsPublishedOn": [
+        "EXPERTS ONLY"
+      ],
+      "totalPoints": 0,
+      "bestPosition": 1,
+      "isRemixerOnly": true,
+      "trending": true,
+      "trendingRankByGenre": {},
+      "trendingPointsByGenre": {}
+    },
+    {
+      "id": "bp_9999",
+      "beatportId": 9999,
+      "name": "Wade",
+      "slug": "wade",
+      "imageUrl": "",
+      "genres": [
+        "Minimal / Deep Tech"
+      ],
+      "tracksByGenre": {},
+      "labelsPublishedOn": [
+        "SOLID GROOVES"
+      ],
+      "totalPoints": 0,
+      "bestPosition": 25,
+      "isRemixerOnly": true,
+      "trending": true,
+      "trendingRankByGenre": {},
+      "trendingPointsByGenre": {}
+    }
+  ],
+  "tracks": [
+    {
+      "id": 19711254,
+      "key": "bp_19711254",
+      "name": "palm of my hands",
+      "mixName": "Odd Mob Extended Remix",
+      "slug": "palm-of-my-hands",
+      "artists": [
+        {
+          "id": 610028,
+          "name": "John Summit",
+          "slug": "john-summit"
+        },
+        {
+          "id": 1068825,
+          "name": "venbee",
+          "slug": "venbee"
+        }
+      ],
+      "remixers": [
+        {
+          "id": 353575,
+          "name": "Odd Mob",
+          "slug": "odd-mob"
+        }
+      ],
+      "label": "EXPERTS ONLY",
+      "labelId": 103008,
+      "labelSlug": "experts-only",
+      "primaryGenre": "Tech House",
+      "subGenre": null,
+      "bpm": 132,
+      "keyCamelot": "2A",
+      "keyName": "Eb Minor",
+      "releaseDate": "2024-11-08",
+      "coverArt": "https://example.com/cover1.jpg",
+      "sampleUrl": "https://example.com/sample1.mp3",
+      "positions": [
+        {
+          "genre": "Tech House",
+          "position": 1,
+          "points": 100,
+          "seenAt": "2026-06-21T10:00:00.000Z"
+        }
+      ],
+      "seenAt": "2026-06-21T10:00:00.000Z"
+    },
+    {
+      "id": 19711255,
+      "key": "bp_19711255",
+      "name": "walls",
+      "mixName": "Original Mix",
+      "slug": "walls",
+      "artists": [
+        {
+          "id": 610028,
+          "name": "John Summit",
+          "slug": "john-summit"
+        }
+      ],
+      "remixers": [],
+      "label": "EXPERTS ONLY",
+      "labelId": 103008,
+      "labelSlug": "experts-only",
+      "primaryGenre": "Tech House",
+      "subGenre": "Latin Tech",
+      "bpm": 126,
+      "keyCamelot": "5A",
+      "keyName": "A Minor",
+      "releaseDate": "2024-09-15",
+      "coverArt": "https://example.com/cover2.jpg",
+      "sampleUrl": "",
+      "positions": [
+        {
+          "genre": "Tech House",
+          "position": 5,
+          "points": 96,
+          "seenAt": "2026-06-21T10:00:00.000Z"
+        }
+      ],
+      "seenAt": "2026-06-21T10:00:00.000Z"
+    },
+    {
+      "id": 19711256,
+      "key": "bp_19711256",
+      "name": "lose control",
+      "mixName": "Original Mix",
+      "slug": "lose-control",
+      "artists": [
+        {
+          "id": 770001,
+          "name": "Mochakk",
+          "slug": "mochakk"
+        }
+      ],
+      "remixers": [],
+      "label": "SOLID GROOVES",
+      "labelId": 9001,
+      "labelSlug": "solid-grooves",
+      "primaryGenre": "Tech House",
+      "subGenre": null,
+      "bpm": 128,
+      "keyCamelot": "6A",
+      "keyName": "G Minor",
+      "releaseDate": "2024-10-01",
+      "coverArt": "",
+      "sampleUrl": "",
+      "positions": [
+        {
+          "genre": "Tech House",
+          "position": 12,
+          "points": 89,
+          "seenAt": "2026-06-21T10:00:00.000Z"
+        },
+        {
+          "genre": "Minimal / Deep Tech",
+          "position": 2,
+          "points": 99,
+          "seenAt": "2026-06-21T10:00:00.000Z"
+        }
+      ],
+      "seenAt": "2026-06-21T10:00:00.000Z"
+    },
+    {
+      "id": 19711260,
+      "key": "bp_19711260",
+      "name": "code reader",
+      "mixName": "Original Mix",
+      "slug": "code-reader",
+      "artists": [
+        {
+          "id": 1456,
+          "name": "Adam Beyer",
+          "slug": "adam-beyer"
+        }
+      ],
+      "remixers": [],
+      "label": "DRUMCODE",
+      "labelId": 1234,
+      "labelSlug": "drumcode",
+      "primaryGenre": "Techno Peak Time / Driving",
+      "subGenre": null,
+      "bpm": 135,
+      "keyCamelot": "4A",
+      "keyName": "F Minor",
+      "releaseDate": "2024-08-20",
+      "coverArt": "",
+      "sampleUrl": "",
+      "positions": [
+        {
+          "genre": "Techno Peak Time / Driving",
+          "position": 3,
+          "points": 98,
+          "seenAt": "2026-06-21T10:00:00.000Z"
+        }
+      ],
+      "seenAt": "2026-06-21T10:00:00.000Z"
+    },
+    {
+      "id": 19711261,
+      "key": "bp_19711261",
+      "name": "server farm",
+      "mixName": "Original Mix",
+      "slug": "server-farm",
+      "artists": [
+        {
+          "id": 1456,
+          "name": "Adam Beyer",
+          "slug": "adam-beyer"
+        },
+        {
+          "id": 7800,
+          "name": "Layton Giordani",
+          "slug": "layton-giordani"
+        }
+      ],
+      "remixers": [],
+      "label": "DRUMCODE",
+      "labelId": 1234,
+      "labelSlug": "drumcode",
+      "primaryGenre": "Techno Peak Time / Driving",
+      "subGenre": null,
+      "bpm": 133,
+      "keyCamelot": "5A",
+      "keyName": "C Minor",
+      "releaseDate": "2024-07-10",
+      "coverArt": "",
+      "sampleUrl": "",
+      "positions": [
+        {
+          "genre": "Techno Peak Time / Driving",
+          "position": 8,
+          "points": 93,
+          "seenAt": "2026-06-21T10:00:00.000Z"
+        }
+      ],
+      "seenAt": "2026-06-21T10:00:00.000Z"
+    },
+    {
+      "id": 19711262,
+      "key": "bp_19711262",
+      "name": "industrial zone",
+      "mixName": "Original Mix",
+      "slug": "industrial-zone",
+      "artists": [
+        {
+          "id": 1456,
+          "name": "Adam Beyer",
+          "slug": "adam-beyer"
+        }
+      ],
+      "remixers": [],
+      "label": "TRUESOUL",
+      "labelId": 5678,
+      "labelSlug": "truesoul",
+      "primaryGenre": "Techno Peak Time / Driving",
+      "subGenre": null,
+      "bpm": 138,
+      "keyCamelot": "6A",
+      "keyName": "G Minor",
+      "releaseDate": "2024-09-05",
+      "coverArt": "",
+      "sampleUrl": "",
+      "positions": [
+        {
+          "genre": "Techno Peak Time / Driving",
+          "position": 18,
+          "points": 83,
+          "seenAt": "2026-06-21T10:00:00.000Z"
+        }
+      ],
+      "seenAt": "2026-06-21T10:00:00.000Z"
+    },
+    {
+      "id": 19711270,
+      "key": "bp_19711270",
+      "name": "dub layers",
+      "mixName": "Dub Mix",
+      "slug": "dub-layers",
+      "artists": [
+        {
+          "id": 770001,
+          "name": "Mochakk",
+          "slug": "mochakk"
+        }
+      ],
+      "remixers": [
+        {
+          "id": 9999,
+          "name": "Wade",
+          "slug": "wade"
+        }
+      ],
+      "label": "SOLID GROOVES",
+      "labelId": 9001,
+      "labelSlug": "solid-grooves",
+      "primaryGenre": "Minimal / Deep Tech",
+      "subGenre": null,
+      "bpm": 127,
+      "keyCamelot": "8A",
+      "keyName": "A Minor",
+      "releaseDate": "2024-11-01",
+      "coverArt": "",
+      "sampleUrl": "",
+      "positions": [
+        {
+          "genre": "Minimal / Deep Tech",
+          "position": 25,
+          "points": 76,
+          "seenAt": "2026-06-21T10:00:00.000Z"
+        }
+      ],
+      "seenAt": "2026-06-21T10:00:00.000Z"
+    }
+  ],
+  "_meta": {
+    "source": "beatport",
+    "version": 2,
+    "scrapedAt": "2026-06-21T10:00:00.000Z",
+    "totalLabels": 4,
+    "totalArtists": 7,
+    "totalTracks": 7,
+    "totalGenres": 3,
+    "successGenres": 3,
+    "failedGenres": 0
+  }
+}
