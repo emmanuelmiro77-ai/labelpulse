@@ -133,3 +133,43 @@ Stage Summary:
 - Multiple fallback strategies (4 for genre discovery, 3 for label extraction) make it resilient to Beatstats HTML/CSS changes
 - Clear error reporting in JSON _meta field when something fails
 - Build verified: compiles + builds cleanly
+
+---
+Task ID: 6
+Agent: Main Agent
+Task: Remove Beatstats scraper entirely, keep only Beatport
+
+Work Log:
+- User confirmed Beatstats scraper still failing (52/52 genres HTTP 404)
+  even after v3 push
+- User decided to abandon Beatstats and build historical DB via periodic
+  Beatport scrapes only
+- Identified all Beatstats code in rankings-wizard.tsx:
+  - buildBeatstatsScript() function: lines 26-516
+  - source state + period + month state
+  - Source selector UI (Beatport vs Beatstats tabs)
+  - Year/Month dropdowns (only used by Beatstats historical mode)
+  - NOT_ON_BEATSTATS / GENRE_DISCOVERY_FAILED error branches
+  - Cloudflare warning block in Step 2
+  - yearOptions / monthOptions arrays
+- Deleted buildBeatstatsScript() entirely (sed -i '26,516d')
+- Simplified scriptToCopy to constant BEATPORT_SCRAPER_SCRIPT
+- Simplified handleOpenSite to always open beatport.com
+- Removed Beatstats-specific error messages from handleFileChange
+- Replaced source selector UI with info banner explaining Beatport-only
+  model + "build history by scraping periodically" message
+- Verified no remaining beatstats references in rankings-wizard.tsx
+- Verified file type-checks cleanly (npx tsc --noEmit)
+- Intentionally KEPT beatstats references in:
+  - src/lib/label-links.ts (UI feature: search label on Beatstats)
+  - src/lib/store.ts (backward compat for old imported JSONs)
+  - src/lib/i18n.ts (cosmetic text comments)
+
+Stage Summary:
+- File: 950 → 351 lines (-63%, -614 lines / +15 lines)
+- Commit: e3ec7d4 "refactor(scraper): remove Beatstats scraper entirely, keep only Beatport"
+- Pushed to origin/main successfully (fe93e5d..e3ec7d4)
+- Vercel redeploy triggered
+- All historical rankings data in DB preserved
+- Going forward: rankings update via Beatport scrapes only, each
+  update adds a snapshot, snapshots accumulate as history
