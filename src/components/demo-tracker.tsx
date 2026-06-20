@@ -321,27 +321,6 @@ export function DemoTracker() {
     }
   };
 
-  const handleAnalyzeFile = async (file: File) => {
-    setIsAnalyzing(true);
-    setAnalysisError(null);
-    setAnalysisProgress({ stage: "fetching", message: `Lettura ${file.name}...`, progress: 0.2 });
-    try {
-      const { analyzeAudioFile } = await import("@/lib/audio-analysis");
-      const result = await analyzeAudioFile(file, (p) => setAnalysisProgress(p));
-      setFormAnalysis(result);
-      setFormBpm(String(result.bpm));
-      setFormKey(result.key.name);
-      setAnalysisProgress({ stage: "done", message: "Analisi completata!", progress: 1 });
-      setTimeout(() => setAnalysisProgress(null), 2000);
-    } catch (err: any) {
-      console.error("[analyze file]", err);
-      setAnalysisError(err?.message || "Errore durante l'analisi del file");
-      setAnalysisProgress(null);
-    } finally {
-      setIsAnalyzing(false);
-    }
-  };
-
   const canAdvance = (status: DemoStatus) => STATUS_FLOW.indexOf(status) < STATUS_FLOW.length - 1;
 
   // If viewing label history, show that instead
