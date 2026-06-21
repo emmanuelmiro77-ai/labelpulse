@@ -15,6 +15,7 @@
  */
 
 import { useAppStore } from "@/lib/store";
+import { getLabelDiscoveryUrls } from "@/lib/label-links";
 import { t, type Locale } from "@/lib/i18n";
 import React, {
   useState,
@@ -40,6 +41,7 @@ import {
   Calendar,
   ListMusic,
   Building2,
+  BarChart3,
 } from "lucide-react";
 
 // ============================================================================
@@ -753,38 +755,64 @@ function ArtistDetail({
           </p>
         ) : (
           <div className="grid grid-cols-1 gap-2 sm:grid-cols-2 lg:grid-cols-3">
-            {labelStats.map(({ name, count, storeLabel }) => (
-              <button
-                key={name}
-                type="button"
-                onClick={() => onLabelClick(name)}
-                className="group flex items-center justify-between gap-2 rounded-lg border border-border/40 bg-card/40 p-3 text-left transition-all hover:border-primary/30 hover:bg-card/70"
-              >
-                <div className="min-w-0">
-                  <p className="truncate text-sm font-medium text-foreground">
-                    {name}
-                  </p>
-                  <p className="text-[11px] text-muted-foreground">
-                    {count} {it(locale, "tracce", "tracks")}
-                  </p>
-                  {storeLabel?.beatportLink && (
+            {labelStats.map(({ name, count, storeLabel }) => {
+              // Build discovery URLs (uses user-saved beatportLink if available,
+              // otherwise falls back to a Beatport search URL by label name).
+              const urls = getLabelDiscoveryUrls({
+                name,
+                beatportLink: storeLabel?.beatportLink,
+              });
+              return (
+                <div
+                  key={name}
+                  className="group flex items-center justify-between gap-2 rounded-lg border border-border/40 bg-card/40 p-3 transition-all hover:border-primary/30 hover:bg-card/70"
+                >
+                  <button
+                    type="button"
+                    onClick={() => onLabelClick(name)}
+                    className="min-w-0 flex-1 text-left"
+                    title={it(locale, "Apri dettaglio label", "Open label details")}
+                  >
+                    <p className="truncate text-sm font-medium text-foreground group-hover:text-primary">
+                      {name}
+                    </p>
+                    <p className="text-[11px] text-muted-foreground">
+                      {count} {it(locale, "tracce", "tracks")}
+                    </p>
+                  </button>
+                  {/* Inline discovery icons: each opens in a new tab and
+                      stops propagation so the card click (label detail)
+                      doesn't fire. */}
+                  <div className="flex shrink-0 items-center gap-1">
                     <a
-                      href={storeLabel.beatportLink}
+                      href={urls.beatport}
                       target="_blank"
                       rel="noopener noreferrer"
                       onClick={(e) => e.stopPropagation()}
-                      className="mt-1 inline-flex items-center gap-1 text-[10px] text-emerald-400 hover:underline"
+                      title={urls.beatportIsDirect
+                        ? it(locale, "Apri pagina Beatport della label", "Open label's Beatport page")
+                        : it(locale, "Cerca su Beatport", "Search on Beatport")}
+                      className="flex h-6 w-6 items-center justify-center rounded-md bg-emerald-500/10 text-emerald-400 transition-colors hover:bg-emerald-500/20"
                     >
-                      <ExternalLink className="h-2.5 w-2.5" />
-                      Beatport
+                      <ExternalLink className="h-3 w-3" />
                     </a>
-                  )}
+                    <a
+                      href={urls.beatstats}
+                      target="_blank"
+                      rel="noopener noreferrer"
+                      onClick={(e) => e.stopPropagation()}
+                      title={it(locale, "Cerca su Beatstats", "Search on Beatstats")}
+                      className="flex h-6 w-6 items-center justify-center rounded-md bg-cyan-500/10 text-cyan-400 transition-colors hover:bg-cyan-500/20"
+                    >
+                      <BarChart3 className="h-3 w-3" />
+                    </a>
+                    <span className="ml-1 rounded-full bg-primary/10 px-2 py-0.5 text-[10px] font-semibold text-primary">
+                      {count}
+                    </span>
+                  </div>
                 </div>
-                <span className="shrink-0 rounded-full bg-primary/10 px-2 py-0.5 text-[10px] font-semibold text-primary">
-                  {count}
-                </span>
-              </button>
-            ))}
+              );
+            })}
           </div>
         )}
       </section>

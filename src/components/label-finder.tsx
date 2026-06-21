@@ -1,8 +1,9 @@
 "use client";
 
-import { useAppStore, getLabelTier, type Label } from "@/lib/store";
+import { useAppStore, getLabelTier, type Label, type Artist, type ArtistTrack } from "@/lib/store";
 import { t } from "@/lib/i18n";
-import React, { useState, useMemo, useCallback, useEffect } from "react";
+import { getLabelDiscoveryUrls } from "@/lib/label-links";
+import React, { useState, useMemo, useCallback, useEffect, useRef } from "react";
 import { sendEmail, ensureValidToken } from "@/lib/gmail";
 import {
   Search,
@@ -34,6 +35,9 @@ import {
   CheckCircle2,
   Loader2,
   Disc3,
+  Play,
+  Pause,
+  Headphones,
 } from "lucide-react";
 import { useToast } from "@/hooks/use-toast";
 import { Input } from "@/components/ui/input";
@@ -231,7 +235,7 @@ function getLinkDisplay(value: string): string {
 }
 
 export function LabelFinder() {
-  const { labels, demos, addLabel, updateLabel, deleteLabel, addDemo, locale, getGenres, setActiveTab, userProfile, setUserProfile, gmailAuth, setGmailAuth, selectedLabelId, setSelectedLabelId } =
+  const { labels, demos, addLabel, updateLabel, deleteLabel, addDemo, locale, getGenres, setActiveTab, userProfile, setUserProfile, gmailAuth, setGmailAuth, selectedLabelId, setSelectedLabelId, artists } =
     useAppStore();
   const genres = getGenres();
   const { toast } = useToast();
@@ -256,6 +260,68 @@ export function LabelFinder() {
   const [detailStatus, setDetailStatus] = useState<"open" | "closed">("open");
   const [detailSubmissionType, setDetailSubmissionType] = useState<"email" | "webform" | "platform">("email");
   const [detailSaved, setDetailSaved] = useState(false);
+
+  // Audio preview state — for the "Top tracks on Beatport" section in the
+  // label detail dialog. We only play one sample at a time; clicking play
+  // on another track stops the previous one.
+  const [playingTrackId, setPlayingTrackId] = useState<number | null>(null);
+  const audioRef = useRef<HTMLAudioElement | null>(null);
+
+  // Derive the label's Top 10 tracks from the scraped artist data. Each
+  // artist has tracksByGenre; we flatten and filter by `track.label ===
+  // detailLabel.name` (case-insensitive). We dedupe by track.id (the same
+  // track can appear under multiple artists/genres). Sorted by chart
+  // position ascending (1 = highest). Capped at 10 to match Beatport's
+  // "Top 10" label page format.
+  const labelTopTracks = useMemo<ArtistTrack[]>(() => {
+    if (!detailLabel) return [];
+    const targetName = detailLabel.name.toLowerCase().trim();
+    const seen = new Set<number>();
+    const tracks: ArtistTrack[] = [];
+    const safeArtists: Artist[] = Array.isArray(artists) ? artists : [];
+    for (const artist of safeArtists) {
+      const genres = artist.tracksByGenre || {};
+      for (const genre of Object.keys(genres)) {
+        for (const track of genres[genre] || []) {
+          if (!track || !track.label) continue;
+          if (track.label.toLowerCase().trim() !== targetName) continue;
+          if (seen.has(track.id)) continue;
+          seen.add(track.id);
+          tracks.push(track);
+        }
+      }
+    }
+    // Sort by chart position (1 first), then by points descending as tiebreaker
+    tracks.sort((a, b) => {
+      if (a.position !== b.position) return a.position - b.position;
+      return (b.points || 0) - (a.points || 0);
+    });
+    return tracks.slice(0, 10);
+  }, [detailLabel, artists]);
+
+  const togglePlayTrack = useCallback((track: ArtistTrack) => {
+    if (!audioRef.current) return;
+    if (playingTrackId === track.id) {
+      audioRef.current.pause();
+      setPlayingTrackId(null);
+      return;
+    }
+    audioRef.current.src = track.sampleUrl;
+    audioRef.current.play().catch(() => {
+      // CORS or network failure — silently ignore, the play button just
+      // won't toggle. The Beatport sample URL is meant to be hot-linkable.
+    });
+    setPlayingTrackId(track.id);
+  }, [playingTrackId]);
+
+  // Reset audio state when dialog closes
+  useEffect(() => {
+    if (!detailLabel && audioRef.current) {
+      audioRef.current.pause();
+      audioRef.current.src = "";
+      setPlayingTrackId(null);
+    }
+  }, [detailLabel]);
 
   // Pitch inline state
   const [showPitch, setShowPitch] = useState(false);
@@ -991,6 +1057,85 @@ export function LabelFinder() {
                     </div>
                   </div>
                 </div>
+
+                {/* Top tracks on Beatport (from scraped artist data) */}
+                {/* Hidden audio element for sample preview */}
+                <audio ref={audioRef} preload="none" />
+                {labelTopTracks.length > 0 && (
+                  <div className="space-y-3 py-3 border-b border-border/30">
+                    <div className="flex items-center justify-between">
+                      <div className="flex items-center gap-2">
+                        <Headphones className="h-4 w-4 text-primary" />
+                        <p className="text-[10px] text-muted-foreground uppercase tracking-wider font-medium">
+                          {locale === "it" ? "Top tracce Beatport" : "Top Beatport tracks"}
+                        </p>
+                      </div>
+                      <span className="text-[10px] text-muted-foreground">
+                        {labelTopTracks.length} {locale === "it" ? "tracce" : "tracks"}
+                      </span>
+                    </div>
+                    <p className="text-[10px] text-muted-foreground/70 -mt-1">
+                      {locale === "it"
+                        ? "Anteprime audio dai dati scraping. Clicca play per ascoltare."
+                        : "Audio previews from scraped data. Click play to listen."}
+                    </p>
+                    <div className="space-y-1.5 max-h-72 overflow-y-auto pr-1">
+                      {labelTopTracks.map((track, idx) => (
+                        <div
+                          key={track.id}
+                          className="flex items-center gap-2 rounded-md border border-border/30 bg-secondary/20 p-2 hover:bg-secondary/40 transition-colors"
+                        >
+                          <button
+                            type="button"
+                            onClick={() => togglePlayTrack(track)}
+                            className="flex h-7 w-7 shrink-0 items-center justify-center rounded-full bg-primary/15 text-primary hover:bg-primary/25 transition-colors"
+                            title={playingTrackId === track.id
+                              ? (locale === "it" ? "Pausa" : "Pause")
+                              : (locale === "it" ? "Riproduci anteprima" : "Play preview")}
+                          >
+                            {playingTrackId === track.id
+                              ? <Pause className="h-3 w-3" />
+                              : <Play className="h-3 w-3 ml-0.5" />}
+                          </button>
+                          {track.coverArt ? (
+                            // eslint-disable-next-line @next/next/no-img-element
+                            <img
+                              src={track.coverArt}
+                              alt=""
+                              className="h-9 w-9 shrink-0 rounded object-cover"
+                              loading="lazy"
+                            />
+                          ) : (
+                            <div className="flex h-9 w-9 shrink-0 items-center justify-center rounded bg-secondary/50">
+                              <Music2 className="h-3.5 w-3.5 text-muted-foreground" />
+                            </div>
+                          )}
+                          <div className="min-w-0 flex-1">
+                            <p className="truncate text-xs font-medium text-foreground">
+                              <span className="text-muted-foreground mr-1">#{idx + 1}</span>
+                              {track.name}
+                              {track.mixName && track.mixName !== "Original Mix" && (
+                                <span className="text-muted-foreground"> ({track.mixName})</span>
+                              )}
+                            </p>
+                            <div className="flex items-center gap-2 text-[10px] text-muted-foreground mt-0.5">
+                              {track.bpm && <span>{track.bpm} BPM</span>}
+                              {track.keyCamelot && <span>· {track.keyCamelot}</span>}
+                              {track.releaseDate && (
+                                <span className="ml-auto">
+                                  {new Date(track.releaseDate).toLocaleDateString(
+                                    locale === "it" ? "it-IT" : "en-US",
+                                    { year: "numeric", month: "short", day: "numeric" }
+                                  )}
+                                </span>
+                              )}
+                            </div>
+                          </div>
+                        </div>
+                      ))}
+                    </div>
+                  </div>
+                )}
 
                 {/* User-editable fields with auto-save */}
                 <div className="space-y-4 py-3">
