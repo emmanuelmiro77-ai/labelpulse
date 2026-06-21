@@ -173,3 +173,24 @@ Stage Summary:
 - All historical rankings data in DB preserved
 - Going forward: rankings update via Beatport scrapes only, each
   update adds a snapshot, snapshots accumulate as history
+
+---
+Task ID: phase2-bugfix
+Agent: main
+Task: Fix bug where re-importing v2 scrape JSON left the Artisti tab empty and the Classifiche spotlight reduced to 5 cards.
+
+Work Log:
+- Read store.ts to understand importData flow: parsed.artists read at top level (not from data.*)
+- Read rankings-wizard.tsx handleFileChange: built importPayload envelope with only data.labels + data.demos, dropping parsed.artists / parsed.tracks
+- Verified partialize config: artists NOT persisted to localStorage (only IndexedDB) — quota safe
+- Verified loadArtistsOnBoot is wired in page.tsx after rehydration
+- Fixed rankings-wizard.tsx: added `artists: parsed.artists || []` and `tracks: parsed.tracks || []` at top level of importPayload
+- Committed as 296ad06 "fix(import): pass through artists[] and tracks[] to importData"
+- Pushed to origin/main
+- Triggered Vercel deploy hook
+
+Stage Summary:
+- Bug was purely in the import-payload construction; store.ts mergeArtists() was already correct
+- After Vercel rebuild (~2-3 min) the user should hard-refresh and re-import the 9.2MB scrape JSON
+- Artisti tab will then show 3,403 artists (Adam Beyer, Skrillex, John Summit, etc.)
+- Classifiche spotlight showing only 5 risers instead of 10 is expected behavior when re-importing the same file (movement = prev - current = 0 for unchanged ranks). Not a bug.
