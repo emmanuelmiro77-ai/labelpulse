@@ -1,6 +1,6 @@
 "use client";
 
-import { useAppStore, loadFromCloud, forceCloudSync } from "@/lib/store";
+import { useAppStore, loadFromCloud, forceCloudSync, loadArtistsOnBoot } from "@/lib/store";
 import { t, LOCALE_NAMES, LOCALE_FLAGS, type Locale } from "@/lib/i18n";
 import { useAuthEffect } from "@/lib/use-auth";
 import { useSession } from "next-auth/react";
@@ -16,6 +16,7 @@ import {
   Globe,
   Loader2,
   User,
+  Users,
 } from "lucide-react";
 import { useState, useEffect } from "react";
 import { Button } from "@/components/ui/button";
@@ -40,10 +41,12 @@ import { BetaFeedbackButton } from "@/components/beta-feedback-button";
 import { WelcomeOnboarding } from "@/components/welcome-onboarding";
 import { BarChart3 } from "lucide-react";
 import { LogIn, AlertTriangle } from "lucide-react";
+import ArtistExplorer from "@/components/artist-explorer";
 
 const NAV_KEYS = [
   { id: "dashboard" as const, labelKey: "nav.dashboard" as const, icon: LayoutDashboard },
   { id: "labels" as const, labelKey: "nav.labels" as const, icon: Music2 },
+  { id: "artists" as const, labelKey: "nav.artists" as const, icon: Users },
   { id: "rankings" as const, labelKey: "nav.rankings" as const, icon: BarChart3 },
   { id: "demos" as const, labelKey: "nav.demos" as const, icon: Send },
   { id: "pitch" as const, labelKey: "nav.pitch" as const, icon: Megaphone },
@@ -53,6 +56,7 @@ const NAV_KEYS = [
 const SECTION_TITLES = {
   dashboard: "dash.title",
   labels: "labels.title",
+  artists: "artists.title",
   rankings: "rankings.title",
   demos: "demos.title",
   pitch: "campaign.title",
@@ -62,6 +66,7 @@ const SECTION_TITLES = {
 const SECTION_SUBTITLES = {
   dashboard: "dash.subtitle",
   labels: "labels.subtitle",
+  artists: "artists.subtitle",
   rankings: "rankings.subtitle",
   demos: "demos.subtitle",
   pitch: "campaign.subtitle",
@@ -82,6 +87,9 @@ export default function Home() {
   useEffect(() => {
     if (hasRehydrated) {
       loadFromCloud();
+      // Load artists from IndexedDB (Phase 2 — scraper v2 data is too large
+      // for localStorage, persisted in IDB instead)
+      loadArtistsOnBoot();
     }
   }, [hasRehydrated]);
 
@@ -297,6 +305,7 @@ export default function Home() {
           <div className="flex items-center gap-2 mb-1">
             {activeTab === "dashboard" && <LayoutDashboard className="h-5 w-5 text-primary" />}
             {activeTab === "labels" && <Music2 className="h-5 w-5 text-primary" />}
+            {activeTab === "artists" && <Users className="h-5 w-5 text-primary" />}
             {activeTab === "rankings" && <BarChart3 className="h-5 w-5 text-primary" />}
             {activeTab === "demos" && <Send className="h-5 w-5 text-primary" />}
             {activeTab === "pitch" && <Megaphone className="h-5 w-5 text-primary" />}
@@ -312,6 +321,7 @@ export default function Home() {
 
         {activeTab === "dashboard" && <Dashboard />}
         {activeTab === "labels" && <LabelFinder />}
+        {activeTab === "artists" && <ArtistExplorer />}
         {activeTab === "rankings" && <RankingsPage />}
         {activeTab === "demos" && <DemoTracker />}
         {activeTab === "pitch" && <PitchGenerator />}

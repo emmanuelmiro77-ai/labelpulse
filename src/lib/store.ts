@@ -5,6 +5,7 @@ import { persist, createJSONStorage, StateStorage } from "zustand/middleware";
 import type { Locale } from "./i18n";
 import labelData from "./labels-data.json";
 import { saveStateToCloud, loadStateFromCloud, isSupabaseConfigured, isApplyingRemoteUpdate } from "./supabase";
+import { saveArtistsToIDB, loadArtistsFromIDB } from "./artists-idb";
 
 // ==================== TYPES ====================
 
@@ -43,6 +44,48 @@ export interface Label {
   trendingPointsByGenre: Record<string, number>;
   isCustom?: boolean; // user-added label
   prevRankByGenre?: Record<string, number>; // Previous ranking snapshot (before last import)
+}
+
+// ==================== ARTISTS & TRACKS (scraper v2) ====================
+// Captured from Beatport Top-100 per genre. Each artist aggregates their
+// tracks across all genres they appear in, plus all labels they've published on.
+// Storage: persisted in IndexedDB (NOT localStorage — too large, 9MB+ for 3000+ artists).
+
+export interface ArtistTrack {
+  id: number;
+  name: string;
+  mixName: string;
+  position: number;
+  points: number;
+  label: string;
+  labelId: number | null;
+  labelSlug: string;
+  releaseDate: string;
+  bpm: number | null;
+  keyCamelot: string;
+  keyName: string;
+  coverArt: string;
+  sampleUrl: string;
+  seenAt: string;
+}
+
+export interface Artist {
+  id: string; // 'bp_6824' (Beatport id) or 'nm_<UPPERCASE_NAME>' (name-only fallback)
+  beatportId: number | null;
+  name: string;
+  slug: string;
+  imageUrl: string;
+  genres: string[];
+  tracksByGenre: Record<string, ArtistTrack[]>;
+  labelsPublishedOn: string[];
+  totalPoints: number;
+  bestPosition: number;
+  isRemixerOnly: boolean;
+  trending: boolean;
+  trendingRankByGenre?: Record<string, number>;
+  trendingPointsByGenre?: Record<string, number>;
+  firstSeenAt?: string; // ISO timestamp of first scrape that included this artist
+  lastSeenAt?: string; // ISO timestamp of most recent scrape that included this artist
 }
 
 // ==================== RANKING SNAPSHOTS ====================
@@ -677,7 +720,9 @@ interface GmailAuth {
 interface AppState {
   labels: Label[];
   demos: Demo[];
-  activeTab: "dashboard" | "labels" | "rankings" | "demos" | "pitch" | "profile";
+  artists: Artist[]; // persisted in IndexedDB, loaded asynchronously on boot
+  selectedArtistId: string | null; // for Artist Explorer detail view
+  activeTab: "dashboard" | "labels" | "artists" | "rankings" | "demos" | "pitch" | "profile";
   locale: Locale;
   userProfile: UserProfile;
   gmailAuth: GmailAuth;
@@ -699,7 +744,11 @@ interface AppState {
   advanceDemoStatus: (id: string) => void;
 
   // Navigation
-  setActiveTab: (tab: "dashboard" | "labels" | "rankings" | "demos" | "pitch" | "profile") => void;
+  setActiveTab: (tab: "dashboard" | "labels" | "artists" | "rankings" | "demos" | "pitch" | "profile") => void;
+
+  // Artists (Phase 2 — Beatport scraper v2)
+  setSelectedArtistId: (id: string | null) => void;
+  setArtists: (artists: Artist[]) => void;
 
   // Language
   setLocale: (locale: Locale) => void;
@@ -723,6 +772,103 @@ interface AppState {
   // Data backup
   exportData: () => string;
   importData: (jsonString: string) => boolean;
+}
+
+/**
+ * Merge incoming artists (from a fresh scrape) with existing artists
+ * (already in the store from previous scrapes).
+ *
+ * Strategy:
+ * - Key by artist.id (e.g. "bp_6824"). Same Beatport id = same artist.
+ * - For each artist that exists: union genres, union labelsPublishedOn,
+ *   MERGE tracksByGenre by track.id (preserve tracks from older scrapes,
+ *   update with new position info), sum totalPoints, min bestPosition.
+ * - firstSeenAt preserved from existing; lastSeenAt = now.
+ * - Trending recomputed fresh from current data.
+ * - New artists: appended with firstSeenAt = lastSeenAt = now.
+ *
+ * This is what makes historical data accumulate: each scrape adds new
+ * tracks to artists' tracksByGenre without losing previously-seen tracks.
+ */
+function mergeArtists(existing: Artist[], incoming: Artist[], now: string): Artist[] {
+  const map = new Map<string, Artist>();
+
+  // Seed with existing
+  for (const a of existing) {
+    map.set(a.id, { ...a });
+  }
+
+  for (const inc of incoming) {
+    const ex = map.get(inc.id);
+    if (!ex) {
+      // New artist — first time we see them
+      map.set(inc.id, {
+        ...inc,
+        firstSeenAt: now,
+        lastSeenAt: now,
+      });
+      continue;
+    }
+
+    // Existing artist — merge fields
+    // Union genres
+    const genres = Array.from(new Set([...(ex.genres || []), ...(inc.genres || [])]));
+
+    // Union labelsPublishedOn
+    const labelsPublishedOn = Array.from(
+      new Set([...(ex.labelsPublishedOn || []), ...(inc.labelsPublishedOn || [])])
+    );
+
+    // Merge tracksByGenre — preserve old tracks, add/update from incoming
+    const tracksByGenre: Record<string, ArtistTrack[]> = { ...(ex.tracksByGenre || {}) };
+    for (const genre of Object.keys(inc.tracksByGenre || {})) {
+      const incTracks = inc.tracksByGenre[genre] || [];
+      const exTracks = tracksByGenre[genre] || [];
+      const byId = new Map<number, ArtistTrack>();
+      // Seed with existing
+      for (const t of exTracks) byId.set(t.id, t);
+      // Update/add with incoming (incoming overrides — fresh positions)
+      for (const t of incTracks) byId.set(t.id, t);
+      tracksByGenre[genre] = Array.from(byId.values()).sort((a, b) => a.position - b.position);
+    }
+
+    // Recompute totalPoints & bestPosition from current incoming data
+    // (the existing totals were from older scrapes — we want the snapshot
+    // from THIS import to drive the points, otherwise the totals just
+    // accumulate forever and "points" loses meaning).
+    // BUT: keep max totalPoints seen (artists who peaked before should
+    // keep credit). Actually no — let's use the LATEST totalPoints,
+    // since that's the current ranking signal. Old tracks are still in
+    // tracksByGenre for browsing, but the points reflect "right now".
+    const totalPoints = inc.totalPoints;
+    const bestPosition = Math.min(ex.bestPosition, inc.bestPosition);
+
+    // Trending: use incoming (fresh computation)
+    const trending = inc.trending;
+    const trendingRankByGenre = inc.trendingRankByGenre;
+    const trendingPointsByGenre = inc.trendingPointsByGenre;
+
+    // isRemixerOnly: false if EITHER snapshot has them as primary
+    const isRemixerOnly = ex.isRemixerOnly && inc.isRemixerOnly;
+
+    map.set(inc.id, {
+      ...ex,
+      ...inc,
+      genres,
+      labelsPublishedOn,
+      tracksByGenre,
+      totalPoints,
+      bestPosition,
+      trending,
+      trendingRankByGenre,
+      trendingPointsByGenre,
+      isRemixerOnly,
+      firstSeenAt: ex.firstSeenAt || now,
+      lastSeenAt: now,
+    });
+  }
+
+  return Array.from(map.values());
 }
 
 /**
@@ -863,6 +1009,8 @@ export const useAppStore = create<AppState>()(
     (set, get) => ({
       labels: buildLabelsFromData(),
       demos: [] as Demo[],
+      artists: [] as Artist[], // populated from IndexedDB on boot (see loadArtistsFromIDB)
+      selectedArtistId: null as string | null,
       activeTab: "dashboard" as const,
       locale: "it" as Locale,
       userProfile: { artistName: "", scLink: "", bio: "", email: "", photoUrl: "", links: [], cyaniteApiToken: "", supabaseUrl: "", supabaseAnonKey: "" } as UserProfile,
@@ -979,6 +1127,18 @@ export const useAppStore = create<AppState>()(
       },
 
       setActiveTab: (tab) => set({ activeTab: tab }),
+
+      setSelectedArtistId: (id) => set({ selectedArtistId: id }),
+
+      setArtists: (artists) => {
+        set({ artists });
+        // Persist to IndexedDB (fire-and-forget; non-blocking)
+        if (typeof window !== "undefined") {
+          saveArtistsToIDB(artists).catch((e) =>
+            console.warn("[LabelPulse] Failed to persist artists to IndexedDB:", e)
+          );
+        }
+      },
       setLocale: (locale) => { set({ locale }); syncToCloud(); },
       setUserProfile: (profile) => {
         set((state) => ({ userProfile: { ...state.userProfile, ...profile }, lastSavedAt: new Date().toISOString() }));
@@ -1256,9 +1416,27 @@ export const useAppStore = create<AppState>()(
             );
           }
 
+          // === ARTIST MERGE (scraper v2) ===
+          // If the imported JSON contains artists[] (from scraper v2), merge them
+          // with existing artists in the store. Dedup by id (e.g. "bp_6824").
+          // Tracks within each artist's tracksByGenre are also merged by track.id
+          // so historical data accumulates across multiple scrapes.
+          // See mergeArtists() for full strategy.
+          let mergedArtists: Artist[] | undefined;
+          const importedArtists: Artist[] = Array.isArray(parsed.artists) ? parsed.artists : [];
+          if (importedArtists.length > 0) {
+            const now = new Date().toISOString();
+            const currentArtists = get().artists || [];
+            mergedArtists = mergeArtists(currentArtists, importedArtists, now);
+            console.info(
+              `[LabelPulse Import] Artists: ${currentArtists.length} existing + ${importedArtists.length} incoming → ${mergedArtists.length} merged.`
+            );
+          }
+
           set({
             labels: mergedLabels,
             demos: mergedDemos,
+            ...(mergedArtists ? { artists: mergedArtists } : {}),
             userProfile: userProfile || get().userProfile,
             locale: importedLocale || get().locale,
             rankingSnapshots: mergedSnapshots,
@@ -1275,6 +1453,14 @@ export const useAppStore = create<AppState>()(
             lastSavedAt: new Date().toISOString(),
           });
           syncToCloud();
+
+          // Persist artists to IndexedDB (non-blocking, fire-and-forget)
+          if (mergedArtists && typeof window !== "undefined") {
+            saveArtistsToIDB(mergedArtists).catch((e) =>
+              console.warn("[LabelPulse Import] Failed to persist artists to IndexedDB:", e)
+            );
+          }
+
           return true;
         } catch {
           return false;
@@ -1804,4 +1990,23 @@ function mergeCloudData(cloudData: any, localState: any): Partial<AppState> {
   }
 
   return merged;
+}
+
+// ===================================================================
+// ARTIST BOOT LOADER
+// Called once on app boot (after Zustand rehydration) to load artists
+// from IndexedDB into the in-memory store. Non-blocking — UI renders
+// immediately with artists:[] and populates when IDB returns.
+// ===================================================================
+export async function loadArtistsOnBoot(): Promise<void> {
+  if (typeof window === "undefined") return;
+  try {
+    const artists = await loadArtistsFromIDB();
+    if (artists.length > 0) {
+      useAppStore.setState({ artists });
+      console.info(`[LabelPulse] Loaded ${artists.length} artists from IndexedDB`);
+    }
+  } catch (e) {
+    console.warn("[LabelPulse] Failed to load artists from IndexedDB:", e);
+  }
 }

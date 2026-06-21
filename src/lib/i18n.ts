@@ -24,6 +24,7 @@ type TranslationKeys = {
   // Nav
   "nav.dashboard": string;
   "nav.labels": string;
+  "nav.artists": string;
   "nav.demos": string;
   "nav.pitch": string;
   "nav.rankings": string;
@@ -55,6 +56,8 @@ type TranslationKeys = {
   // Labels
   "labels.title": string;
   "labels.subtitle": string;
+  "artists.title": string;
+  "artists.subtitle": string;
   "labels.search": string;
   "labels.allGenres": string;
   "labels.allTypes": string;
@@ -407,6 +410,7 @@ const translations: Record<Locale, TranslationKeys> = {
   it: {
     "nav.dashboard": "Dashboard",
     "nav.labels": "Label",
+    "nav.artists": "Artisti",
     "nav.demos": "Demo",
     "nav.pitch": "Pitch",
     "nav.rankings": "Classifiche",
@@ -433,6 +437,8 @@ const translations: Record<Locale, TranslationKeys> = {
     "dash.welcomeStep3": "3. Genera il Pitch — crea un'email professionale per gli A&R con un clic",
     "labels.title": "Label Finder & Database",
     "labels.subtitle": "Esplora, filtra e gestisci il tuo database di label discografiche.",
+    "artists.title": "Artisti",
+    "artists.subtitle": "Esplora gli artisti nelle classifiche Beatport — tracce, label, BPM, key e storico pubblicazioni.",
     "labels.search": "Cerca label, generi, contatti...",
     "labels.allGenres": "Tutti i generi",
     "labels.allTypes": "Tutti i tipi",
@@ -756,6 +762,7 @@ const translations: Record<Locale, TranslationKeys> = {
   en: {
     "nav.dashboard": "Dashboard",
     "nav.labels": "Labels",
+    "nav.artists": "Artists",
     "nav.demos": "Demos",
     "nav.pitch": "Pitch",
     "nav.rankings": "Rankings",
@@ -782,6 +789,8 @@ const translations: Record<Locale, TranslationKeys> = {
     "dash.welcomeStep3": "3. Generate a Pitch — create a professional A&R email with one click",
     "labels.title": "Label Finder & Database",
     "labels.subtitle": "Browse, filter and manage your label database with real Beatport data.",
+    "artists.title": "Artists",
+    "artists.subtitle": "Explore artists in the Beatport charts — tracks, labels, BPM, key and publication history.",
     "labels.search": "Search labels, genres, contacts...",
     "labels.allGenres": "All Genres",
     "labels.allTypes": "All Types",
@@ -1105,6 +1114,7 @@ const translations: Record<Locale, TranslationKeys> = {
   es: {
     "nav.dashboard": "Panel",
     "nav.labels": "Labels",
+    "nav.artists": "Artistas",
     "nav.demos": "Demos",
     "nav.pitch": "Pitch",
     "nav.rankings": "Clasificaciones",
@@ -1131,6 +1141,8 @@ const translations: Record<Locale, TranslationKeys> = {
     "dash.welcomeStep3": "3. Genera un Pitch — crea un email profesional para A&R con un clic",
     "labels.title": "Buscador de Labels",
     "labels.subtitle": "Explora, filtra y gestiona tu base de datos de labels discográficas.",
+    "artists.title": "Artistas",
+    "artists.subtitle": "Explora los artistas en las clasificaciones de Beatport — tracks, labels, BPM, key e historial de publicaciones.",
     "labels.search": "Buscar labels, géneros, contactos...",
     "labels.allGenres": "Todos los géneros",
     "labels.allTypes": "Todos los tipos",
@@ -1454,6 +1466,7 @@ const translations: Record<Locale, TranslationKeys> = {
   fr: {
     "nav.dashboard": "Tableau de bord",
     "nav.labels": "Labels",
+    "nav.artists": "Artistes",
     "nav.demos": "Démos",
     "nav.pitch": "Pitch",
     "nav.rankings": "Classements",
@@ -1480,6 +1493,8 @@ const translations: Record<Locale, TranslationKeys> = {
     "dash.welcomeStep3": "3. Générez un Pitch — créez un email professionnel pour les A&R en un clic",
     "labels.title": "Recherche de Labels",
     "labels.subtitle": "Parcourez, filtrez et gérez votre base de données de labels.",
+    "artists.title": "Artistes",
+    "artists.subtitle": "Explorez les artistes dans les classements Beatport — tracks, labels, BPM, tonalité et historique de publications.",
     "labels.search": "Rechercher labels, genres, contacts...",
     "labels.allGenres": "Tous les genres",
     "labels.allTypes": "Tous les types",
@@ -1803,6 +1818,7 @@ const translations: Record<Locale, TranslationKeys> = {
   de: {
     "nav.dashboard": "Übersicht",
     "nav.labels": "Labels",
+    "nav.artists": "Künstler",
     "nav.demos": "Demos",
     "nav.pitch": "Pitch",
     "nav.rankings": "Ranglisten",
@@ -1829,6 +1845,8 @@ const translations: Record<Locale, TranslationKeys> = {
     "dash.welcomeStep3": "3. Pitch generieren — erstelle mit einem Klick eine professionelle A&R-E-Mail",
     "labels.title": "Label-Datenbank",
     "labels.subtitle": "Durchsuche, filtere und verwalte deine Label-Datenbank.",
+    "artists.title": "Künstler",
+    "artists.subtitle": "Erkunde Künstler in den Beatport-Charts — Tracks, Labels, BPM, Tonart und Veröffentlichungshistorie.",
     "labels.search": "Labels, Genres, Kontakte suchen...",
     "labels.allGenres": "Alle Genres",
     "labels.allTypes": "Alle Typen",
@@ -2152,6 +2170,7 @@ const translations: Record<Locale, TranslationKeys> = {
   pt: {
     "nav.dashboard": "Painel",
     "nav.labels": "Labels",
+    "nav.artists": "Artistas",
     "nav.demos": "Demos",
     "nav.pitch": "Pitch",
     "nav.rankings": "Rankings",
@@ -2178,6 +2197,8 @@ const translations: Record<Locale, TranslationKeys> = {
     "dash.welcomeStep3": "3. Gere um Pitch — crie um email profissional para A&R com um clique",
     "labels.title": "Buscador de Labels",
     "labels.subtitle": "Explore, filtre e gerencie seu banco de dados de labels.",
+    "artists.title": "Artistas",
+    "artists.subtitle": "Explore os artistas nas paradas da Beatport — tracks, labels, BPM, key e histórico de publicações.",
     "labels.search": "Buscar labels, gêneros, contatos...",
     "labels.allGenres": "Todos os gêneros",
     "labels.allTypes": "Todos os tipos",
