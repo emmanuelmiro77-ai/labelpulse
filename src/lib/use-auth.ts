@@ -89,16 +89,23 @@ export function useAuthEffect(): void {
       `[LabelPulse Auth] User authenticated (${email}). Triggering cloud load.`
     );
     loadFromCloud().then(() => {
-      // ⚠️ CRITICAL FIX: do NOT blindly forceCloudSync after loadFromCloud.
-      // The old code did `setTimeout(() => forceCloudSync(), 1000)` which
-      // would take the local state (possibly empty seed) and write it to
-      // cloud, OVERWRITING the user's cloud profile with empty data.
-      // This was the root cause of the "profile data loss on re-login" bug.
+      // ⚠️ CRITICAL FIX (data-loss bug 2026-06-22):
+      // PREVIOUSLY this block did `forceCloudSync()` 1 second after
+      // loadFromCloud completed, whenever local had any data. The merge
+      // logic in loadFromCloud now correctly UNIONS local + cloud arrays
+      // by id (instead of replacing), so after loadFromCloud the local
+      // state may have NEW data that wasn't in cloud. We DO want to push
+      // that back to cloud so the new data survives.
       //
-      // Instead, only push to cloud if local genuinely has real data that
-      // cloud doesn't (e.g., the user entered data on this device before
-      // logging in, or restored from sidecar). When in doubt, do nothing —
-      // the user's next edit will trigger syncToCloud naturally.
+      // BUT we must NOT push if the local arrays are EMPTY (which would
+      // overwrite cloud with empty data). The check below ensures we
+      // only push when local genuinely has content to contribute.
+      //
+      // Additionally, we now defer this push by 3 seconds (instead of 1s)
+      // to give the realtime subscription time to settle, and we make it
+      // conditional on local having MORE content than what we can verify
+      // cloud had (we can't see cloud here, but if local has any user
+      // edits, snapshots, or demos, those need to be backed up).
       setTimeout(() => {
         try {
           const s = useAppStore.getState();
@@ -111,9 +118,19 @@ export function useAuthEffect(): void {
             (Array.isArray(s.userProfile?.links) && s.userProfile.links.length > 0);
           const localHasDemos = s.demos.length > 0;
           const localHasSnapshots = s.rankingSnapshots.length > 0;
-          if (localProfileHasData || localHasDemos || localHasSnapshots) {
+          const localHasUserEditedLabels =
+            Array.isArray(s.labels) &&
+            s.labels.some((l: any) =>
+              (l.emails && l.emails.length > 0) ||
+              (l.notes && l.notes.trim() !== "") ||
+              (l.website && l.website.trim() !== "") ||
+              (l.demoLink && l.demoLink.trim() !== "") ||
+              (l.status && l.status !== "to_contact" && l.status !== "")
+            );
+
+          if (localProfileHasData || localHasDemos || localHasSnapshots || localHasUserEditedLabels) {
             console.info(
-              "[LabelPulse Auth] Local has real data after cloud load — pushing to cloud to backfill."
+              "[LabelPulse Auth] Local has real data after cloud merge — pushing merged result to cloud so new data survives on other devices."
             );
             forceCloudSync();
           } else {
@@ -124,22 +141,25 @@ export function useAuthEffect(): void {
         } catch (e) {
           console.warn("[LabelPulse Auth] Post-cloud sync check failed:", e);
         }
-      }, 1000);
+      }, 3000);
 
       // ⚠️ POST-CLOUD SAFETY NET: after cloud sync, the cloud might have
       // sent an empty/partial profile (e.g., a fresh cloud row). Re-restore
       // from sidecar if the live profile is now empty but the sidecar had data.
+      // Note: we do NOT auto-push to cloud here anymore — the next user edit
+      // will trigger syncToCloud naturally, and that's safer than risk a
+      // race condition where the sidecar restore happens before the merge
+      // from loadFromCloud is fully committed.
       setTimeout(() => {
         try {
           const again = restoreProfileFromSidecar();
           if (again) {
             console.info(
-              "[LabelPulse Auth] Post-cloud profile restore triggered — re-pushing to cloud."
+              "[LabelPulse Auth] Post-cloud profile restore triggered (sidecar had data the live store was missing). Profile is now visible; will sync on next user edit."
             );
-            setTimeout(() => forceCloudSync(), 500);
           }
         } catch {}
-      }, 2500);
+      }, 4500);
     });
   }, [status, session?.user?.email, hasRehydrated, hasCloudSynced]);
 

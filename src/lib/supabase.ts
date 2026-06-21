@@ -418,7 +418,7 @@ export function setupRealtimeSubscription(): () => void {
           table: CLOUD_TABLE,
           filter: `id=eq.${getCloudRowId()}`,
         },
-        (payload: any) => {
+        async (payload: any) => {
           // Skip our own updates to avoid feedback loops
           if (_isApplyingRemoteUpdate) return;
 
@@ -434,7 +434,7 @@ export function setupRealtimeSubscription(): () => void {
           // Apply the remote data to the local store
           _isApplyingRemoteUpdate = true;
           try {
-            applyRemoteData(newData);
+            await applyRemoteData(newData);
             setStatus("synced");
           } finally {
             _isApplyingRemoteUpdate = false;
@@ -487,7 +487,7 @@ export function isApplyingRemoteUpdate(): boolean {
  * overwrite local non-empty arrays with empty cloud arrays. This is
  * the realtime-update path, and we want the same protection here.
  */
-function applyRemoteData(cloudData: any): void {
+async function applyRemoteData(cloudData: any): Promise<void> {
   // Lazy require to avoid circular import
   const store = useAppStore.getState();
   const localLastSavedAt = store.lastSavedAt
@@ -542,15 +542,80 @@ function applyRemoteData(cloudData: any): void {
 
   const merged: any = {};
 
-  // Labels: only apply if cloud has non-empty labels (don't wipe local)
-  if (cloudData.labels && Array.isArray(cloudData.labels) && cloudData.labels.length > 0) {
-    merged.labels = cloudData.labels;
+  // ⚠️ CRITICAL FIX (data-loss bug 2026-06-22):
+  // Mirror the fix in store.ts:mergeCloudData — do UNION BY ID instead of
+  // REPLACE for arrays. This is the realtime-update path; same protection.
+  // Lazy-import mergeSnapshots from store to avoid circular dep at module
+  // load time. (We already import mergeProfiles at top of file.)
+  let mergeSnapshotsFn: any = null;
+  try {
+    // Re-require lazily — store.ts imports from supabase.ts at top level
+    const storeMod = await import("./store");
+    mergeSnapshotsFn = (storeMod as any).mergeSnapshotsPublic || null;
+  } catch {
+    // fall through — we'll handle snapshots below
   }
 
-  // Demos: only apply if cloud has non-empty demos OR local is empty
-  if (Array.isArray(cloudData.demos) && (cloudData.demos.length > 0 || !store.demos || store.demos.length === 0)) {
-    merged.demos = cloudData.demos;
+  // ---------- LABELS: union by id, preserve user-edit fields from local ----------
+  const cloudLabels = Array.isArray(cloudData.labels) ? cloudData.labels : [];
+  const localLabels = Array.isArray(store.labels) ? store.labels : [];
+  const labelUserEditFields = [
+    "emails", "notes", "website", "demoLink", "socialLink",
+    "soundcloudLink", "status", "tier", "instagramLink", "facebookLink",
+    "bandcampLink", "beatstatsLink",
+  ];
+  const labelsById = new Map<string, any>();
+  const labelsByName = new Map<string, any>();
+  for (const cl of cloudLabels) {
+    if (!cl || typeof cl !== "object") continue;
+    labelsById.set(cl.id, { ...cl });
+    const nm = cl.name?.toLowerCase().trim();
+    if (nm) labelsByName.set(nm, cl);
   }
+  for (const ll of localLabels) {
+    if (!ll || typeof ll !== "object") continue;
+    const nm = ll.name?.toLowerCase().trim();
+    const existing = labelsById.get(ll.id) || (nm ? labelsByName.get(nm) : undefined);
+    if (existing) {
+      for (const f of labelUserEditFields) {
+        const lv = (ll as any)[f];
+        if (Array.isArray(lv) ? lv.length > 0 : (lv && String(lv).trim() !== "")) {
+          (existing as any)[f] = lv;
+        }
+      }
+    } else {
+      labelsById.set(ll.id, { ...ll });
+      if (nm) labelsByName.set(nm, ll);
+    }
+  }
+  if (labelsById.size > 0) {
+    merged.labels = Array.from(labelsById.values());
+  }
+
+  // ---------- DEMOS: union by id, prefer newest createdAt ----------
+  const cloudDemos = Array.isArray(cloudData.demos) ? cloudData.demos : [];
+  const localDemos = Array.isArray(store.demos) ? store.demos : [];
+  const demosById = new Map<string, any>();
+  for (const d of cloudDemos) {
+    if (!d || typeof d !== "object" || !d.id) continue;
+    demosById.set(d.id, d);
+  }
+  for (const d of localDemos) {
+    if (!d || typeof d !== "object" || !d.id) continue;
+    const existing = demosById.get(d.id);
+    if (!existing) {
+      demosById.set(d.id, d);
+    } else {
+      const exTs = new Date(existing.createdAt || 0).getTime();
+      const loTs = new Date(d.createdAt || 0).getTime();
+      if (loTs > exTs) {
+        demosById.set(d.id, d);
+      } else if (loTs === exTs && ((d.notes && d.notes.trim()) || (d.pitchText && d.pitchText.trim()))) {
+        demosById.set(d.id, d);
+      }
+    }
+  }
+  merged.demos = Array.from(demosById.values());
 
   if (cloudData.userProfile) {
     // ⚠️ CRITICAL: Use mergeProfiles so that non-empty fields from BOTH
@@ -573,9 +638,30 @@ function applyRemoteData(cloudData: any): void {
   }
   if (cloudData.lastSavedAt) merged.lastSavedAt = cloudData.lastSavedAt;
 
-  // rankingSnapshots: NEVER wipe local snapshots with empty cloud array
-  if (Array.isArray(cloudData.rankingSnapshots) && (cloudData.rankingSnapshots.length > 0 || !store.rankingSnapshots || store.rankingSnapshots.length === 0)) {
-    merged.rankingSnapshots = cloudData.rankingSnapshots;
+  // ---------- RANKING SNAPSHOTS: union by id via mergeSnapshots ----------
+  // mergeSnapshots is defined in store.ts. We try to use the lazy-loaded
+  // copy; if that fails (e.g., circular dep issue), fall back to local
+  // snapshots so we don't lose data.
+  const cloudSnaps = Array.isArray(cloudData.rankingSnapshots) ? cloudData.rankingSnapshots : [];
+  const localSnaps = Array.isArray(store.rankingSnapshots) ? store.rankingSnapshots : [];
+  if (mergeSnapshotsFn && typeof mergeSnapshotsFn === "function") {
+    merged.rankingSnapshots = mergeSnapshotsFn(localSnaps, cloudSnaps);
+  } else {
+    // Manual union by id as fallback
+    const seen = new Set<string>();
+    const out: any[] = [];
+    for (const s of [...localSnaps, ...cloudSnaps]) {
+      if (!s || typeof s !== "object") continue;
+      const key = s.id || `${s.timestamp}|${s.source}`;
+      if (seen.has(key)) continue;
+      seen.add(key);
+      out.push(s);
+    }
+    out.sort(
+      (x, y) =>
+        new Date(x.timestamp || 0).getTime() - new Date(y.timestamp || 0).getTime()
+    );
+    merged.rankingSnapshots = out;
   }
   if (cloudData.locale) merged.locale = cloudData.locale;
 

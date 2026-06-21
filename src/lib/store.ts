@@ -285,6 +285,12 @@ function mergeSnapshots(
 }
 
 /**
+ * Public alias for mergeSnapshots, exported so supabase.ts can use it via
+ * lazy import (to avoid circular deps at module load time).
+ */
+export const mergeSnapshotsPublic = mergeSnapshots;
+
+/**
  * Check if persisted data has user edits (emails, notes, links, etc.)
  * This helps us detect if the store was accidentally reset to seed data.
  */
@@ -1929,43 +1935,111 @@ function setupRealtimeSubscriptionSafe(): void {
 function mergeCloudData(cloudData: any, localState: any): Partial<AppState> {
   const merged: Partial<AppState> = {};
 
-  // Labels: applica defaults e merge con seed data, come nella reidratazione
-  if (cloudData.labels && Array.isArray(cloudData.labels) && cloudData.labels.length > 0) {
-    merged.labels = cloudData.labels.map((l: any) => ({
-      ...LABEL_DEFAULTS,
-      ...l,
-    }));
+  // ⚠️ CRITICAL FIX (data-loss bug 2026-06-22):
+  // Previously this function REPLACED local arrays with cloud arrays. That
+  // meant: if the cloud had older snapshots/demos/labels (but a newer
+  // lastSavedAt — e.g., because another device had just synced), the local
+  // device's newer data was silently overwritten. This caused the user to
+  // lose today's rankings when they logged in on mobile and then refreshed PC.
+  //
+  // FIX: do a UNION BY ID for snapshots, demos, and labels. For each ID
+  // present in both, merge field-by-field (for labels, preserve user edits
+  // like emails/notes; for demos, prefer the version with the newest
+  // createdAt; for snapshots, prefer the version with the newest timestamp).
 
-    // Aggiungi seed labels mancanti
-    const cloudIds = new Set(cloudData.labels.map((l: any) => l.id));
-    const cloudNames = new Set(
-      cloudData.labels.map((l: any) => l.name?.toLowerCase().trim()).filter(Boolean)
-    );
-    const seedLabels = buildLabelsFromData();
-    for (const seed of seedLabels) {
-      if (!cloudIds.has(seed.id) && !cloudNames.has(seed.name.toLowerCase().trim())) {
-        (merged.labels as Label[]).push(seed);
+  // ---------- LABELS ----------
+  // Union by id (and by name as fallback). For labels present in both,
+  // merge field-by-field: cloud provides the canonical seed fields, local
+  // user-edited fields (emails, notes, demoLink, socialLink, status,
+  // tier, etc.) are preserved if non-empty.
+  const cloudLabels = Array.isArray(cloudData.labels) ? cloudData.labels : [];
+  const localLabels = Array.isArray(localState.labels) ? localState.labels : [];
+  const labelUserEditFields: (keyof Label)[] = [
+    "emails", "notes", "website", "demoLink", "socialLink",
+    "soundcloudLink", "status", "tier", "instagramLink", "facebookLink",
+    "bandcampLink", "beatstatsLink",
+  ];
+  const labelsById = new Map<string, Label>();
+  const labelsByName = new Map<string, Label>();
+  // Add cloud labels first
+  for (const cl of cloudLabels) {
+    if (!cl || typeof cl !== "object") continue;
+    const label: Label = { ...LABEL_DEFAULTS, ...cl };
+    labelsById.set(label.id, label);
+    const nm = label.name?.toLowerCase().trim();
+    if (nm) labelsByName.set(nm, label);
+  }
+  // Merge local labels: if exists in cloud by id or name, merge user-edit
+  // fields from local (non-empty wins). Otherwise add as new.
+  for (const ll of localLabels) {
+    if (!ll || typeof ll !== "object") continue;
+    const nm = ll.name?.toLowerCase().trim();
+    const existing = labelsById.get(ll.id) || (nm ? labelsByName.get(nm) : undefined);
+    if (existing) {
+      // Merge user-edit fields from local into the existing entry
+      for (const f of labelUserEditFields) {
+        const lv = (ll as any)[f];
+        if (Array.isArray(lv) ? lv.length > 0 : (lv && String(lv).trim() !== "")) {
+          (existing as any)[f] = lv;
+        }
+      }
+    } else {
+      const label: Label = { ...LABEL_DEFAULTS, ...ll };
+      labelsById.set(label.id, label);
+      if (nm) labelsByName.set(nm, label);
+    }
+  }
+  // Always ensure seed labels are present
+  const cloudIds = new Set(cloudLabels.map((l: any) => l.id));
+  const cloudNames = new Set(
+    cloudLabels.map((l: any) => l.name?.toLowerCase().trim()).filter(Boolean)
+  );
+  const seedLabels = buildLabelsFromData();
+  for (const seed of seedLabels) {
+    if (!cloudIds.has(seed.id) && !cloudNames.has(seed.name.toLowerCase().trim())
+        && !labelsById.has(seed.id)) {
+      labelsById.set(seed.id, seed);
+    }
+  }
+  merged.labels = repairLabelData(Array.from(labelsById.values()));
+
+  // ---------- DEMOS ----------
+  // Union by id. If a demo id exists in both, keep the version with the
+  // newest createdAt (or updatedAt if present).
+  const cloudDemos = Array.isArray(cloudData.demos) ? cloudData.demos : [];
+  const localDemos = Array.isArray(localState.demos) ? localState.demos : [];
+  const demosById = new Map<string, Demo>();
+  for (const d of cloudDemos) {
+    if (!d || typeof d !== "object" || !d.id) continue;
+    demosById.set(d.id, d);
+  }
+  for (const d of localDemos) {
+    if (!d || typeof d !== "object" || !d.id) continue;
+    const existing = demosById.get(d.id);
+    if (!existing) {
+      demosById.set(d.id, d);
+    } else {
+      // Prefer the one with the newest createdAt (or notes/link updates)
+      const exTs = new Date(existing.createdAt || 0).getTime();
+      const loTs = new Date(d.createdAt || 0).getTime();
+      if (loTs > exTs) {
+        demosById.set(d.id, d);
+      } else if (loTs === exTs) {
+        // Same createdAt — prefer the one with non-empty pitchText or notes
+        if ((d.notes && d.notes.trim()) || (d.pitchText && d.pitchText.trim())) {
+          demosById.set(d.id, d);
+        }
       }
     }
-
-    // Repair corrupted data
-    merged.labels = repairLabelData(merged.labels);
-  } else {
-    // Cloud non ha labels (o array vuoto) → mantieni locali
-    merged.labels = localState.labels;
   }
+  merged.demos = Array.from(demosById.values());
 
-  // Demos: SOLO se cloud ha effettivamente demos, mantieni locali altrimenti
-  // (before: `Array.isArray(cloudData.demos) ? cloudData.demos : localState.demos`
-  //  sovrascriveva demos locali con [] se cloud aveva demos:[])
-  if (Array.isArray(cloudData.demos) && cloudData.demos.length > 0) {
-    merged.demos = cloudData.demos;
-  } else if (Array.isArray(cloudData.demos) && (!localState.demos || localState.demos.length === 0)) {
-    // Cloud ha demos:[] e locale è vuoto → ok a usare [] (no-op)
-    merged.demos = cloudData.demos;
-  } else {
-    merged.demos = localState.demos;
-  }
+  // ---------- RANKING SNAPSHOTS ----------
+  // Union by id (and by timestamp|source as fallback). mergeSnapshots
+  // already exists and handles this correctly, plus sorts by timestamp.
+  const cloudSnaps = Array.isArray(cloudData.rankingSnapshots) ? cloudData.rankingSnapshots : [];
+  const localSnaps = Array.isArray(localState.rankingSnapshots) ? localState.rankingSnapshots : [];
+  merged.rankingSnapshots = mergeSnapshots(localSnaps, cloudSnaps);
 
   // Simple fields
   merged.activeTab = cloudData.activeTab || localState.activeTab;
@@ -1982,19 +2056,6 @@ function mergeCloudData(cloudData: any, localState: any): Partial<AppState> {
   merged.gmailAuth = cloudData.gmailAuth || localState.gmailAuth;
   merged.rankingsUpdatedAt = cloudData.rankingsUpdatedAt ?? localState.rankingsUpdatedAt;
   merged.lastSavedAt = cloudData.lastSavedAt ?? localState.lastSavedAt;
-
-  // rankingSnapshots: STesso principio — non sovrascrivere snapshots locali
-  // con array vuoto dal cloud. Gli snapshots sono il cuore delle classifiche
-  // storiche, perderli significa perdere mesi di import Beatport/Beatstats.
-  if (Array.isArray(cloudData.rankingSnapshots) && cloudData.rankingSnapshots.length > 0) {
-    merged.rankingSnapshots = cloudData.rankingSnapshots;
-  } else if (Array.isArray(cloudData.rankingSnapshots) && (!localState.rankingSnapshots || localState.rankingSnapshots.length === 0)) {
-    // Cloud vuoto e locale vuoto → ok a usare []
-    merged.rankingSnapshots = cloudData.rankingSnapshots;
-  } else {
-    // Locale ha dati, cloud vuoto → mantieni locali
-    merged.rankingSnapshots = localState.rankingSnapshots || [];
-  }
 
   return merged;
 }
