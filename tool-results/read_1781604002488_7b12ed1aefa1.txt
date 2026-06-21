@@ -1,0 +1,2002 @@
+     1→{
+     2→  "genres": [
+     3→    "140 / Deep Dubstep / Grime",
+     4→    "Afro House",
+     5→    "Amapiano",
+     6→    "Ambient / Experimental",
+     7→    "Bass / Club",
+     8→    "Bass House",
+     9→    "Brazilian Funk",
+    10→    "Breaks / Breakbeat / Uk Bass",
+    11→    "Dance / Pop",
+    12→    "Deep House",
+    13→    "Downtempo",
+    14→    "Drum & Bass",
+    15→    "Dubstep",
+    16→    "Electro Classic / Detroit / Modern",
+    17→    "Electronica",
+    18→    "Funky House",
+    19→    "Hard Dance / Hardcore / Neo Rave",
+    20→    "Hard Techno",
+    21→    "House",
+    22→    "Indie Dance",
+    23→    "Jackin House",
+    24→    "Mainstage",
+    25→    "Melodic House & Techno",
+    26→    "Minimal / Deep Tech",
+    27→    "Nu Disco / Disco",
+    28→    "Organic House",
+    29→    "Progressive House",
+    30→    "Psy-Trance",
+    31→    "Tech House",
+    32→    "Techno Peak Time / Driving",
+    33→    "Techno Raw / Deep / Hypnotic",
+    34→    "Top 100 All Genres",
+    35→    "Trance Main Floor",
+    36→    "Trap / Future Bass",
+    37→    "Uk Garage / Bassline"
+    38→  ],
+    39→  "labels": [
+    40→    {
+    41→      "id": "lbl_kosa",
+    42→      "name": "• KOSA •",
+    43→      "genres": [
+    44→        "Downtempo"
+    45→      ],
+    46→      "rankByGenre": {
+    47→        "Downtempo": 16
+    48→      },
+    49→      "pointsByGenre": {
+    50→        "Downtempo": 27134
+    51→      },
+    52→      "trending": false
+    53→    },
+    54→    {
+    55→      "id": "lbl_1001_recordings",
+    56→      "name": "1001 RECORDINGS",
+    57→      "genres": [
+    58→        "Bass House"
+    59→      ],
+    60→      "rankByGenre": {
+    61→        "Bass House": 28
+    62→      },
+    63→      "pointsByGenre": {
+    64→        "Bass House": 19451
+    65→      },
+    66→      "trending": false
+    67→    },
+    68→    {
+    69→      "id": "lbl_12_1_london",
+    70→      "name": "12+1 LONDON",
+    71→      "genres": [
+    72→        "Jackin House"
+    73→      ],
+    74→      "rankByGenre": {},
+    75→      "pointsByGenre": {},
+    76→      "trending": true,
+    77→      "trendingRankByGenre": {
+    78→        "Jackin House": 9
+    79→      },
+    80→      "trendingPointsByGenre": {
+    81→        "Jackin House": 2199
+    82→      }
+    83→    },
+    84→    {
+    85→      "id": "lbl_1605",
+    86→      "name": "1605",
+    87→      "genres": [
+    88→        "Techno Peak Time / Driving"
+    89→      ],
+    90→      "rankByGenre": {
+    91→        "Techno Peak Time / Driving": 11
+    92→      },
+    93→      "pointsByGenre": {
+    94→        "Techno Peak Time / Driving": 33544
+    95→      },
+    96→      "trending": false
+    97→    },
+    98→    {
+    99→      "id": "lbl_18_area_holdings",
+   100→      "name": "18 AREA HOLDINGS",
+   101→      "genres": [
+   102→        "Amapiano"
+   103→      ],
+   104→      "rankByGenre": {
+   105→        "Amapiano": 39
+   106→      },
+   107→      "pointsByGenre": {
+   108→        "Amapiano": 10042
+   109→      },
+   110→      "trending": false
+   111→    },
+   112→    {
+   113→      "id": "lbl_1985_music",
+   114→      "name": "1985 MUSIC",
+   115→      "genres": [
+   116→        "140 / Deep Dubstep / Grime",
+   117→        "Drum & Bass"
+   118→      ],
+   119→      "rankByGenre": {
+   120→        "140 / Deep Dubstep / Grime": 8,
+   121→        "Drum & Bass": 31
+   122→      },
+   123→      "pointsByGenre": {
+   124→        "140 / Deep Dubstep / Grime": 54431,
+   125→        "Drum & Bass": 17803
+   126→      },
+   127→      "trending": true,
+   128→      "trendingRankByGenre": {
+   129→        "140 / Deep Dubstep / Grime": 10
+   130→      },
+   131→      "trendingPointsByGenre": {
+   132→        "140 / Deep Dubstep / Grime": 1865
+   133→      }
+   134→    },
+   135→    {
+   136→      "id": "lbl_20_20_vision_recordings",
+   137→      "name": "20/20 VISION RECORDINGS",
+   138→      "genres": [
+   139→        "Electro Classic / Detroit / Modern"
+   140→      ],
+   141→      "rankByGenre": {
+   142→        "Electro Classic / Detroit / Modern": 46
+   143→      },
+   144→      "pointsByGenre": {
+   145→        "Electro Classic / Detroit / Modern": 9975
+   146→      },
+   147→      "trending": false
+   148→    },
+   149→    {
+   150→      "id": "lbl_2026_lessons_holdings_pty_lt",
+   151→      "name": "2026 LESSONS HOLDINGS (PTY) LT...",
+   152→      "genres": [
+   153→        "Amapiano"
+   154→      ],
+   155→      "rankByGenre": {},
+   156→      "pointsByGenre": {},
+   157→      "trending": true,
+   158→      "trendingRankByGenre": {
+   159→        "Amapiano": 10
+   160→      },
+   161→      "trendingPointsByGenre": {
+   162→        "Amapiano": 1415
+   163→      }
+   164→    },
+   165→    {
+   166→      "id": "lbl_23hours",
+   167→      "name": "23HOURS",
+   168→      "genres": [
+   169→        "Electronica"
+   170→      ],
+   171→      "rankByGenre": {},
+   172→      "pointsByGenre": {},
+   173→      "trending": true,
+   174→      "trendingRankByGenre": {
+   175→        "Electronica": 5
+   176→      },
+   177→      "trendingPointsByGenre": {
+   178→        "Electronica": 2896
+   179→      }
+   180→    },
+   181→    {
+   182→      "id": "lbl_44_label_group",
+   183→      "name": "44 LABEL GROUP",
+   184→      "genres": [
+   185→        "Hard Dance / Hardcore / Neo Rave",
+   186→        "Hard Techno"
+   187→      ],
+   188→      "rankByGenre": {
+   189→        "Hard Dance / Hardcore / Neo Rave": 4,
+   190→        "Hard Techno": 1
+   191→      },
+   192→      "pointsByGenre": {
+   193→        "Hard Dance / Hardcore / Neo Rave": 73034,
+   194→        "Hard Techno": 245836
+   195→      },
+   196→      "trending": true,
+   197→      "trendingRankByGenre": {
+   198→        "Hard Dance / Hardcore / Neo Rave": 6,
+   199→        "Hard Techno": 1
+   200→      },
+   201→      "trendingPointsByGenre": {
+   202→        "Hard Dance / Hardcore / Neo Rave": 2419,
+   203→        "Hard Techno": 9552
+   204→      }
+   205→    },
+   206→    {
+   207→      "id": "lbl_808_life",
+   208→      "name": "808 LIFE",
+   209→      "genres": [
+   210→        "Electro Classic / Detroit / Modern"
+   211→      ],
+   212→      "rankByGenre": {
+   213→        "Electro Classic / Detroit / Modern": 26
+   214→      },
+   215→      "pointsByGenre": {
+   216→        "Electro Classic / Detroit / Modern": 17639
+   217→      },
+   218→      "trending": false
+   219→    },
+   220→    {
+   221→      "id": "lbl_83",
+   222→      "name": "83",
+   223→      "genres": [
+   224→        "Breaks / Breakbeat / Uk Bass",
+   225→        "Electro Classic / Detroit / Modern"
+   226→      ],
+   227→      "rankByGenre": {
+   228→        "Breaks / Breakbeat / Uk Bass": 1,
+   229→        "Electro Classic / Detroit / Modern": 10
+   230→      },
+   231→      "pointsByGenre": {
+   232→        "Breaks / Breakbeat / Uk Bass": 313849,
+   233→        "Electro Classic / Detroit / Modern": 36023
+   234→      },
+   235→      "trending": true,
+   236→      "trendingRankByGenre": {
+   237→        "Breaks / Breakbeat / Uk Bass": 1
+   238→      },
+   239→      "trendingPointsByGenre": {
+   240→        "Breaks / Breakbeat / Uk Bass": 13706
+   241→      }
+   242→    },
+   243→    {
+   244→      "id": "lbl_844_label_group",
+   245→      "name": "844 LABEL GROUP",
+   246→      "genres": [
+   247→        "Trance Main Floor"
+   248→      ],
+   249→      "rankByGenre": {
+   250→        "Trance Main Floor": 32
+   251→      },
+   252→      "pointsByGenre": {
+   253→        "Trance Main Floor": 17047
+   254→      },
+   255→      "trending": false
+   256→    },
+   257→    {
+   258→      "id": "lbl_88rising_music",
+   259→      "name": "88RISING MUSIC",
+   260→      "genres": [
+   261→        "Trap / Future Bass"
+   262→      ],
+   263→      "rankByGenre": {},
+   264→      "pointsByGenre": {},
+   265→      "trending": true,
+   266→      "trendingRankByGenre": {
+   267→        "Trap / Future Bass": 9
+   268→      },
+   269→      "trendingPointsByGenre": {
+   270→        "Trap / Future Bass": 2137
+   271→      }
+   272→    },
+   273→    {
+   274→      "id": "lbl_8bit",
+   275→      "name": "8BIT",
+   276→      "genres": [
+   277→        "Deep House",
+   278→        "House",
+   279→        "Progressive House"
+   280→      ],
+   281→      "rankByGenre": {
+   282→        "Deep House": 3
+   283→      },
+   284→      "pointsByGenre": {
+   285→        "Deep House": 95874
+   286→      },
+   287→      "trending": true,
+   288→      "trendingRankByGenre": {
+   289→        "Deep House": 2,
+   290→        "House": 10,
+   291→        "Progressive House": 7
+   292→      },
+   293→      "trendingPointsByGenre": {
+   294→        "Deep House": 5968,
+   295→        "House": 2130,
+   296→        "Progressive House": 2641
+   297→      }
+   298→    },
+   299→    {
+   300→      "id": "lbl_a_baile",
+   301→      "name": "A BAILE",
+   302→      "genres": [
+   303→        "Brazilian Funk"
+   304→      ],
+   305→      "rankByGenre": {
+   306→        "Brazilian Funk": 21
+   307→      },
+   308→      "pointsByGenre": {
+   309→        "Brazilian Funk": 1398
+   310→      },
+   311→      "trending": false
+   312→    },
+   313→    {
+   314→      "id": "lbl_a_state_of_trance",
+   315→      "name": "A STATE OF TRANCE",
+   316→      "genres": [
+   317→        "Trance Main Floor"
+   318→      ],
+   319→      "rankByGenre": {
+   320→        "Trance Main Floor": 8
+   321→      },
+   322→      "pointsByGenre": {
+   323→        "Trance Main Floor": 35828
+   324→      },
+   325→      "trending": false
+   326→    },
+   327→    {
+   328→      "id": "lbl_abra_x",
+   329→      "name": "ABRA X",
+   330→      "genres": [
+   331→        "Indie Dance"
+   332→      ],
+   333→      "rankByGenre": {
+   334→        "Indie Dance": 31
+   335→      },
+   336→      "pointsByGenre": {
+   337→        "Indie Dance": 12840
+   338→      },
+   339→      "trending": false
+   340→    },
+   341→    {
+   342→      "id": "lbl_abracadabra_music",
+   343→      "name": "ABRACADABRA MUSIC",
+   344→      "genres": [
+   345→        "Afro House",
+   346→        "House",
+   347→        "Indie Dance"
+   348→      ],
+   349→      "rankByGenre": {
+   350→        "Afro House": 42,
+   351→        "House": 24,
+   352→        "Indie Dance": 19
+   353→      },
+   354→      "pointsByGenre": {
+   355→        "Afro House": 9617,
+   356→        "House": 21704,
+   357→        "Indie Dance": 24149
+   358→      },
+   359→      "trending": true,
+   360→      "trendingRankByGenre": {
+   361→        "Indie Dance": 10
+   362→      },
+   363→      "trendingPointsByGenre": {
+   364→        "Indie Dance": 2072
+   365→      }
+   366→    },
+   367→    {
+   368→      "id": "lbl_acetone",
+   369→      "name": "ACETONE",
+   370→      "genres": [
+   371→        "Funky House"
+   372→      ],
+   373→      "rankByGenre": {
+   374→        "Funky House": 2
+   375→      },
+   376→      "pointsByGenre": {
+   377→        "Funky House": 329154
+   378→      },
+   379→      "trending": true,
+   380→      "trendingRankByGenre": {
+   381→        "Funky House": 2
+   382→      },
+   383→      "trendingPointsByGenre": {
+   384→        "Funky House": 9970
+   385→      }
+   386→    },
+   387→    {
+   388→      "id": "lbl_ad_93",
+   389→      "name": "AD 93",
+   390→      "genres": [
+   391→        "Ambient / Experimental"
+   392→      ],
+   393→      "rankByGenre": {
+   394→        "Ambient / Experimental": 27
+   395→      },
+   396→      "pointsByGenre": {
+   397→        "Ambient / Experimental": 12669
+   398→      },
+   399→      "trending": false
+   400→    },
+   401→    {
+   402→      "id": "lbl_aeterna_records",
+   403→      "name": "AETERNA RECORDS",
+   404→      "genres": [
+   405→        "Bass House",
+   406→        "Melodic House & Techno"
+   407→      ],
+   408→      "rankByGenre": {
+   409→        "Bass House": 22,
+   410→        "Melodic House & Techno": 8
+   411→      },
+   412→      "pointsByGenre": {
+   413→        "Bass House": 24435,
+   414→        "Melodic House & Techno": 43501
+   415→      },
+   416→      "trending": false
+   417→    },
+   418→    {
+   419→      "id": "lbl_affairs",
+   420→      "name": "AFFAIRS",
+   421→      "genres": [
+   422→        "Indie Dance",
+   423→        "Melodic House & Techno",
+   424→        "Techno Peak Time / Driving",
+   425→        "Top 100 All Genres"
+   426→      ],
+   427→      "rankByGenre": {
+   428→        "Indie Dance": 41,
+   429→        "Melodic House & Techno": 50,
+   430→        "Techno Peak Time / Driving": 42,
+   431→        "Top 100 All Genres": 43
+   432→      },
+   433→      "pointsByGenre": {
+   434→        "Indie Dance": 9483,
+   435→        "Melodic House & Techno": 10922,
+   436→        "Techno Peak Time / Driving": 10235,
+   437→        "Top 100 All Genres": 12018
+   438→      },
+   439→      "trending": true,
+   440→      "trendingRankByGenre": {
+   441→        "Top 100 All Genres": 8
+   442→      },
+   443→      "trendingPointsByGenre": {
+   444→        "Top 100 All Genres": 1636
+   445→      }
+   446→    },
+   447→    {
+   448→      "id": "lbl_affenk_fig_red",
+   449→      "name": "AFFENKäFIG RED",
+   450→      "genres": [
+   451→        "Hard Techno"
+   452→      ],
+   453→      "rankByGenre": {
+   454→        "Hard Techno": 42
+   455→      },
+   456→      "pointsByGenre": {
+   457→        "Hard Techno": 5793
+   458→      },
+   459→      "trending": false
+   460→    },
+   461→    {
+   462→      "id": "lbl_affiliate",
+   463→      "name": "AFFILIATE",
+   464→      "genres": [
+   465→        "Ambient / Experimental"
+   466→      ],
+   467→      "rankByGenre": {},
+   468→      "pointsByGenre": {},
+   469→      "trending": true,
+   470→      "trendingRankByGenre": {
+   471→        "Ambient / Experimental": 5
+   472→      },
+   473→      "trendingPointsByGenre": {
+   474→        "Ambient / Experimental": 1774
+   475→      }
+   476→    },
+   477→    {
+   478→      "id": "lbl_affin",
+   479→      "name": "AFFIN",
+   480→      "genres": [
+   481→        "Ambient / Experimental"
+   482→      ],
+   483→      "rankByGenre": {
+   484→        "Ambient / Experimental": 9
+   485→      },
+   486→      "pointsByGenre": {
+   487→        "Ambient / Experimental": 22385
+   488→      },
+   489→      "trending": false
+   490→    },
+   491→    {
+   492→      "id": "lbl_afrika_music_group",
+   493→      "name": "AFRIKA MUSIC GROUP",
+   494→      "genres": [
+   495→        "Amapiano"
+   496→      ],
+   497→      "rankByGenre": {
+   498→        "Amapiano": 35
+   499→      },
+   500→      "pointsByGenre": {
+   501→        "Amapiano": 10364
+   502→      },
+   503→      "trending": false
+   504→    },
+   505→    {
+   506→      "id": "lbl_afro_republik",
+   507→      "name": "AFRO REPUBLIK",
+   508→      "genres": [
+   509→        "Afro House",
+   510→        "Mainstage"
+   511→      ],
+   512→      "rankByGenre": {
+   513→        "Afro House": 14,
+   514→        "Mainstage": 50
+   515→      },
+   516→      "pointsByGenre": {
+   517→        "Afro House": 30841,
+   518→        "Mainstage": 8466
+   519→      },
+   520→      "trending": false
+   521→    },
+   522→    {
+   523→      "id": "lbl_afrodise",
+   524→      "name": "AFRODISE",
+   525→      "genres": [
+   526→        "Afro House"
+   527→      ],
+   528→      "rankByGenre": {
+   529→        "Afro House": 12
+   530→      },
+   531→      "pointsByGenre": {
+   532→        "Afro House": 35324
+   533→      },
+   534→      "trending": false
+   535→    },
+   536→    {
+   537→      "id": "lbl_afterdark",
+   538→      "name": "AFTERDARK",
+   539→      "genres": [
+   540→        "Trance Main Floor"
+   541→      ],
+   542→      "rankByGenre": {
+   543→        "Trance Main Floor": 37
+   544→      },
+   545→      "pointsByGenre": {
+   546→        "Trance Main Floor": 14060
+   547→      },
+   548→      "trending": false
+   549→    },
+   550→    {
+   551→      "id": "lbl_afterlife_records",
+   552→      "name": "AFTERLIFE RECORDS",
+   553→      "genres": [
+   554→        "Melodic House & Techno",
+   555→        "Top 100 All Genres"
+   556→      ],
+   557→      "rankByGenre": {
+   558→        "Melodic House & Techno": 2,
+   559→        "Top 100 All Genres": 30
+   560→      },
+   561→      "pointsByGenre": {
+   562→        "Melodic House & Techno": 80837,
+   563→        "Top 100 All Genres": 15875
+   564→      },
+   565→      "trending": false
+   566→    },
+   567→    {
+   568→      "id": "lbl_against_the_grain",
+   569→      "name": "AGAINST THE GRAIN",
+   570→      "genres": [
+   571→        "Breaks / Breakbeat / Uk Bass"
+   572→      ],
+   573→      "rankByGenre": {
+   574→        "Breaks / Breakbeat / Uk Bass": 21
+   575→      },
+   576→      "pointsByGenre": {
+   577→        "Breaks / Breakbeat / Uk Bass": 18468
+   578→      },
+   579→      "trending": true,
+   580→      "trendingRankByGenre": {
+   581→        "Breaks / Breakbeat / Uk Bass": 10
+   582→      },
+   583→      "trendingPointsByGenre": {
+   584→        "Breaks / Breakbeat / Uk Bass": 1660
+   585→      }
+   586→    },
+   587→    {
+   588→      "id": "lbl_age_101",
+   589→      "name": "AGE 101",
+   590→      "genres": [
+   591→        "Brazilian Funk"
+   592→      ],
+   593→      "rankByGenre": {
+   594→        "Brazilian Funk": 49
+   595→      },
+   596→      "pointsByGenre": {
+   597→        "Brazilian Funk": 479
+   598→      },
+   599→      "trending": false
+   600→    },
+   601→    {
+   602→      "id": "lbl_agony",
+   603→      "name": "AGONY",
+   604→      "genres": [
+   605→        "Hard Techno"
+   606→      ],
+   607→      "rankByGenre": {
+   608→        "Hard Techno": 9
+   609→      },
+   610→      "pointsByGenre": {
+   611→        "Hard Techno": 40816
+   612→      },
+   613→      "trending": true,
+   614→      "trendingRankByGenre": {
+   615→        "Hard Techno": 6
+   616→      },
+   617→      "trendingPointsByGenre": {
+   618→        "Hard Techno": 3050
+   619→      }
+   620→    },
+   621→    {
+   622→      "id": "lbl_akasha_mx",
+   623→      "name": "AKASHA MX",
+   624→      "genres": [
+   625→        "Downtempo"
+   626→      ],
+   627→      "rankByGenre": {
+   628→        "Downtempo": 45
+   629→      },
+   630→      "pointsByGenre": {
+   631→        "Downtempo": 7349
+   632→      },
+   633→      "trending": false
+   634→    },
+   635→    {
+   636→      "id": "lbl_alien_communications_ltd",
+   637→      "name": "ALIEN COMMUNICATIONS LTD",
+   638→      "genres": [
+   639→        "Electro Classic / Detroit / Modern"
+   640→      ],
+   641→      "rankByGenre": {
+   642→        "Electro Classic / Detroit / Modern": 50
+   643→      },
+   644→      "pointsByGenre": {
+   645→        "Electro Classic / Detroit / Modern": 8830
+   646→      },
+   647→      "trending": false
+   648→    },
+   649→    {
+   650→      "id": "lbl_aliens_on_mushrooms",
+   651→      "name": "ALIENS ON MUSHROOMS",
+   652→      "genres": [
+   653→        "Jackin House"
+   654→      ],
+   655→      "rankByGenre": {
+   656→        "Jackin House": 11
+   657→      },
+   658→      "pointsByGenre": {
+   659→        "Jackin House": 37014
+   660→      },
+   661→      "trending": false
+   662→    },
+   663→    {
+   664→      "id": "lbl_all_day_i_dream",
+   665→      "name": "ALL DAY I DREAM",
+   666→      "genres": [
+   667→        "Organic House"
+   668→      ],
+   669→      "rankByGenre": {
+   670→        "Organic House": 1
+   671→      },
+   672→      "pointsByGenre": {
+   673→        "Organic House": 179846
+   674→      },
+   675→      "trending": true,
+   676→      "trendingRankByGenre": {
+   677→        "Organic House": 1
+   678→      },
+   679→      "trendingPointsByGenre": {
+   680→        "Organic House": 6965
+   681→      }
+   682→    },
+   683→    {
+   684→      "id": "lbl_all_night_long",
+   685→      "name": "ALL NIGHT LONG",
+   686→      "genres": [
+   687→        "Hard Dance / Hardcore / Neo Rave"
+   688→      ],
+   689→      "rankByGenre": {
+   690→        "Hard Dance / Hardcore / Neo Rave": 32
+   691→      },
+   692→      "pointsByGenre": {
+   693→        "Hard Dance / Hardcore / Neo Rave": 15859
+   694→      },
+   695→      "trending": false
+   696→    },
+   697→    {
+   698→      "id": "lbl_all_the_people",
+   699→      "name": "ALL THE PEOPLE",
+   700→      "genres": [
+   701→        "Bass / Club"
+   702→      ],
+   703→      "rankByGenre": {
+   704→        "Bass / Club": 9
+   705→      },
+   706→      "pointsByGenre": {
+   707→        "Bass / Club": 32337
+   708→      },
+   709→      "trending": true,
+   710→      "trendingRankByGenre": {
+   711→        "Bass / Club": 4
+   712→      },
+   713→      "trendingPointsByGenre": {
+   714→        "Bass / Club": 2010
+   715→      }
+   716→    },
+   717→    {
+   718→      "id": "lbl_all_ways_dance",
+   719→      "name": "ALL WAYS DANCE",
+   720→      "genres": [
+   721→        "Trance Main Floor"
+   722→      ],
+   723→      "rankByGenre": {
+   724→        "Trance Main Floor": 41
+   725→      },
+   726→      "pointsByGenre": {
+   727→        "Trance Main Floor": 12620
+   728→      },
+   729→      "trending": false
+   730→    },
+   731→    {
+   732→      "id": "lbl_alott",
+   733→      "name": "ALOTT",
+   734→      "genres": [
+   735→        "Trap / Future Bass"
+   736→      ],
+   737→      "rankByGenre": {
+   738→        "Trap / Future Bass": 25
+   739→      },
+   740→      "pointsByGenre": {
+   741→        "Trap / Future Bass": 16111
+   742→      },
+   743→      "trending": false
+   744→    },
+   745→    {
+   746→      "id": "lbl_alpaka_muzik",
+   747→      "name": "ALPAKA MUZIK",
+   748→      "genres": [
+   749→        "Psy-Trance"
+   750→      ],
+   751→      "rankByGenre": {
+   752→        "Psy-Trance": 39
+   753→      },
+   754→      "pointsByGenre": {
+   755→        "Psy-Trance": 7139
+   756→      },
+   757→      "trending": false
+   758→    },
+   759→    {
+   760→      "id": "lbl_alteza_records_official",
+   761→      "name": "ALTEZA RECORDS OFFICIAL",
+   762→      "genres": [
+   763→        "Psy-Trance"
+   764→      ],
+   765→      "rankByGenre": {
+   766→        "Psy-Trance": 20
+   767→      },
+   768→      "pointsByGenre": {
+   769→        "Psy-Trance": 18864
+   770→      },
+   771→      "trending": false
+   772→    },
+   773→    {
+   774→      "id": "lbl_altitude_records",
+   775→      "name": "ALTITUDE RECORDS",
+   776→      "genres": [
+   777→        "Funky House"
+   778→      ],
+   779→      "rankByGenre": {
+   780→        "Funky House": 23
+   781→      },
+   782→      "pointsByGenre": {
+   783→        "Funky House": 11744
+   784→      },
+   785→      "trending": false
+   786→    },
+   787→    {
+   788→      "id": "lbl_altra_moda",
+   789→      "name": "ALTRA MODA",
+   790→      "genres": [
+   791→        "House",
+   792→        "Tech House"
+   793→      ],
+   794→      "rankByGenre": {
+   795→        "House": 11,
+   796→        "Tech House": 47
+   797→      },
+   798→      "pointsByGenre": {
+   799→        "House": 38582,
+   800→        "Tech House": 9208
+   801→      },
+   802→      "trending": false
+   803→    },
+   804→    {
+   805→      "id": "lbl_altruism_records",
+   806→      "name": "ALTRUISM RECORDS",
+   807→      "genres": [
+   808→        "Hard Dance / Hardcore / Neo Rave"
+   809→      ],
+   810→      "rankByGenre": {
+   811→        "Hard Dance / Hardcore / Neo Rave": 45
+   812→      },
+   813→      "pointsByGenre": {
+   814→        "Hard Dance / Hardcore / Neo Rave": 10387
+   815→      },
+   816→      "trending": false
+   817→    },
+   818→    {
+   819→      "id": "lbl_alula_tunes",
+   820→      "name": "ALULA TUNES",
+   821→      "genres": [
+   822→        "Techno Peak Time / Driving"
+   823→      ],
+   824→      "rankByGenre": {
+   825→        "Techno Peak Time / Driving": 34
+   826→      },
+   827→      "pointsByGenre": {
+   828→        "Techno Peak Time / Driving": 13218
+   829→      },
+   830→      "trending": false
+   831→    },
+   832→    {
+   833→      "id": "lbl_ambient_soundscapes",
+   834→      "name": "AMBIENT SOUNDSCAPES",
+   835→      "genres": [
+   836→        "Ambient / Experimental"
+   837→      ],
+   838→      "rankByGenre": {
+   839→        "Ambient / Experimental": 47
+   840→      },
+   841→      "pointsByGenre": {
+   842→        "Ambient / Experimental": 8171
+   843→      },
+   844→      "trending": false
+   845→    },
+   846→    {
+   847→      "id": "lbl_amselcom",
+   848→      "name": "AMSELCOM",
+   849→      "genres": [
+   850→        "Downtempo"
+   851→      ],
+   852→      "rankByGenre": {
+   853→        "Downtempo": 49
+   854→      },
+   855→      "pointsByGenre": {
+   856→        "Downtempo": 6946
+   857→      },
+   858→      "trending": false
+   859→    },
+   860→    {
+   861→      "id": "lbl_amulanga",
+   862→      "name": "AMULANGA",
+   863→      "genres": [
+   864→        "Organic House"
+   865→      ],
+   866→      "rankByGenre": {
+   867→        "Organic House": 17
+   868→      },
+   869→      "pointsByGenre": {
+   870→        "Organic House": 30336
+   871→      },
+   872→      "trending": true,
+   873→      "trendingRankByGenre": {
+   874→        "Organic House": 4
+   875→      },
+   876→      "trendingPointsByGenre": {
+   877→        "Organic House": 2887
+   878→      }
+   879→    },
+   880→    {
+   881→      "id": "lbl_analog_concept",
+   882→      "name": "ANALOG CONCEPT",
+   883→      "genres": [
+   884→        "Electro Classic / Detroit / Modern"
+   885→      ],
+   886→      "rankByGenre": {
+   887→        "Electro Classic / Detroit / Modern": 49
+   888→      },
+   889→      "pointsByGenre": {
+   890→        "Electro Classic / Detroit / Modern": 9012
+   891→      },
+   892→      "trending": false
+   893→    },
+   894→    {
+   895→      "id": "lbl_andromedik",
+   896→      "name": "ANDROMEDIK",
+   897→      "genres": [
+   898→        "Drum & Bass"
+   899→      ],
+   900→      "rankByGenre": {
+   901→        "Drum & Bass": 44
+   902→      },
+   903→      "pointsByGenre": {
+   904→        "Drum & Bass": 10351
+   905→      },
+   906→      "trending": false
+   907→    },
+   908→    {
+   909→      "id": "lbl_animal63",
+   910→      "name": "ANIMAL63",
+   911→      "genres": [
+   912→        "Electronica"
+   913→      ],
+   914→      "rankByGenre": {
+   915→        "Electronica": 39
+   916→      },
+   917→      "pointsByGenre": {
+   918→        "Electronica": 9607
+   919→      },
+   920→      "trending": false
+   921→    },
+   922→    {
+   923→      "id": "lbl_animarum_recordings",
+   924→      "name": "ANIMARUM RECORDINGS",
+   925→      "genres": [
+   926→        "Techno Peak Time / Driving"
+   927→      ],
+   928→      "rankByGenre": {
+   929→        "Techno Peak Time / Driving": 4
+   930→      },
+   931→      "pointsByGenre": {
+   932→        "Techno Peak Time / Driving": 59415
+   933→      },
+   934→      "trending": false
+   935→    },
+   936→    {
+   937→      "id": "lbl_anjunabeats",
+   938→      "name": "ANJUNABEATS",
+   939→      "genres": [
+   940→        "Ambient / Experimental",
+   941→        "Progressive House",
+   942→        "Trance Main Floor"
+   943→      ],
+   944→      "rankByGenre": {
+   945→        "Ambient / Experimental": 21,
+   946→        "Progressive House": 9,
+   947→        "Trance Main Floor": 4
+   948→      },
+   949→      "pointsByGenre": {
+   950→        "Ambient / Experimental": 14271,
+   951→        "Progressive House": 47030,
+   952→        "Trance Main Floor": 65380
+   953→      },
+   954→      "trending": true,
+   955→      "trendingRankByGenre": {
+   956→        "Trance Main Floor": 5
+   957→      },
+   958→      "trendingPointsByGenre": {
+   959→        "Trance Main Floor": 2241
+   960→      }
+   961→    },
+   962→    {
+   963→      "id": "lbl_anjunachill",
+   964→      "name": "ANJUNACHILL",
+   965→      "genres": [
+   966→        "Ambient / Experimental",
+   967→        "Downtempo"
+   968→      ],
+   969→      "rankByGenre": {
+   970→        "Ambient / Experimental": 1,
+   971→        "Downtempo": 44
+   972→      },
+   973→      "pointsByGenre": {
+   974→        "Ambient / Experimental": 73113,
+   975→        "Downtempo": 7448
+   976→      },
+   977→      "trending": true,
+   978→      "trendingRankByGenre": {
+   979→        "Ambient / Experimental": 2
+   980→      },
+   981→      "trendingPointsByGenre": {
+   982→        "Ambient / Experimental": 2426
+   983→      }
+   984→    },
+   985→    {
+   986→      "id": "lbl_anjunadeep",
+   987→      "name": "ANJUNADEEP",
+   988→      "genres": [
+   989→        "Ambient / Experimental",
+   990→        "Breaks / Breakbeat / Uk Bass",
+   991→        "Deep House",
+   992→        "Electronica",
+   993→        "Melodic House & Techno",
+   994→        "Organic House",
+   995→        "Progressive House"
+   996→      ],
+   997→      "rankByGenre": {
+   998→        "Ambient / Experimental": 3,
+   999→        "Breaks / Breakbeat / Uk Bass": 29,
+  1000→        "Deep House": 46,
+  1001→        "Electronica": 4,
+  1002→        "Melodic House & Techno": 18,
+  1003→        "Organic House": 5,
+  1004→        "Progressive House": 1
+  1005→      },
+  1006→      "pointsByGenre": {
+  1007→        "Ambient / Experimental": 32193,
+  1008→        "Breaks / Breakbeat / Uk Bass": 13720,
+  1009→        "Deep House": 9821,
+  1010→        "Electronica": 55126,
+  1011→        "Melodic House & Techno": 25653,
+  1012→        "Organic House": 53198,
+  1013→        "Progressive House": 166427
+  1014→      },
+  1015→      "trending": true,
+  1016→      "trendingRankByGenre": {
+  1017→        "Electronica": 6,
+  1018→        "Melodic House & Techno": 5,
+  1019→        "Organic House": 10,
+  1020→        "Progressive House": 1
+  1021→      },
+  1022→      "trendingPointsByGenre": {
+  1023→        "Electronica": 1972,
+  1024→        "Melodic House & Techno": 2302,
+  1025→        "Organic House": 2247,
+  1026→        "Progressive House": 5439
+  1027→      }
+  1028→    },
+  1029→    {
+  1030→      "id": "lbl_anjunadeep_explorations",
+  1031→      "name": "ANJUNADEEP EXPLORATIONS",
+  1032→      "genres": [
+  1033→        "Breaks / Breakbeat / Uk Bass",
+  1034→        "Deep House",
+  1035→        "Electronica",
+  1036→        "Organic House",
+  1037→        "Progressive House"
+  1038→      ],
+  1039→      "rankByGenre": {
+  1040→        "Breaks / Breakbeat / Uk Bass": 40,
+  1041→        "Deep House": 23,
+  1042→        "Electronica": 3,
+  1043→        "Organic House": 42,
+  1044→        "Progressive House": 40
+  1045→      },
+  1046→      "pointsByGenre": {
+  1047→        "Breaks / Breakbeat / Uk Bass": 9599,
+  1048→        "Deep House": 20384,
+  1049→        "Electronica": 58724,
+  1050→        "Organic House": 10316,
+  1051→        "Progressive House": 10990
+  1052→      },
+  1053→      "trending": true,
+  1054→      "trendingRankByGenre": {
+  1055→        "Electronica": 7
+  1056→      },
+  1057→      "trendingPointsByGenre": {
+  1058→        "Electronica": 1837
+  1059→      }
+  1060→    },
+  1061→    {
+  1062→      "id": "lbl_another_rhythm",
+  1063→      "name": "ANOTHER RHYTHM",
+  1064→      "genres": [
+  1065→        "Breaks / Breakbeat / Uk Bass"
+  1066→      ],
+  1067→      "rankByGenre": {
+  1068→        "Breaks / Breakbeat / Uk Bass": 18
+  1069→      },
+  1070→      "pointsByGenre": {
+  1071→        "Breaks / Breakbeat / Uk Bass": 20305
+  1072→      },
+  1073→      "trending": false
+  1074→    },
+  1075→    {
+  1076→      "id": "lbl_anti_up",
+  1077→      "name": "ANTI UP",
+  1078→      "genres": [
+  1079→        "Bass House"
+  1080→      ],
+  1081→      "rankByGenre": {
+  1082→        "Bass House": 31
+  1083→      },
+  1084→      "pointsByGenre": {
+  1085→        "Bass House": 17574
+  1086→      },
+  1087→      "trending": false
+  1088→    },
+  1089→    {
+  1090→      "id": "lbl_ap_musik",
+  1091→      "name": "AP MUSIK",
+  1092→      "genres": [
+  1093→        "Ambient / Experimental"
+  1094→      ],
+  1095→      "rankByGenre": {
+  1096→        "Ambient / Experimental": 22
+  1097→      },
+  1098→      "pointsByGenre": {
+  1099→        "Ambient / Experimental": 13610
+  1100→      },
+  1101→      "trending": true,
+  1102→      "trendingRankByGenre": {
+  1103→        "Ambient / Experimental": 9
+  1104→      },
+  1105→      "trendingPointsByGenre": {
+  1106→        "Ambient / Experimental": 1503
+  1107→      }
+  1108→    },
+  1109→    {
+  1110→      "id": "lbl_apent",
+  1111→      "name": "APENT",
+  1112→      "genres": [
+  1113→        "Amapiano"
+  1114→      ],
+  1115→      "rankByGenre": {
+  1116→        "Amapiano": 19
+  1117→      },
+  1118→      "pointsByGenre": {
+  1119→        "Amapiano": 15547
+  1120→      },
+  1121→      "trending": false
+  1122→    },
+  1123→    {
+  1124→      "id": "lbl_aquecimento_br",
+  1125→      "name": "AQUECIMENTO BR",
+  1126→      "genres": [
+  1127→        "Brazilian Funk"
+  1128→      ],
+  1129→      "rankByGenre": {
+  1130→        "Brazilian Funk": 9
+  1131→      },
+  1132→      "pointsByGenre": {
+  1133→        "Brazilian Funk": 2736
+  1134→      },
+  1135→      "trending": true,
+  1136→      "trendingRankByGenre": {
+  1137→        "Brazilian Funk": 7
+  1138→      },
+  1139→      "trendingPointsByGenre": {
+  1140→        "Brazilian Funk": 2736
+  1141→      }
+  1142→    },
+  1143→    {
+  1144→      "id": "lbl_arcane_music",
+  1145→      "name": "ARCANE MUSIC",
+  1146→      "genres": [
+  1147→        "Bass House",
+  1148→        "Hard Dance / Hardcore / Neo Rave",
+  1149→        "Mainstage",
+  1150→        "Techno Peak Time / Driving"
+  1151→      ],
+  1152→      "rankByGenre": {
+  1153→        "Bass House": 39,
+  1154→        "Hard Dance / Hardcore / Neo Rave": 50,
+  1155→        "Mainstage": 43,
+  1156→        "Techno Peak Time / Driving": 2
+  1157→      },
+  1158→      "pointsByGenre": {
+  1159→        "Bass House": 13814,
+  1160→        "Hard Dance / Hardcore / Neo Rave": 8305,
+  1161→        "Mainstage": 11981,
+  1162→        "Techno Peak Time / Driving": 91558
+  1163→      },
+  1164→      "trending": true,
+  1165→      "trendingRankByGenre": {
+  1166→        "Techno Peak Time / Driving": 2
+  1167→      },
+  1168→      "trendingPointsByGenre": {
+  1169→        "Techno Peak Time / Driving": 4353
+  1170→      }
+  1171→    },
+  1172→    {
+  1173→      "id": "lbl_architektur_records",
+  1174→      "name": "ARCHITEKTUR RECORDS",
+  1175→      "genres": [
+  1176→        "Breaks / Breakbeat / Uk Bass"
+  1177→      ],
+  1178→      "rankByGenre": {
+  1179→        "Breaks / Breakbeat / Uk Bass": 25
+  1180→      },
+  1181→      "pointsByGenre": {
+  1182→        "Breaks / Breakbeat / Uk Bass": 14331
+  1183→      },
+  1184→      "trending": false
+  1185→    },
+  1186→    {
+  1187→      "id": "lbl_archives",
+  1188→      "name": "ARCHIVES",
+  1189→      "genres": [
+  1190→        "Ambient / Experimental"
+  1191→      ],
+  1192→      "rankByGenre": {
+  1193→        "Ambient / Experimental": 50
+  1194→      },
+  1195→      "pointsByGenre": {
+  1196→        "Ambient / Experimental": 7826
+  1197→      },
+  1198→      "trending": false
+  1199→    },
+  1200→    {
+  1201→      "id": "lbl_armada_captivating",
+  1202→      "name": "ARMADA CAPTIVATING",
+  1203→      "genres": [
+  1204→        "Trance Main Floor"
+  1205→      ],
+  1206→      "rankByGenre": {
+  1207→        "Trance Main Floor": 5
+  1208→      },
+  1209→      "pointsByGenre": {
+  1210→        "Trance Main Floor": 53565
+  1211→      },
+  1212→      "trending": false
+  1213→    },
+  1214→    {
+  1215→      "id": "lbl_armada_music",
+  1216→      "name": "ARMADA MUSIC",
+  1217→      "genres": [
+  1218→        "Afro House",
+  1219→        "Ambient / Experimental",
+  1220→        "Bass House",
+  1221→        "Dance / Pop",
+  1222→        "Drum & Bass",
+  1223→        "Hard Dance / Hardcore / Neo Rave",
+  1224→        "Hard Techno",
+  1225→        "House",
+  1226→        "Mainstage",
+  1227→        "Melodic House & Techno",
+  1228→        "Organic House",
+  1229→        "Progressive House",
+  1230→        "Psy-Trance",
+  1231→        "Tech House",
+  1232→        "Techno Peak Time / Driving",
+  1233→        "Top 100 All Genres",
+  1234→        "Trance Main Floor"
+  1235→      ],
+  1236→      "rankByGenre": {
+  1237→        "Afro House": 49,
+  1238→        "Ambient / Experimental": 42,
+  1239→        "Bass House": 27,
+  1240→        "Dance / Pop": 9,
+  1241→        "Drum & Bass": 13,
+  1242→        "Hard Dance / Hardcore / Neo Rave": 33,
+  1243→        "Hard Techno": 13,
+  1244→        "House": 45,
+  1245→        "Mainstage": 5,
+  1246→        "Melodic House & Techno": 5,
+  1247→        "Organic House": 26,
+  1248→        "Progressive House": 20,
+  1249→        "Psy-Trance": 25,
+  1250→        "Tech House": 32,
+  1251→        "Techno Peak Time / Driving": 15,
+  1252→        "Top 100 All Genres": 19,
+  1253→        "Trance Main Floor": 1
+  1254→      },
+  1255→      "pointsByGenre": {
+  1256→        "Afro House": 8807,
+  1257→        "Ambient / Experimental": 9378,
+  1258→        "Bass House": 19915,
+  1259→        "Dance / Pop": 41017,
+  1260→        "Drum & Bass": 33245,
+  1261→        "Hard Dance / Hardcore / Neo Rave": 15449,
+  1262→        "Hard Techno": 33734,
+  1263→        "House": 9711,
+  1264→        "Mainstage": 87444,
+  1265→        "Melodic House & Techno": 48851,
+  1266→        "Organic House": 18972,
+  1267→        "Progressive House": 23436,
+  1268→        "Psy-Trance": 15967,
+  1269→        "Tech House": 11879,
+  1270→        "Techno Peak Time / Driving": 26291,
+  1271→        "Top 100 All Genres": 23332,
+  1272→        "Trance Main Floor": 230529
+  1273→      },
+  1274→      "trending": true,
+  1275→      "trendingRankByGenre": {
+  1276→        "Mainstage": 4,
+  1277→        "Melodic House & Techno": 8,
+  1278→        "Trance Main Floor": 2
+  1279→      },
+  1280→      "trendingPointsByGenre": {
+  1281→        "Mainstage": 2753,
+  1282→        "Melodic House & Techno": 2191,
+  1283→        "Trance Main Floor": 6511
+  1284→      }
+  1285→    },
+  1286→    {
+  1287→      "id": "lbl_armind_armada",
+  1288→      "name": "ARMIND (ARMADA)",
+  1289→      "genres": [
+  1290→        "Psy-Trance",
+  1291→        "Trance Main Floor"
+  1292→      ],
+  1293→      "rankByGenre": {
+  1294→        "Psy-Trance": 46,
+  1295→        "Trance Main Floor": 23
+  1296→      },
+  1297→      "pointsByGenre": {
+  1298→        "Psy-Trance": 5656,
+  1299→        "Trance Main Floor": 20875
+  1300→      },
+  1301→      "trending": true,
+  1302→      "trendingRankByGenre": {
+  1303→        "Trance Main Floor": 7
+  1304→      },
+  1305→      "trendingPointsByGenre": {
+  1306→        "Trance Main Floor": 2076
+  1307→      }
+  1308→    },
+  1309→    {
+  1310→      "id": "lbl_arms_legs",
+  1311→      "name": "ARMS & LEGS",
+  1312→      "genres": [
+  1313→        "House"
+  1314→      ],
+  1315→      "rankByGenre": {
+  1316→        "House": 49
+  1317→      },
+  1318→      "pointsByGenre": {
+  1319→        "House": 8522
+  1320→      },
+  1321→      "trending": false
+  1322→    },
+  1323→    {
+  1324→      "id": "lbl_arsenal",
+  1325→      "name": "ARSENAL",
+  1326→      "genres": [
+  1327→        "Electro Classic / Detroit / Modern"
+  1328→      ],
+  1329→      "rankByGenre": {
+  1330→        "Electro Classic / Detroit / Modern": 13
+  1331→      },
+  1332→      "pointsByGenre": {
+  1333→        "Electro Classic / Detroit / Modern": 25535
+  1334→      },
+  1335→      "trending": false
+  1336→    },
+  1337→    {
+  1338→      "id": "lbl_artcore_records",
+  1339→      "name": "ARTCORE RECORDS",
+  1340→      "genres": [
+  1341→        "Psy-Trance"
+  1342→      ],
+  1343→      "rankByGenre": {
+  1344→        "Psy-Trance": 7
+  1345→      },
+  1346→      "pointsByGenre": {
+  1347→        "Psy-Trance": 72198
+  1348→      },
+  1349→      "trending": true,
+  1350→      "trendingRankByGenre": {
+  1351→        "Psy-Trance": 9
+  1352→      },
+  1353→      "trendingPointsByGenre": {
+  1354→        "Psy-Trance": 1749
+  1355→      }
+  1356→    },
+  1357→    {
+  1358→      "id": "lbl_artikal_music_uk",
+  1359→      "name": "ARTIKAL MUSIC UK",
+  1360→      "genres": [
+  1361→        "140 / Deep Dubstep / Grime"
+  1362→      ],
+  1363→      "rankByGenre": {
+  1364→        "140 / Deep Dubstep / Grime": 40
+  1365→      },
+  1366→      "pointsByGenre": {
+  1367→        "140 / Deep Dubstep / Grime": 8863
+  1368→      },
+  1369→      "trending": false
+  1370→    },
+  1371→    {
+  1372→      "id": "lbl_arts",
+  1373→      "name": "ARTS",
+  1374→      "genres": [
+  1375→        "Techno Raw / Deep / Hypnotic"
+  1376→      ],
+  1377→      "rankByGenre": {
+  1378→        "Techno Raw / Deep / Hypnotic": 11
+  1379→      },
+  1380→      "pointsByGenre": {
+  1381→        "Techno Raw / Deep / Hypnotic": 45571
+  1382→      },
+  1383→      "trending": false
+  1384→    },
+  1385→    {
+  1386→      "id": "lbl_ascent_control",
+  1387→      "name": "ASCENT CONTROL",
+  1388→      "genres": [
+  1389→        "Funky House"
+  1390→      ],
+  1391→      "rankByGenre": {
+  1392→        "Funky House": 28
+  1393→      },
+  1394→      "pointsByGenre": {
+  1395→        "Funky House": 8547
+  1396→      },
+  1397→      "trending": false
+  1398→    },
+  1399→    {
+  1400→      "id": "lbl_astralwerks",
+  1401→      "name": "ASTRALWERKS",
+  1402→      "genres": [
+  1403→        "Afro House"
+  1404→      ],
+  1405→      "rankByGenre": {
+  1406→        "Afro House": 47
+  1407→      },
+  1408→      "pointsByGenre": {
+  1409→        "Afro House": 8959
+  1410→      },
+  1411→      "trending": false
+  1412→    },
+  1413→    {
+  1414→      "id": "lbl_atlantic_records",
+  1415→      "name": "ATLANTIC RECORDS",
+  1416→      "genres": [
+  1417→        "Dance / Pop",
+  1418→        "Trance Main Floor"
+  1419→      ],
+  1420→      "rankByGenre": {
+  1421→        "Dance / Pop": 8,
+  1422→        "Trance Main Floor": 40
+  1423→      },
+  1424→      "pointsByGenre": {
+  1425→        "Dance / Pop": 41046,
+  1426→        "Trance Main Floor": 12860
+  1427→      },
+  1428→      "trending": false
+  1429→    },
+  1430→    {
+  1431→      "id": "lbl_atlantic_records_uk",
+  1432→      "name": "ATLANTIC RECORDS UK",
+  1433→      "genres": [
+  1434→        "140 / Deep Dubstep / Grime",
+  1435→        "Bass House",
+  1436→        "Breaks / Breakbeat / Uk Bass",
+  1437→        "Dance / Pop",
+  1438→        "Deep House",
+  1439→        "Melodic House & Techno",
+  1440→        "Tech House",
+  1441→        "Top 100 All Genres",
+  1442→        "Trap / Future Bass"
+  1443→      ],
+  1444→      "rankByGenre": {
+  1445→        "140 / Deep Dubstep / Grime": 4,
+  1446→        "Bass House": 4,
+  1447→        "Breaks / Breakbeat / Uk Bass": 13,
+  1448→        "Dance / Pop": 5,
+  1449→        "Deep House": 6,
+  1450→        "Melodic House & Techno": 46,
+  1451→        "Tech House": 23,
+  1452→        "Top 100 All Genres": 35,
+  1453→        "Trap / Future Bass": 33
+  1454→      },
+  1455→      "pointsByGenre": {
+  1456→        "140 / Deep Dubstep / Grime": 78779,
+  1457→        "Bass House": 61195,
+  1458→        "Breaks / Breakbeat / Uk Bass": 29084,
+  1459→        "Dance / Pop": 81067,
+  1460→        "Deep House": 48577,
+  1461→        "Melodic House & Techno": 12229,
+  1462→        "Tech House": 17569,
+  1463→        "Top 100 All Genres": 14524,
+  1464→        "Trap / Future Bass": 10461
+  1465→      },
+  1466→      "trending": true,
+  1467→      "trendingRankByGenre": {
+  1468→        "140 / Deep Dubstep / Grime": 5,
+  1469→        "Deep House": 9
+  1470→      },
+  1471→      "trendingPointsByGenre": {
+  1472→        "140 / Deep Dubstep / Grime": 3355,
+  1473→        "Deep House": 2013
+  1474→      }
+  1475→    },
+  1476→    {
+  1477→      "id": "lbl_atlantic_ksr",
+  1478→      "name": "ATLANTIC/KSR",
+  1479→      "genres": [
+  1480→        "Trap / Future Bass"
+  1481→      ],
+  1482→      "rankByGenre": {
+  1483→        "Trap / Future Bass": 43
+  1484→      },
+  1485→      "pointsByGenre": {
+  1486→        "Trap / Future Bass": 8412
+  1487→      },
+  1488→      "trending": false
+  1489→    },
+  1490→    {
+  1491→      "id": "lbl_atom",
+  1492→      "name": "ATOM.",
+  1493→      "genres": [
+  1494→        "Bass House"
+  1495→      ],
+  1496→      "rankByGenre": {
+  1497→        "Bass House": 49
+  1498→      },
+  1499→      "pointsByGenre": {
+  1500→        "Bass House": 10401
+  1501→      },
+  1502→      "trending": false
+  1503→    },
+  1504→    {
+  1505→      "id": "lbl_at_m",
+  1506→      "name": "ATöM.",
+  1507→      "genres": [
+  1508→        "Techno Raw / Deep / Hypnotic"
+  1509→      ],
+  1510→      "rankByGenre": {
+  1511→        "Techno Raw / Deep / Hypnotic": 32
+  1512→      },
+  1513→      "pointsByGenre": {
+  1514→        "Techno Raw / Deep / Hypnotic": 13878
+  1515→      },
+  1516→      "trending": true,
+  1517→      "trendingRankByGenre": {
+  1518→        "Techno Raw / Deep / Hypnotic": 7
+  1519→      },
+  1520→      "trendingPointsByGenre": {
+  1521→        "Techno Raw / Deep / Hypnotic": 2498
+  1522→      }
+  1523→    },
+  1524→    {
+  1525→      "id": "lbl_atw_records",
+  1526→      "name": "ATW RECORDS",
+  1527→      "genres": [
+  1528→        "Bass / Club",
+  1529→        "Top 100 All Genres",
+  1530→        "Uk Garage / Bassline"
+  1531→      ],
+  1532→      "rankByGenre": {
+  1533→        "Bass / Club": 36,
+  1534→        "Top 100 All Genres": 48
+  1535→      },
+  1536→      "pointsByGenre": {
+  1537→        "Bass / Club": 13156,
+  1538→        "Top 100 All Genres": 9795
+  1539→      },
+  1540→      "trending": true,
+  1541→      "trendingRankByGenre": {
+  1542→        "Uk Garage / Bassline": 2
+  1543→      },
+  1544→      "trendingPointsByGenre": {
+  1545→        "Uk Garage / Bassline": 7370
+  1546→      }
+  1547→    },
+  1548→    {
+  1549→      "id": "lbl_audiocode",
+  1550→      "name": "AUDIOCODE",
+  1551→      "genres": [
+  1552→        "Hard Techno"
+  1553→      ],
+  1554→      "rankByGenre": {
+  1555→        "Hard Techno": 6
+  1556→      },
+  1557→      "pointsByGenre": {
+  1558→        "Hard Techno": 78566
+  1559→      },
+  1560→      "trending": true,
+  1561→      "trendingRankByGenre": {
+  1562→        "Hard Techno": 5
+  1563→      },
+  1564→      "trendingPointsByGenre": {
+  1565→        "Hard Techno": 4042
+  1566→      }
+  1567→    },
+  1568→    {
+  1569→      "id": "lbl_aus_music",
+  1570→      "name": "AUS MUSIC",
+  1571→      "genres": [
+  1572→        "Electronica"
+  1573→      ],
+  1574→      "rankByGenre": {
+  1575→        "Electronica": 32
+  1576→      },
+  1577→      "pointsByGenre": {
+  1578→        "Electronica": 11196
+  1579→      },
+  1580→      "trending": false
+  1581→    },
+  1582→    {
+  1583→      "id": "lbl_autektone_records",
+  1584→      "name": "AUTEKTONE RECORDS",
+  1585→      "genres": [
+  1586→        "Hard Dance / Hardcore / Neo Rave",
+  1587→        "Techno Peak Time / Driving",
+  1588→        "Trance Main Floor"
+  1589→      ],
+  1590→      "rankByGenre": {
+  1591→        "Hard Dance / Hardcore / Neo Rave": 37,
+  1592→        "Techno Peak Time / Driving": 30,
+  1593→        "Trance Main Floor": 17
+  1594→      },
+  1595→      "pointsByGenre": {
+  1596→        "Hard Dance / Hardcore / Neo Rave": 14571,
+  1597→        "Techno Peak Time / Driving": 14929,
+  1598→        "Trance Main Floor": 23411
+  1599→      },
+  1600→      "trending": true,
+  1601→      "trendingRankByGenre": {
+  1602→        "Trance Main Floor": 8
+  1603→      },
+  1604→      "trendingPointsByGenre": {
+  1605→        "Trance Main Floor": 2037
+  1606→      }
+  1607→    },
+  1608→    {
+  1609→      "id": "lbl_avenu",
+  1610→      "name": "AVENU",
+  1611→      "genres": [
+  1612→        "Deep House"
+  1613→      ],
+  1614→      "rankByGenre": {
+  1615→        "Deep House": 45
+  1616→      },
+  1617→      "pointsByGenre": {
+  1618→        "Deep House": 10023
+  1619→      },
+  1620→      "trending": false
+  1621→    },
+  1622→    {
+  1623→      "id": "lbl_awoken_records",
+  1624→      "name": "AWOKEN RECORDS",
+  1625→      "genres": [
+  1626→        "Amapiano"
+  1627→      ],
+  1628→      "rankByGenre": {
+  1629→        "Amapiano": 7
+  1630→      },
+  1631→      "pointsByGenre": {
+  1632→        "Amapiano": 46407
+  1633→      },
+  1634→      "trending": true,
+  1635→      "trendingRankByGenre": {
+  1636→        "Amapiano": 4
+  1637→      },
+  1638→      "trendingPointsByGenre": {
+  1639→        "Amapiano": 4348
+  1640→      }
+  1641→    },
+  1642→    {
+  1643→      "id": "lbl_axis_records",
+  1644→      "name": "AXIS RECORDS",
+  1645→      "genres": [
+  1646→        "Techno Raw / Deep / Hypnotic"
+  1647→      ],
+  1648→      "rankByGenre": {
+  1649→        "Techno Raw / Deep / Hypnotic": 21
+  1650→      },
+  1651→      "pointsByGenre": {
+  1652→        "Techno Raw / Deep / Hypnotic": 22929
+  1653→      },
+  1654→      "trending": false
+  1655→    },
+  1656→    {
+  1657→      "id": "lbl_axtone_records",
+  1658→      "name": "AXTONE RECORDS",
+  1659→      "genres": [
+  1660→        "Mainstage"
+  1661→      ],
+  1662→      "rankByGenre": {
+  1663→        "Mainstage": 46
+  1664→      },
+  1665→      "pointsByGenre": {
+  1666→        "Mainstage": 9744
+  1667→      },
+  1668→      "trending": false
+  1669→    },
+  1670→    {
+  1671→      "id": "lbl_baby_blue_entertainment",
+  1672→      "name": "BABY BLUE ENTERTAINMENT",
+  1673→      "genres": [
+  1674→        "Amapiano"
+  1675→      ],
+  1676→      "rankByGenre": {
+  1677→        "Amapiano": 23
+  1678→      },
+  1679→      "pointsByGenre": {
+  1680→        "Amapiano": 13250
+  1681→      },
+  1682→      "trending": false
+  1683→    },
+  1684→    {
+  1685→      "id": "lbl_baby_momo_production",
+  1686→      "name": "BABY MOMO PRODUCTION",
+  1687→      "genres": [
+  1688→        "Amapiano"
+  1689→      ],
+  1690→      "rankByGenre": {
+  1691→        "Amapiano": 40
+  1692→      },
+  1693→      "pointsByGenre": {
+  1694→        "Amapiano": 9974
+  1695→      },
+  1696→      "trending": false
+  1697→    },
+  1698→    {
+  1699→      "id": "lbl_baikal_nomads",
+  1700→      "name": "BAIKAL NOMADS",
+  1701→      "genres": [
+  1702→        "Downtempo"
+  1703→      ],
+  1704→      "rankByGenre": {
+  1705→        "Downtempo": 27
+  1706→      },
+  1707→      "pointsByGenre": {
+  1708→        "Downtempo": 15510
+  1709→      },
+  1710→      "trending": false
+  1711→    },
+  1712→    {
+  1713→      "id": "lbl_baile_service",
+  1714→      "name": "BAILE SERVICE",
+  1715→      "genres": [
+  1716→        "Brazilian Funk"
+  1717→      ],
+  1718→      "rankByGenre": {
+  1719→        "Brazilian Funk": 30
+  1720→      },
+  1721→      "pointsByGenre": {
+  1722→        "Brazilian Funk": 900
+  1723→      },
+  1724→      "trending": false
+  1725→    },
+  1726→    {
+  1727→      "id": "lbl_baker_s_dozen",
+  1728→      "name": "BAKER'S DOZEN",
+  1729→      "genres": [
+  1730→        "Deep House",
+  1731→        "House"
+  1732→      ],
+  1733→      "rankByGenre": {
+  1734→        "Deep House": 8,
+  1735→        "House": 29
+  1736→      },
+  1737→      "pointsByGenre": {
+  1738→        "Deep House": 42164,
+  1739→        "House": 17298
+  1740→      },
+  1741→      "trending": false
+  1742→    },
+  1743→    {
+  1744→      "id": "lbl_balance_music",
+  1745→      "name": "BALANCE MUSIC",
+  1746→      "genres": [
+  1747→        "Progressive House"
+  1748→      ],
+  1749→      "rankByGenre": {
+  1750→        "Progressive House": 15
+  1751→      },
+  1752→      "pointsByGenre": {
+  1753→        "Progressive House": 28217
+  1754→      },
+  1755→      "trending": false
+  1756→    },
+  1757→    {
+  1758→      "id": "lbl_balash",
+  1759→      "name": "BALASH",
+  1760→      "genres": [
+  1761→        "Funky House"
+  1762→      ],
+  1763→      "rankByGenre": {
+  1764→        "Funky House": 46
+  1765→      },
+  1766→      "pointsByGenre": {
+  1767→        "Funky House": 4011
+  1768→      },
+  1769→      "trending": false
+  1770→    },
+  1771→    {
+  1772→      "id": "lbl_ballroom_records",
+  1773→      "name": "BALLROOM RECORDS",
+  1774→      "genres": [
+  1775→        "Ambient / Experimental"
+  1776→      ],
+  1777→      "rankByGenre": {
+  1778→        "Ambient / Experimental": 24
+  1779→      },
+  1780→      "pointsByGenre": {
+  1781→        "Ambient / Experimental": 13246
+  1782→      },
+  1783→      "trending": false
+  1784→    },
+  1785→    {
+  1786→      "id": "lbl_bamboleo",
+  1787→      "name": "BAMBOLEO",
+  1788→      "genres": [
+  1789→        "Minimal / Deep Tech"
+  1790→      ],
+  1791→      "rankByGenre": {
+  1792→        "Minimal / Deep Tech": 43
+  1793→      },
+  1794→      "pointsByGenre": {
+  1795→        "Minimal / Deep Tech": 11044
+  1796→      },
+  1797→      "trending": true,
+  1798→      "trendingRankByGenre": {
+  1799→        "Minimal / Deep Tech": 9
+  1800→      },
+  1801→      "trendingPointsByGenre": {
+  1802→        "Minimal / Deep Tech": 1865
+  1803→      }
+  1804→    },
+  1805→    {
+  1806→      "id": "lbl_banana_club",
+  1807→      "name": "BANANA CLUB",
+  1808→      "genres": [
+  1809→        "Breaks / Breakbeat / Uk Bass"
+  1810→      ],
+  1811→      "rankByGenre": {
+  1812→        "Breaks / Breakbeat / Uk Bass": 8
+  1813→      },
+  1814→      "pointsByGenre": {
+  1815→        "Breaks / Breakbeat / Uk Bass": 42799
+  1816→      },
+  1817→      "trending": false
+  1818→    },
+  1819→    {
+  1820→      "id": "lbl_bar_25_music",
+  1821→      "name": "BAR 25 MUSIC",
+  1822→      "genres": [
+  1823→        "Organic House"
+  1824→      ],
+  1825→      "rankByGenre": {
+  1826→        "Organic House": 8
+  1827→      },
+  1828→      "pointsByGenre": {
+  1829→        "Organic House": 44611
+  1830→      },
+  1831→      "trending": true,
+  1832→      "trendingRankByGenre": {
+  1833→        "Organic House": 9
+  1834→      },
+  1835→      "trendingPointsByGenre": {
+  1836→        "Organic House": 2326
+  1837→      }
+  1838→    },
+  1839→    {
+  1840→      "id": "lbl_barong_family",
+  1841→      "name": "BARONG FAMILY",
+  1842→      "genres": [
+  1843→        "Trap / Future Bass"
+  1844→      ],
+  1845→      "rankByGenre": {
+  1846→        "Trap / Future Bass": 21
+  1847→      },
+  1848→      "pointsByGenre": {
+  1849→        "Trap / Future Bass": 17395
+  1850→      },
+  1851→      "trending": false
+  1852→    },
+  1853→    {
+  1854→      "id": "lbl_barra_uno",
+  1855→      "name": "BARRA UNO",
+  1856→      "genres": [
+  1857→        "Ambient / Experimental"
+  1858→      ],
+  1859→      "rankByGenre": {
+  1860→        "Ambient / Experimental": 35
+  1861→      },
+  1862→      "pointsByGenre": {
+  1863→        "Ambient / Experimental": 11416
+  1864→      },
+  1865→      "trending": false
+  1866→    },
+  1867→    {
+  1868→      "id": "lbl_bass_jamz",
+  1869→      "name": "BASS JAMZ",
+  1870→      "genres": [
+  1871→        "Electro Classic / Detroit / Modern",
+  1872→        "Minimal / Deep Tech"
+  1873→      ],
+  1874→      "rankByGenre": {
+  1875→        "Electro Classic / Detroit / Modern": 48,
+  1876→        "Minimal / Deep Tech": 49
+  1877→      },
+  1878→      "pointsByGenre": {
+  1879→        "Electro Classic / Detroit / Modern": 9499,
+  1880→        "Minimal / Deep Tech": 8899
+  1881→      },
+  1882→      "trending": false
+  1883→    },
+  1884→    {
+  1885→      "id": "lbl_bassrush_records",
+  1886→      "name": "BASSRUSH RECORDS",
+  1887→      "genres": [
+  1888→        "140 / Deep Dubstep / Grime",
+  1889→        "Dubstep"
+  1890→      ],
+  1891→      "rankByGenre": {
+  1892→        "140 / Deep Dubstep / Grime": 5,
+  1893→        "Dubstep": 8
+  1894→      },
+  1895→      "pointsByGenre": {
+  1896→        "140 / Deep Dubstep / Grime": 74511,
+  1897→        "Dubstep": 63508
+  1898→      },
+  1899→      "trending": true,
+  1900→      "trendingRankByGenre": {
+  1901→        "Dubstep": 8
+  1902→      },
+  1903→      "trendingPointsByGenre": {
+  1904→        "Dubstep": 2698
+  1905→      }
+  1906→    },
+  1907→    {
+  1908→      "id": "lbl_bassweight_records",
+  1909→      "name": "BASSWEIGHT RECORDS",
+  1910→      "genres": [
+  1911→        "Dubstep"
+  1912→      ],
+  1913→      "rankByGenre": {
+  1914→        "Dubstep": 22
+  1915→      },
+  1916→      "pointsByGenre": {
+  1917→        "Dubstep": 18896
+  1918→      },
+  1919→      "trending": false
+  1920→    },
+  1921→    {
+  1922→      "id": "lbl_batty_bass",
+  1923→      "name": "BATTY BASS",
+  1924→      "genres": [
+  1925→        "Electro Classic / Detroit / Modern"
+  1926→      ],
+  1927→      "rankByGenre": {
+  1928→        "Electro Classic / Detroit / Modern": 21
+  1929→      },
+  1930→      "pointsByGenre": {
+  1931→        "Electro Classic / Detroit / Modern": 20133
+  1932→      },
+  1933→      "trending": false
+  1934→    },
+  1935→    {
+  1936→      "id": "lbl_bcco",
+  1937→      "name": "BCCO",
+  1938→      "genres": [
+  1939→        "Electronica",
+  1940→        "Techno Raw / Deep / Hypnotic"
+  1941→      ],
+  1942→      "rankByGenre": {
+  1943→        "Electronica": 7,
+  1944→        "Techno Raw / Deep / Hypnotic": 25
+  1945→      },
+  1946→      "pointsByGenre": {
+  1947→        "Electronica": 32228,
+  1948→        "Techno Raw / Deep / Hypnotic": 19054
+  1949→      },
+  1950→      "trending": true,
+  1951→      "trendingRankByGenre": {
+  1952→        "Electronica": 3,
+  1953→        "Techno Raw / Deep / Hypnotic": 2
+  1954→      },
+  1955→      "trendingPointsByGenre": {
+  1956→        "Electronica": 3801,
+  1957→        "Techno Raw / Deep / Hypnotic": 4061
+  1958→      }
+  1959→    },
+  1960→    {
+  1961→      "id": "lbl_be_yourself_music",
+  1962→      "name": "BE YOURSELF MUSIC",
+  1963→      "genres": [
+  1964→        "Hard Techno"
+  1965→      ],
+  1966→      "rankByGenre": {
+  1967→        "Hard Techno": 19
+  1968→      },
+  1969→      "pointsByGenre": {
+  1970→        "Hard Techno": 23166
+  1971→      },
+  1972→      "trending": true,
+  1973→      "trendingRankByGenre": {
+  1974→        "Hard Techno": 9
+  1975→      },
+  1976→      "trendingPointsByGenre": {
+  1977→        "Hard Techno": 2041
+  1978→      }
+  1979→    },
+  1980→    {
+  1981→      "id": "lbl_beat_boutique",
+  1982→      "name": "BEAT BOUTIQUE",
+  1983→      "genres": [
+  1984→        "Indie Dance"
+  1985→      ],
+  1986→      "rankByGenre": {
+  1987→        "Indie Dance": 24
+  1988→      },
+  1989→      "pointsByGenre": {
+  1990→        "Indie Dance": 14823
+  1991→      },
+  1992→      "trending": false
+  1993→    },
+  1994→    {
+  1995→      "id": "lbl_beat_intelligence_network",
+  1996→      "name": "BEAT INTELLIGENCE NETWORK",
+  1997→      "genres": [
+  1998→        "Dubstep"
+  1999→      ],
+  2000→      "rankByGenre": {
+
+[showing lines 1-2000 of 20080; use offset=2001 with limit to continue reading]

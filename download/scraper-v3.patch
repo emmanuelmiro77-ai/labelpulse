@@ -1,0 +1,245 @@
+From a09d7eb2420efb595fc1583ff1c61028fc2ea049 Mon Sep 17 00:00:00 2001
+From: Z User <z@container>
+Date: Sat, 20 Jun 2026 14:20:15 +0000
+Subject: [PATCH] =?UTF-8?q?fix(scraper):=20Beatstats=20v3=20=E2=80=94=20ca?=
+ =?UTF-8?q?pture=20&=20use=20real=20href,=20parse=20body=20on=20404,=20bro?=
+ =?UTF-8?q?wser=20headers?=
+MIME-Version: 1.0
+Content-Type: text/plain; charset=UTF-8
+Content-Transfer-Encoding: 8bit
+
+Root cause: v2.1 discovered 52 genres correctly from homepage link analysis,
+but threw away the actual href URLs and rebuilt them as /list?genre={id}&period=2
+— which returns HTTP 404 for every genre.
+
+v3 fixes:
+1. discoverGenres() now captures full href alongside id+name
+2. buildGenreUrls(genre) returns multiple candidate URLs:
+   - Real href (preferred)
+   - /list?genre=N&period=2 (current period)
+   - /list?genre=N (no period)
+   - /label-ranking?genre=N&period=2 (legacy path)
+3. scrapeGenre() tries each URL in turn until one yields labels
+4. Body is parsed even on HTTP 404 — Next.js apps often return 404 status
+   but still embed __NEXT_DATA__ with the actual data
+5. browserHeaders() sends Sec-Fetch-Mode: navigate etc. so Cloudflare
+   doesn't 404 our fetches
+6. Logs first 3 sample hrefs for diagnostic visibility
+7. Version banner bumped to v3 so user can verify new code is loaded
+---
+ src/components/rankings-wizard.tsx | 134 +++++++++++++++++++----------
+ 1 file changed, 89 insertions(+), 45 deletions(-)
+
+diff --git a/src/components/rankings-wizard.tsx b/src/components/rankings-wizard.tsx
+index 5c53022..eab49c2 100755
+--- a/src/components/rankings-wizard.tsx
++++ b/src/components/rankings-wizard.tsx
+@@ -47,7 +47,7 @@ function buildBeatstatsScript(period: "current" | string, month: string | null):
+ var PERIOD_LABEL = ${JSON.stringify(periodLabel)};
+ var DELAY_MS = 600;
+ var S='%c[LabelPulse]',c1='color:#8b5cf6;font-weight:bold',c2='color:#666',cOk='color:#22c55e;font-weight:bold',cErr='color:#ef4444';
+-console.log(S+' %cBeatstats Scraper v2.1 avviato',c1,c2);
++console.log(S+' %cBeatstats Scraper v3 avviato',c1,c2);
+ console.log(S+' %cPeriodo: '+PERIOD_LABEL,c1,c2);
+ var sleep=function(ms){return new Promise(function(r){setTimeout(r,ms)})};
+ 
+@@ -61,30 +61,66 @@ if(location.hostname.indexOf('beatstats.com')===-1){
+ }
+ var ORIGIN=location.origin;
+ 
+-function buildGenreUrl(genreId){
+-  if(PERIOD_LABEL==='current'){
+-    return ORIGIN+'/list?genre='+genreId+'&period=2';
++// Browser-like headers so Beatstats/Cloudflare don't 404 our fetches
++function browserHeaders(){
++  return {
++    'Accept':'text/html,application/xhtml+xml,application/xml;q=0.9,image/avif,image/webp,*/*;q=0.8',
++    'Accept-Language':'en-US,en;q=0.9,it;q=0.8',
++    'Sec-Fetch-Dest':'document',
++    'Sec-Fetch-Mode':'navigate',
++    'Sec-Fetch-Site':'same-origin',
++    'Sec-Fetch-User':'?1',
++    'Upgrade-Insecure-Requests':'1'
++  };
++}
++
++// Resolve a (possibly relative) href against the current origin
++function resolveHref(href){
++  if(!href) return null;
++  if(href.indexOf('http')===0) return href;
++  if(href.charAt(0)==='/') return ORIGIN+href;
++  return ORIGIN+'/'+href;
++}
++
++// Given a genre, build the best URL we can: prefer the captured href,
++// fall back to reconstructing several known URL patterns
++function buildGenreUrls(genre){
++  var urls=[];
++  if(genre.href){
++    var resolved=resolveHref(genre.href);
++    if(resolved) urls.push(resolved);
+   }
+-  if(PERIOD_LABEL.indexOf('-')===-1){
++  // Fallback URL patterns (in priority order)
++  if(PERIOD_LABEL==='current'){
++    urls.push(ORIGIN+'/list?genre='+genre.id+'&period=2');
++    urls.push(ORIGIN+'/list?genre='+genre.id);
++    urls.push(ORIGIN+'/label-ranking?genre='+genre.id+'&period=2');
++  }else if(PERIOD_LABEL.indexOf('-')===-1){
+     var y=parseInt(PERIOD_LABEL,10);
+-    return ORIGIN+'/list?genre='+genreId+'&period=3&year='+y;
++    urls.push(ORIGIN+'/list?genre='+genre.id+'&period=3&year='+y);
++    urls.push(ORIGIN+'/list?genre='+genre.id+'&year='+y);
++  }else{
++    var parts=PERIOD_LABEL.split('-');
++    urls.push(ORIGIN+'/list?genre='+genre.id+'&period=2&year='+parts[0]+'&month='+parts[1]);
++    urls.push(ORIGIN+'/list?genre='+genre.id+'&year='+parts[0]+'&month='+parts[1]);
+   }
+-  var parts=PERIOD_LABEL.split('-');
+-  return ORIGIN+'/list?genre='+genreId+'&period=2&year='+parts[0]+'&month='+parts[1];
++  // De-duplicate
++  var seen={},out=[];
++  urls.forEach(function(u){ if(!seen[u]){ seen[u]=1; out.push(u);} });
++  return out;
+ }
+ 
+ async function discoverGenres(){
+   var genres=[];
+   console.log(S+' %cFase 1: Scoperta generi da homepage...',c1,c2);
+   try{
+-    var res=await fetch(ORIGIN+'/',{credentials:'include',headers:{'Accept':'text/html'}});
++    var res=await fetch(ORIGIN+'/',{credentials:'include',headers:browserHeaders()});
+     if(!res.ok){
+       console.log(S+' %c  Homepage HTTP '+res.status+', provo URL alternativo',c1,cErr);
+-      res=await fetch(ORIGIN+'/list?genre=0&period=2',{credentials:'include',headers:{'Accept':'text/html'}});
++      res=await fetch(ORIGIN+'/list?genre=0&period=2',{credentials:'include',headers:browserHeaders()});
+     }
+     if(!res.ok){
+-      console.log(S+' %c  Impossibile caricare pagina: HTTP '+res.status,c1,cErr);
+-      return [];
++      console.log(S+' %c  Impossibile caricare pagina: HTTP '+res.status+' (provo a leggere il body comunque)',c1,cErr);
+     }
+     var html=await res.text();
+     if(html.indexOf('Just a moment...')!==-1||html.indexOf('__cf_chl_opt')!==-1){
+@@ -93,7 +129,7 @@ async function discoverGenres(){
+     }
+     var doc=new DOMParser().parseFromString(html,'text/html');
+ 
+-    // Strategy A: <a href="?genre=N"> links
++    // Strategy A: <a href*="genre="> links — capture the FULL href
+     var genreLinks=doc.querySelectorAll('a[href*="genre="]');
+     var seen=new Set();
+     genreLinks.forEach(function(link){
+@@ -104,12 +140,16 @@ async function discoverGenres(){
+         var name=(link.textContent||'').trim();
+         if(name&&name.length>1&&!seen.has(id)){
+           seen.add(id);
+-          genres.push({id:id,name:name});
++          genres.push({id:id,name:name,href:href});
+         }
+       }
+     });
+     if(genres.length>0){
+       console.log(S+' %c  Trovati '+genres.length+' generi via link analysis',c1,cOk);
++      // Diagnostic: log first 3 hrefs so we can verify the URL pattern
++      for(var i=0;i<Math.min(3,genres.length);i++){
++        console.log(S+' %c    sample['+i+'] id='+genres[i].id+' href='+genres[i].href,c1,c2);
++      }
+       return genres;
+     }
+ 
+@@ -137,7 +177,7 @@ async function discoverGenres(){
+         if(found){
+           found.forEach(function(g){
+             if(((g.id!==undefined)||(g.genreId!==undefined))&&(g.name||g.slug)){
+-              genres.push({id:g.id!==undefined?g.id:g.genreId,name:g.name||g.slug});
++              genres.push({id:g.id!==undefined?g.id:g.genreId,name:g.name||g.slug,href:g.href||g.url||g.link||null});
+             }
+           });
+           if(genres.length>0){
+@@ -160,7 +200,7 @@ async function discoverGenres(){
+         var n=parseInt(v,10);
+         var name=(opt.textContent||'').trim();
+         if(!isNaN(n)&&name&&name.length>1){
+-          genres.push({id:n,name:name});
++          genres.push({id:n,name:name,href:null});
+         }
+       });
+     });
+@@ -315,40 +355,44 @@ function extractLabelsFromDoc(doc){
+ }
+ 
+ async function scrapeGenre(genre){
+-  var url=buildGenreUrl(genre.id);
+-  console.log(S+' %c  GET '+url,c1,c2);
+-  try{
+-    var res=await fetch(url,{credentials:'include',headers:{'Accept':'text/html'}});
+-    if(!res.ok){
+-      console.log(S+' %c  HTTP '+res.status+' per '+genre.name,c1,cErr);
+-      return [];
+-    }
+-    var html=await res.text();
+-    if(html.indexOf('Just a moment...')!==-1||html.indexOf('__cf_chl_opt')!==-1){
+-      console.log(S+' %c  Cloudflare challenge per '+genre.name,c1,cErr);
+-      return [];
+-    }
+-    var doc=new DOMParser().parseFromString(html,'text/html');
+-    var labels=extractLabelsFromDoc(doc);
+-    if(labels.length===0){
+-      console.log(S+' %c  0 label per '+genre.name,c1,cErr);
+-      return [];
++  var urls=buildGenreUrls(genre);
++  for(var ui=0;ui<urls.length;ui++){
++    var url=urls[ui];
++    var tag=ui===0?'  GET':(ui===1?'  RETRY':'  RETRY['+ui+']');
++    console.log(S+' %c'+tag+' '+url,c1,c2);
++    try{
++      var res=await fetch(url,{credentials:'include',headers:browserHeaders()});
++      var html=await res.text();
++      // Cloudflare challenge: bail and don't try fallbacks (we'd hit the same wall)
++      if(html.indexOf('Just a moment...')!==-1||html.indexOf('__cf_chl_opt')!==-1){
++        console.log(S+' %c  Cloudflare challenge per '+genre.name,c1,cErr);
++        return [];
++      }
++      // Parse body EVEN on non-2xx — Next.js apps often return 404 status
++      // but still embed __NEXT_DATA__ with the actual data
++      var doc=new DOMParser().parseFromString(html,'text/html');
++      var labels=extractLabelsFromDoc(doc);
++      if(labels.length>0){
++        labels.sort(function(a,b){
++          if(b.points!==a.points) return b.points-a.points;
++          return a.rank-b.rank;
++        });
++        labels.forEach(function(l,i){l.rank=i+1;});
++        console.log(S+' %c  OK '+labels.length+' label (HTTP '+res.status+', url['+ui+']) \\u2014 #1: '+(labels[0]?labels[0].name:'-')+' ('+(labels[0]?labels[0].points:0)+' pts)',c1,cOk);
++        return labels;
++      }
++      // 0 labels from this URL — try the next one
++      console.log(S+' %c  HTTP '+res.status+' / 0 label da url['+ui+']',c1,cErr);
++    }catch(e){
++      console.log(S+' %c  Errore '+genre.name+' url['+ui+']: '+e.message,c1,cErr);
+     }
+-    labels.sort(function(a,b){
+-      if(b.points!==a.points) return b.points-a.points;
+-      return a.rank-b.rank;
+-    });
+-    labels.forEach(function(l,i){l.rank=i+1;});
+-    console.log(S+' %c  OK '+labels.length+' label \\u2014 #1: '+(labels[0]?labels[0].name:'-')+' ('+(labels[0]?labels[0].points:0)+' pts)',c1,cOk);
+-    return labels;
+-  }catch(e){
+-    console.log(S+' %c  Errore '+genre.name+': '+e.message,c1,cErr);
+-    return [];
+   }
++  console.log(S+' %c  FALLITO '+genre.name+' ('+urls.length+' URL provati, 0 label)',c1,cErr);
++  return [];
+ }
+ 
+ console.log(S+' %c========================================',c1,c1);
+-console.log(S+' %cINIZIO ESTRAZIONE BEATSTATS v2.1',c1,cOk);
++console.log(S+' %cINIZIO ESTRAZIONE BEATSTATS v3',c1,cOk);
+ console.log(S+' %cPeriodo: '+PERIOD_LABEL,c1,c2);
+ console.log(S+' %c========================================',c1,c1);
+ 
+-- 
+2.47.3
+
