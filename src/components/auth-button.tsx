@@ -46,17 +46,21 @@ export function AuthButton() {
   }
 
   // Unauthenticated — show login button
+  // IMPORTANT: text "Accedi" is ALWAYS visible (no `hidden sm:inline`) so
+  // the button is identifiable on mobile, where the header is crowded with
+  // many small icon-only buttons. Variant="default" (primary color) makes
+  // it stand out as the primary call-to-action for unauthenticated users.
   if (status === "unauthenticated" || !session?.user) {
     return (
       <Button
         onClick={() => signIn("google")}
         size="sm"
-        variant="outline"
-        className="gap-1.5 text-xs"
+        variant="default"
+        className="gap-1.5 text-xs shrink-0"
         title="Accedi con Google per sincronizzare i tuoi dati su tutti i dispositivi"
       >
         <LogIn className="h-3.5 w-3.5" />
-        <span className="hidden sm:inline">Accedi</span>
+        <span>Accedi</span>
       </Button>
     );
   }

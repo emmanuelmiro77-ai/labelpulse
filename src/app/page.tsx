@@ -182,13 +182,12 @@ export default function Home() {
 
           {/* Right side: Language + Help + Mobile menu */}
           <div className="flex items-center gap-2">
-            {/* Language Switcher */}
+            {/* Language Switcher — desktop only (mobile gets it in the hamburger menu) */}
             <Popover>
               <PopoverTrigger asChild>
-                <Button variant="ghost" size="sm" className="gap-1.5 text-xs text-muted-foreground hover:text-foreground">
+                <Button variant="ghost" size="sm" className="gap-1.5 text-xs text-muted-foreground hover:text-foreground hidden md:inline-flex">
                   <Globe className="h-3.5 w-3.5" />
-                  <span className="hidden sm:inline">{LOCALE_FLAGS[locale]} {LOCALE_NAMES[locale]}</span>
-                  <span className="sm:hidden">{LOCALE_FLAGS[locale]}</span>
+                  <span>{LOCALE_FLAGS[locale]} {LOCALE_NAMES[locale]}</span>
                 </Button>
               </PopoverTrigger>
               <PopoverContent className="w-48 p-1" align="end">
@@ -209,29 +208,41 @@ export default function Home() {
               </PopoverContent>
             </Popover>
 
-            {/* Gmail Connection */}
-            <GmailSettings />
+            {/* Gmail Connection — desktop only (mobile: hamburger menu) */}
+            <div className="hidden md:block">
+              <GmailSettings />
+            </div>
 
-            {/* Cloud Sync (multi-device via Supabase BYOK) */}
-            <CloudSyncButton />
+            {/* Cloud Sync — desktop only (mobile: hamburger menu) */}
+            <div className="hidden md:block">
+              <CloudSyncButton />
+            </div>
 
-            {/* Auth (Google login — multi-device profile) */}
+            {/* Auth (Google login — multi-device profile)
+                ALWAYS visible — on mobile it's the primary CTA, on desktop
+                it sits inline with the other utility buttons. */}
             <AuthButton />
 
-            {/* Beta Feedback (only shows when authenticated) */}
-            <BetaFeedbackButton />
+            {/* Beta Feedback (only shows when authenticated) — desktop only */}
+            <div className="hidden md:block">
+              <BetaFeedbackButton />
+            </div>
 
-            {/* Data Backup */}
-            <DataBackup />
+            {/* Data Backup — desktop only */}
+            <div className="hidden md:block">
+              <DataBackup />
+            </div>
 
-            {/* Auto-Save */}
-            <AutoSave />
+            {/* Auto-Save — desktop only */}
+            <div className="hidden md:block">
+              <AutoSave />
+            </div>
 
-            {/* Help Button */}
+            {/* Help Button — desktop only (mobile: hamburger menu) */}
             <Button
               variant="ghost"
               size="icon"
-              className="text-muted-foreground hover:text-amber-400"
+              className="text-muted-foreground hover:text-amber-400 hidden md:inline-flex"
               onClick={() => setHelpOpen(true)}
               title={t(locale, "nav.help")}
             >
@@ -270,13 +281,66 @@ export default function Home() {
                   </button>
                 );
               })}
-              <button
-                onClick={() => { setHelpOpen(true); setMobileMenuOpen(false); }}
-                className="flex items-center gap-3 px-4 py-3 rounded-lg text-sm font-medium text-amber-400 hover:bg-secondary/50"
-              >
-                <HelpCircle className="h-4 w-4" />
-                {t(locale, "nav.help")}
-              </button>
+
+              {/* Divider before utility tools */}
+              <div className="my-2 border-t border-border/30" />
+
+              {/* Utility tools — visible on mobile only via this menu.
+                  Each component renders its own button which opens its own
+                  popover/dialog. They are full-width rows here so the user
+                  has a tap target. */}
+              <div className="flex flex-col gap-1 px-2 py-1">
+                <div className="text-[10px] uppercase tracking-wide text-muted-foreground px-2 pb-1">
+                  {locale === "it" ? "Strumenti e account" : "Tools & account"}
+                </div>
+
+                {/* Language switcher row (mobile-only entry that opens the
+                    same popover as the desktop Globe button). */}
+                <Popover>
+                  <PopoverTrigger asChild>
+                    <button className="w-full flex items-center gap-3 px-4 py-3 rounded-lg text-sm font-medium text-muted-foreground hover:text-foreground hover:bg-secondary/50">
+                      <Globe className="h-4 w-4" />
+                      {LOCALE_FLAGS[locale]} {LOCALE_NAMES[locale]}
+                    </button>
+                  </PopoverTrigger>
+                  <PopoverContent className="w-48 p-1" align="start">
+                    {(Object.keys(LOCALE_NAMES) as Locale[]).map((loc) => (
+                      <button
+                        key={loc}
+                        onClick={() => setLocale(loc)}
+                        className={`w-full flex items-center gap-2.5 px-3 py-2 rounded-md text-sm transition-colors ${
+                          locale === loc
+                            ? "bg-primary/15 text-primary font-semibold"
+                            : "text-muted-foreground hover:text-foreground hover:bg-secondary/50"
+                        }`}
+                      >
+                        <span className="text-base">{LOCALE_FLAGS[loc]}</span>
+                        {LOCALE_NAMES[loc]}
+                      </button>
+                    ))}
+                  </PopoverContent>
+                </Popover>
+
+                {/* Gmail, Cloud Sync, Backup, AutoSave — render the same
+                    components as in the desktop header, but full-width here
+                    inside the mobile menu. They keep their own state and
+                    popover behavior. */}
+                <div className="w-full [&>button]:w-full [&>button]:justify-start [&>button]:gap-3 [&>button]:px-4 [&>button]:py-3 [&>button]:rounded-lg [&>button]:text-sm [&>button]:font-medium [&>button]:text-muted-foreground [&>button:hover]:text-foreground [&>button:hover]:bg-secondary/50">
+                  <GmailSettings />
+                  <CloudSyncButton />
+                  <DataBackup />
+                  <AutoSave />
+                </div>
+
+                {/* Help */}
+                <button
+                  onClick={() => { setHelpOpen(true); setMobileMenuOpen(false); }}
+                  className="w-full flex items-center gap-3 px-4 py-3 rounded-lg text-sm font-medium text-amber-400 hover:bg-secondary/50"
+                >
+                  <HelpCircle className="h-4 w-4" />
+                  {t(locale, "nav.help")}
+                </button>
+              </div>
             </div>
           </nav>
         )}
