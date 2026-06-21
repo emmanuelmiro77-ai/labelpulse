@@ -1,7 +1,7 @@
 "use client";
 
 import { useAppStore, getLabelTier, type Label } from "@/lib/store";
-import { t } from "@/lib/i18n";
+import { t, type Locale } from "@/lib/i18n";
 import { useState, useMemo, useCallback } from "react";
 import {
   Zap,
@@ -16,6 +16,10 @@ import {
   Target,
   Copy,
   ExternalLink,
+  Activity,
+  Upload,
+  Loader2,
+  Sparkles,
 } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent } from "@/components/ui/card";
@@ -41,9 +45,10 @@ import {
   type PitchLanguage,
 } from "@/lib/pitch-utils";
 import { useToast } from "@/hooks/use-toast";
+import { SimilarSuggestions } from "@/components/similar-suggestions";
 
 export function PitchGenerator() {
-  const { labels, demos, addDemo, locale, userProfile, setUserProfile, getGenres } = useAppStore();
+  const { labels, demos, addDemo, locale, userProfile, setUserProfile, getGenres, artists, setActiveTab, setSelectedLabelId, setSelectedArtistId } = useAppStore();
   const { toast } = useToast();
   const genres = getGenres();
 
@@ -59,6 +64,19 @@ export function PitchGenerator() {
   const [language, setLanguage] = useState<PitchLanguage>("en");
   const [customNote, setCustomNote] = useState("");
   const [selectedGenre, setSelectedGenre] = useState("");
+
+  // Track audio profile — user can type BPM/key manually OR run an analysis
+  // on the SoundCloud link. Used by SimilarSuggestions to mine the scraped
+  // DB for labels/artists that match the user's track.
+  const [trackBpm, setTrackBpm] = useState("");
+  const [trackKey, setTrackKey] = useState("");
+  const [trackAnalysis, setTrackAnalysis] = useState<{
+    bpm: number;
+    bpmConfidence: number;
+    key: { camelot: string; confidence: number };
+  } | null>(null);
+  const [isAnalyzing, setIsAnalyzing] = useState(false);
+  const [analysisError, setAnalysisError] = useState<string | null>(null);
 
   // Target labels state
   const [selectedLabelIds, setSelectedLabelIds] = useState<Set<string>>(new Set());
@@ -83,6 +101,78 @@ export function PitchGenerator() {
       setUserProfile({ scLink: scLink.trim() });
     }
   };
+
+  // Run audio analysis on the SoundCloud link OR a user-uploaded file.
+  // Result fills trackBpm / trackKey + trackAnalysis (used by SimilarSuggestions).
+  const handleAnalyzeTrack = async (file?: File) => {
+    const audioUrl = scLink.trim();
+    if (!file && !audioUrl) {
+      setAnalysisError(locale === "it"
+        ? "Inserisci un link SoundCloud o carica un file"
+        : "Provide a SoundCloud link or upload a file");
+      return;
+    }
+    setIsAnalyzing(true);
+    setAnalysisError(null);
+    try {
+      const { analyzeAudio, analyzeAudioFile } = await import("@/lib/audio-analysis");
+      const result = file
+        ? await analyzeAudioFile(file, () => {})
+        : await analyzeAudio(audioUrl, () => {});
+      setTrackAnalysis({
+        bpm: result.bpm,
+        bpmConfidence: result.bpmConfidence,
+        key: {
+          camelot: result.key.camelot,
+          confidence: result.key.confidence,
+        },
+      });
+      setTrackBpm(String(result.bpm));
+      if (result.key.confidence > 0) {
+        setTrackKey(result.key.camelot);
+      }
+    } catch (err: any) {
+      console.error("[pitch analyze]", err);
+      setAnalysisError(err?.message || (locale === "it" ? "Errore analisi" : "Analysis failed"));
+    } finally {
+      setIsAnalyzing(false);
+    }
+  };
+
+  // Cross-tab navigation from SimilarSuggestions
+  const handleOpenLabel = useCallback(
+    (label: Label) => {
+      setSelectedLabelId?.(label.id || label.name);
+      setActiveTab("labels");
+    },
+    [setActiveTab, setSelectedLabelId]
+  );
+  const handleOpenArtist = useCallback(
+    (artistId: string) => {
+      setSelectedArtistId?.(artistId);
+      setActiveTab("artists");
+      if (typeof window !== "undefined") {
+        window.scrollTo({ top: 0, behavior: "smooth" });
+      }
+    },
+    [setActiveTab, setSelectedArtistId]
+  );
+  // "Use as target" in SimilarSuggestions → toggle the label in the
+  // selectedLabelIds set so it gets included in the campaign.
+  const handleSelectLabelAsTarget = useCallback(
+    (label: Label) => {
+      setSelectedLabelIds((prev) => {
+        const next = new Set(prev);
+        if (next.has(label.id)) {
+          next.delete(label.id);
+        } else {
+          next.add(label.id);
+        }
+        return next;
+      });
+    },
+    []
+  );
 
   // Get matching labels by genre, grouped by tier
   const matchingLabels = useMemo(() => {
@@ -375,6 +465,93 @@ export function PitchGenerator() {
               placeholder="..."
               rows={2}
               className="bg-secondary/50 border-border/50 resize-none"
+            />
+          </div>
+
+          {/* ===== Track audio profile (BPM / key + audio analysis) =====
+              These power the SimilarSuggestions panel below: by analyzing
+              your track (or typing BPM/key manually), the app can mine the
+              scraped Beatport DB and surface labels / artists that already
+              release tracks like yours. */}
+          <div className="mt-3 grid grid-cols-2 gap-3">
+            <div className="space-y-1.5">
+              <UILabel className="text-xs font-mono uppercase text-muted-foreground flex items-center gap-1">
+                <Activity className="h-3 w-3" /> BPM
+              </UILabel>
+              <Input
+                value={trackBpm}
+                onChange={(e) => setTrackBpm(e.target.value)}
+                placeholder="128"
+                className="bg-secondary/50 border-border/50"
+              />
+            </div>
+            <div className="space-y-1.5">
+              <UILabel className="text-xs font-mono uppercase text-muted-foreground">Key (Camelot)</UILabel>
+              <Input
+                value={trackKey}
+                onChange={(e) => setTrackKey(e.target.value)}
+                placeholder="8A"
+                className="bg-secondary/50 border-border/50"
+              />
+            </div>
+          </div>
+
+          <div className="mt-2 flex items-center gap-1.5">
+            <Button
+              type="button"
+              variant="outline"
+              size="sm"
+              onClick={() => handleAnalyzeTrack()}
+              disabled={isAnalyzing || !scLink.trim()}
+              className="h-7 text-xs"
+            >
+              {isAnalyzing ? (
+                <><Loader2 className="h-3 w-3 mr-1 animate-spin" /> {locale === "it" ? "Analisi..." : "Analyzing..."}</>
+              ) : (
+                <><Activity className="h-3 w-3 mr-1" /> {locale === "it" ? "Analizza link" : "Analyze link"}</>
+              )}
+            </Button>
+            <label className="cursor-pointer">
+              <input
+                type="file"
+                accept="audio/*,.mp3,.wav,.m4a,.ogg,.flac"
+                className="hidden"
+                onChange={(e) => {
+                  const f = e.target.files?.[0];
+                  if (f) handleAnalyzeTrack(f);
+                  e.target.value = "";
+                }}
+              />
+              <span className="inline-flex items-center gap-1 px-2.5 h-7 text-xs bg-secondary hover:bg-secondary/70 rounded-md border border-border/50 transition-colors">
+                <Upload className="h-3 w-3" /> {locale === "it" ? "Carica file" : "Upload file"}
+              </span>
+            </label>
+            {analysisError && (
+              <span className="text-[10px] text-destructive">{analysisError}</span>
+            )}
+            {trackAnalysis && (
+              <Badge variant="outline" className="text-[10px] bg-primary/10 border-primary/30 text-primary">
+                <Sparkles className="h-2.5 w-2.5 mr-0.5" /> {trackAnalysis.bpm} BPM · {trackAnalysis.key.camelot}
+              </Badge>
+            )}
+          </div>
+
+          {/* Similar labels & artists — appears as soon as BPM or key is set.
+              Click a label name to open its detail page in the Labels tab,
+              or click "use as target" (chevron) to add it to the campaign
+              selection above. */}
+          <div className="mt-3">
+            <SimilarSuggestions
+              analysis={trackAnalysis}
+              genre={selectedGenre}
+              manualBpm={trackBpm}
+              manualKey={trackKey}
+              artists={artists}
+              labels={labels}
+              locale={locale}
+              onOpenLabel={handleOpenLabel}
+              onOpenArtist={handleOpenArtist}
+              onSelectLabel={handleSelectLabelAsTarget}
             />
           </div>
         </CardContent>

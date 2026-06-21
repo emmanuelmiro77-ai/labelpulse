@@ -1,8 +1,8 @@
 "use client";
 
-import { useAppStore, type Demo, type DemoStatus } from "@/lib/store";
+import { useAppStore, type Demo, type DemoStatus, type Label } from "@/lib/store";
 import { t, type Locale } from "@/lib/i18n";
-import { useState, useMemo } from "react";
+import { useState, useMemo, useCallback } from "react";
 import {
   Plus,
   Pencil,
@@ -51,6 +51,7 @@ import {
 } from "@/components/ui/select";
 import { Label as UILabel } from "@/components/ui/label";
 import { Textarea } from "@/components/ui/textarea";
+import { SimilarSuggestions } from "@/components/similar-suggestions";
 
 const STATUS_KEYS: DemoStatus[] = [
   "ready",
@@ -95,7 +96,7 @@ const STATUS_TKEYS: Record<DemoStatus, "demos.ready" | "demos.sent" | "demos.rev
 };
 
 export function DemoTracker() {
-  const { labels, demos, addDemo, updateDemo, deleteDemo, advanceDemoStatus, locale: _locale, getGenres, userProfile } =
+  const { labels, demos, addDemo, updateDemo, deleteDemo, advanceDemoStatus, locale: _locale, getGenres, userProfile, artists, setActiveTab, setSelectedLabelId, setSelectedArtistId } =
     useAppStore();
   const locale = _locale as Locale;
   const genres = getGenres();
@@ -322,6 +323,41 @@ export function DemoTracker() {
   };
 
   const canAdvance = (status: DemoStatus) => STATUS_FLOW.indexOf(status) < STATUS_FLOW.length - 1;
+
+  // Cross-tab navigation from SimilarSuggestions panel inside the add/edit
+  // dialog. Clicking a label name closes this dialog and opens the label
+  // detail dialog in the Labels tab; clicking an artist name closes this
+  // dialog and opens the artist detail page in the Artists tab. Promoting
+  // a suggested label to the demo's target is in-dialog (no navigation).
+  const handleOpenLabelFromSuggestion = useCallback(
+    (label: Label) => {
+      setShowAddDialog(false);
+      setSelectedLabelId?.(label.id || label.name);
+      setActiveTab("labels");
+    },
+    [setActiveTab, setSelectedLabelId]
+  );
+  const handleOpenArtistFromSuggestion = useCallback(
+    (artistId: string) => {
+      setShowAddDialog(false);
+      setSelectedArtistId?.(artistId);
+      setActiveTab("artists");
+      if (typeof window !== "undefined") {
+        window.scrollTo({ top: 0, behavior: "smooth" });
+      }
+    },
+    [setActiveTab, setSelectedArtistId]
+  );
+  const handleSelectLabelAsTarget = useCallback(
+    (label: Label) => {
+      setFormLabelId(label.id);
+      // Auto-fill genre if the demo doesn't have one yet and the label has a best genre
+      if (!formGenre.trim() && label.genres?.length) {
+        setFormGenre(label.genres[0]);
+      }
+    },
+    [formGenre]
+  );
 
   // If viewing label history, show that instead
   if (labelHistoryId) {
@@ -638,7 +674,7 @@ export function DemoTracker() {
 
       {/* Add/Edit Dialog */}
       <Dialog open={showAddDialog} onOpenChange={setShowAddDialog}>
-        <DialogContent className="sm:max-w-md bg-card border-border/50">
+        <DialogContent className="sm:max-w-2xl bg-card border-border/50 max-h-[90vh] overflow-y-auto">
           <DialogHeader>
             <DialogTitle>{editingDemo ? t(locale, "demos.editDemo") : t(locale, "demos.addDemo")}</DialogTitle>
           </DialogHeader>
@@ -849,6 +885,23 @@ export function DemoTracker() {
                 💡 <strong>Suggerimento</strong>: se l'analisi del link SoundCloud fallisce, usa <span className="text-primary">"Carica file"</span> per analizzare direttamente il tuo MP3/WAV — è il metodo più affidabile.
               </p>
             </div>
+
+            {/* Similar labels & artists suggestions — auto-matched from the
+                scraped Beatport DB based on the track's BPM, key (Camelot),
+                and genre. Helps the user answer "who do I send this to?"
+                without having to scroll through 1192 labels manually. */}
+            <SimilarSuggestions
+              analysis={formAnalysis}
+              genre={formGenre}
+              manualBpm={formBpm}
+              manualKey={formKey}
+              artists={artists}
+              labels={labels}
+              locale={locale}
+              onOpenLabel={handleOpenLabelFromSuggestion}
+              onOpenArtist={handleOpenArtistFromSuggestion}
+              onSelectLabel={handleSelectLabelAsTarget}
+            />
 
             <div className="grid grid-cols-2 gap-3">
               <div className="space-y-1.5">
