@@ -597,6 +597,11 @@ export function RankingsWizard() {
           return;
         }
 
+        // CRITICAL: pass artists[] and tracks[] through at the TOP LEVEL of
+        // the payload (not inside `data`), because importData() in store.ts
+        // reads them from `parsed.artists` / `parsed.tracks` directly.
+        // Without this, scraper v2 data (3,400+ artists, 3,000 tracks) is
+        // silently dropped on import and the Artisti tab stays empty.
         const importPayload = {
           app: "labelpulse",
           version: 1,
@@ -604,6 +609,9 @@ export function RankingsWizard() {
             labels: parsed.labels || [],
             demos: [],
           },
+          // Scraper v2 fields (ignored by v1 import path — backward compatible)
+          artists: Array.isArray(parsed.artists) ? parsed.artists : [],
+          tracks: Array.isArray(parsed.tracks) ? parsed.tracks : [],
           _meta: parsed._meta,
         };
 
