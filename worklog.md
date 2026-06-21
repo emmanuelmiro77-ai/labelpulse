@@ -222,3 +222,56 @@ Stage Summary:
 - Dialog dettaglio label ora contiene: dati Beatport (read-only) + Top 10 tracce (audio) + Top 10 artisti (clickable) + form editabile con Salva/Annulla
 - Navigazione cross-page bidirezionale completa: label↔artista, artista↔label
 - Tutto funziona senza reload: navigation via store state (selectedLabelId, selectedArtistId, setActiveTab)
+
+---
+Task ID: similar-suggestions
+Agent: Main Agent
+Task: Aggiungere "match similari" in Demo/Pitch: da analisi traccia (BPM, key, genre) suggerire label e artisti simili dal DB scraping
+
+Work Log:
+- Analizzato struttura dati: artists[] ha tracksByGenre con bpm, keyCamelot, label, position, points per ogni traccia
+- Analizzato demo-tracker.tsx: aveva già audio analysis (essentia.js + fallback Web Audio, Cyanite BYOK)
+- Analizzato pitch-generator.tsx: aveva già track setup + target labels per genre con tier
+- Creato src/lib/demo-matcher.ts (pure function):
+  - bpmScore (gestisce halve-doubling: 130 BPM matcha anche 65 e 260)
+  - keyScore (Camelot: stesso codice = 1.0, compatibile ±1/relative = 0.7)
+  - genreScore (match loose con includes per "Melodic House & Techno" vs "Melodic House")
+  - trackScore = bpm*0.45 + key*0.35 + genre*0.20 (almeno uno tra bpm/key > 0)
+  - Aggregazione per label: rawScore = Σ (trackScore × track.points), matchCount, bestGenre
+  - Aggregazione per artist: rawScore = Σ trackScore, matchCount, bestPosition
+  - Normalizzazione 0-100 per display
+  - Sort: rawScore desc, poi rank genre asc (per label), bestPosition asc (per artist)
+- Creato src/components/similar-suggestions.tsx:
+  - Pannello UI con header "Suggerimenti simili" + counter "basato su Nk brani"
+  - Badge con profilo traccia (BPM, Camelot, genre)
+  - Sezione "Label consigliate" (max 8): rank #, nome clickable, badge tier (T/M), score bar 0-100%, matchCount + bestGenre + rank genre
+  - Sezione "Artisti simili (peer)" (max 8): rank #, avatar, nome clickable, score bar cyan, matchCount + bestPosition
+  - Empty state "Carica o analizza la traccia per vedere..." se mancano BPM e key
+  - Empty state "Nessun match trovato nei N brani" se 0 risultati
+- Integrato in demo-tracker.tsx (dialog add/edit):
+  - Aggiunti handlers handleOpenLabelFromSuggestion (chiude dialog + va a Labels tab + setSelectedLabelId)
+  - handleOpenArtistFromSuggestion (chiude dialog + va a Artists tab + setSelectedArtistId)
+  - handleSelectLabelAsTarget (imposta formLabelId + auto-fill genre)
+  - Dialog ampliato da sm:max-w-md a sm:max-w-2xl con scroll verticale
+  - Pannello SimilarSuggestions posizionato dopo Audio Analysis
+- Integrato in pitch-generator.tsx (Track Setup card):
+  - Aggiunti state trackBpm, trackKey, trackAnalysis, isAnalyzing, analysisError
+  - handleAnalyzeTrack: usa analyzeAudio o analyzeAudioFile (stessa lib del demo-tracker)
+  - handleSelectLabelAsTarget: toggle del label nel selectedLabelIds Set (così va nella campagna)
+  - UI: 2 inputs BPM/Key + bottone "Analizza link" + "Carica file" + pannello SimilarSuggestions
+- Build: ✓ successful (6.3s, 0 errori nuovi)
+- Commit a568e0d pushato su origin/main
+
+Stage Summary:
+- L'utente carica o inserisce BPM/key della sua traccia (anche manuale, senza analysis)
+- Il matcher analizza 3000+ artisti × tutti i loro tracks (~Nk brani) in tempo reale (useMemo)
+- Restituisce top 8 label e top 8 artisti ordinati per similarità pesata
+- Ogni label è clickable → apre dialog dettaglio label (con top tracks + top artisti)
+- Ogni artista è clickable → apre pagina artista
+- "Use as target" in Demo = imposta come label destinazione; in Pitch = aggiunge alla campagna
+- Tutto integrato senza nuovi passaggi manuali: l'analisi audio già esistente alimenta il matcher
+
+Next:
+- L'utente dovrebbe testare: caricare una traccia in Demo → vedere se i suggerimenti hanno senso
+- Possibile tuning: pesi BPM/key/genre, soglia minScore, maxResults
+- Possibile future: integrare anche energy/danceability quando Cyanite è attivo
