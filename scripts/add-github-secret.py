@@ -23,7 +23,7 @@ from nacl import encoding, public
 OWNER = "emmanuelmiro77-ai"
 REPO = "labelpulse"
 SECRET_NAME = "VERCEL_DEPLOY_HOOK_URL"
-SECRET_VALUE = "https://api.vercel.com/v1/integrations/deploy/prj_0VyMLP6kApHuFWvQDF7jC9DhVFzz/43hhmu7U2l"
+SECRET_VALUE = "https://api.vercel.com/v1/integrations/deploy/prj_0VyMLP6kApHuFWvQDF7jC9DhVFzz/17F4dV4SK1"
 
 # Extract token from git remote URL
 import subprocess
