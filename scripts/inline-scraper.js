@@ -15,7 +15,7 @@ const scraperSource = fs.readFileSync(scraperPath, 'utf8');
 // We need to replace the ENTIRE content between the backticks (inclusive).
 
 const startMarker = 'const BEATPORT_SCRAPER_SCRIPT = `';
-const endMarker = '`;\n\nfunction getDaysSince';
+const endMarker = '`;\n\n\nfunction getDaysSince';
 
 const startIdx = fileContent.indexOf(startMarker);
 if (startIdx === -1) {
