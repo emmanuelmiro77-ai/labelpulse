@@ -1,0 +1,520 @@
+{
+  "meta": {
+    "source": "beatport",
+    "version": 2,
+    "scrapedAt": "2026-06-21T12:37:49.786Z",
+    "totalLabels": 1286,
+    "totalArtists": 3403,
+    "totalTracks": 3000,
+    "totalGenres": 34,
+    "successGenres": 30,
+    "failedGenres": 4
+  },
+  "topArtists": [
+    {
+      "name": "Skrillex",
+      "totalPoints": 1710,
+      "genresCount": 7,
+      "labelsCount": 11,
+      "bestPosition": 1,
+      "trending": true,
+      "labels": [
+        "UNIVERSAL-ISLAND RECORDS LTD.",
+        "MAJOR RECORDINGS",
+        "OWSLA/ATLANTIC",
+        "ATLANTIC RECORDS UK",
+        "BLACK BOOK RECORDS",
+        "BIG BEAT RECORDS",
+        "OWSLA/MAD DECENT",
+        "OWSLA",
+        "EPIC/GRAND HUSTLE/CACTUS JACK",
+        "AFTERMATH",
+        "PAN"
+      ]
+    },
+    {
+      "name": "Block & Crown",
+      "totalPoints": 1239,
+      "genresCount": 2,
+      "labelsCount": 9,
+      "bestPosition": 2,
+      "trending": true,
+      "labels": [
+        "DIAMM",
+        "SUPERCIRCUS",
+        "DARK MONDAYS",
+        "REBOUNCE RECORDS",
+        "CROISETTE RECORDS",
+        "BEATS FOR SPORTS",
+        "SAVE THE NIGHTLIFE",
+        "BOOTH BUSTERS",
+        "MASTERMIX RECORDS"
+      ]
+    },
+    {
+      "name": "Hugel",
+      "totalPoints": 1084,
+      "genresCount": 4,
+      "labelsCount": 7,
+      "bestPosition": 1,
+      "trending": true,
+      "labels": [
+        "MOBLACK RECORDS",
+        "MAKE THE GIRLS DANCE RECORDS",
+        "CR2 RECORDS",
+        "VIRGIN",
+        "UNION RECORDS (IT)",
+        "DEFECTED",
+        "INSOMNIAC RECORDS"
+      ]
+    },
+    {
+      "name": "Prospa",
+      "totalPoints": 977,
+      "genresCount": 3,
+      "labelsCount": 1,
+      "bestPosition": 2,
+      "trending": true,
+      "labels": [
+        "CIRCOLOCO RECORDS"
+      ]
+    },
+    {
+      "name": "MC GW",
+      "totalPoints": 944,
+      "genresCount": 1,
+      "labelsCount": 10,
+      "bestPosition": 5,
+      "trending": true,
+      "labels": [
+        "TDAH RECORDS",
+        "BULLS TALENT",
+        "JET MUSIC GROUP",
+        "ONES AND ZEROS",
+        "TRT HITS",
+        "MEGABAILE PRODUCTIONS",
+        "MU540 PRODUÇÕES / EMPIRE",
+        "SHAKE MUSIC",
+        "THE ANTHILL RECORDS",
+        "SAM BUSINESS"
+      ]
+    },
+    {
+      "name": "ANOTR",
+      "totalPoints": 875,
+      "genresCount": 6,
+      "labelsCount": 1,
+      "bestPosition": 3,
+      "trending": true,
+      "labels": [
+        "NO ART"
+      ]
+    },
+    {
+      "name": "David Guetta",
+      "totalPoints": 867,
+      "genresCount": 4,
+      "labelsCount": 8,
+      "bestPosition": 2,
+      "trending": true,
+      "labels": [
+        "SPINNIN' RECORDS",
+        "MINISTRY OF SOUND RECORDINGS",
+        "HUMAN RE SOURCES",
+        "SOUTH COAST MUSIC GROUP/INTERSCOPE RECORDS",
+        "BEBE REXHA MUSIC LLC / EMPIRE",
+        "F*** ME I'M FAMOUS",
+        "HELL BEACH (BACK CATALOG)",
+        "RHINO"
+      ]
+    },
+    {
+      "name": "Silva Bumpa",
+      "totalPoints": 790,
+      "genresCount": 2,
+      "labelsCount": 3,
+      "bestPosition": 1,
+      "trending": true,
+      "labels": [
+        "ROOM TWO RECORDINGS",
+        "ATW RECORDS",
+        "AMUSE"
+      ]
+    },
+    {
+      "name": "Subtronics",
+      "totalPoints": 741,
+      "genresCount": 3,
+      "labelsCount": 5,
+      "bestPosition": 9,
+      "trending": true,
+      "labels": [
+        "ATLANTIC RECORDS",
+        "EXPERTS ONLY",
+        "SUBSIDIA",
+        "CYCLOPS RECORDINGS",
+        "DEADBEATS"
+      ]
+    },
+    {
+      "name": "Yo Speed",
+      "totalPoints": 691,
+      "genresCount": 1,
+      "labelsCount": 1,
+      "bestPosition": 4,
+      "trending": true,
+      "labels": [
+        "83"
+      ]
+    },
+    {
+      "name": "Kolter",
+      "totalPoints": 685,
+      "genresCount": 3,
+      "labelsCount": 3,
+      "bestPosition": 1,
+      "trending": true,
+      "labels": [
+        "KOLTRAX",
+        "KOLTERCAMP",
+        "HEAVY HOUSE SOCIETY"
+      ]
+    },
+    {
+      "name": "Disguised",
+      "totalPoints": 615,
+      "genresCount": 1,
+      "labelsCount": 2,
+      "bestPosition": 1,
+      "trending": true,
+      "labels": [
+        "MUTUAL RYTM",
+        "INHERIT"
+      ]
+    },
+    {
+      "name": "Crazibiza",
+      "totalPoints": 595,
+      "genresCount": 1,
+      "labelsCount": 1,
+      "bestPosition": 1,
+      "trending": true,
+      "labels": [
+        "PORNOSTAR RECORDS"
+      ]
+    },
+    {
+      "name": "John Summit",
+      "totalPoints": 592,
+      "genresCount": 6,
+      "labelsCount": 2,
+      "bestPosition": 9,
+      "trending": true,
+      "labels": [
+        "EXPERTS ONLY",
+        "MAU5TRAP RECORDINGS LIMITED / ARKADE / EPICWIN LTD."
+      ]
+    },
+    {
+      "name": "Isoxo",
+      "totalPoints": 577,
+      "genresCount": 3,
+      "labelsCount": 4,
+      "bestPosition": 1,
+      "trending": true,
+      "labels": [
+        "CREATE MUSIC GROUP",
+        "OWSLA/ATLANTIC",
+        "88RISING MUSIC",
+        "88RISING"
+      ]
+    },
+    {
+      "name": "Brunello",
+      "totalPoints": 536,
+      "genresCount": 5,
+      "labelsCount": 2,
+      "bestPosition": 2,
+      "trending": true,
+      "labels": [
+        "MELLOW CIRCUS RECORDS",
+        "NERVOUS RECORDS"
+      ]
+    },
+    {
+      "name": "Nari",
+      "totalPoints": 510,
+      "genresCount": 1,
+      "labelsCount": 2,
+      "bestPosition": 9,
+      "trending": true,
+      "labels": [
+        "ACETONE",
+        "TIKTONE"
+      ]
+    },
+    {
+      "name": "Keinemusik",
+      "totalPoints": 483,
+      "genresCount": 2,
+      "labelsCount": 1,
+      "bestPosition": 12,
+      "trending": true,
+      "labels": [
+        "KEINEMUSIK"
+      ]
+    },
+    {
+      "name": "Sidney Charles",
+      "totalPoints": 480,
+      "genresCount": 4,
+      "labelsCount": 2,
+      "bestPosition": 4,
+      "trending": true,
+      "labels": [
+        "KOLTRAX",
+        "HEAVY HOUSE SOCIETY"
+      ]
+    },
+    {
+      "name": "DE SOFFER",
+      "totalPoints": 477,
+      "genresCount": 1,
+      "labelsCount": 5,
+      "bestPosition": 2,
+      "trending": true,
+      "labels": [
+        "GLASGOW UNDERGROUND",
+        "SOAVE",
+        "PARAISO",
+        "PARAÍSO DOUX",
+        "WTF"
+      ]
+    }
+  ],
+  "topLabels": [
+    {
+      "name": "CREATE MUSIC GROUP",
+      "genres": [
+        "Ambient / Experimental",
+        "Bass House",
+        "Drum & Bass",
+        "Dubstep",
+        "Hard Dance / Hardcore / Neo Rave",
+        "Jackin House",
+        "Trap / Future Bass"
+      ],
+      "totalPoints": 1573
+    },
+    {
+      "name": "ARMADA MUSIC",
+      "genres": [
+        "Amapiano",
+        "Bass House",
+        "Dance / Pop",
+        "Drum & Bass",
+        "Hard Dance / Hardcore / Neo Rave",
+        "Mainstage",
+        "Melodic House & Techno",
+        "Minimal / Deep Tech",
+        "Progressive House",
+        "Psy-Trance",
+        "Trance Main Floor",
+        "Uk Garage / Bassline"
+      ],
+      "totalPoints": 1491
+    },
+    {
+      "name": "MUTUAL RYTM",
+      "genres": [
+        "Techno Raw / Deep / Hypnotic"
+      ],
+      "totalPoints": 1338
+    },
+    {
+      "name": "83",
+      "genres": [
+        "Breaks / Breakbeat / Uk Bass"
+      ],
+      "totalPoints": 1249
+    },
+    {
+      "name": "OWSLA/ATLANTIC",
+      "genres": [
+        "Bass House",
+        "Brazilian Funk",
+        "Breaks / Breakbeat / Uk Bass",
+        "Dubstep",
+        "Jackin House",
+        "Trap / Future Bass"
+      ],
+      "totalPoints": 1245
+    },
+    {
+      "name": "PORNOSTAR RECORDS",
+      "genres": [
+        "140 / Deep Dubstep / Grime",
+        "Nu Disco / Disco"
+      ],
+      "totalPoints": 1221
+    },
+    {
+      "name": "DRUMCODE",
+      "genres": [
+        "Bass House",
+        "Jackin House",
+        "Melodic House & Techno",
+        "Techno Peak Time / Driving"
+      ],
+      "totalPoints": 1139
+    },
+    {
+      "name": "CIRCOLOCO RECORDS",
+      "genres": [
+        "Dance / Pop",
+        "House",
+        "Minimal / Deep Tech",
+        "Nu Disco / Disco",
+        "Tech House"
+      ],
+      "totalPoints": 1118
+    },
+    {
+      "name": "NEVER SAY DIE RECORDS",
+      "genres": [
+        "Dubstep"
+      ],
+      "totalPoints": 1113
+    },
+    {
+      "name": "DIYNAMIC",
+      "genres": [
+        "Bass House",
+        "Indie Dance",
+        "Jackin House",
+        "Melodic House & Techno",
+        "Tech House"
+      ],
+      "totalPoints": 1037
+    },
+    {
+      "name": "SOLID GROOVES RECORDS",
+      "genres": [
+        "Deep House",
+        "House",
+        "Minimal / Deep Tech",
+        "Tech House"
+      ],
+      "totalPoints": 1019
+    },
+    {
+      "name": "MAKE THE GIRLS DANCE RECORDS",
+      "genres": [
+        "Afro House",
+        "Dance / Pop",
+        "House",
+        "Tech House"
+      ],
+      "totalPoints": 1007
+    },
+    {
+      "name": "XL RECORDINGS",
+      "genres": [
+        "Bass House",
+        "Breaks / Breakbeat / Uk Bass",
+        "Electronica",
+        "Uk Garage / Bassline"
+      ],
+      "totalPoints": 972
+    },
+    {
+      "name": "NO ART",
+      "genres": [
+        "Afro House",
+        "Dance / Pop",
+        "Deep House",
+        "Funky House",
+        "House",
+        "Nu Disco / Disco",
+        "Uk Garage / Bassline"
+      ],
+      "totalPoints": 950
+    },
+    {
+      "name": "DEFECTED",
+      "genres": [
+        "Afro House",
+        "Deep House",
+        "House",
+        "Indie Dance",
+        "Melodic House & Techno",
+        "Nu Disco / Disco",
+        "Tech House"
+      ],
+      "totalPoints": 945
+    },
+    {
+      "name": "EXPERTS ONLY",
+      "genres": [
+        "Bass House",
+        "Dance / Pop",
+        "Drum & Bass",
+        "Dubstep",
+        "Indie Dance",
+        "Jackin House",
+        "Melodic House & Techno",
+        "Tech House"
+      ],
+      "totalPoints": 932
+    },
+    {
+      "name": "SPINNIN' RECORDS",
+      "genres": [
+        "Bass House",
+        "Dance / Pop",
+        "Jackin House",
+        "Nu Disco / Disco"
+      ],
+      "totalPoints": 917
+    },
+    {
+      "name": "CECILLE",
+      "genres": [
+        "Deep House",
+        "Funky House",
+        "House"
+      ],
+      "totalPoints": 902
+    },
+    {
+      "name": "TSZR",
+      "genres": [
+        "Deep House",
+        "Hard Dance / Hardcore / Neo Rave",
+        "House",
+        "Melodic House & Techno",
+        "Minimal / Deep Tech",
+        "Nu Disco / Disco"
+      ],
+      "totalPoints": 837
+    },
+    {
+      "name": "CATCH & RELEASE",
+      "genres": [
+        "Bass House",
+        "Dance / Pop",
+        "Jackin House",
+        "Tech House"
+      ],
+      "totalPoints": 835
+    }
+  ],
+  "crossGenreTracksCount": 0,
+  "stats": {
+    "avgTracksPerArtist": 1.52,
+    "remixersOnly": 125,
+    "trendingArtists": 1096,
+    "labelsWithSlug": 1286,
+    "labelsWithImage": 1286
+  }
+}

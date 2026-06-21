@@ -1,7 +1,7 @@
 // Analyze the JSON output from Beatport scraper v2
 const fs = require('fs');
 
-const data = JSON.parse(fs.readFileSync('/home/z/my-project/upload/labelpulse_beatport_2026-06-21.json', 'utf8'));
+const data = JSON.parse(fs.readFileSync('/home/z/my-project/upload/labelpulse_beatport_2026-06-21 (1).json', 'utf8'));
 
 console.log('=== METADATA ===');
 console.log(JSON.stringify(data._meta, null, 2));
