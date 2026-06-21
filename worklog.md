@@ -194,3 +194,31 @@ Stage Summary:
 - After Vercel rebuild (~2-3 min) the user should hard-refresh and re-import the 9.2MB scrape JSON
 - Artisti tab will then show 3,403 artists (Adam Beyer, Skrillex, John Summit, etc.)
 - Classifiche spotlight showing only 5 risers instead of 10 is expected behavior when re-importing the same file (movement = prev - current = 0 for unchanged ranks). Not a bug.
+
+---
+Task ID: label-detail-page
+Agent: Main Agent
+Task: Click sul nome label deve aprire pagina dedicata (non Beatport); aggiungere top artisti cliccabili
+
+Work Log:
+- Analizzato label-finder.tsx: detail dialog esistente aveva già top 10 tracks + form editabile
+- Analizzato rankings-page.tsx: ClickableLabelName aveva href={urls.beatport} → andava su Beatport
+- Modificato ClickableLabelName in rankings-page.tsx: ora è un <button> che chiama onOpen(label)
+- Aggiunto handleOpenLabel in RankingsPage: setSelectedLabelId + setActiveTab('labels')
+- Aggiunto LabelDiscoveryIcons helper in label-finder.tsx (icone Beatport/Beatstats/SoundCloud)
+- Inserito LabelDiscoveryIcons nelle card label (dopo i badge, accanto al nome)
+- Aggiunto useMemo labelTopArtists: deriva top 10 artisti della label da artists[] (match per nome case-insensitive)
+  - Punteggio = somma points di tutte le tracce dell'artista su quella label
+  - Sort: punti desc, bestPosition asc, nome asc
+- Aggiunto handleOpenArtist: chiude dialog + setSelectedArtistId + setActiveTab('artists')
+- Aggiunta UI "Top artisti della label" nel dialog dettaglio (con avatar, nome, n.tracce, best position, punti)
+  - Ogni riga è un bottone clickable che naviga alla pagina artista
+- Build Next.js: ✓ successful (6.3s, 0 errori nei file modificati)
+- Commit 4996196 e push su origin/main
+
+Stage Summary:
+- Click sul nome label (sia in Classifiche che in Label) → apre dialog dettaglio (NON più Beatport)
+- Le icone Beatport/Beatstats/SoundCloud restano separate e funzionano come prima
+- Dialog dettaglio label ora contiene: dati Beatport (read-only) + Top 10 tracce (audio) + Top 10 artisti (clickable) + form editabile con Salva/Annulla
+- Navigazione cross-page bidirezionale completa: label↔artista, artista↔label
+- Tutto funziona senza reload: navigation via store state (selectedLabelId, selectedArtistId, setActiveTab)
