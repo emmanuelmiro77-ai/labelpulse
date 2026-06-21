@@ -138,33 +138,40 @@ function LabelDiscoveryIcons({
 }
 
 /**
- * Clickable label name — opens Beatport (direct if user provided a link,
- * search otherwise) in a new tab. Falls back to plain text if no name.
+ * Clickable label name — opens the LABEL DETAIL PAGE (the dialog inside
+ * LabelFinder) instead of going to Beatport. The Beatport / Beatstats
+ * icons next to the name (LabelDiscoveryIcons) remain the only way to
+ * jump to those external sites — clicking the NAME itself navigates
+ * internally so the user can edit data, listen to top tracks, see the
+ * label's top artists, etc.
+ *
+ * The navigation works by setting `selectedLabelId` in the global store
+ * (matches by id OR by name as fallback) and switching to the "labels"
+ * tab. LabelFinder has a useEffect that watches selectedLabelId and
+ * auto-opens its detail dialog.
  */
 function ClickableLabelName({
   label,
   className = "",
+  onOpen,
 }: {
   label: Label;
   className?: string;
+  onOpen?: (label: Label) => void;
 }) {
   if (!label?.name) return null;
-  const urls = getLabelDiscoveryUrls(label);
   return (
-    <a
-      href={urls.beatport}
-      target="_blank"
-      rel="noopener noreferrer"
-      onClick={(e) => e.stopPropagation()}
-      title={
-        urls.beatportIsDirect
-          ? `Apri ${label.name} su Beatport (link diretto)`
-          : `Cerca ${label.name} su Beatport`
-      }
-      className={`hover:text-primary hover:underline cursor-pointer transition-colors ${className}`}
+    <button
+      type="button"
+      onClick={(e) => {
+        e.stopPropagation();
+        onOpen?.(label);
+      }}
+      title={`Apri la pagina dedicata di ${label.name} (dati, top tracce, artisti)`}
+      className={`hover:text-primary hover:underline cursor-pointer transition-colors text-left bg-transparent border-0 p-0 ${className}`}
     >
       {label.name}
-    </a>
+    </button>
   );
 }
 
@@ -378,7 +385,7 @@ function buildRankedList(
 // ==================== COMPONENT ====================
 
 export function RankingsPage() {
-  const { labels, locale, rankingsUpdatedAt, rankingSnapshots } = useAppStore();
+  const { labels, locale, rankingsUpdatedAt, rankingSnapshots, setActiveTab, setSelectedLabelId } = useAppStore();
   const snapshots = rankingSnapshots || []; // defensive: might be undefined for existing users
   const [selectedGenre, setSelectedGenre] = useState<string | null>(null);
   const [sortMode, setSortMode] = useState<SortMode>("rank");
@@ -386,6 +393,17 @@ export function RankingsPage() {
   const [timePeriod, setTimePeriod] = useState<RankingTimePeriod>("current");
   const [showGenreDropdown, setShowGenreDropdown] = useState(false);
   const [spotlightShowAll, setSpotlightShowAll] = useState(false); // when true + genre selected, show global risers instead of genre-filtered
+
+  // Click on a label name → navigate to the LabelFinder tab and auto-open
+  // the detail dialog for that label. Matches by id when possible, falls
+  // back to name (LabelFinder's useEffect handles both).
+  const handleOpenLabel = useCallback(
+    (label: Label) => {
+      setSelectedLabelId?.(label.id || label.name);
+      setActiveTab("labels");
+    },
+    [setActiveTab, setSelectedLabelId]
+  );
 
   // Get all genres from labels, sorted alphabetically
   const allGenres = useMemo(() => {
@@ -669,6 +687,7 @@ export function RankingsPage() {
                       <ClickableLabelName
                         label={item.label}
                         className="text-xs font-medium text-foreground truncate"
+                        onOpen={handleOpenLabel}
                       />
                     </div>
                     <div className="flex items-center gap-1 mt-0.5">
@@ -881,6 +900,7 @@ export function RankingsPage() {
                       <ClickableLabelName
                         label={item.label}
                         className="font-medium text-foreground truncate"
+                        onOpen={handleOpenLabel}
                       />
                       {timePeriod === "current" && (
                         <>

@@ -38,6 +38,8 @@ import {
   Play,
   Pause,
   Headphones,
+  BarChart3,
+  Users,
 } from "lucide-react";
 import { useToast } from "@/hooks/use-toast";
 import { Input } from "@/components/ui/input";
@@ -234,8 +236,80 @@ function getLinkDisplay(value: string): string {
     .replace(/\/$/, "");
 }
 
+/**
+ * Compact row of clickable discovery icons for a label.
+ * Renders tiny icon-buttons that open Beatport / Beatstats / SoundCloud /
+ * Website in a new tab. Mirrors the same component in rankings-page.tsx
+ * so the UX is identical across the two pages.
+ *
+ * Each click handler stops propagation so the parent card's onClick
+ * (which opens the detail dialog) doesn't also fire.
+ */
+function LabelDiscoveryIcons({
+  label,
+  size = 12,
+}: {
+  label: Label;
+  size?: number;
+}) {
+  if (!label?.name) return null;
+  const urls = getLabelDiscoveryUrls(label);
+  const btnClass =
+    "inline-flex items-center justify-center rounded p-0.5 transition-colors hover:bg-accent/40 shrink-0";
+
+  return (
+    <div className="inline-flex items-center gap-0.5 ml-1">
+      {/* Beatport — direct (green) if user-saved, search (muted) otherwise */}
+      <a
+        href={urls.beatport}
+        target="_blank"
+        rel="noopener noreferrer"
+        title={
+          urls.beatportIsDirect
+            ? `Apri ${label.name} su Beatport (link diretto)`
+            : `Cerca ${label.name} su Beatport`
+        }
+        className={`${btnClass} ${
+          urls.beatportIsDirect
+            ? "text-emerald-400 hover:text-emerald-300"
+            : "text-muted-foreground hover:text-emerald-400"
+        }`}
+        onClick={(e) => e.stopPropagation()}
+      >
+        <ExternalLink style={{ width: size, height: size }} />
+      </a>
+
+      {/* Beatstats — always search */}
+      <a
+        href={urls.beatstats}
+        target="_blank"
+        rel="noopener noreferrer"
+        title={`Cerca ${label.name} su Beatstats`}
+        className={`${btnClass} text-muted-foreground hover:text-amber-400`}
+        onClick={(e) => e.stopPropagation()}
+      >
+        <BarChart3 style={{ width: size, height: size }} />
+      </a>
+
+      {/* SoundCloud — only if direct link exists */}
+      {label.soundcloudLink && (
+        <a
+          href={urls.soundcloud}
+          target="_blank"
+          rel="noopener noreferrer"
+          title={`Apri ${label.name} su SoundCloud`}
+          className={`${btnClass} text-muted-foreground hover:text-orange-400`}
+          onClick={(e) => e.stopPropagation()}
+        >
+          <Music2 style={{ width: size, height: size }} />
+        </a>
+      )}
+    </div>
+  );
+}
+
 export function LabelFinder() {
-  const { labels, demos, addLabel, updateLabel, deleteLabel, addDemo, locale, getGenres, setActiveTab, userProfile, setUserProfile, gmailAuth, setGmailAuth, selectedLabelId, setSelectedLabelId, artists } =
+  const { labels, demos, addLabel, updateLabel, deleteLabel, addDemo, locale, getGenres, setActiveTab, userProfile, setUserProfile, gmailAuth, setGmailAuth, selectedLabelId, setSelectedLabelId, selectedArtistId, setSelectedArtistId, artists } =
     useAppStore();
   const genres = getGenres();
   const { toast } = useToast();
@@ -298,6 +372,98 @@ export function LabelFinder() {
     });
     return tracks.slice(0, 10);
   }, [detailLabel, artists]);
+
+  // Derive the label's Top artists from the scraped artist data. We look
+  // at every artist whose `labelsPublishedOn` array contains this label's
+  // name (case-insensitive), or who has at least one track published on
+  // this label (defensive — labelsPublishedOn is best-effort and may miss
+  // some entries). Each artist's "label score" = sum of points of all
+  // their tracks on this label (across all genres). Sorted desc, top 10.
+  //
+  // The user can then click an artist name to jump to the Artist Explorer
+  // detail page (cross-tab navigation via selectedArtistId + setActiveTab).
+  const labelTopArtists = useMemo<Array<{
+    id: string;
+    name: string;
+    imageUrl: string;
+    totalLabelPoints: number;
+    trackCount: number;
+    bestPosition: number | null;
+    isRemixerOnly: boolean;
+  }>>(() => {
+    if (!detailLabel) return [];
+    const targetName = detailLabel.name.toLowerCase().trim();
+    const safeArtists: Artist[] = Array.isArray(artists) ? artists : [];
+    const results: Array<{
+      id: string;
+      name: string;
+      imageUrl: string;
+      totalLabelPoints: number;
+      trackCount: number;
+      bestPosition: number | null;
+      isRemixerOnly: boolean;
+    }> = [];
+
+    for (const artist of safeArtists) {
+      // Match: artist explicitly lists this label OR has at least one track
+      // on this label in any genre.
+      const listsLabel = (artist.labelsPublishedOn || []).some(
+        (ln) => ln.toLowerCase().trim() === targetName
+      );
+      let totalLabelPoints = 0;
+      let trackCount = 0;
+      let bestPosition: number | null = null;
+      for (const genre of Object.keys(artist.tracksByGenre || {})) {
+        for (const track of artist.tracksByGenre[genre] || []) {
+          if (!track || !track.label) continue;
+          if (track.label.toLowerCase().trim() !== targetName) continue;
+          trackCount += 1;
+          totalLabelPoints += track.points || 0;
+          if (bestPosition === null || track.position < bestPosition) {
+            bestPosition = track.position;
+          }
+        }
+      }
+      if (!listsLabel && trackCount === 0) continue;
+      results.push({
+        id: artist.id,
+        name: artist.name,
+        imageUrl: artist.imageUrl || "",
+        totalLabelPoints,
+        trackCount,
+        bestPosition,
+        isRemixerOnly: !!artist.isRemixerOnly,
+      });
+    }
+
+    // Sort: total label points desc; tiebreak by best chart position asc;
+    // final tiebreak by name asc for stable ordering.
+    results.sort((a, b) => {
+      if (a.totalLabelPoints !== b.totalLabelPoints) {
+        return b.totalLabelPoints - a.totalLabelPoints;
+      }
+      if (a.bestPosition !== null && b.bestPosition !== null && a.bestPosition !== b.bestPosition) {
+        return a.bestPosition - b.bestPosition;
+      }
+      return a.name.localeCompare(b.name);
+    });
+    return results.slice(0, 10);
+  }, [detailLabel, artists]);
+
+  // Navigate to the Artist Explorer detail page for the given artist id.
+  // Closes the label dialog first so the artist page is fully visible.
+  const handleOpenArtist = useCallback(
+    (artistId: string) => {
+      setDetailLabel(null);
+      setSelectedArtistId?.(artistId);
+      setActiveTab("artists");
+      // Scroll to top so the artist hero is visible.
+      if (typeof window !== "undefined") {
+        window.scrollTo({ top: 0, behavior: "smooth" });
+      }
+    },
+    [setActiveTab, setSelectedArtistId]
+  );
 
   const togglePlayTrack = useCallback((track: ArtistTrack) => {
     if (!audioRef.current) return;
@@ -980,6 +1146,11 @@ export function LabelFinder() {
                         className={label.status === "open" ? "bg-emerald-500/20 text-emerald-400 border-emerald-500/30 text-[10px] px-1.5 py-0" : "bg-red-500/20 text-red-400 border-red-500/30 text-[10px] px-1.5 py-0"}>
                         {label.status === "open" ? t(locale, "labels.open") : t(locale, "labels.closed")}
                       </Badge>
+                      {/* Beatport / Beatstats / SoundCloud discovery icons.
+                          Same pattern as the rankings page: the label NAME
+                          opens the detail dialog (card onClick), while these
+                          icons jump straight to the external sites. */}
+                      <LabelDiscoveryIcons label={label} size={11} />
                     </div>
                     <div className="flex flex-wrap items-center gap-x-3 gap-y-0.5 mt-1 text-[11px] text-muted-foreground">
                       <span className="text-primary/60 font-medium truncate max-w-[200px]">{bestGenre || label.genre}</span>
@@ -1170,6 +1341,81 @@ export function LabelFinder() {
                             </div>
                           </div>
                         </div>
+                      ))}
+                    </div>
+                  </div>
+                )}
+
+                {/* Top artists on this label — derived from scraped artist data.
+                    Each artist's score = sum of points of their tracks on this
+                    label. Clicking a name navigates to the Artist Explorer
+                    detail page (cross-tab via selectedArtistId). */}
+                {labelTopArtists.length > 0 && (
+                  <div className="space-y-3 py-3 border-b border-border/30">
+                    <div className="flex items-center justify-between">
+                      <div className="flex items-center gap-2">
+                        <Users className="h-4 w-4 text-primary" />
+                        <p className="text-[10px] text-muted-foreground uppercase tracking-wider font-medium">
+                          {locale === "it" ? "Top artisti della label" : "Top artists on label"}
+                        </p>
+                      </div>
+                      <span className="text-[10px] text-muted-foreground">
+                        {labelTopArtists.length} {locale === "it" ? "artisti" : "artists"}
+                      </span>
+                    </div>
+                    <p className="text-[10px] text-muted-foreground/70 -mt-1">
+                      {locale === "it"
+                        ? "Punteggio totale dell'artista su questa label. Clicca sul nome per aprire la pagina artista."
+                        : "Artist's total score on this label. Click a name to open the artist page."}
+                    </p>
+                    <div className="space-y-1 max-h-72 overflow-y-auto pr-1">
+                      {labelTopArtists.map((artist, idx) => (
+                        <button
+                          key={artist.id}
+                          type="button"
+                          onClick={() => handleOpenArtist(artist.id)}
+                          className="w-full flex items-center gap-2 rounded-md border border-border/30 bg-secondary/20 p-2 hover:bg-secondary/40 hover:border-primary/30 transition-colors text-left group"
+                          title={locale === "it"
+                            ? `Apri la pagina di ${artist.name}`
+                            : `Open ${artist.name}'s page`}
+                        >
+                          <span className="text-xs font-mono text-muted-foreground shrink-0 w-6 text-right">
+                            #{idx + 1}
+                          </span>
+                          {artist.imageUrl ? (
+                            // eslint-disable-next-line @next/next/no-img-element
+                            <img
+                              src={artist.imageUrl}
+                              alt=""
+                              className="h-8 w-8 shrink-0 rounded-full object-cover"
+                              loading="lazy"
+                            />
+                          ) : (
+                            <div className="flex h-8 w-8 shrink-0 items-center justify-center rounded-full bg-secondary/50">
+                              <Users className="h-3.5 w-3.5 text-muted-foreground" />
+                            </div>
+                          )}
+                          <div className="min-w-0 flex-1">
+                            <p className="truncate text-xs font-medium text-foreground group-hover:text-primary transition-colors">
+                              {artist.name}
+                              {artist.isRemixerOnly && (
+                                <span className="text-[10px] text-muted-foreground ml-1">(remixer)</span>
+                              )}
+                            </p>
+                            <div className="flex items-center gap-2 text-[10px] text-muted-foreground mt-0.5">
+                              <span>{artist.trackCount} {locale === "it" ? "tracce" : "tracks"}</span>
+                              {artist.bestPosition !== null && (
+                                <span>· {locale === "it" ? "migliore" : "best"} #{artist.bestPosition}</span>
+                              )}
+                            </div>
+                          </div>
+                          <div className="shrink-0 text-right">
+                            <p className="text-sm font-bold text-primary">
+                              {artist.totalLabelPoints.toLocaleString()}
+                            </p>
+                            <p className="text-[9px] text-muted-foreground uppercase">pts</p>
+                          </div>
+                        </button>
                       ))}
                     </div>
                   </div>
