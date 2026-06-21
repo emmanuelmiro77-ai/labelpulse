@@ -537,6 +537,44 @@ export function LabelFinder() {
     saveLinksToStore(detailLinks);
   }, [detailLinks, saveLinksToStore]);
 
+  // Explicit "Save all" action — the user-facing save button at the bottom
+  // of the dialog. Commits ALL pending detail state to the store in one shot:
+  //   - newEmailInput (if the user typed an email but didn't press + or Enter)
+  //   - detailEmails (re-persisted to be safe)
+  //   - detailLinks (links as currently shown in the UI)
+  //   - detailNotes
+  //   - detailStatus
+  //   - detailSubmissionType
+  // This complements (does NOT replace) the existing auto-save onBlur/onEnter
+  // handlers — users who press + or click away still get auto-save, but users
+  // who type and then click "Salva" without pressing + will NOT lose data.
+  const saveAllDetails = useCallback(() => {
+    if (!detailLabel) return;
+    const exists = labels.find(l => l.id === detailLabel.id);
+    if (!exists) return;
+
+    // Commit pending email input
+    let finalEmails = detailEmails;
+    const pendingEmail = newEmailInput.trim();
+    if (pendingEmail && pendingEmail.includes("@") && !detailEmails.includes(pendingEmail)) {
+      finalEmails = [...detailEmails, pendingEmail];
+      setDetailEmails(finalEmails);
+      setNewEmailInput("");
+    }
+
+    const linkFields = detailLinksToFields(detailLinks);
+    updateLabel(detailLabel.id, {
+      emails: finalEmails,
+      contactInfo: finalEmails[0] || "",
+      notes: detailNotes,
+      status: detailStatus,
+      submissionType: detailSubmissionType,
+      ...linkFields,
+    });
+    setDetailSaved(true);
+    setTimeout(() => setDetailSaved(false), 1500);
+  }, [detailLabel, labels, detailEmails, newEmailInput, detailLinks, detailNotes, detailStatus, detailSubmissionType, updateLabel]);
+
   // Pitch generation
   const pitchText = useMemo(() => {
     if (!detailLabel || !pitchTrackName.trim()) return "";
@@ -1488,13 +1526,30 @@ export function LabelFinder() {
                   )}
                 </div>
 
-                <DialogFooter className="gap-2">
-                  {detailLabel.isCustom && (
-                    <Button variant="destructive" size="sm" onClick={() => { setDeleteConfirmId(detailLabel.id); setDetailLabel(null); }}>
-                      <Trash2 className="h-3 w-3 mr-1" />{t(locale, "labels.delete")}
+                <DialogFooter className="gap-2 sm:justify-between">
+                  <div className="flex items-center gap-2">
+                    {detailLabel.isCustom && (
+                      <Button variant="destructive" size="sm" onClick={() => { setDeleteConfirmId(detailLabel.id); setDetailLabel(null); }}>
+                        <Trash2 className="h-3 w-3 mr-1" />{t(locale, "labels.delete")}
+                      </Button>
+                    )}
+                    {detailSaved && (
+                      <span className="text-[11px] text-emerald-400 flex items-center gap-1 animate-pulse">
+                        <Check className="h-3 w-3" /> {locale === "it" ? "Salvato" : "Saved"}
+                      </span>
+                    )}
+                  </div>
+                  <div className="flex items-center gap-2">
+                    <Button
+                      variant="default"
+                      onClick={saveAllDetails}
+                      className="gap-1.5"
+                    >
+                      <Save className="h-3.5 w-3.5" />
+                      {locale === "it" ? "Salva" : "Save"}
                     </Button>
-                  )}
-                  <Button variant="ghost" onClick={() => setDetailLabel(null)}>{t(locale, "labels.close")}</Button>
+                    <Button variant="ghost" onClick={() => setDetailLabel(null)}>{t(locale, "labels.close")}</Button>
+                  </div>
                 </DialogFooter>
               </>
             );
