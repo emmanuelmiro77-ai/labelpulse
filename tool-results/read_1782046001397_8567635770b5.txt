@@ -1,0 +1,1488 @@
+     1→"use client";
+     2→
+     3→import { useAppStore, getLabelTier, type Label } from "@/lib/store";
+     4→import { t } from "@/lib/i18n";
+     5→import React, { useState, useMemo, useCallback, useEffect } from "react";
+     6→import { sendEmail, ensureValidToken } from "@/lib/gmail";
+     7→import {
+     8→  Search,
+     9→  Plus,
+    10→  Filter,
+    11→  Mail,
+    12→  Globe,
+    13→  ExternalLink,
+    14→  Pencil,
+    15→  Trash2,
+    16→  ChevronDown,
+    17→  Music2,
+    18→  Target,
+    19→  TrendingUp,
+    20→  Award,
+    21→  Zap,
+    22→  X,
+    23→  Check,
+    24→  Link2,
+    25→  Save,
+    26→  CircleDot,
+    27→  Sparkles,
+    28→  Copy,
+    29→  Send,
+    30→  Languages,
+    31→  ClipboardCheck,
+    32→  MailOpen,
+    33→  SendHorizonal,
+    34→  CheckCircle2,
+    35→  Loader2,
+    36→  Disc3,
+    37→} from "lucide-react";
+    38→import { useToast } from "@/hooks/use-toast";
+    39→import { Input } from "@/components/ui/input";
+    40→import { Button } from "@/components/ui/button";
+    41→import { Badge } from "@/components/ui/badge";
+    42→import { Card, CardContent } from "@/components/ui/card";
+    43→import {
+    44→  Dialog,
+    45→  DialogContent,
+    46→  DialogHeader,
+    47→  DialogTitle,
+    48→  DialogFooter,
+    49→} from "@/components/ui/dialog";
+    50→import {
+    51→  Select,
+    52→  SelectContent,
+    53→  SelectItem,
+    54→  SelectTrigger,
+    55→  SelectValue,
+    56→} from "@/components/ui/select";
+    57→import { Label as UILabel } from "@/components/ui/label";
+    58→import { Textarea } from "@/components/ui/textarea";
+    59→import { Popover, PopoverContent, PopoverTrigger } from "@/components/ui/popover";
+    60→import { Checkbox } from "@/components/ui/checkbox";
+    61→import {
+    62→  generatePitch,
+    63→  generateSubject,
+    64→  generatePitchBody,
+    65→  generateMailtoLink,
+    66→  generateGmailLink,
+    67→  PITCH_LANGUAGES,
+    68→  type PitchTone,
+    69→  type PitchLanguage,
+    70→} from "@/lib/pitch-utils";
+    71→
+    72→const SUBMISSION_TYPES = ["email", "webform", "platform"] as const;
+    73→
+    74→// ==================== SMART URL HELPER ====================
+    75→// Converts partial usernames/handles into full clickable URLs.
+    76→// E.g. "spectrummusicnl" → "https://instagram.com/spectrummusicnl"
+    77→// If already a full URL, returns as-is.
+    78→
+    79→// ==================== LINK TYPE DEFINITIONS ====================
+    80→const LINK_TYPES = [
+    81→  { id: "website", labelKey: "labels.linkTypeWebsite", icon: Globe, placeholder: "https://www.label.com", color: "text-blue-400" },
+    82→  { id: "instagram", labelKey: "labels.linkTypeInstagram", icon: ExternalLink, placeholder: "username", color: "text-pink-400" },
+    83→  { id: "soundcloud", labelKey: "labels.linkTypeSoundcloud", icon: Music2, placeholder: "username", color: "text-orange-400" },
+    84→  { id: "beatport", labelKey: "labels.linkTypeBeatport", icon: Disc3, placeholder: "label-slug", color: "text-forest-400" },
+    85→  { id: "spotify", labelKey: "labels.linkTypeSpotify", icon: Music2, placeholder: "artist-id", color: "text-green-400" },
+    86→  { id: "youtube", labelKey: "labels.linkTypeYoutube", icon: ExternalLink, placeholder: "@channel", color: "text-red-400" },
+    87→  { id: "bandcamp", labelKey: "labels.linkTypeBandcamp", icon: Music2, placeholder: "username", color: "text-cyan-400" },
+    88→  { id: "demoLink", labelKey: "labels.linkTypeDemoLink", icon: Link2, placeholder: "https://www.label.com/submit-demo", color: "text-purple-400" },
+    89→  { id: "other", labelKey: "labels.linkTypeOther", icon: ExternalLink, placeholder: "https://...", color: "text-gray-400" },
+    90→] as const;
+    91→
+    92→type LinkTypeId = typeof LINK_TYPES[number]["id"];
+    93→
+    94→interface DetailLink {
+    95→  type: LinkTypeId | string;
+    96→  value: string;
+    97→}
+    98→
+    99→// Smart URL builder for each link type
+   100→function toClickableUrl(value: string, linkType: string): string | null {
+   101→  if (!value || !value.trim()) return null;
+   102→  const v = value.trim();
+   103→
+   104→  // Already a full URL
+   105→  if (/^https?:\/\//i.test(v)) return v;
+   106→
+   107→  // Email
+   108→  if (v.includes("@") && linkType !== "instagram" && linkType !== "soundcloud") {
+   109→    return `mailto:${v}`;
+   110→  }
+   111→
+   112→  // Type-specific smart defaults
+   113→  switch (linkType) {
+   114→    case "instagram":
+   115→      if (/^[a-zA-Z0-9._]{1,30}$/.test(v)) {
+   116→        return `https://instagram.com/${v.replace(/^@/, "")}`;
+   117→      }
+   118→      return `https://${v}`;
+   119→    case "soundcloud":
+   120→      if (/^[a-zA-Z0-9._-]{1,30}$/.test(v)) {
+   121→        return `https://soundcloud.com/${v.replace(/^@/, "")}`;
+   122→      }
+   123→      return `https://${v}`;
+   124→    case "beatport":
+   125→      if (/^[a-zA-Z0-9._-]{1,50}$/.test(v)) {
+   126→        return `https://www.beatport.com/label/${v.replace(/^@/, "")}`;
+   127→      }
+   128→      return `https://${v}`;
+   129→    case "spotify":
+   130→      if (/^[a-zA-Z0-9._-]{1,40}$/.test(v)) {
+   131→        return `https://open.spotify.com/artist/${v.replace(/^@/, "")}`;
+   132→      }
+   133→      return `https://${v}`;
+   134→    case "youtube":
+   135→      if (/^@?[a-zA-Z0-9._-]{1,40}$/.test(v)) {
+   136→        return `https://youtube.com/${v.replace(/^@/, "@")}`;
+   137→      }
+   138→      return `https://${v}`;
+   139→    case "bandcamp":
+   140→      if (/^[a-zA-Z0-9._-]{1,40}$/.test(v)) {
+   141→        return `https://${v}.bandcamp.com`;
+   142→      }
+   143→      return `https://${v}`;
+   144→    case "website":
+   145→    case "demoLink":
+   146→    case "other":
+   147→    default:
+   148→      return `https://${v}`;
+   149→  }
+   150→}
+   151→
+   152→// Get placeholder for a link type
+   153→function getLinkPlaceholder(linkType: string): string {
+   154→  const found = LINK_TYPES.find(lt => lt.id === linkType);
+   155→  return found?.placeholder || "https://...";
+   156→}
+   157→
+   158→// Get icon component for a link type
+   159→function getLinkIcon(linkType: string): React.ComponentType<{ className?: string }> {
+   160→  const found = LINK_TYPES.find(lt => lt.id === linkType);
+   161→  return found?.icon || ExternalLink;
+   162→}
+   163→
+   164→// Get color class for a link type
+   165→function getLinkColor(linkType: string): string {
+   166→  const found = LINK_TYPES.find(lt => lt.id === linkType);
+   167→  return found?.color || "text-cyan-400";
+   168→}
+   169→
+   170→// Convert fixed link fields + customLinks into a unified DetailLink array
+   171→function labelToDetailLinks(label: Label): DetailLink[] {
+   172→  const links: DetailLink[] = [];
+   173→  if (label.website?.trim()) links.push({ type: "website", value: label.website });
+   174→  if (label.socialLink?.trim()) links.push({ type: "instagram", value: label.socialLink });
+   175→  if (label.soundcloudLink?.trim()) links.push({ type: "soundcloud", value: label.soundcloudLink });
+   176→  if (label.beatportLink?.trim()) links.push({ type: "beatport", value: label.beatportLink });
+   177→  if (label.demoLink?.trim()) links.push({ type: "demoLink", value: label.demoLink });
+   178→  // Add custom links
+   179→  if (label.customLinks?.length) {
+   180→    for (const cl of label.customLinks) {
+   181→      if (cl.value?.trim()) links.push({ type: cl.type, value: cl.value });
+   182→    }
+   183→  }
+   184→  return links;
+   185→}
+   186→
+   187→// Save a DetailLink array back to the fixed fields + customLinks
+   188→function detailLinksToFields(links: DetailLink[]): Partial<Label> {
+   189→  const fields: Partial<Label> = {
+   190→    website: "",
+   191→    socialLink: "",
+   192→    soundcloudLink: "",
+   193→    beatportLink: "",
+   194→    demoLink: "",
+   195→    customLinks: [],
+   196→  };
+   197→  for (const link of links) {
+   198→    if (!link.value?.trim()) continue;
+   199→    switch (link.type) {
+   200→      case "website":
+   201→        fields.website = link.value;
+   202→        break;
+   203→      case "instagram":
+   204→        fields.socialLink = link.value;
+   205→        break;
+   206→      case "soundcloud":
+   207→        fields.soundcloudLink = link.value;
+   208→        break;
+   209→      case "beatport":
+   210→        fields.beatportLink = link.value;
+   211→        break;
+   212→      case "demoLink":
+   213→        fields.demoLink = link.value;
+   214→        break;
+   215→      default:
+   216→        // Custom type - goes into customLinks
+   217→        if (!fields.customLinks) fields.customLinks = [];
+   218→        fields.customLinks.push({ type: link.type, value: link.value });
+   219→        break;
+   220→    }
+   221→  }
+   222→  return fields;
+   223→}
+   224→
+   225→// Get display text for a link (strips protocol for cleaner display)
+   226→function getLinkDisplay(value: string): string {
+   227→  return value
+   228→    .replace(/^https?:\/\//, "")
+   229→    .replace(/^mailto:/, "")
+   230→    .replace(/\/$/, "");
+   231→}
+   232→
+   233→export function LabelFinder() {
+   234→  const { labels, demos, addLabel, updateLabel, deleteLabel, addDemo, locale, getGenres, setActiveTab, userProfile, setUserProfile, gmailAuth, setGmailAuth } =
+   235→    useAppStore();
+   236→  const genres = getGenres();
+   237→  const { toast } = useToast();
+   238→  const [sendingEmail, setSendingEmail] = useState(false);
+   239→  const [emailSent, setEmailSent] = useState(false);
+   240→  const [search, setSearch] = useState("");
+   241→  const [genreFilter, setGenreFilter] = useState<string[]>([]);
+   242→  const [genrePopoverOpen, setGenrePopoverOpen] = useState(false);
+   243→  const [statusFilter, setStatusFilter] = useState("all");
+   244→  const [showAddDialog, setShowAddDialog] = useState(false);
+   245→  const [editingLabel, setEditingLabel] = useState<Label | null>(null);
+   246→  const [deleteConfirmId, setDeleteConfirmId] = useState<string | null>(null);
+   247→  const [showSmartMatch, setShowSmartMatch] = useState(false);
+   248→  const [smartMatchGenre, setSmartMatchGenre] = useState("");
+   249→
+   250→  // Detail dialog state
+   251→  const [detailLabel, setDetailLabel] = useState<Label | null>(null);
+   252→  const [detailEmails, setDetailEmails] = useState<string[]>([]);
+   253→  const [newEmailInput, setNewEmailInput] = useState("");
+   254→  const [detailLinks, setDetailLinks] = useState<DetailLink[]>([]);
+   255→  const [detailNotes, setDetailNotes] = useState("");
+   256→  const [detailStatus, setDetailStatus] = useState<"open" | "closed">("open");
+   257→  const [detailSubmissionType, setDetailSubmissionType] = useState<"email" | "webform" | "platform">("email");
+   258→  const [detailSaved, setDetailSaved] = useState(false);
+   259→
+   260→  // Pitch inline state
+   261→  const [showPitch, setShowPitch] = useState(false);
+   262→  const [pitchTrackName, setPitchTrackName] = useState("");
+   263→  const [pitchScLink, setPitchScLink] = useState("");
+   264→  const [pitchArtistName, setPitchArtistName] = useState("");
+   265→  const [pitchTone, setPitchTone] = useState<PitchTone>("professional");
+   266→  const [pitchLanguage, setPitchLanguage] = useState<PitchLanguage>("en");
+   267→  const [pitchNote, setPitchNote] = useState("");
+   268→  const [pitchCopied, setPitchCopied] = useState(false);
+   269→  const [pitchDemoCreated, setPitchDemoCreated] = useState(false);
+   270→
+   271→  // Add label form state
+   272→  const [formName, setFormName] = useState("");
+   273→  const [formGenre, setFormGenre] = useState(genres[0] || "Techno");
+   274→  const [formSubmissionType, setFormSubmissionType] = useState<
+   275→    "email" | "webform" | "platform"
+   276→  >("email");
+   277→  const [formContact, setFormContact] = useState("");
+   278→  const [formStatus, setFormStatus] = useState<"open" | "closed">("open");
+   279→  const [formNotes, setFormNotes] = useState("");
+   280→
+   281→  const filteredLabels = useMemo(() => {
+   282→    return labels.filter((l) => {
+   283→      const matchSearch =
+   284→        !search ||
+   285→        l.name.toLowerCase().includes(search.toLowerCase()) ||
+   286→        l.genres.some((g) => g.toLowerCase().includes(search.toLowerCase())) ||
+   287→        l.contactInfo.toLowerCase().includes(search.toLowerCase()) ||
+   288→        l.emails.some((e) => e.toLowerCase().includes(search.toLowerCase()));
+   289→      const matchGenre =
+   290→        genreFilter.length === 0 ||
+   291→        genreFilter.every((g) => l.genres.includes(g));
+   292→      const matchStatus =
+   293→        statusFilter === "all" || l.status === statusFilter;
+   294→      return matchSearch && matchGenre && matchStatus;
+   295→    });
+   296→  }, [labels, search, genreFilter, statusFilter]);
+   297→
+   298→  const toggleGenre = (genre: string) => {
+   299→    setGenreFilter((prev) =>
+   300→      prev.includes(genre)
+   301→        ? prev.filter((g) => g !== genre)
+   302→        : [...prev, genre]
+   303→    );
+   304→  };
+   305→
+   306→  const clearGenreFilter = () => {
+   307→    setGenreFilter([]);
+   308→    setGenrePopoverOpen(false);
+   309→  };
+   310→
+   311→  // Smart Match results
+   312→  const smartMatchResults = useMemo(() => {
+   313→    if (!smartMatchGenre) return { top: [], mid: [], emerging: [] };
+   314→    const genreLabels = labels.filter((l) =>
+   315→      l.genres.includes(smartMatchGenre)
+   316→    );
+   317→    const top = genreLabels
+   318→      .filter((l) => l.rankByGenre?.[smartMatchGenre] && l.rankByGenre[smartMatchGenre] <= 20)
+   319→      .sort((a, b) => (a.rankByGenre?.[smartMatchGenre] || 999) - (b.rankByGenre?.[smartMatchGenre] || 999));
+   320→    const mid = genreLabels
+   321→      .filter((l) => l.rankByGenre?.[smartMatchGenre] && l.rankByGenre[smartMatchGenre] > 20 && l.rankByGenre[smartMatchGenre] <= 50)
+   322→      .sort((a, b) => (a.rankByGenre?.[smartMatchGenre] || 999) - (b.rankByGenre?.[smartMatchGenre] || 999));
+   323→    const emerging = genreLabels
+   324→      .filter((l) => l.trending && !top.includes(l) && !mid.includes(l))
+   325→      .sort((a, b) => (b.trendingPointsByGenre?.[smartMatchGenre] || 0) - (a.trendingPointsByGenre?.[smartMatchGenre] || 0))
+   326→      .slice(0, 15);
+   327→    return { top, mid, emerging };
+   328→  }, [labels, smartMatchGenre]);
+   329→
+   330→  const resetForm = () => {
+   331→    setFormName("");
+   332→    setFormGenre(genres[0] || "Techno");
+   333→    setFormSubmissionType("email");
+   334→    setFormContact("");
+   335→    setFormStatus("open");
+   336→    setFormNotes("");
+   337→  };
+   338→
+   339→  const openAdd = () => {
+   340→    resetForm();
+   341→    setEditingLabel(null);
+   342→    setShowAddDialog(true);
+   343→  };
+   344→
+   345→  // Open detail dialog
+   346→  const openDetail = useCallback((label: Label) => {
+   347→    setDetailLabel(label);
+   348→    setDetailEmails(label.emails?.length ? [...label.emails] : (label.contactInfo ? [label.contactInfo] : []));
+   349→    setDetailLinks(labelToDetailLinks(label));
+   350→    setDetailNotes(label.notes || "");
+   351→    setDetailStatus(label.status);
+   352→    setDetailSubmissionType(label.submissionType);
+   353→    setDetailSaved(false);
+   354→    setShowPitch(false);
+   355→    setPitchTrackName("");
+   356→    setPitchArtistName(userProfile.artistName || "");
+   357→    setPitchScLink(userProfile.scLink || "");
+   358→    setPitchTone("professional");
+   359→    setPitchLanguage("en");
+   360→    setPitchNote("");
+   361→    setPitchCopied(false);
+   362→    setPitchDemoCreated(false);
+   363→  }, [userProfile]);
+   364→
+   365→  // Keep detailLabel in sync with store (in case store changes externally)
+   366→  useEffect(() => {
+   367→    if (!detailLabel) return;
+   368→    const fresh = labels.find(l => l.id === detailLabel.id);
+   369→    if (!fresh) {
+   370→      // Label was deleted — close dialog
+   371→      setDetailLabel(null);
+   372→    } else if (fresh !== detailLabel) {
+   373→      // Store version changed — update snapshot
+   374→      setDetailLabel(fresh);
+   375→    }
+   376→  }, [labels, detailLabel]);
+   377→
+   378→  // Auto-save detail changes (with safety check)
+   379→  const saveDetailField = useCallback(
+   380→    (field: string, value: any) => {
+   381→      if (!detailLabel) return;
+   382→      // Double-check the label still exists in the store
+   383→      const exists = labels.find(l => l.id === detailLabel.id);
+   384→      if (!exists) return;
+   385→      updateLabel(detailLabel.id, { [field]: value });
+   386→      setDetailSaved(true);
+   387→      setTimeout(() => setDetailSaved(false), 1500);
+   388→    },
+   389→    [detailLabel, updateLabel, labels]
+   390→  );
+   391→
+   392→  // Email management
+   393→  const addEmail = useCallback(() => {
+   394→    const email = newEmailInput.trim();
+   395→    if (!email || !email.includes("@")) return;
+   396→    const updated = [...detailEmails, email];
+   397→    setDetailEmails(updated);
+   398→    setNewEmailInput("");
+   399→    if (detailLabel) {
+   400→      updateLabel(detailLabel.id, { emails: updated, contactInfo: updated[0] || "" });
+   401→      setDetailSaved(true);
+   402→      setTimeout(() => setDetailSaved(false), 1500);
+   403→    }
+   404→  }, [detailEmails, newEmailInput, detailLabel, updateLabel]);
+   405→
+   406→  const removeEmail = useCallback((index: number) => {
+   407→    const updated = detailEmails.filter((_, i) => i !== index);
+   408→    setDetailEmails(updated);
+   409→    if (detailLabel) {
+   410→      updateLabel(detailLabel.id, { emails: updated, contactInfo: updated[0] || "" });
+   411→      setDetailSaved(true);
+   412→      setTimeout(() => setDetailSaved(false), 1500);
+   413→    }
+   414→  }, [detailEmails, detailLabel, updateLabel]);
+   415→
+   416→  // Link management
+   417→  const saveLinksToStore = useCallback((links: DetailLink[]) => {
+   418→    if (!detailLabel) return;
+   419→    const exists = labels.find(l => l.id === detailLabel.id);
+   420→    if (!exists) return;
+   421→    const fields = detailLinksToFields(links);
+   422→    updateLabel(detailLabel.id, fields);
+   423→    setDetailSaved(true);
+   424→    setTimeout(() => setDetailSaved(false), 1500);
+   425→  }, [detailLabel, updateLabel, labels]);
+   426→
+   427→  const addDetailLink = useCallback((type: string) => {
+   428→    const newLinks = [...detailLinks, { type, value: "" }];
+   429→    setDetailLinks(newLinks);
+   430→    // Don't save to store yet - value is empty
+   431→  }, [detailLinks]);
+   432→
+   433→  const updateDetailLink = useCallback((index: number, field: "type" | "value", val: string) => {
+   434→    const newLinks = [...detailLinks];
+   435→    newLinks[index] = { ...newLinks[index], [field]: val };
+   436→    setDetailLinks(newLinks);
+   437→    if (field === "value" && val.trim()) {
+   438→      saveLinksToStore(newLinks);
+   439→    }
+   440→  }, [detailLinks, saveLinksToStore]);
+   441→
+   442→  const removeDetailLink = useCallback((index: number) => {
+   443→    const newLinks = detailLinks.filter((_, i) => i !== index);
+   444→    setDetailLinks(newLinks);
+   445→    saveLinksToStore(newLinks);
+   446→  }, [detailLinks, saveLinksToStore]);
+   447→
+   448→  const saveDetailLinkOnBlur = useCallback((index: number) => {
+   449→    saveLinksToStore(detailLinks);
+   450→  }, [detailLinks, saveLinksToStore]);
+   451→
+   452→  // Pitch generation
+   453→  const pitchText = useMemo(() => {
+   454→    if (!detailLabel || !pitchTrackName.trim()) return "";
+   455→    return generatePitch(
+   456→      detailLabel.name,
+   457→      pitchTrackName.trim(),
+   458→      pitchArtistName,
+   459→      pitchScLink,
+   460→      pitchTone,
+   461→      pitchNote,
+   462→      detailEmails,
+   463→      detailSubmissionType,
+   464→      pitchLanguage
+   465→    );
+   466→  }, [detailLabel, pitchTrackName, pitchArtistName, pitchScLink, pitchTone, pitchNote, detailEmails, detailSubmissionType, pitchLanguage]);
+   467→
+   468→  // Mailto link for opening email client
+   469→  const pitchMailtoLink = useMemo(() => {
+   470→    if (!detailLabel || !pitchTrackName.trim() || !detailEmails.length) return "";
+   471→    const subject = generateSubject(pitchTrackName.trim(), pitchArtistName, pitchLanguage);
+   472→    const body = generatePitchBody(
+   473→      detailLabel.name,
+   474→      pitchTrackName.trim(),
+   475→      pitchArtistName,
+   476→      pitchScLink,
+   477→      pitchTone,
+   478→      pitchNote,
+   479→      pitchLanguage
+   480→    );
+   481→    return generateMailtoLink(detailEmails, subject, body);
+   482→  }, [detailLabel, pitchTrackName, pitchArtistName, pitchScLink, pitchTone, pitchNote, detailEmails, pitchLanguage]);
+   483→
+   484→  // Gmail link for opening Gmail in browser
+   485→  const pitchGmailLink = useMemo(() => {
+   486→    if (!detailLabel || !pitchTrackName.trim()) return "";
+   487→    const subject = generateSubject(pitchTrackName.trim(), pitchArtistName, pitchLanguage);
+   488→    const body = generatePitchBody(
+   489→      detailLabel.name,
+   490→      pitchTrackName.trim(),
+   491→      pitchArtistName,
+   492→      pitchScLink,
+   493→      pitchTone,
+   494→      pitchNote,
+   495→      pitchLanguage
+   496→    );
+   497→    return generateGmailLink(detailEmails, subject, body);
+   498→  }, [detailLabel, pitchTrackName, pitchArtistName, pitchScLink, pitchTone, pitchNote, detailEmails, pitchLanguage]);
+   499→
+   500→  // Check if a demo already exists for this label + track
+   501→  const demoAlreadyExists = useMemo(() => {
+   502→    if (!detailLabel || !pitchTrackName.trim()) return false;
+   503→    return demos.some(
+   504→      (d) => d.labelId === detailLabel.id && d.trackName.toLowerCase() === pitchTrackName.trim().toLowerCase()
+   505→    );
+   506→  }, [demos, detailLabel, pitchTrackName]);
+   507→
+   508→  // Save profile fields on blur
+   509→  const handlePitchArtistBlur = useCallback(() => {
+   510→    if (pitchArtistName.trim() && pitchArtistName.trim() !== userProfile.artistName) {
+   511→      setUserProfile({ artistName: pitchArtistName.trim() });
+   512→    }
+   513→  }, [pitchArtistName, userProfile.artistName, setUserProfile]);
+   514→
+   515→  const handlePitchScLinkBlur = useCallback(() => {
+   516→    if (pitchScLink.trim() && pitchScLink.trim() !== userProfile.scLink) {
+   517→      setUserProfile({ scLink: pitchScLink.trim() });
+   518→    }
+   519→  }, [pitchScLink, userProfile.scLink, setUserProfile]);
+   520→
+   521→  // Open Gmail and auto-create demo
+   522→  const handleOpenGmail = useCallback(() => {
+   523→    if (!detailLabel || !pitchTrackName.trim()) return;
+   524→    window.open(pitchGmailLink, "_blank");
+   525→    if (!demoAlreadyExists) {
+   526→      addDemo({
+   527→        trackName: pitchTrackName.trim(),
+   528→        labelId: detailLabel.id,
+   529→        status: "sent",
+   530→        sentDate: new Date().toISOString().split("T")[0],
+   531→        link: pitchScLink.trim(),
+   532→        links: [],
+   533→        notes: pitchNote.trim(),
+   534→        pitchText: pitchText,
+   535→        artistName: pitchArtistName.trim(),
+   536→        genre: "",
+   537→        bpm: "",
+   538→        key: "",
+   539→      });
+   540→      setPitchDemoCreated(true);
+   541→    }
+   542→  }, [detailLabel, pitchTrackName, pitchScLink, pitchNote, pitchGmailLink, demoAlreadyExists, addDemo, pitchText, pitchArtistName]);
+   543→
+   544→  // Open email client (mailto:) and auto-create demo
+   545→  const handleSendAndTrack = useCallback(() => {
+   546→    if (!detailLabel || !pitchTrackName.trim()) return;
+   547→    if (pitchMailtoLink) {
+   548→      window.open(pitchMailtoLink, "_blank");
+   549→    }
+   550→    if (!demoAlreadyExists) {
+   551→      addDemo({
+   552→        trackName: pitchTrackName.trim(),
+   553→        labelId: detailLabel.id,
+   554→        status: "sent",
+   555→        sentDate: new Date().toISOString().split("T")[0],
+   556→        link: pitchScLink.trim(),
+   557→        links: [],
+   558→        notes: pitchNote.trim(),
+   559→        pitchText: pitchText,
+   560→        artistName: pitchArtistName.trim(),
+   561→        genre: "",
+   562→        bpm: "",
+   563→        key: "",
+   564→      });
+   565→      setPitchDemoCreated(true);
+   566→    }
+   567→  }, [detailLabel, pitchTrackName, pitchScLink, pitchNote, pitchMailtoLink, demoAlreadyExists, addDemo, pitchText, pitchArtistName]);
+   568→
+   569→  // Send email directly via Gmail API (no browser open needed!)
+   570→  const handleDirectSend = useCallback(async () => {
+   571→    if (!detailLabel || !pitchTrackName.trim() || !gmailAuth.isConnected) return;
+   572→
+   573→    setSendingEmail(true);
+   574→    setEmailSent(false);
+   575→
+   576→    try {
+   577→      // Ensure token is still valid
+   578→      const validAuth = await ensureValidToken(gmailAuth);
+   579→      if (!validAuth) {
+   580→        toast({ title: "Sessione Gmail scaduta", description: "Riconnetti il tuo account Gmail", variant: "destructive" });
+   581→        setSendingEmail(false);
+   582→        return;
+   583→      }
+   584→      // Update auth if refreshed
+   585→      if (validAuth.accessToken !== gmailAuth.accessToken) {
+   586→        setGmailAuth(validAuth);
+   587→      }
+   588→
+   589→      const subject = generateSubject(pitchTrackName.trim(), pitchArtistName, pitchLanguage);
+   590→      const body = generatePitchBody(
+   591→        detailLabel.name,
+   592→        pitchTrackName.trim(),
+   593→        pitchArtistName,
+   594→        pitchScLink,
+   595→        pitchTone,
+   596→        pitchNote,
+   597→        pitchLanguage
+   598→      );
+   599→
+   600→      const result = await sendEmail(
+   601→        validAuth.accessToken,
+   602→        detailEmails,
+   603→        subject,
+   604→        body
+   605→      );
+   606→
+   607→      if (result.success) {
+   608→        setEmailSent(true);
+   609→        toast({ title: "Email inviata! ✉️", description: `Demo inviato a ${detailLabel.name}` });
+   610→        // Auto-create demo tracking
+   611→        if (!demoAlreadyExists) {
+   612→          addDemo({
+   613→            trackName: pitchTrackName.trim(),
+   614→            labelId: detailLabel.id,
+   615→            status: "sent",
+   616→            sentDate: new Date().toISOString().split("T")[0],
+   617→            link: pitchScLink.trim(),
+   618→            links: [],
+   619→            notes: pitchNote.trim(),
+   620→            pitchText: pitchText,
+   621→            artistName: pitchArtistName.trim(),
+   622→            genre: "",
+   623→            bpm: "",
+   624→            key: "",
+   625→          });
+   626→          setPitchDemoCreated(true);
+   627→        }
+   628→        setTimeout(() => setEmailSent(false), 4000);
+   629→      } else {
+   630→        toast({ title: "Errore invio", description: result.error || "Errore sconosciuto", variant: "destructive" });
+   631→      }
+   632→    } catch (err: any) {
+   633→      toast({ title: "Errore invio", description: err.message || "Errore di connessione", variant: "destructive" });
+   634→    } finally {
+   635→      setSendingEmail(false);
+   636→    }
+   637→  }, [detailLabel, pitchTrackName, pitchArtistName, pitchScLink, pitchTone, pitchNote, pitchLanguage, detailEmails, gmailAuth, demoAlreadyExists, addDemo, pitchText, setGmailAuth, toast]);
+   638→
+   639→  const handlePitchCopy = async () => {
+   640→    try {
+   641→      await navigator.clipboard.writeText(pitchText);
+   642→      setPitchCopied(true);
+   643→      setTimeout(() => setPitchCopied(false), 2000);
+   644→    } catch {
+   645→      const textarea = document.createElement("textarea");
+   646→      textarea.value = pitchText;
+   647→      document.body.appendChild(textarea);
+   648→      textarea.select();
+   649→      document.execCommand("copy");
+   650→      document.body.removeChild(textarea);
+   651→      setPitchCopied(true);
+   652→      setTimeout(() => setPitchCopied(false), 2000);
+   653→    }
+   654→  };
+   655→
+   656→  const handleSave = () => {
+   657→    if (!formName.trim()) return;
+   658→    const data = {
+   659→      name: formName.trim(),
+   660→      genre: formGenre,
+   661→      submissionType: formSubmissionType,
+   662→      contactInfo: formContact.trim(),
+   663→      status: formStatus,
+   664→      notes: formNotes.trim(),
+   665→    };
+   666→    if (editingLabel) {
+   667→      updateLabel(editingLabel.id, data);
+   668→    } else {
+   669→      addLabel(data);
+   670→    }
+   671→    setShowAddDialog(false);
+   672→    resetForm();
+   673→  };
+   674→
+   675→  const handleDelete = (id: string) => {
+   676→    deleteLabel(id);
+   677→    setDeleteConfirmId(null);
+   678→  };
+   679→
+   680→  const getSubmissionLabel = (type: string) => {
+   681→    switch (type) {
+   682→      case "email":
+   683→        return t(locale, "labels.email");
+   684→      case "webform":
+   685→        return t(locale, "labels.webform");
+   686→      default:
+   687→        return t(locale, "labels.platform");
+   688→    }
+   689→  };
+   690→
+   691→  const getTierBadge = (label: Label) => {
+   692→    const genre = genreFilter.length > 0 ? genreFilter[0] : label.genres[0];
+   693→    const tier = getLabelTier(label, genre);
+   694→    if (!tier) return null;
+   695→    if (tier === "top")
+   696→      return (
+   697→        <Badge className="bg-purple-500/20 text-purple-300 border-purple-500/30 text-[10px] px-1.5 py-0">
+   698→          🟣 {t(locale, "labels.tierTop")}
+   699→        </Badge>
+   700→      );
+   701→    if (tier === "mid")
+   702→      return (
+   703→        <Badge className="bg-blue-500/20 text-blue-300 border-blue-500/30 text-[10px] px-1.5 py-0">
+   704→          🔵 {t(locale, "labels.tierMid")}
+   705→        </Badge>
+   706→      );
+   707→    return (
+   708→      <Badge className="bg-emerald-500/20 text-emerald-300 border-emerald-500/30 text-[10px] px-1.5 py-0">
+   709→        🟢 {t(locale, "labels.tierEmerging")}
+   710→      </Badge>
+   711→    );
+   712→  };
+   713→
+   714→  const getBestRank = (label: Label, genre?: string) => {
+   715→    if (genre && label.rankByGenre?.[genre]) return `#${label.rankByGenre[genre]}`;
+   716→    const ranks = Object.values(label.rankByGenre || {});
+   717→    if (ranks.length === 0) return null;
+   718→    return `#${Math.min(...ranks)}`;
+   719→  };
+   720→
+   721→  const hasUserData = (label: Label) => {
+   722→    return !!(
+   723→      label.contactInfo ||
+   724→      (label.emails && label.emails.length > 0) ||
+   725→      label.website ||
+   726→      label.demoLink ||
+   727→      label.socialLink ||
+   728→      label.soundcloudLink ||
+   729→      label.beatportLink ||
+   730→      (label.customLinks && label.customLinks.length > 0) ||
+   731→      label.notes
+   732→    );
+   733→  };
+   734→
+   735→  return (
+   736→    <div className="space-y-4">
+   737→      {/* Filters + Smart Match */}
+   738→      <div className="flex flex-col sm:flex-row gap-3">
+   739→        <div className="relative flex-1">
+   740→          <Search className="absolute left-3 top-1/2 -translate-y-1/2 h-4 w-4 text-muted-foreground" />
+   741→          <Input
+   742→            placeholder={t(locale, "labels.search")}
+   743→            value={search}
+   744→            onChange={(e) => setSearch(e.target.value)}
+   745→            className="pl-9 bg-secondary/50 border-border/50"
+   746→          />
+   747→        </div>
+   748→        <Popover open={genrePopoverOpen} onOpenChange={setGenrePopoverOpen}>
+   749→          <PopoverTrigger asChild>
+   750→            <Button variant="outline" className="w-full sm:w-auto min-w-[180px] max-w-[320px] bg-secondary/50 border-border/50 justify-start h-9 px-3">
+   751→              <Filter className="h-3.5 w-3.5 mr-1.5 shrink-0" />
+   752→              {genreFilter.length === 0 ? (
+   753→                <span className="text-muted-foreground">{t(locale, "labels.allGenres")}</span>
+   754→              ) : (
+   755→                <span className="truncate flex items-center gap-1">
+   756→                  {genreFilter.length === 1 ? genreFilter[0] : (
+   757→                    <>
+   758→                      {genreFilter.slice(0, 2).map((g) => (
+   759→                        <Badge key={g} className="bg-primary/20 text-primary border-primary/30 text-[10px] px-1.5 py-0 leading-4">{g}</Badge>
+   760→                      ))}
+   761→                      {genreFilter.length > 2 && <span className="text-[10px] text-muted-foreground">+{genreFilter.length - 2}</span>}
+   762→                    </>
+   763→                  )}
+   764→                </span>
+   765→              )}
+   766→              <ChevronDown className="h-3 w-3 ml-auto shrink-0 opacity-50" />
+   767→            </Button>
+   768→          </PopoverTrigger>
+   769→          <PopoverContent className="w-72 p-0 bg-card border-border/50" align="start">
+   770→            <div className="p-2 border-b border-border/30">
+   771→              <div className="flex items-center justify-between">
+   772→                <span className="text-xs font-medium text-muted-foreground uppercase tracking-wider">{t(locale, "labels.filterByGenre")}</span>
+   773→                {genreFilter.length > 0 && (
+   774→                  <Button variant="ghost" size="sm" className="h-5 text-[10px] text-muted-foreground hover:text-foreground px-1.5" onClick={clearGenreFilter}>
+   775→                    <X className="h-2.5 w-2.5 mr-0.5" />{t(locale, "labels.clearFilter")}
+   776→                  </Button>
+   777→                )}
+   778→              </div>
+   779→              {genreFilter.length > 0 && (
+   780→                <p className="text-[10px] text-primary/70 mt-1">
+   781→                  {t(locale, "labels.andLogic")} ({genreFilter.length} {genreFilter.length === 1 ? t(locale, "labels.genreSingular") : t(locale, "labels.genrePlural")})
+   782→                </p>
+   783→              )}
+   784→            </div>
+   785→            <div className="max-h-[280px] overflow-y-auto p-1">
+   786→              {genres.map((g) => {
+   787→                const isSelected = genreFilter.includes(g);
+   788→                return (
+   789→                  <button key={g} onClick={() => toggleGenre(g)} className="flex items-center gap-2 w-full px-2 py-1.5 rounded-md text-sm hover:bg-secondary/50 transition-colors text-left">
+   790→                    <Checkbox checked={isSelected} className="pointer-events-none" />
+   791→                    <span className={isSelected ? "text-foreground font-medium" : "text-muted-foreground"}>{g}</span>
+   792→                    {isSelected && <Check className="h-3 w-3 ml-auto text-primary" />}
+   793→                  </button>
+   794→                );
+   795→              })}
+   796→            </div>
+   797→          </PopoverContent>
+   798→        </Popover>
+   799→        <Select value={statusFilter} onValueChange={setStatusFilter}>
+   800→          <SelectTrigger className="w-full sm:w-[150px] bg-secondary/50 border-border/50">
+   801→            <ChevronDown className="h-3.5 w-3.5 mr-1.5 shrink-0" />
+   802→            <SelectValue placeholder={t(locale, "labels.allStatus")} />
+   803→          </SelectTrigger>
+   804→          <SelectContent>
+   805→            <SelectItem value="all">{t(locale, "labels.allStatus")}</SelectItem>
+   806→            <SelectItem value="open">{t(locale, "labels.open")}</SelectItem>
+   807→            <SelectItem value="closed">{t(locale, "labels.closed")}</SelectItem>
+   808→          </SelectContent>
+   809→        </Select>
+   810→        <Button onClick={() => setShowSmartMatch(true)} variant="outline" className="border-primary/30 text-primary hover:bg-primary/10 shrink-0">
+   811→          <Target className="h-4 w-4 mr-1.5" />{t(locale, "labels.smartMatch")}
+   812→        </Button>
+   813→        <Button onClick={openAdd} className="glow-purple shrink-0">
+   814→          <Plus className="h-4 w-4 mr-1.5" />{t(locale, "labels.addLabel")}
+   815→        </Button>
+   816→      </div>
+   817→
+   818→      {/* Results count */}
+   819→      <p className="text-xs text-muted-foreground font-mono">
+   820→        {filteredLabels.length} {t(locale, "labels.found")}
+   821→      </p>
+   822→
+   823→      {/* Labels list */}
+   824→      <div className="grid gap-2">
+   825→        {filteredLabels.slice(0, 100).map((label) => {
+   826→          const bestGenre = genreFilter.length > 0 ? genreFilter[0] : label.genres[0];
+   827→          const rank = getBestRank(label, bestGenre);
+   828→          const enriched = hasUserData(label);
+   829→          return (
+   830→            <Card key={label.id} className="bg-card/60 border-border/40 hover:border-primary/30 transition-all group cursor-pointer" onClick={() => openDetail(label)}>
+   831→              <CardContent className="p-3">
+   832→                <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-2">
+   833→                  <div className="flex-1 min-w-0">
+   834→                    <div className="flex items-center gap-2 flex-wrap">
+   835→                      <Music2 className="h-3.5 w-3.5 text-primary shrink-0" />
+   836→                      <h3 className="font-semibold text-foreground text-sm truncate">{label.name}</h3>
+   837→                      {enriched && (
+   838→                        <Badge className="bg-primary/15 text-primary border-primary/20 text-[10px] px-1.5 py-0">
+   839→                          <CircleDot className="h-2.5 w-2.5 mr-0.5" />{t(locale, "labels.enriched")}
+   840→                        </Badge>
+   841→                      )}
+   842→                      {label.trending && (
+   843→                        <Badge className="bg-orange-500/20 text-orange-300 border-orange-500/30 text-[10px] px-1.5 py-0">
+   844→                          <TrendingUp className="h-2.5 w-2.5 mr-0.5" />🔥
+   845→                        </Badge>
+   846→                      )}
+   847→                      {rank && (
+   848→                        <span className="text-[10px] font-mono text-primary/70 bg-primary/10 px-1.5 py-0.5 rounded">
+   849→                          {t(locale, "labels.rank")} {rank}
+   850→                        </span>
+   851→                      )}
+   852→                      {getTierBadge(label)}
+   853→                      <Badge variant={label.status === "open" ? "default" : "secondary"}
+   854→                        className={label.status === "open" ? "bg-emerald-500/20 text-emerald-400 border-emerald-500/30 text-[10px] px-1.5 py-0" : "bg-red-500/20 text-red-400 border-red-500/30 text-[10px] px-1.5 py-0"}>
+   855→                        {label.status === "open" ? t(locale, "labels.open") : t(locale, "labels.closed")}
+   856→                      </Badge>
+   857→                    </div>
+   858→                    <div className="flex flex-wrap items-center gap-x-3 gap-y-0.5 mt-1 text-[11px] text-muted-foreground">
+   859→                      <span className="text-primary/60 font-medium truncate max-w-[200px]">{bestGenre || label.genre}</span>
+   860→                      {label.emails && label.emails.length > 0 && (
+   861→                        <a
+   862→                          href={`mailto:${label.emails[0]}`}
+   863→                          onClick={(e) => e.stopPropagation()}
+   864→                          className="font-mono truncate max-w-[200px] flex items-center gap-0.5 hover:text-foreground transition-colors"
+   865→                        >
+   866→                          <Mail className="h-2.5 w-2.5" /> {label.emails[0]}{label.emails.length > 1 ? ` +${label.emails.length - 1}` : ""}
+   867→                        </a>
+   868→                      )}
+   869→                      {!label.emails?.length && label.contactInfo && (
+   870→                        <a
+   871→                          href={label.contactInfo.includes("@") ? `mailto:${label.contactInfo}` : toClickableUrl(label.contactInfo, "website") || "#"}
+   872→                          onClick={(e) => e.stopPropagation()}
+   873→                          className="font-mono truncate max-w-[200px] flex items-center gap-0.5 hover:text-foreground transition-colors"
+   874→                        >
+   875→                          <Mail className="h-2.5 w-2.5" /> {label.contactInfo}
+   876→                        </a>
+   877→                      )}
+   878→                      {label.website && (
+   879→                        <a
+   880→                          href={toClickableUrl(label.website, "website") || "#"}
+   881→                          onClick={(e) => e.stopPropagation()}
+   882→                          target="_blank"
+   883→                          rel="noopener noreferrer"
+   884→                          className="font-mono truncate max-w-[160px] flex items-center gap-0.5 hover:text-cyan-400 transition-colors"
+   885→                        >
+   886→                          <Globe className="h-2.5 w-2.5" /> {getLinkDisplay(label.website)}
+   887→                        </a>
+   888→                      )}
+   889→                      {bestGenre && label.pointsByGenre?.[bestGenre] && (
+   890→                        <span className="font-mono text-muted-foreground/50">
+   891→                          {label.pointsByGenre[bestGenre].toLocaleString()} {t(locale, "labels.points")}
+   892→                        </span>
+   893→                      )}
+   894→                    </div>
+   895→                  </div>
+   896→                  {label.isCustom && (
+   897→                    <div className="flex items-center gap-1 shrink-0 opacity-60 group-hover:opacity-100 transition-opacity">
+   898→                      <Button variant="ghost" size="icon" className="h-7 w-7 hover:text-destructive"
+   899→                        onClick={(e) => { e.stopPropagation(); setDeleteConfirmId(label.id); }}>
+   900→                        <Trash2 className="h-3 w-3" />
+   901→                      </Button>
+   902→                    </div>
+   903→                  )}
+   904→                </div>
+   905→              </CardContent>
+   906→            </Card>
+   907→          );
+   908→        })}
+   909→
+   910→        {filteredLabels.length > 100 && (
+   911→          <p className="text-xs text-muted-foreground text-center py-2">
+   912→            ...{t(locale, "labels.andOther")} {filteredLabels.length - 100} {t(locale, "labels.labelsLower")}. {t(locale, "labels.useFilters")}
+   913→          </p>
+   914→        )}
+   915→        {filteredLabels.length === 0 && (
+   916→          <div className="text-center py-16 text-muted-foreground">
+   917→            <Music2 className="h-12 w-12 mx-auto mb-3 opacity-30" />
+   918→            <p className="text-sm">{t(locale, "labels.noLabels")}</p>
+   919→          </div>
+   920→        )}
+   921→      </div>
+   922→
+   923→      {/* =========== DETAIL DIALOG =========== */}
+   924→      <Dialog open={!!detailLabel} onOpenChange={(open) => { if (!open) setDetailLabel(null); }}>
+   925→        <DialogContent className="sm:max-w-2xl bg-card border-border/50 max-h-[90vh] overflow-y-auto">
+   926→          {detailLabel && (() => {
+   927→            const bestGenre = genreFilter.length > 0 ? genreFilter[0] : detailLabel.genres[0];
+   928→            const rank = getBestRank(detailLabel, bestGenre);
+   929→            return (
+   930→              <>
+   931→                <DialogHeader>
+   932→                  <DialogTitle className="flex items-center gap-2 flex-wrap">
+   933→                    <Music2 className="h-5 w-5 text-primary" />
+   934→                    <span>{detailLabel.name}</span>
+   935→                    {rank && <span className="text-xs font-mono text-primary/70 bg-primary/10 px-2 py-0.5 rounded">{t(locale, "labels.rank")} {rank}</span>}
+   936→                    {getTierBadge(detailLabel)}
+   937→                    {detailLabel.trending && <Badge className="bg-orange-500/20 text-orange-300 border-orange-500/30 text-[10px] px-1.5 py-0">🔥 Trending</Badge>}
+   938→                  </DialogTitle>
+   939→                </DialogHeader>
+   940→
+   941→                {/* Beatport data (read-only) */}
+   942→                <div className="space-y-3 pb-3 border-b border-border/30">
+   943→                  <p className="text-[10px] text-muted-foreground uppercase tracking-wider font-medium">{t(locale, "labels.beatportData")}</p>
+   944→                  <div className="flex flex-wrap gap-2">
+   945→                    {detailLabel.genres.map((g) => (
+   946→                      <Badge key={g} variant="secondary" className="text-[10px] bg-secondary/50">
+   947→                        {g}{detailLabel.rankByGenre?.[g] && <span className="ml-1 text-primary/60">#{detailLabel.rankByGenre[g]}</span>}
+   948→                      </Badge>
+   949→                    ))}
+   950→                  </div>
+   951→                  <div className="grid grid-cols-3 gap-2 text-center">
+   952→                    {bestGenre && detailLabel.rankByGenre?.[bestGenre] && (
+   953→                      <div className="bg-secondary/30 rounded-lg p-2">
+   954→                        <p className="text-[10px] text-muted-foreground uppercase">{t(locale, "labels.rank")}</p>
+   955→                        <p className="text-lg font-bold text-primary">#{detailLabel.rankByGenre[bestGenre]}</p>
+   956→                      </div>
+   957→                    )}
+   958→                    {bestGenre && detailLabel.pointsByGenre?.[bestGenre] && (
+   959→                      <div className="bg-secondary/30 rounded-lg p-2">
+   960→                        <p className="text-[10px] text-muted-foreground uppercase">{t(locale, "labels.points")}</p>
+   961→                        <p className="text-lg font-bold text-foreground">{detailLabel.pointsByGenre[bestGenre].toLocaleString()}</p>
+   962→                      </div>
+   963→                    )}
+   964→                    <div className="bg-secondary/30 rounded-lg p-2">
+   965→                      <p className="text-[10px] text-muted-foreground uppercase">{t(locale, "labels.status")}</p>
+   966→                      <p className={`text-sm font-bold ${detailLabel.status === "open" ? "text-emerald-400" : "text-red-400"}`}>
+   967→                        {detailLabel.status === "open" ? t(locale, "labels.open") : t(locale, "labels.closed")}
+   968→                      </p>
+   969→                    </div>
+   970→                  </div>
+   971→                </div>
+   972→
+   973→                {/* User-editable fields with auto-save */}
+   974→                <div className="space-y-4 py-3">
+   975→                  <div className="flex items-center justify-between">
+   976→                    <p className="text-[10px] text-muted-foreground uppercase tracking-wider font-medium">{t(locale, "labels.yourData")}</p>
+   977→                    {detailSaved && (
+   978→                      <span className="text-[10px] text-emerald-400 flex items-center gap-1 animate-pulse">
+   979→                        <Save className="h-2.5 w-2.5" /> {t(locale, "labels.saved")}
+   980→                      </span>
+   981→                    )}
+   982→                  </div>
+   983→
+   984→                  {/* Multiple emails */}
+   985→                  <div className="space-y-1.5">
+   986→                    <UILabel className="text-xs font-mono uppercase text-muted-foreground flex items-center gap-1.5">
+   987→                      <Mail className="h-3 w-3" /> {t(locale, "labels.demoEmails")}
+   988→                    </UILabel>
+   989→                    <div className="space-y-1.5">
+   990→                      {detailEmails.map((email, idx) => (
+   991→                        <div key={idx} className="flex items-center gap-1.5">
+   992→                          <div className="flex-1 px-3 py-1.5 rounded-md bg-secondary/50 border border-border/30 text-sm font-mono text-foreground flex items-center justify-between">
+   993→                            <span className="truncate">{email}</span>
+   994→                            <button
+   995→                              onClick={() => removeEmail(idx)}
+   996→                              className="text-muted-foreground hover:text-destructive transition-colors shrink-0 ml-2"
+   997→                            >
+   998→                              <X className="h-3 w-3" />
+   999→                            </button>
+  1000→                          </div>
+  1001→                          {idx === 0 && detailEmails.length > 1 && (
+  1002→                            <Badge className="text-[8px] bg-primary/10 text-primary border-primary/20 px-1 py-0 shrink-0">TO</Badge>
+  1003→                          )}
+  1004→                          {idx > 0 && (
+  1005→                            <Badge className="text-[8px] bg-secondary/50 text-muted-foreground border-border/30 px-1 py-0 shrink-0">CC</Badge>
+  1006→                          )}
+  1007→                        </div>
+  1008→                      ))}
+  1009→                      <div className="flex gap-1.5">
+  1010→                        <Input
+  1011→                          value={newEmailInput}
+  1012→                          onChange={(e) => setNewEmailInput(e.target.value)}
+  1013→                          onKeyDown={(e) => { if (e.key === "Enter") { e.preventDefault(); addEmail(); } }}
+  1014→                          placeholder={t(locale, "labels.addEmailPlaceholder")}
+  1015→                          className="bg-secondary/50 text-sm"
+  1016→                        />
+  1017→                        <Button variant="outline" size="sm" onClick={addEmail} disabled={!newEmailInput.trim() || !newEmailInput.includes("@")} className="shrink-0">
+  1018→                          <Plus className="h-3 w-3" />
+  1019→                        </Button>
+  1020→                      </div>
+  1021→                    </div>
+  1022→                  </div>
+  1023→
+  1024→                  {/* Unified Links & Social section */}
+  1025→                  <div className="space-y-2">
+  1026→                    <div className="flex items-center justify-between">
+  1027→                      <UILabel className="text-xs font-mono uppercase text-muted-foreground flex items-center gap-1.5">
+  1028→                        <ExternalLink className="h-3 w-3" /> {t(locale, "labels.linksSection")}
+  1029→                      </UILabel>
+  1030→                    </div>
+  1031→                    {/* Existing links */}
+  1032→                    {detailLinks.map((link, idx) => {
+  1033→                      const Icon = getLinkIcon(link.type);
+  1034→                      const color = getLinkColor(link.type);
+  1035→                      const clickUrl = link.value?.trim() ? toClickableUrl(link.value, link.type) : null;
+  1036→                      // Find which types are already used (to limit dropdown choices)
+  1037→                      const usedTypes = new Set(detailLinks.map((l, i) => i !== idx ? l.type : null).filter(Boolean));
+  1038→                      return (
+  1039→                        <div key={idx} className="space-y-1">
+  1040→                          <div className="flex items-center gap-1.5">
+  1041→                            {/* Type selector */}
+  1042→                            <Select value={link.type} onValueChange={(v) => updateDetailLink(idx, "type", v)}>
+  1043→                              <SelectTrigger className="bg-secondary/50 w-[130px] shrink-0 h-9 text-xs">
+  1044→                                <SelectValue />
+  1045→                              </SelectTrigger>
+  1046→                              <SelectContent>
+  1047→                                {LINK_TYPES.map((lt) => (
+  1048→                                  <SelectItem key={lt.id} value={lt.id} disabled={usedTypes.has(lt.id) && lt.id !== link.type}>
+  1049→                                    {t(locale, lt.labelKey as any)}
+  1050→                                  </SelectItem>
+  1051→                                ))}
+  1052→                              </SelectContent>
+  1053→                            </Select>
+  1054→                            {/* Value input */}
+  1055→                            <Input value={link.value} onChange={(e) => updateDetailLink(idx, "value", e.target.value)}
+  1056→                              onBlur={() => saveDetailLinkOnBlur(idx)}
+  1057→                              placeholder={getLinkPlaceholder(link.type)} className="bg-secondary/50 flex-1 text-sm" />
+  1058→                            {/* Open link button */}
+  1059→                            {clickUrl && (
+  1060→                              <Button variant="ghost" size="icon" className={`shrink-0 h-9 w-9 ${color} hover:opacity-80 hover:bg-white/5`}
+  1061→                                onClick={() => window.open(clickUrl, "_blank")}
+  1062→                                title={t(locale, "labels.openLink")}>
+  1063→                                <ExternalLink className="h-3.5 w-3.5" />
+  1064→                              </Button>
+  1065→                            )}
+  1066→                            {/* Remove button */}
+  1067→                            <Button variant="ghost" size="icon" className="shrink-0 h-9 w-9 text-muted-foreground hover:text-destructive hover:bg-destructive/10"
+  1068→                              onClick={() => removeDetailLink(idx)}>
+  1069→                              <X className="h-3.5 w-3.5" />
+  1070→                            </Button>
+  1071→                          </div>
+  1072→                          {/* Clickable URL preview */}
+  1073→                          {clickUrl && (
+  1074→                            <a href={clickUrl} target="_blank" rel="noopener noreferrer"
+  1075→                              className={`text-[11px] font-mono ${color} hover:underline truncate block pl-[138px]`}>
+  1076→                              {clickUrl}
+  1077→                            </a>
+  1078→                          )}
+  1079→                        </div>
+  1080→                      );
+  1081→                    })}
+  1082→                    {/* Add new link button */}
+  1083→                    <div className="flex items-center gap-1.5">
+  1084→                      <Select value="" onValueChange={(v) => addDetailLink(v)}>
+  1085→                        <SelectTrigger className="bg-secondary/30 border-dashed border-muted-foreground/30 w-full h-9 text-xs text-muted-foreground hover:border-primary/50 hover:text-primary transition-colors">
+  1086→                          <Plus className="h-3 w-3 mr-1" />
+  1087→                          <SelectValue placeholder={t(locale, "labels.addLinkPlaceholder")} />
+  1088→                        </SelectTrigger>
+  1089→                        <SelectContent>
+  1090→                          {LINK_TYPES.map((lt) => {
+  1091→                            const alreadyUsed = detailLinks.some(l => l.type === lt.id);
+  1092→                            return (
+  1093→                              <SelectItem key={lt.id} value={lt.id} disabled={alreadyUsed}>
+  1094→                                {t(locale, lt.labelKey as any)}
+  1095→                              </SelectItem>
+  1096→                            );
+  1097→                          })}
+  1098→                        </SelectContent>
+  1099→                      </Select>
+  1100→                    </div>
+  1101→                  </div>
+  1102→
+  1103→                  <div className="grid grid-cols-2 gap-3">
+  1104→                    <div className="space-y-1.5">
+  1105→                      <UILabel className="text-xs font-mono uppercase text-muted-foreground">{t(locale, "labels.submissionType")}</UILabel>
+  1106→                      <Select value={detailSubmissionType} onValueChange={(v) => {
+  1107→                        const val = v as "email" | "webform" | "platform";
+  1108→                        setDetailSubmissionType(val);
+  1109→                        if (detailLabel) updateLabel(detailLabel.id, { submissionType: val });
+  1110→                        setDetailSaved(true); setTimeout(() => setDetailSaved(false), 1500);
+  1111→                      }}>
+  1112→                        <SelectTrigger className="bg-secondary/50"><SelectValue /></SelectTrigger>
+  1113→                        <SelectContent>
+  1114→                          {SUBMISSION_TYPES.map((type) => (<SelectItem key={type} value={type}>{getSubmissionLabel(type)}</SelectItem>))}
+  1115→                        </SelectContent>
+  1116→                      </Select>
+  1117→                    </div>
+  1118→                    <div className="space-y-1.5">
+  1119→                      <UILabel className="text-xs font-mono uppercase text-muted-foreground">{t(locale, "labels.status")}</UILabel>
+  1120→                      <Select value={detailStatus} onValueChange={(v) => {
+  1121→                        const val = v as "open" | "closed";
+  1122→                        setDetailStatus(val);
+  1123→                        if (detailLabel) updateLabel(detailLabel.id, { status: val });
+  1124→                        setDetailSaved(true); setTimeout(() => setDetailSaved(false), 1500);
+  1125→                      }}>
+  1126→                        <SelectTrigger className="bg-secondary/50"><SelectValue /></SelectTrigger>
+  1127→                        <SelectContent>
+  1128→                          <SelectItem value="open">{t(locale, "labels.open")}</SelectItem>
+  1129→                          <SelectItem value="closed">{t(locale, "labels.closed")}</SelectItem>
+  1130→                        </SelectContent>
+  1131→                      </Select>
+  1132→                    </div>
+  1133→                  </div>
+  1134→
+  1135→                  <div className="space-y-1.5">
+  1136→                    <UILabel className="text-xs font-mono uppercase text-muted-foreground">{t(locale, "labels.notes")}</UILabel>
+  1137→                    <Textarea value={detailNotes} onChange={(e) => setDetailNotes(e.target.value)}
+  1138→                      onBlur={() => saveDetailField("notes", detailNotes)} placeholder={t(locale, "labels.notesPlaceholder")} rows={2} className="bg-secondary/50 resize-none" />
+  1139→                  </div>
+  1140→                </div>
+  1141→
+  1142→                {/* Pitch Section */}
+  1143→                <div className="border-t border-border/30 pt-3">
+  1144→                  <Button
+  1145→                    variant="outline"
+  1146→                    className="w-full border-primary/30 text-primary hover:bg-primary/10"
+  1147→                    onClick={() => setShowPitch(!showPitch)}
+  1148→                  >
+  1149→                    <Sparkles className="h-4 w-4 mr-1.5" />
+  1150→                    {showPitch ? t(locale, "labels.hidePitch") : t(locale, "labels.generatePitch")}
+  1151→                  </Button>
+  1152→
+  1153→                  {showPitch && (
+  1154→                    <div className="space-y-3 mt-3">
+  1155→                      <div className="grid grid-cols-2 gap-3">
+  1156→                        <div className="space-y-1.5">
+  1157→                          <UILabel className="text-xs font-mono uppercase text-muted-foreground">{t(locale, "pitch.trackName")}</UILabel>
+  1158→                          <Input value={pitchTrackName} onChange={(e) => { setPitchTrackName(e.target.value); setPitchDemoCreated(false); }} placeholder="e.g. Midnight Drive" className="bg-secondary/50 text-sm" />
+  1159→                        </div>
+  1160→                        <div className="space-y-1.5">
+  1161→                          <UILabel className="text-xs font-mono uppercase text-muted-foreground">{t(locale, "pitch.artistName")}</UILabel>
+  1162→                          <Input value={pitchArtistName} onChange={(e) => setPitchArtistName(e.target.value)} onBlur={handlePitchArtistBlur} placeholder="e.g. Traacia" className="bg-secondary/50 text-sm" />
+  1163→                        </div>
+  1164→                      </div>
+  1165→                      <div className="grid grid-cols-3 gap-3">
+  1166→                        <div className="space-y-1.5">
+  1167→                          <UILabel className="text-xs font-mono uppercase text-muted-foreground">{t(locale, "pitch.scLink")}</UILabel>
+  1168→                          <Input value={pitchScLink} onChange={(e) => setPitchScLink(e.target.value)} onBlur={handlePitchScLinkBlur} placeholder="https://soundcloud.com/..." className="bg-secondary/50 text-sm" />
+  1169→                        </div>
+  1170→                        <div className="space-y-1.5">
+  1171→                          <UILabel className="text-xs font-mono uppercase text-muted-foreground">{t(locale, "pitch.tone")}</UILabel>
+  1172→                          <Select value={pitchTone} onValueChange={(v) => setPitchTone(v as PitchTone)}>
+  1173→                            <SelectTrigger className="bg-secondary/50 text-sm"><SelectValue /></SelectTrigger>
+  1174→                            <SelectContent>
+  1175→                              <SelectItem value="professional">{t(locale, "pitch.toneProfessional")}</SelectItem>
+  1176→                              <SelectItem value="confident">{t(locale, "pitch.toneConfident")}</SelectItem>
+  1177→                              <SelectItem value="friendly">{t(locale, "pitch.toneFriendly")}</SelectItem>
+  1178→                              <SelectItem value="storytelling">{t(locale, "pitch.toneStorytelling")}</SelectItem>
+  1179→                            </SelectContent>
+  1180→                          </Select>
+  1181→                        </div>
+  1182→                        <div className="space-y-1.5">
+  1183→                          <UILabel className="text-xs font-mono uppercase text-muted-foreground flex items-center gap-1">
+  1184→                            <Languages className="h-3 w-3" /> {t(locale, "pitch.emailLanguage")}
+  1185→                          </UILabel>
+  1186→                          <Select value={pitchLanguage} onValueChange={(v) => setPitchLanguage(v as PitchLanguage)}>
+  1187→                            <SelectTrigger className="bg-secondary/50 text-sm"><SelectValue /></SelectTrigger>
+  1188→                            <SelectContent>
+  1189→                              {(Object.keys(PITCH_LANGUAGES) as PitchLanguage[]).map((lang) => (
+  1190→                                <SelectItem key={lang} value={lang}>{PITCH_LANGUAGES[lang]}</SelectItem>
+  1191→                              ))}
+  1192→                            </SelectContent>
+  1193→                          </Select>
+  1194→                        </div>
+  1195→                      </div>
+  1196→                      <div className="space-y-1.5">
+  1197→                        <UILabel className="text-xs font-mono uppercase text-muted-foreground">{t(locale, "pitch.additionalNote")}</UILabel>
+  1198→                        <Input value={pitchNote} onChange={(e) => setPitchNote(e.target.value)} placeholder="Optional note..." className="bg-secondary/50 text-sm" />
+  1199→                      </div>
+  1200→
+  1201→                      {/* Pitch preview */}
+  1202→                      {pitchText && (
+  1203→                        <div className="space-y-2">
+  1204→                          <div className="flex items-center justify-between">
+  1205→                            <span className="text-[10px] text-muted-foreground uppercase tracking-wider flex items-center gap-1">
+  1206→                              <Sparkles className="h-3 w-3 text-primary" /> {t(locale, "pitch.preview")}
+  1207→                            </span>
+  1208→                            <div className="flex items-center gap-1.5">
+  1209→                              <Button onClick={handlePitchCopy} size="sm" className="h-7 text-xs border-border/50" variant="outline">
+  1210→                                {pitchCopied ? <><Check className="h-3 w-3 mr-1" />{t(locale, "pitch.copied")}</> : <><Copy className="h-3 w-3 mr-1" />{t(locale, "pitch.copyToClipboard")}</>}
+  1211→                              </Button>
+  1212→                            </div>
+  1213→                          </div>
+  1214→                          <Card className="bg-card/80 border-border/30">
+  1215→                            <CardContent className="p-3 max-h-[220px] overflow-y-auto">
+  1216→                              <pre className="text-[11px] leading-relaxed whitespace-pre-wrap font-mono text-foreground/80">{pitchText}</pre>
+  1217→                            </CardContent>
+  1218→                          </Card>
+  1219→
+  1220→                          {/* Action buttons */}
+  1221→                          <div className="flex flex-col gap-2">
+  1222→                            {/* Direct Gmail send — PRIMARY if connected */}
+  1223→                            {gmailAuth.isConnected ? (
+  1224→                              <Button
+  1225→                                onClick={handleDirectSend}
+  1226→                                className="w-full text-sm bg-emerald-600 hover:bg-emerald-500 text-white"
+  1227→                                disabled={!pitchTrackName.trim() || !detailEmails.length || sendingEmail}
+  1228→                              >
+  1229→                                {emailSent ? (
+  1230→                                  <><CheckCircle2 className="h-3.5 w-3.5 mr-1.5" />Email inviata!</>
+  1231→                                ) : sendingEmail ? (
+  1232→                                  <><Loader2 className="h-3.5 w-3.5 mr-1.5 animate-spin" />Invio in corso...</>
+  1233→                                ) : pitchDemoCreated ? (
+  1234→                                  <><Check className="h-3.5 w-3.5 mr-1" />{t(locale, "pitch.sentAndTracked")}</>
+  1235→                                ) : (
+  1236→                                  <><SendHorizonal className="h-3.5 w-3.5 mr-1.5" />Invia direttamente da Gmail</>
+  1237→                                )}
+  1238→                              </Button>
+  1239→                            ) : (
+  1240→                              /* Fallback: open Gmail in browser if not connected */
+  1241→                              <Button
+  1242→                                onClick={handleOpenGmail}
+  1243→                                className="w-full glow-purple text-sm"
+  1244→                                disabled={!pitchTrackName.trim()}
+  1245→                              >
+  1246→                                <MailOpen className="h-3.5 w-3.5 mr-1.5" />
+  1247→                                {pitchDemoCreated
+  1248→                                  ? <><Check className="h-3.5 w-3.5 mr-1" />{t(locale, "pitch.sentAndTracked")}</>
+  1249→                                  : detailEmails.length > 0
+  1250→                                    ? t(locale, "pitch.openGmail")
+  1251→                                    : t(locale, "pitch.openGmailNoEmail")
+  1252→                                }
+  1253→                              </Button>
+  1254→                            )}
+  1255→
+  1256→                            {/* Secondary actions row */}
+  1257→                            <div className="flex flex-col sm:flex-row gap-2">
+  1258→                              {/* mailto: link — only when label has email */}
+  1259→                              {detailEmails.length > 0 && detailSubmissionType === "email" && (
+  1260→                                <Button
+  1261→                                  onClick={handleSendAndTrack}
+  1262→                                  variant="outline"
+  1263→                                  className="flex-1 text-sm border-primary/20"
+  1264→                                  disabled={!pitchTrackName.trim()}
+  1265→                                >
+  1266→                                  <Send className="h-3.5 w-3.5 mr-1.5" />
+  1267→                                  {t(locale, "pitch.openEmailClient")}
+  1268→                                </Button>
+  1269→                              )}
+  1270→                              {/* Track Demo Only */}
+  1271→                              {!demoAlreadyExists && !pitchDemoCreated && (
+  1272→                                <Button
+  1273→                                  variant="outline"
+  1274→                                  className="flex-1 text-sm border-border/50"
+  1275→                                  disabled={!pitchTrackName.trim()}
+  1276→                                  onClick={() => {
+  1277→                                    if (!detailLabel || !pitchTrackName.trim()) return;
+  1278→                                    addDemo({
+  1279→                                      trackName: pitchTrackName.trim(),
+  1280→                                      labelId: detailLabel.id,
+  1281→                                      status: "ready",
+  1282→                                      sentDate: null,
+  1283→                                      link: pitchScLink.trim(),
+  1284→                                      links: [],
+  1285→                                      notes: pitchNote.trim(),
+  1286→                                      pitchText: pitchText,
+  1287→                                      artistName: pitchArtistName.trim(),
+  1288→                                      genre: "",
+  1289→                                      bpm: "",
+  1290→                                      key: "",
+  1291→                                    });
+  1292→                                    setPitchDemoCreated(true);
+  1293→                                  }}
+  1294→                                >
+  1295→                                  <ClipboardCheck className="h-3.5 w-3.5 mr-1.5" />
+  1296→                                  {t(locale, "pitch.addDemoOnly")}
+  1297→                                </Button>
+  1298→                              )}
+  1299→                              {pitchDemoCreated && (
+  1300→                                <Button
+  1301→                                  variant="ghost"
+  1302→                                  size="sm"
+  1303→                                  className="text-primary text-xs"
+  1304→                                  onClick={() => { setActiveTab("demos"); setDetailLabel(null); }}
+  1305→                                >
+  1306→                                  {t(locale, "pitch.goToDemo")} →
+  1307→                                </Button>
+  1308→                              )}
+  1309→                            </div>
+  1310→
+  1311→                            {/* Info message when no email is set */}
+  1312→                            {!detailEmails.length && (
+  1313→                              <p className="text-[10px] text-amber-400/70 flex items-center gap-1">
+  1314→                                <Mail className="h-3 w-3" /> {t(locale, "pitch.addEmailFirst")}
+  1315→                              </p>
+  1316→                            )}
+  1317→                          </div>
+  1318→                        </div>
+  1319→                      )}
+  1320→                    </div>
+  1321→                  )}
+  1322→                </div>
+  1323→
+  1324→                <DialogFooter className="gap-2">
+  1325→                  {detailLabel.isCustom && (
+  1326→                    <Button variant="destructive" size="sm" onClick={() => { setDeleteConfirmId(detailLabel.id); setDetailLabel(null); }}>
+  1327→                      <Trash2 className="h-3 w-3 mr-1" />{t(locale, "labels.delete")}
+  1328→                    </Button>
+  1329→                  )}
+  1330→                  <Button variant="ghost" onClick={() => setDetailLabel(null)}>{t(locale, "labels.close")}</Button>
+  1331→                </DialogFooter>
+  1332→              </>
+  1333→            );
+  1334→          })()}
+  1335→        </DialogContent>
+  1336→      </Dialog>
+  1337→
+  1338→      {/* Smart Match Dialog */}
+  1339→      <Dialog open={showSmartMatch} onOpenChange={setShowSmartMatch}>
+  1340→        <DialogContent className="sm:max-w-2xl bg-card border-border/50 max-h-[85vh] overflow-y-auto">
+  1341→          <DialogHeader>
+  1342→            <DialogTitle className="flex items-center gap-2">
+  1343→              <Target className="h-5 w-5 text-primary" />{t(locale, "labels.smartMatchTitle")}
+  1344→            </DialogTitle>
+  1345→          </DialogHeader>
+  1346→          <p className="text-sm text-muted-foreground">{t(locale, "labels.smartMatchDesc")}</p>
+  1347→          <Select value={smartMatchGenre} onValueChange={setSmartMatchGenre}>
+  1348→            <SelectTrigger className="bg-secondary/50"><SelectValue placeholder={t(locale, "labels.selectGenre")} /></SelectTrigger>
+  1349→            <SelectContent>{genres.map((g) => (<SelectItem key={g} value={g}>{g}</SelectItem>))}</SelectContent>
+  1350→          </Select>
+  1351→
+  1352→          {smartMatchGenre && (
+  1353→            <div className="space-y-4 mt-2">
+  1354→              {smartMatchResults.top.length > 0 && (
+  1355→                <div>
+  1356→                  <h4 className="text-xs font-semibold text-purple-300 uppercase tracking-wider mb-2 flex items-center gap-1.5">
+  1357→                    <Award className="h-3.5 w-3.5" />{t(locale, "labels.topTier")}
+  1358→                  </h4>
+  1359→                  <div className="grid gap-1.5">
+  1360→                    {smartMatchResults.top.map((l) => (
+  1361→                      <div key={l.id} className="flex items-center justify-between px-3 py-1.5 rounded-lg bg-purple-500/5 border border-purple-500/10 text-sm cursor-pointer hover:bg-purple-500/10 transition-colors"
+  1362→                        onClick={() => { setShowSmartMatch(false); openDetail(l); }}>
+  1363→                        <div className="flex items-center gap-2">
+  1364→                          <span className="text-[10px] font-mono text-purple-400 w-8">#{l.rankByGenre?.[smartMatchGenre]}</span>
+  1365→                          <span className="font-medium text-foreground">{l.name}</span>
+  1366→                          {l.trending && <span className="text-orange-400 text-[10px]">🔥</span>}
+  1367→                        </div>
+  1368→                        <span className="text-[10px] font-mono text-muted-foreground">{l.pointsByGenre?.[smartMatchGenre]?.toLocaleString()} pts</span>
+  1369→                      </div>
+  1370→                    ))}
+  1371→                  </div>
+  1372→                </div>
+  1373→              )}
+  1374→              {smartMatchResults.mid.length > 0 && (
+  1375→                <div>
+  1376→                  <h4 className="text-xs font-semibold text-blue-300 uppercase tracking-wider mb-2 flex items-center gap-1.5">
+  1377→                    <Zap className="h-3.5 w-3.5" />{t(locale, "labels.midTier")}
+  1378→                  </h4>
+  1379→                  <div className="grid gap-1.5">
+  1380→                    {smartMatchResults.mid.map((l) => (
+  1381→                      <div key={l.id} className="flex items-center justify-between px-3 py-1.5 rounded-lg bg-blue-500/5 border border-blue-500/10 text-sm cursor-pointer hover:bg-blue-500/10 transition-colors"
+  1382→                        onClick={() => { setShowSmartMatch(false); openDetail(l); }}>
+  1383→                        <div className="flex items-center gap-2">
+  1384→                          <span className="text-[10px] font-mono text-blue-400 w-8">#{l.rankByGenre?.[smartMatchGenre]}</span>
+  1385→                          <span className="font-medium text-foreground">{l.name}</span>
+  1386→                          {l.trending && <span className="text-orange-400 text-[10px]">🔥</span>}
+  1387→                        </div>
+  1388→                        <span className="text-[10px] font-mono text-muted-foreground">{l.pointsByGenre?.[smartMatchGenre]?.toLocaleString()} pts</span>
+  1389→                      </div>
+  1390→                    ))}
+  1391→                  </div>
+  1392→                </div>
+  1393→              )}
+  1394→              {smartMatchResults.emerging.length > 0 && (
+  1395→                <div>
+  1396→                  <h4 className="text-xs font-semibold text-emerald-300 uppercase tracking-wider mb-2 flex items-center gap-1.5">
+  1397→                    <TrendingUp className="h-3.5 w-3.5" />{t(locale, "labels.emerging")}
+  1398→                  </h4>
+  1399→                  <div className="grid gap-1.5">
+  1400→                    {smartMatchResults.emerging.map((l) => (
+  1401→                      <div key={l.id} className="flex items-center justify-between px-3 py-1.5 rounded-lg bg-emerald-500/5 border border-emerald-500/10 text-sm cursor-pointer hover:bg-emerald-500/10 transition-colors"
+  1402→                        onClick={() => { setShowSmartMatch(false); openDetail(l); }}>
+  1403→                        <div className="flex items-center gap-2">
+  1404→                          <span className="text-[10px] text-orange-400">🔥</span>
+  1405→                          <span className="font-medium text-foreground">{l.name}</span>
+  1406→                        </div>
+  1407→                        <span className="text-[10px] font-mono text-muted-foreground">{l.trendingPointsByGenre?.[smartMatchGenre]?.toLocaleString()} pts (14d)</span>
+  1408→                      </div>
+  1409→                    ))}
+  1410→                  </div>
+  1411→                </div>
+  1412→              )}
+  1413→              {smartMatchResults.top.length === 0 && smartMatchResults.mid.length === 0 && smartMatchResults.emerging.length === 0 && (
+  1414→                <p className="text-sm text-muted-foreground text-center py-4">No data for this genre yet.</p>
+  1415→              )}
+  1416→            </div>
+  1417→          )}
+  1418→        </DialogContent>
+  1419→      </Dialog>
+  1420→
+  1421→      {/* Add/Edit Dialog */}
+  1422→      <Dialog open={showAddDialog} onOpenChange={setShowAddDialog}>
+  1423→        <DialogContent className="sm:max-w-md bg-card border-border/50">
+  1424→          <DialogHeader>
+  1425→            <DialogTitle>{editingLabel ? t(locale, "labels.editLabel") : t(locale, "labels.addLabel")}</DialogTitle>
+  1426→          </DialogHeader>
+  1427→          <div className="space-y-4 py-2">
+  1428→            <div className="space-y-1.5">
+  1429→              <UILabel className="text-xs font-mono uppercase text-muted-foreground">{t(locale, "labels.labelName")}</UILabel>
+  1430→              <Input value={formName} onChange={(e) => setFormName(e.target.value)} placeholder="e.g. Drumcode" className="bg-secondary/50" />
+  1431→            </div>
+  1432→            <div className="grid grid-cols-2 gap-3">
+  1433→              <div className="space-y-1.5">
+  1434→                <UILabel className="text-xs font-mono uppercase text-muted-foreground">{t(locale, "labels.genre")}</UILabel>
+  1435→                <Select value={formGenre} onValueChange={setFormGenre}>
+  1436→                  <SelectTrigger className="bg-secondary/50"><SelectValue /></SelectTrigger>
+  1437→                  <SelectContent>{genres.slice(0, 20).map((g) => (<SelectItem key={g} value={g}>{g}</SelectItem>))}</SelectContent>
+  1438→                </Select>
+  1439→              </div>
+  1440→              <div className="space-y-1.5">
+  1441→                <UILabel className="text-xs font-mono uppercase text-muted-foreground">{t(locale, "labels.submissionType")}</UILabel>
+  1442→                <Select value={formSubmissionType} onValueChange={(v) => setFormSubmissionType(v as "email" | "webform" | "platform")}>
+  1443→                  <SelectTrigger className="bg-secondary/50"><SelectValue /></SelectTrigger>
+  1444→                  <SelectContent>{SUBMISSION_TYPES.map((type) => (<SelectItem key={type} value={type}>{getSubmissionLabel(type)}</SelectItem>))}</SelectContent>
+  1445→                </Select>
+  1446→              </div>
+  1447→            </div>
+  1448→            <div className="space-y-1.5">
+  1449→              <UILabel className="text-xs font-mono uppercase text-muted-foreground">{t(locale, "labels.arContact")}</UILabel>
+  1450→              <Input value={formContact} onChange={(e) => setFormContact(e.target.value)} placeholder="demos@label.com or https://..." className="bg-secondary/50" />
+  1451→            </div>
+  1452→            <div className="space-y-1.5">
+  1453→              <UILabel className="text-xs font-mono uppercase text-muted-foreground">{t(locale, "labels.status")}</UILabel>
+  1454→              <Select value={formStatus} onValueChange={(v) => setFormStatus(v as "open" | "closed")}>
+  1455→                <SelectTrigger className="bg-secondary/50"><SelectValue /></SelectTrigger>
+  1456→                <SelectContent>
+  1457→                  <SelectItem value="open">{t(locale, "labels.open")}</SelectItem>
+  1458→                  <SelectItem value="closed">{t(locale, "labels.closed")}</SelectItem>
+  1459→                </SelectContent>
+  1460→              </Select>
+  1461→            </div>
+  1462→            <div className="space-y-1.5">
+  1463→              <UILabel className="text-xs font-mono uppercase text-muted-foreground">{t(locale, "labels.notes")}</UILabel>
+  1464→              <Textarea value={formNotes} onChange={(e) => setFormNotes(e.target.value)} placeholder="..." rows={2} className="bg-secondary/50 resize-none" />
+  1465→            </div>
+  1466→          </div>
+  1467→          <DialogFooter>
+  1468→            <Button variant="ghost" onClick={() => setShowAddDialog(false)}>{t(locale, "labels.cancel")}</Button>
+  1469→            <Button onClick={handleSave} disabled={!formName.trim()}>{editingLabel ? t(locale, "labels.update") : t(locale, "labels.save")}</Button>
+  1470→          </DialogFooter>
+  1471→        </DialogContent>
+  1472→      </Dialog>
+  1473→
+  1474→      {/* Delete Confirm */}
+  1475→      <Dialog open={!!deleteConfirmId} onOpenChange={() => setDeleteConfirmId(null)}>
+  1476→        <DialogContent className="sm:max-w-sm bg-card border-border/50">
+  1477→          <DialogHeader><DialogTitle>{t(locale, "labels.deleteConfirm")}</DialogTitle></DialogHeader>
+  1478→          <p className="text-sm text-muted-foreground">{t(locale, "labels.deleteConfirmMsg")}</p>
+  1479→          <DialogFooter>
+  1480→            <Button variant="ghost" onClick={() => setDeleteConfirmId(null)}>{t(locale, "labels.cancel")}</Button>
+  1481→            <Button variant="destructive" onClick={() => deleteConfirmId && handleDelete(deleteConfirmId)}>{t(locale, "labels.delete")}</Button>
+  1482→          </DialogFooter>
+  1483→        </DialogContent>
+  1484→      </Dialog>
+  1485→    </div>
+  1486→  );
+  1487→}
+  1488→
