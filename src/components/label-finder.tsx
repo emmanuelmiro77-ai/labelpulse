@@ -231,7 +231,7 @@ function getLinkDisplay(value: string): string {
 }
 
 export function LabelFinder() {
-  const { labels, demos, addLabel, updateLabel, deleteLabel, addDemo, locale, getGenres, setActiveTab, userProfile, setUserProfile, gmailAuth, setGmailAuth } =
+  const { labels, demos, addLabel, updateLabel, deleteLabel, addDemo, locale, getGenres, setActiveTab, userProfile, setUserProfile, gmailAuth, setGmailAuth, selectedLabelId, setSelectedLabelId } =
     useAppStore();
   const genres = getGenres();
   const { toast } = useToast();
@@ -361,6 +361,28 @@ export function LabelFinder() {
     setPitchCopied(false);
     setPitchDemoCreated(false);
   }, [userProfile]);
+
+  // Cross-tab navigation: if another tab (e.g. Artist Explorer) sets
+  // selectedLabelId, open the detail dialog for that label and clear the
+  // signal so it doesn't re-open on every re-render. Matches by id first,
+  // then by case-insensitive name as a fallback (artist.labelsPublishedOn
+  // only stores names, not ids).
+  useEffect(() => {
+    if (!selectedLabelId) return;
+    const byId = labels.find(l => l.id === selectedLabelId);
+    if (byId) {
+      openDetail(byId);
+      setSelectedLabelId(null);
+      return;
+    }
+    // Fallback: selectedLabelId might actually be a label name passed
+    // through from artist-explorer (we set both id and name there).
+    const byName = labels.find(l => l.name.toLowerCase().trim() === String(selectedLabelId).toLowerCase().trim());
+    if (byName) {
+      openDetail(byName);
+      setSelectedLabelId(null);
+    }
+  }, [selectedLabelId, labels, openDetail, setSelectedLabelId]);
 
   // Keep detailLabel in sync with store (in case store changes externally)
   useEffect(() => {

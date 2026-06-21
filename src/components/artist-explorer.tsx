@@ -1131,12 +1131,15 @@ export default function ArtistExplorer() {
     artists?: Artist[];
     selectedArtistId?: string | null;
     setSelectedArtistId?: (id: string | null) => void;
+    selectedLabelId?: string | null;
+    setSelectedLabelId?: (id: string | null) => void;
   };
 
   const { locale, labels, setActiveTab } = store;
   const artists = store.artists;
   const selectedArtistId = store.selectedArtistId ?? null;
   const setSelectedArtistId = store.setSelectedArtistId;
+  const setSelectedLabelId = store.setSelectedLabelId;
 
   // Defensive: guard against undefined arrays.
   const safeArtists = useMemo(
@@ -1169,17 +1172,24 @@ export default function ArtistExplorer() {
 
   const handleLabelClick = useCallback(
     (labelName: string) => {
-      // For now: jump to the Labels tab. (Future: could highlight/filter by name.)
-      // We intentionally ignore labelName for the highlight step — store doesn't
-      // expose a "focused label id" yet. The user can search there.
-      void labelName;
-      try {
+      // Cross-tab navigation: try to resolve the label id by name (case-
+      // insensitive) so the LabelFinder can open its detail dialog
+      // directly. If we can't find a match (e.g. the label was scraped
+      // but isn't in the user's saved labels), we still switch to the
+      // Labels tab so the user can search manually.
+      if (!setSelectedLabelId) {
         setActiveTab("labels");
-      } catch {
-        /* noop */
+        return;
       }
+      const match = labels.find(
+        (l) => l.name.toLowerCase().trim() === labelName.toLowerCase().trim()
+      );
+      // If we have an id, pass that. Otherwise pass the name itself —
+      // LabelFinder's useEffect falls back to name matching.
+      setSelectedLabelId(match?.id || labelName);
+      setActiveTab("labels");
     },
-    [setActiveTab]
+    [labels, setActiveTab, setSelectedLabelId]
   );
 
   // ----- Empty state (no artists loaded yet) -----

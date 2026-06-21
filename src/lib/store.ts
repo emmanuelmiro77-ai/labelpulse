@@ -722,6 +722,7 @@ interface AppState {
   demos: Demo[];
   artists: Artist[]; // persisted in IndexedDB, loaded asynchronously on boot
   selectedArtistId: string | null; // for Artist Explorer detail view
+  selectedLabelId: string | null; // cross-tab navigation: clicking a label name from Artist Explorer sets this, then LabelFinder opens the detail dialog
   activeTab: "dashboard" | "labels" | "artists" | "rankings" | "demos" | "pitch" | "profile";
   locale: Locale;
   userProfile: UserProfile;
@@ -749,6 +750,9 @@ interface AppState {
   // Artists (Phase 2 — Beatport scraper v2)
   setSelectedArtistId: (id: string | null) => void;
   setArtists: (artists: Artist[]) => void;
+
+  // Cross-tab label focus (Phase 2 — used by Artist Explorer → Label Finder)
+  setSelectedLabelId: (id: string | null) => void;
 
   // Language
   setLocale: (locale: Locale) => void;
@@ -1011,6 +1015,7 @@ export const useAppStore = create<AppState>()(
       demos: [] as Demo[],
       artists: [] as Artist[], // populated from IndexedDB on boot (see loadArtistsFromIDB)
       selectedArtistId: null as string | null,
+      selectedLabelId: null as string | null,
       activeTab: "dashboard" as const,
       locale: "it" as Locale,
       userProfile: { artistName: "", scLink: "", bio: "", email: "", photoUrl: "", links: [], cyaniteApiToken: "", supabaseUrl: "", supabaseAnonKey: "" } as UserProfile,
@@ -1129,6 +1134,8 @@ export const useAppStore = create<AppState>()(
       setActiveTab: (tab) => set({ activeTab: tab }),
 
       setSelectedArtistId: (id) => set({ selectedArtistId: id }),
+
+      setSelectedLabelId: (id) => set({ selectedLabelId: id }),
 
       setArtists: (artists) => {
         set({ artists });
