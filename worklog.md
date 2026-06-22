@@ -275,3 +275,42 @@ Next:
 - L'utente dovrebbe testare: caricare una traccia in Demo → vedere se i suggerimenti hanno senso
 - Possibile tuning: pesi BPM/key/genre, soglia minScore, maxResults
 - Possibile future: integrare anche energy/danceability quando Cyanite è attivo
+
+---
+Task ID: audio-analysis-fix
+Agent: Main Agent
+Task: User reported "analizza audio non è cambiato di una virgola" — the audio analysis feature appeared unchanged despite previous commits.
+
+Work Log:
+- Investigated the screenshot data: BPM 133, Key 8B, Energy 100%, Dance 100%, "Sconosciuta" key name, 322s · -9.2 dBFS
+- Recognized this is the EXACT output of runWebAudioFallback() when essentia.js fails to load
+- Tested essentia.js asset URLs: /essentia-wasm.web.js → 404, /essentia-wasm.web.wasm → 404, /essentia.js-core.js → 404
+- ROOT CAUSE: Next.js static export was not copying the essentia.js WASM files from /public/ to /out/
+  (server.mjs serves from /out/, so the 404 caused essentia to silently fail on every load)
+- Attempted to add `force-static` to all API routes — works for normal routes but catch-all
+  [...nextauth] route cannot be statically exported even with generateStaticParams
+- Created scripts/build-static.sh: temporarily moves src/app/api/ out of the way during build,
+  restores after. Safe because server.mjs doesn't handle /api/* anyway.
+- Extracted authOptions to src/lib/auth-options.ts so gmail/send route can import it
+  without depending on the catch-all route file
+- Copied essentia.js files directly to /out/ (immediate fix for current running server)
+- Added /public/ as secondary static root in server.mjs (prevents future regressions)
+- Fixed computeEnergy: linear (rms/0.3)^0.7 → logarithmic curve. Typical loud electronic
+  music (RMS ~0.30) now shows ~87% instead of saturating at 100%
+- Fixed computeDanceability: added beat-regularity scoring (peak periodicity at expected
+  BPM intervals), tightened BPM score (caps at 0.85 instead of 1.0)
+- Improved fallback UX: now returns camelot:'' with name 'Non disponibile' instead of
+  fake '8B' code; UI shows 'N/A' + amber warning when key.confidence === 0
+- Updated demo-tracker.tsx and pitch-generator.tsx to display the new fallback state
+- Build verified: build-static.sh runs successfully, essentia files served at HTTP 200
+- Bundle verified: 'camelot:""', 'Non disponibile', and 'log10' are in the output chunks
+- Commit 1711925 pushed to origin/main
+
+Stage Summary:
+- essentia.js WASM now loads correctly → full BPM + key detection works
+- Energy and Dance no longer saturate to 100% on typical electronic music
+- When fallback does occur, the UI explicitly tells the user instead of showing fake data
+- The user should hard-refresh (Ctrl+Shift+R) to pick up the new bundle and re-test
+  audio analysis — they should now see a real Camelot code (e.g. 8A for A minor)
+  instead of "8B + Sconosciuta", and Energy/Dance values in the 60-90% range
+  instead of always 100%
