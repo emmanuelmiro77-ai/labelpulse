@@ -729,3 +729,62 @@ Stage Summary:
 - Compressione client-side mantiene la row cloud piccola (~30-80KB) per sync veloce
 - UX bilanciata: pulsante "Carica foto" sempre visibile (CTA primario), URL input ancora disponibile per utenti avanzati (edit overlay camera)
 - Validazione robusta: tipo file, size max 8MB, error display localizzato IT/EN
+
+---
+Task ID: admin-global-cloud-split
+Agent: main (Super Z)
+Task: Implementare architettura admin-only scrape + cloud split globale/personale
+
+Work Log:
+- Verificato schema Supabase (supabase-schema.sql): tabella app_state con id TEXT, RLS Allow all, supporta row 'global' senza migrazione
+- Verificato che ADMIN_EMAILS esisteva solo in producer-profile.tsx (per BYOK Supabase UI)
+- Aggiunto in supabase.ts:
+  - ADMIN_EMAILS Set centralizzato (fonte unica: emmanuel.miro77@gmail.com)
+  - isAdminEmail(email) export function
+  - isCurrentUserAdmin() internal helper
+  - GLOBAL_CLOUD_ROW_ID = 'global' costante
+  - getGlobalCloudRowId(), getGlobalArtistsCloudRowId() helpers
+  - LABEL_BEATPORT_FIELDS, LABEL_PERSONAL_FIELDS costanti
+  - buildGlobalPayload(state): estrae campi Beatport dalle label
+  - buildPersonalPayload(state): estrae campi utente + custom labels
+  - mergeGlobalAndPersonalLabel(global, personal)
+  - mergeGlobalAndPersonalCloud(global, personal) EXPORT: merge finale
+- Riscritto saveStateToCloud: 
+  - Sempre salva row personale (id=email)
+  - Se admin, ANCHE salva row globale (id='global')
+  - Non-admin non tocca mai 'global' (anche se importasse, il builder estrae solo campi personali)
+- Riscritto loadStateFromCloud:
+  - Fetch parallela di entrambe le row (Promise.all)
+  - Merge tramite mergeGlobalAndPersonalCloud
+  - Tollerante a row mancanti (nuovo utente, admin non ancora pushato)
+- Modificato loadArtistsFromCloud: sempre legge da 'global_artists' (admin pusha lì, utenti leggono da lì)
+- Modificato setupRealtimeSubscription: due canali separati
+  - app_state_personal (id=email): refresh al cambio profilo/demos
+  - app_state_global (id='global'): refresh quando admin pusha nuovo scrape
+  - Entrambi chiamano loadStateFromCloud per re-merge completo
+  - Aggiunto _realtimeGlobalChannel variabile modulo
+  - teardownRealtime rimuove entrambi i canali
+- Modificato data-backup.tsx:
+  - Import useSession + isAdminEmail
+  - isAdmin check
+  - RankingsWizard nascosto per non-admin (mostra messaggio "Aggiornamento classifiche automatico")
+  - Pulsante Import nascosto per non-admin (mostra messaggio "Importazione riservata all'admin")
+  - Admin mode badge in alto nel popover (solo admin)
+  - Defense-in-depth: handleImportClick blocca con toast se !isAdmin
+- Modificato producer-profile.tsx:
+  - Rimosso ADMIN_EMAILS locale duplicato
+  - Importa isAdminEmail da supabase.ts (fonte centralizzata)
+  - Fix bug chiamata compressImageToDataUrl (4 arg → 3 arg, errore TS preesistente)
+- Build Next.js OK, TypeScript check pulito sui file modificati
+- Commit 0fb65c5, push su GitHub → trigger deploy Vercel
+
+Stage Summary:
+- Architettura completa: cloud split in due livelli (globale vs personale)
+- Admin (emmanuel.miro77@gmail.com) è l'unico che può pushare scrape Beatport nel global
+- Utenti normali vedono solo l'UI di visualizzazione (no Import, no RankingsWizard)
+- Ogni utente mantiene i propri dati personali (profilo, demos, note/emails/status su label, custom labels)
+- Quando admin fa nuovo scrape, realtime subscription notifica tutti gli utenti connessi → refresh automatico
+- Merge intelligente: per ogni label, rank/points/genres dal global + emails/notes/status dal personale
+- Le personalizzazioni utente persistono tra i tuoi aggiornamenti (grazie al merge by id)
+- NO migrazione SQL richiesta: la row 'global' viene creata automaticamente al primo push dell'admin
+- L'admin deve fare un nuovo import (o modificare qualcosa che triggera syncToCloud) per popolare la row 'global' la prima volta
