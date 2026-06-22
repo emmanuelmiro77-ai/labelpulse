@@ -81,19 +81,35 @@ export function SimilarSuggestions({
   onOpenArtist,
   onSelectLabel,
 }: SimilarSuggestionsProps) {
-  // Build a TrackProfile from analysis OR manual fields.
+  // Build a TrackProfile merging analysis + manual fields.
+  // CRITICAL (2026-06-22): manual BPM/key MUST override analysis values.
+  // The user may have manually corrected a wrong BPM detection (e.g. 133 → 134)
+  // or typed a different key. We must honor their correction — otherwise the
+  // suggestions keep using the wrong analysis value and the user feels ignored.
   const profile: TrackProfile | null = useMemo(() => {
-    // Prefer analysis if it has good confidence
     const fromAnalysis = profileFromAnalysis(analysis, genre);
-    if (fromAnalysis) return fromAnalysis;
 
-    // Fall back to manual fields
-    const bpmNum = manualBpm ? parseInt(manualBpm, 10) : NaN;
-    const bpm = Number.isFinite(bpmNum) && bpmNum > 0 ? bpmNum : null;
-    const key = manualKey?.trim() || null;
-    if (bpm === null && !key) return null;
-    return { bpm, camelotKey: key, genre: genre?.trim() || null };
+    // Manual values — only valid if non-empty
+    const manualBpmNum = manualBpm ? parseInt(manualBpm, 10) : NaN;
+    const manualBpm = Number.isFinite(manualBpmNum) && manualBpmNum > 0 ? manualBpmNum : null;
+    const manualKeyClean = manualKey?.trim() || null;
+
+    // Manual wins over analysis when present
+    const bpm = manualBpm ?? fromAnalysis?.bpm ?? null;
+    const camelotKey = manualKeyClean || fromAnalysis?.camelotKey || null;
+    const finalGenre = genre?.trim() || null;
+
+    if (bpm === null && !camelotKey) return null;
+    return { bpm, camelotKey, genre: finalGenre };
   }, [analysis, genre, manualBpm, manualKey]);
+
+  // Detect if the user has manually overridden the analysis values —
+  // used to show a "(manuale)" badge next to the BPM display.
+  const hasManualBpmOverride = useMemo(() => {
+    if (!manualBpm) return false;
+    const n = parseInt(manualBpm, 10);
+    return Number.isFinite(n) && n > 0 && analysis?.bpm != null && n !== analysis.bpm;
+  }, [manualBpm, analysis]);
 
   const result = useMemo(() => {
     if (!profile) return null;
@@ -159,6 +175,9 @@ export function SimilarSuggestions({
         {profile.bpm != null && (
           <Badge variant="outline" className="bg-primary/10 border-primary/30 text-primary">
             {profile.bpm} BPM
+            {hasManualBpmOverride && (
+              <span className="ml-1 text-[8px] text-amber-400 font-mono">(manuale)</span>
+            )}
           </Badge>
         )}
         {profile.camelotKey && (

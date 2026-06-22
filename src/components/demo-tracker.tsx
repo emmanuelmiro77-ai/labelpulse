@@ -52,6 +52,20 @@ import {
 import { Label as UILabel } from "@/components/ui/label";
 import { Textarea } from "@/components/ui/textarea";
 import { SimilarSuggestions } from "@/components/similar-suggestions";
+import {
+  Popover,
+  PopoverContent,
+  PopoverTrigger,
+} from "@/components/ui/popover";
+import {
+  Command,
+  CommandInput,
+  CommandList,
+  CommandEmpty,
+  CommandGroup,
+  CommandItem,
+} from "@/components/ui/command";
+import { Check, ChevronsUpDown, Filter, AlertCircle } from "lucide-react";
 
 const STATUS_KEYS: DemoStatus[] = [
   "ready",
@@ -123,6 +137,14 @@ export function DemoTracker() {
   const [formGenre, setFormGenre] = useState("");
   const [formBpm, setFormBpm] = useState("");
   const [formKey, setFormKey] = useState("");
+  // Combobox state for the target-label picker — keeps the picker open while
+  // the user types and filters through 1192+ labels.
+  const [labelComboboxOpen, setLabelComboboxOpen] = useState(false);
+  const [labelSearchQuery, setLabelSearchQuery] = useState("");
+  // Combobox state for the genre picker — same pattern, lets the user pick
+  // from the 35 scraped genres OR type a custom one.
+  const [genreComboboxOpen, setGenreComboboxOpen] = useState(false);
+  const [genreSearchQuery, setGenreSearchQuery] = useState("");
   // Audio analysis state
   const [isAnalyzing, setIsAnalyzing] = useState(false);
   const [analysisProgress, setAnalysisProgress] = useState<{
@@ -158,6 +180,7 @@ export function DemoTracker() {
   }, [labels, labelHistoryId]);
 
   const getLabelName = (labelId: string) => {
+    if (!labelId) return locale === "it" ? "Demo senza target" : "No target";
     return labels.find((l) => l.id === labelId)?.name ?? "—";
   };
 
@@ -175,6 +198,10 @@ export function DemoTracker() {
     setFormAnalysis(null);
     setAnalysisError(null);
     setAnalysisProgress(null);
+    setLabelComboboxOpen(false);
+    setLabelSearchQuery("");
+    setGenreComboboxOpen(false);
+    setGenreSearchQuery("");
   };
 
   const openAdd = () => { resetForm(); setEditingDemo(null); setShowAddDialog(true); };
@@ -198,10 +225,12 @@ export function DemoTracker() {
   };
 
   const handleSave = () => {
-    if (!formTrackName.trim() || !formLabelId) return;
+    // Only trackName is required. labelId may be empty when the user wants
+    // to save a demo for sending to multiple labels later (no specific target yet).
+    if (!formTrackName.trim()) return;
     const data = {
       trackName: formTrackName.trim(),
-      labelId: formLabelId,
+      labelId: formLabelId || "",
       status: formStatus,
       sentDate: formSentDate || null,
       link: formLink.trim(),
@@ -685,15 +714,125 @@ export function DemoTracker() {
             </div>
             <div className="grid grid-cols-2 gap-3">
               <div className="space-y-1.5">
-                <UILabel className="text-xs font-mono uppercase text-muted-foreground">{t(locale, "demos.targetLabel")}</UILabel>
-                <Select value={formLabelId} onValueChange={setFormLabelId}>
-                  <SelectTrigger className="bg-secondary/50"><SelectValue placeholder={t(locale, "demos.selectLabel")} /></SelectTrigger>
-                  <SelectContent>
-                    {labels.filter((l) => l.status === "open").slice(0, 50).map((l) => (
-                      <SelectItem key={l.id} value={l.id}>{l.name}</SelectItem>
-                    ))}
-                  </SelectContent>
-                </Select>
+                <div className="flex items-center justify-between">
+                  <UILabel className="text-xs font-mono uppercase text-muted-foreground">
+                    {locale === "it" ? "Label target" : "Target label"}
+                    <span className="ml-1 text-[10px] text-muted-foreground/60 normal-case font-sans">
+                      ({locale === "it" ? "opzionale" : "optional"})
+                    </span>
+                  </UILabel>
+                  {formLabelId && (
+                    <button
+                      type="button"
+                      onClick={() => setFormLabelId("")}
+                      className="text-[10px] text-muted-foreground hover:text-destructive"
+                    >
+                      {locale === "it" ? "Rimuovi" : "Clear"}
+                    </button>
+                  )}
+                </div>
+                <Popover open={labelComboboxOpen} onOpenChange={setLabelComboboxOpen}>
+                  <PopoverTrigger asChild>
+                    <Button
+                      type="button"
+                      variant="outline"
+                      role="combobox"
+                      aria-expanded={labelComboboxOpen}
+                      className="w-full justify-between bg-secondary/50 font-normal h-9"
+                    >
+                      <span className="truncate text-left">
+                        {formLabelId
+                          ? (labels.find((l) => l.id === formLabelId)?.name || formLabelId)
+                          : <span className="text-muted-foreground">{t(locale, "demos.selectLabel")}</span>}
+                      </span>
+                      <ChevronsUpDown className="ml-2 h-4 w-4 shrink-0 opacity-50" />
+                    </Button>
+                  </PopoverTrigger>
+                  <PopoverContent className="w-[--radix-popover-trigger-width] p-0" align="start">
+                    <Command shouldFilter={true} filter={(value, search) => {
+                      // Custom filter: match label name case-insensitively
+                      const label = labels.find((l) => l.id === value);
+                      if (!label) return 0;
+                      const name = label.name.toLowerCase();
+                      const q = search.toLowerCase().trim();
+                      if (!q) return 1;
+                      if (name.startsWith(q)) return 1;
+                      if (name.includes(q)) return 0.7;
+                      // Also search by genre
+                      const genres = (label.genres || []).join(" ").toLowerCase();
+                      if (genres.includes(q)) return 0.4;
+                      return 0;
+                    }}>
+                      <CommandInput
+                        placeholder={locale === "it" ? "Cerca label per nome o genere…" : "Search label by name or genre…"}
+                        value={labelSearchQuery}
+                        onValueChange={setLabelSearchQuery}
+                      />
+                      <CommandList>
+                        <CommandEmpty>
+                          {locale === "it" ? "Nessuna label trovata." : "No label found."}
+                        </CommandEmpty>
+                        <CommandGroup heading={locale === "it" ? "Tutte le label" : "All labels"}>
+                          {/* Show open labels first, then closed — limit to 200 for performance */}
+                          {labels
+                            .slice()
+                            .sort((a, b) => {
+                              // Open labels first
+                              if (a.status === "open" && b.status !== "open") return -1;
+                              if (a.status !== "open" && b.status === "open") return 1;
+                              return a.name.localeCompare(b.name);
+                            })
+                            .slice(0, 250)
+                            .map((l) => (
+                              <CommandItem
+                                key={l.id}
+                                value={l.id}
+                                onSelect={(v) => {
+                                  setFormLabelId(v === formLabelId ? "" : v);
+                                  setLabelComboboxOpen(false);
+                                  setLabelSearchQuery("");
+                                  // Auto-fill genre if the demo doesn't have one yet
+                                  if (!formGenre.trim() && l.genres?.length) {
+                                    setFormGenre(l.genres[0]);
+                                  }
+                                }}
+                                className="flex items-center gap-2"
+                              >
+                                <Check
+                                  className={`h-3.5 w-3.5 ${formLabelId === l.id ? "opacity-100" : "opacity-0"}`}
+                                />
+                                <div className="flex-1 min-w-0">
+                                  <div className="flex items-center gap-1.5">
+                                    <span className="text-sm truncate">{l.name}</span>
+                                    {l.status === "closed" && (
+                                      <Badge className="text-[8px] px-1 py-0 shrink-0 bg-red-500/20 text-red-400 border-red-500/30">
+                                        {locale === "it" ? "chiusa" : "closed"}
+                                      </Badge>
+                                    )}
+                                  </div>
+                                  {l.genres?.length > 0 && (
+                                    <span className="text-[10px] text-muted-foreground truncate block">
+                                      {l.genres.join(", ")}
+                                    </span>
+                                  )}
+                                </div>
+                              </CommandItem>
+                            ))}
+                        </CommandGroup>
+                      </CommandList>
+                    </Command>
+                  </PopoverContent>
+                </Popover>
+                {!formLabelId && (
+                  <p className="text-[10px] text-muted-foreground/70 leading-snug flex items-start gap-1">
+                    <AlertCircle className="h-3 w-3 mt-0.5 shrink-0 text-amber-400" />
+                    <span>
+                      {locale === "it"
+                        ? "Demo senza target: salvata per essere inviata a più label in seguito. Utile quando invii tramite il form della label stessa."
+                        : "No target: saved to be sent to multiple labels later. Useful when you submit via the label's own form."}
+                    </span>
+                  </p>
+                )}
               </div>
               <div className="space-y-1.5">
                 <UILabel className="text-xs font-mono uppercase text-muted-foreground">{t(locale, "labels.status")}</UILabel>
@@ -717,11 +856,12 @@ export function DemoTracker() {
                   newLinks[idx] = { ...newLinks[idx], type: v };
                   setFormLinks(newLinks);
                 }}>
-                  <SelectTrigger className="bg-secondary/50 w-[120px] shrink-0 h-9 text-xs">
+                  <SelectTrigger className="bg-secondary/50 w-[130px] shrink-0 h-9 text-xs">
                     <SelectValue />
                   </SelectTrigger>
                   <SelectContent>
                     <SelectItem value="soundcloud">SoundCloud</SelectItem>
+                    <SelectItem value="label_form">{locale === "it" ? "Form label" : "Label form"}</SelectItem>
                     <SelectItem value="dropbox">Dropbox</SelectItem>
                     <SelectItem value="wetransfer">WeTransfer</SelectItem>
                     <SelectItem value="drive">Google Drive</SelectItem>
@@ -740,21 +880,111 @@ export function DemoTracker() {
               </div>
             ))}
             <Button variant="outline" size="sm" className="w-full border-dashed text-muted-foreground hover:text-primary"
-              onClick={() => setFormLinks([...formLinks, { type: "dropbox", value: "" }])}>
+              onClick={() => setFormLinks([...formLinks, { type: "label_form", value: "" }])}>
               <Plus className="h-3 w-3 mr-1" /> {t(locale, "demos.addLink")}
             </Button>
+            <p className="text-[10px] text-muted-foreground/60 leading-snug">
+              {locale === "it"
+                ? "💡 Aggiungi un link di tipo 'Form label' quando hai inviato la demo tramite il form sulla pagina della label stessa."
+                : "💡 Add a 'Label form' link when you submitted the demo via the form on the label's own page."}
+            </p>
             <div className="grid grid-cols-3 gap-3">
               <div className="space-y-1.5">
-                <UILabel className="text-xs font-mono uppercase text-muted-foreground">{t(locale, "demos.genre")}</UILabel>
-                <Input value={formGenre} onChange={(e) => setFormGenre(e.target.value)} placeholder="Techno" className="bg-secondary/50" />
+                <UILabel className="text-xs font-mono uppercase text-muted-foreground">
+                  {t(locale, "demos.genre")}
+                </UILabel>
+                <Popover open={genreComboboxOpen} onOpenChange={setGenreComboboxOpen}>
+                  <PopoverTrigger asChild>
+                    <Button
+                      type="button"
+                      variant="outline"
+                      role="combobox"
+                      aria-expanded={genreComboboxOpen}
+                      className="w-full justify-between bg-secondary/50 font-normal h-9"
+                    >
+                      <span className="truncate text-left">
+                        {formGenre.trim()
+                          ? formGenre
+                          : <span className="text-muted-foreground">{locale === "it" ? "Seleziona o digita…" : "Pick or type…"}</span>}
+                      </span>
+                      <Filter className="ml-2 h-3.5 w-3.5 shrink-0 opacity-50" />
+                    </Button>
+                  </PopoverTrigger>
+                  <PopoverContent className="w-[--radix-popover-trigger-width] p-0" align="start">
+                    <Command shouldFilter={false}>
+                      <CommandInput
+                        placeholder={locale === "it" ? "Digita per filtrare o creare…" : "Type to filter or create…"}
+                        value={formGenre}
+                        onValueChange={(v) => {
+                          setFormGenre(v);
+                          setGenreSearchQuery(v);
+                        }}
+                      />
+                      <CommandList>
+                        {formGenre.trim() && !genres.some(g => g.toLowerCase() === formGenre.trim().toLowerCase()) && (
+                          <CommandGroup heading={locale === "it" ? "Personalizzato" : "Custom"}>
+                            <CommandItem
+                              value={`__custom__${formGenre}`}
+                              onSelect={() => setGenreComboboxOpen(false)}
+                              className="text-amber-400"
+                            >
+                              <span className="text-sm">+ {locale === "it" ? `Usa "${formGenre}"` : `Use "${formGenre}"`}</span>
+                            </CommandItem>
+                          </CommandGroup>
+                        )}
+                        <CommandGroup heading={locale === "it" ? "Generi scrapati" : "Scraped genres"}>
+                          {genres
+                            .filter(g => !formGenre.trim() || g.toLowerCase().includes(formGenre.trim().toLowerCase()))
+                            .map((g) => (
+                              <CommandItem
+                                key={g}
+                                value={g}
+                                onSelect={(v) => {
+                                  setFormGenre(v);
+                                  setGenreComboboxOpen(false);
+                                }}
+                                className="flex items-center gap-2"
+                              >
+                                <Check
+                                  className={`h-3.5 w-3.5 ${formGenre.toLowerCase() === g.toLowerCase() ? "opacity-100" : "opacity-0"}`}
+                                />
+                                <span className="text-sm">{g}</span>
+                              </CommandItem>
+                            ))}
+                          {genres.filter(g => !formGenre.trim() || g.toLowerCase().includes(formGenre.trim().toLowerCase())).length === 0 && (
+                            <CommandEmpty>
+                              {locale === "it" ? "Nessun genere trovato." : "No genre found."}
+                            </CommandEmpty>
+                          )}
+                        </CommandGroup>
+                      </CommandList>
+                    </Command>
+                  </PopoverContent>
+                </Popover>
               </div>
               <div className="space-y-1.5">
-                <UILabel className="text-xs font-mono uppercase text-muted-foreground">BPM</UILabel>
-                <Input value={formBpm} onChange={(e) => setFormBpm(e.target.value)} placeholder="128" className="bg-secondary/50" />
+                <UILabel className="text-xs font-mono uppercase text-muted-foreground">
+                  BPM
+                  {formAnalysis && formBpm && parseInt(formBpm, 10) !== formAnalysis.bpm && (
+                    <span className="ml-1 text-[9px] text-amber-400 normal-case font-sans">(corretto)</span>
+                  )}
+                </UILabel>
+                <Input
+                  value={formBpm}
+                  onChange={(e) => setFormBpm(e.target.value)}
+                  placeholder="128"
+                  className="bg-secondary/50"
+                  inputMode="numeric"
+                />
               </div>
               <div className="space-y-1.5">
                 <UILabel className="text-xs font-mono uppercase text-muted-foreground">Key</UILabel>
-                <Input value={formKey} onChange={(e) => setFormKey(e.target.value)} placeholder="Am" className="bg-secondary/50" />
+                <Input
+                  value={formKey}
+                  onChange={(e) => setFormKey(e.target.value)}
+                  placeholder="Am"
+                  className="bg-secondary/50"
+                />
               </div>
             </div>
 
@@ -916,7 +1146,7 @@ export function DemoTracker() {
           </div>
           <DialogFooter>
             <Button variant="ghost" onClick={() => setShowAddDialog(false)}>{t(locale, "labels.cancel")}</Button>
-            <Button onClick={handleSave} disabled={!formTrackName.trim() || !formLabelId}>
+            <Button onClick={handleSave} disabled={!formTrackName.trim()}>
               {editingDemo ? t(locale, "labels.update") : t(locale, "labels.save")}
             </Button>
           </DialogFooter>
