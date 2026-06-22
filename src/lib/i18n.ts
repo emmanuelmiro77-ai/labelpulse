@@ -235,6 +235,12 @@ type TranslationKeys = {
   "rankings.falling": string;
   "rankings.newEntries": string;
   "rankings.lastUpdate": string;
+  "rankings.lastUpdateFull": string;
+  "rankings.refreshButton": string;
+  "rankings.refreshing": string;
+  "rankings.refreshDone": string;
+  "rankings.refreshError": string;
+  "rankings.refreshedJustNow": string;
   "rankings.newEntry": string;
   "rankings.colLabel": string;
   "rankings.colRank": string;
@@ -618,6 +624,12 @@ const translations: Record<Locale, TranslationKeys> = {
     "rankings.falling": "in discesa",
     "rankings.newEntries": "nuove entrate",
     "rankings.lastUpdate": "Ultimo agg.",
+    "rankings.lastUpdateFull": "Ultimo aggiornamento classifiche",
+    "rankings.refreshButton": "Aggiorna ora",
+    "rankings.refreshing": "Aggiornamento…",
+    "rankings.refreshDone": "Classifiche aggiornate",
+    "rankings.refreshError": "Errore aggiornamento",
+    "rankings.refreshedJustNow": "Appena aggiornato",
     "rankings.newEntry": "NUOVA",
     "rankings.colLabel": "Label",
     "rankings.colRank": "Rank",
@@ -980,6 +992,12 @@ const translations: Record<Locale, TranslationKeys> = {
     "rankings.falling": "falling",
     "rankings.newEntries": "new entries",
     "rankings.lastUpdate": "Last update",
+    "rankings.lastUpdateFull": "Last rankings update",
+    "rankings.refreshButton": "Refresh now",
+    "rankings.refreshing": "Refreshing…",
+    "rankings.refreshDone": "Rankings updated",
+    "rankings.refreshError": "Refresh failed",
+    "rankings.refreshedJustNow": "Just refreshed",
     "rankings.newEntry": "NEW",
     "rankings.colLabel": "Label",
     "rankings.colRank": "Rank",
@@ -1342,6 +1360,12 @@ const translations: Record<Locale, TranslationKeys> = {
     "rankings.falling": "en bajada",
     "rankings.newEntries": "nuevas entradas",
     "rankings.lastUpdate": "Último act.",
+    "rankings.lastUpdateFull": "Última actualización de clasificaciones",
+    "rankings.refreshButton": "Actualizar ahora",
+    "rankings.refreshing": "Actualizando…",
+    "rankings.refreshDone": "Clasificaciones actualizadas",
+    "rankings.refreshError": "Error al actualizar",
+    "rankings.refreshedJustNow": "Actualizado ahora",
     "rankings.newEntry": "NUEVA",
     "rankings.colLabel": "Label",
     "rankings.colRank": "Rank",
@@ -1704,6 +1728,12 @@ const translations: Record<Locale, TranslationKeys> = {
     "rankings.falling": "en baisse",
     "rankings.newEntries": "nouvelles entrées",
     "rankings.lastUpdate": "Dernière MAJ",
+    "rankings.lastUpdateFull": "Dernière mise à jour des classements",
+    "rankings.refreshButton": "Actualiser maintenant",
+    "rankings.refreshing": "Actualisation…",
+    "rankings.refreshDone": "Classements actualisés",
+    "rankings.refreshError": "Échec de l'actualisation",
+    "rankings.refreshedJustNow": "Venant d'être actualisé",
     "rankings.newEntry": "NOUVELLE",
     "rankings.colLabel": "Label",
     "rankings.colRank": "Rang",
@@ -2066,6 +2096,12 @@ const translations: Record<Locale, TranslationKeys> = {
     "rankings.falling": "fallend",
     "rankings.newEntries": "Neueinträge",
     "rankings.lastUpdate": "Letzte Akt.",
+    "rankings.lastUpdateFull": "Letzte Aktualisierung der Rankings",
+    "rankings.refreshButton": "Jetzt aktualisieren",
+    "rankings.refreshing": "Aktualisierung…",
+    "rankings.refreshDone": "Rankings aktualisiert",
+    "rankings.refreshError": "Aktualisierung fehlgeschlagen",
+    "rankings.refreshedJustNow": "Gerade aktualisiert",
     "rankings.newEntry": "NEU",
     "rankings.colLabel": "Label",
     "rankings.colRank": "Rang",
@@ -2428,6 +2464,12 @@ const translations: Record<Locale, TranslationKeys> = {
     "rankings.falling": "em descida",
     "rankings.newEntries": "novas entradas",
     "rankings.lastUpdate": "Último act.",
+    "rankings.lastUpdateFull": "Última actualización de clasificaciones",
+    "rankings.refreshButton": "Actualizar ahora",
+    "rankings.refreshing": "Actualizando…",
+    "rankings.refreshDone": "Clasificaciones actualizadas",
+    "rankings.refreshError": "Error al actualizar",
+    "rankings.refreshedJustNow": "Actualizado ahora",
     "rankings.newEntry": "NOVA",
     "rankings.colLabel": "Label",
     "rankings.colRank": "Rank",

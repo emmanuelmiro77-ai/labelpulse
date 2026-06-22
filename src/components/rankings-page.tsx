@@ -1,6 +1,6 @@
 "use client";
 
-import { useAppStore, getLabelTier, readSnapshotsSidecar, restoreSnapshotsFromSidecar } from "@/lib/store";
+import { useAppStore, getLabelTier, readSnapshotsSidecar, restoreSnapshotsFromSidecar, loadFromCloud } from "@/lib/store";
 import type { Label, RankingSnapshot, RankingTimePeriod } from "@/lib/store";
 import { t, type Locale } from "@/lib/i18n";
 import { getLabelDiscoveryUrls } from "@/lib/label-links";
@@ -26,6 +26,7 @@ import {
   ExternalLink,
   Music2,
   RotateCcw,
+  RefreshCw,
 } from "lucide-react";
 import React, { useState, useMemo, useCallback, useEffect } from "react";
 import { Button } from "@/components/ui/button";
@@ -449,6 +450,11 @@ export function RankingsPage() {
   const [showGenreDropdown, setShowGenreDropdown] = useState(false);
   const [spotlightShowAll, setSpotlightShowAll] = useState(false); // when true + genre selected, show global risers instead of genre-filtered
 
+  // ---- Manual "refresh rankings" button state (for non-admin users) ----
+  // Shows whether a cloud refresh is in progress, and provides feedback after.
+  const [isRefreshing, setIsRefreshing] = useState(false);
+  const [refreshFeedback, setRefreshFeedback] = useState<null | "done" | "error">(null);
+
   // Click on a label name → navigate to the LabelFinder tab and auto-open
   // the detail dialog for that label. Matches by id when possible, falls
   // back to name (LabelFinder's useEffect handles both).
@@ -459,6 +465,47 @@ export function RankingsPage() {
     },
     [setActiveTab, setSelectedLabelId]
   );
+
+  // Manual "refresh rankings" — pulls the latest global cloud data and
+  // re-merges it into the local store. Useful for non-admin users who
+  // want to see if the admin has pushed a new scrape since they opened
+  // the app (realtime should already handle this, but the button gives
+  // a visible "force refresh" affordance + user feedback).
+  const handleManualRefresh = useCallback(async () => {
+    if (isRefreshing) return;
+    setIsRefreshing(true);
+    setRefreshFeedback(null);
+    try {
+      await loadFromCloud();
+      setRefreshFeedback("done");
+    } catch (err) {
+      console.error("[RankingsPage] Manual refresh failed:", err);
+      setRefreshFeedback("error");
+    } finally {
+      setIsRefreshing(false);
+      // Auto-clear feedback after 3 seconds
+      setTimeout(() => setRefreshFeedback(null), 3000);
+    }
+  }, [isRefreshing]);
+
+  // Format the rankingsUpdatedAt timestamp with date + time, locale-aware.
+  // Returns null if no update timestamp is available.
+  const formattedLastUpdate = useMemo(() => {
+    if (!rankingsUpdatedAt) return null;
+    try {
+      const d = new Date(rankingsUpdatedAt);
+      const localeStr = locale === "it" ? "it-IT" : locale === "es" ? "es-ES" : locale === "fr" ? "fr-FR" : locale === "de" ? "de-DE" : "en-US";
+      return d.toLocaleString(localeStr, {
+        day: "2-digit",
+        month: "short",
+        year: "numeric",
+        hour: "2-digit",
+        minute: "2-digit",
+      });
+    } catch {
+      return null;
+    }
+  }, [rankingsUpdatedAt, locale]);
 
   // Get all genres from labels, sorted alphabetically
   const allGenres = useMemo(() => {
@@ -806,6 +853,39 @@ export function RankingsPage() {
         </div>
       )}
 
+
+      {/* Last-update badge + manual refresh button (visible to all users) */}
+      {formattedLastUpdate && (
+        <div className="flex items-center justify-between gap-3 flex-wrap px-3 py-2 rounded-md bg-secondary/30 border border-border/40">
+          <span className="flex items-center gap-2 text-xs text-muted-foreground">
+            <Clock className="h-3.5 w-3.5 text-cyan-400 shrink-0" />
+            <span className="text-muted-foreground/70">{t(locale, "rankings.lastUpdateFull")}:</span>
+            <span className="font-medium text-foreground">{formattedLastUpdate}</span>
+          </span>
+          <button
+            type="button"
+            onClick={handleManualRefresh}
+            disabled={isRefreshing}
+            className={`flex items-center gap-1.5 px-2 py-1 rounded-md text-xs font-medium transition-colors border ${
+              refreshFeedback === "done"
+                ? "bg-emerald-500/15 text-emerald-300 border-emerald-500/40"
+                : refreshFeedback === "error"
+                  ? "bg-red-500/15 text-red-300 border-red-500/40"
+                  : "bg-cyan-500/10 text-cyan-300 border-cyan-500/30 hover:bg-cyan-500/20"
+            } ${isRefreshing ? "opacity-60 cursor-wait" : ""}`}
+            title={t(locale, "rankings.refreshButton")}
+          >
+            <RefreshCw className={`h-3 w-3 ${isRefreshing ? "animate-spin" : ""}`} />
+            {isRefreshing
+              ? t(locale, "rankings.refreshing")
+              : refreshFeedback === "done"
+                ? t(locale, "rankings.refreshDone")
+                : refreshFeedback === "error"
+                  ? t(locale, "rankings.refreshError")
+                  : t(locale, "rankings.refreshButton")}
+          </button>
+        </div>
+      )}
 
       {/* Genre selector + Filters */}
       <div className="space-y-4">
