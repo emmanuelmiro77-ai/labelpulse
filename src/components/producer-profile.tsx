@@ -3,7 +3,7 @@
 import { useAppStore } from "@/lib/store";
 import { t } from "@/lib/i18n";
 import { isSupabaseConfigured } from "@/lib/supabase";
-import React, { useState, useCallback, useMemo } from "react";
+import React, { useState, useCallback, useMemo, useRef } from "react";
 import { useSession } from "next-auth/react";
 import {
   Pencil,
@@ -18,6 +18,8 @@ import {
   Camera,
   Cloud,
   CloudOff,
+  Upload,
+  Loader2,
 } from "lucide-react";
 import { CloudRecovery } from "@/components/cloud-recovery";
 import { Input } from "@/components/ui/input";
@@ -108,6 +110,84 @@ function getLinkColor(linkType: string): string {
   return found?.color || "text-cyan-400";
 }
 
+// ==================== IMAGE COMPRESSION HELPER ====================
+
+/**
+ * Read an image File, downscale it to a square of `size`×`size` pixels
+ * (cover-fit: the image is cropped to fill the square without distortion),
+ * and re-encode it as a JPEG data URL at the given quality.
+ *
+ * Used for profile photo uploads — keeps the stored data URL small
+ * (~30-80 KB at 256×256 / 0.85 quality) so it fits comfortably inside
+ * the Supabase JSONB row without bloating cloud sync.
+ *
+ * PNG with alpha is detected and falls back to PNG encoding to preserve
+ * transparency (still downscaled, but without JPEG's lossy flatten).
+ */
+function compressImageToDataUrl(
+  file: File,
+  size: number,
+  quality: number,
+): Promise<string> {
+  return new Promise((resolve, reject) => {
+    if (typeof window === "undefined" || !window.FileReader || !window.HTMLCanvasElement) {
+      reject(new Error("Image compression not supported in this environment"));
+      return;
+    }
+    const reader = new FileReader();
+    reader.onerror = () => reject(new Error("Failed to read file"));
+    reader.onload = () => {
+      const src = reader.result;
+      if (typeof src !== "string") {
+        reject(new Error("FileReader returned non-string"));
+        return;
+      }
+      const img = new Image();
+      img.onerror = () => reject(new Error("Failed to decode image"));
+      img.onload = () => {
+        // Cover-fit: scale so the smaller dimension fills `size`, then crop the rest.
+        const sourceRatio = img.width / img.height;
+        let sx = 0, sy = 0, sw = img.width, sh = img.height;
+        if (sourceRatio > 1) {
+          // Wider than tall — crop sides
+          sw = img.height;
+          sx = (img.width - sw) / 2;
+        } else if (sourceRatio < 1) {
+          // Taller than wide — crop top/bottom
+          sh = img.width;
+          sy = (img.height - sh) / 2;
+        }
+        const canvas = document.createElement("canvas");
+        canvas.width = size;
+        canvas.height = size;
+        const ctx = canvas.getContext("2d");
+        if (!ctx) {
+          reject(new Error("Canvas 2D context unavailable"));
+          return;
+        }
+        // White background for JPEG (avoids black halo on transparent PNGs).
+        ctx.fillStyle = "#FFFFFF";
+        ctx.fillRect(0, 0, size, size);
+        ctx.drawImage(img, sx, sy, sw, sh, 0, 0, size, size);
+
+        // Use PNG if the source is a PNG with alpha (preserves transparency),
+        // otherwise JPEG. We can't easily detect alpha without reading pixels,
+        // so we keep it simple: PNG source → PNG output (small enough at 256²).
+        const isPng = file.type === "image/png";
+        const mime = isPng ? "image/png" : "image/jpeg";
+        try {
+          const dataUrl = canvas.toDataURL(mime, isPng ? undefined : quality);
+          resolve(dataUrl);
+        } catch (err) {
+          reject(err instanceof Error ? err : new Error("Canvas toDataURL failed"));
+        }
+      };
+      img.src = src;
+    };
+    reader.readAsDataURL(file);
+  });
+}
+
 // ==================== COMPONENT ====================
 
 export function ProducerProfile() {
@@ -117,6 +197,9 @@ export function ProducerProfile() {
   const [detailSaved, setDetailSaved] = useState(false);
   const [showPhotoInput, setShowPhotoInput] = useState(false);
   const [photoUrlDraft, setPhotoUrlDraft] = useState(userProfile.photoUrl);
+  const [photoUploading, setPhotoUploading] = useState(false);
+  const [photoUploadError, setPhotoUploadError] = useState<string | null>(null);
+  const fileInputRef = useRef<HTMLInputElement | null>(null);
 
   // Local links state for editing before blur-save
   const [localLinks, setLocalLinks] = useState<{ type: string; value: string }[]>(
@@ -161,6 +244,61 @@ export function ProducerProfile() {
     },
     [userProfile.photoUrl]
   );
+
+  // ==================== PHOTO FILE UPLOAD ====================
+  // Reads an image File chosen by the user, downscales it to a 256x256 square
+  // (cover-fit) and re-encodes it as JPEG @ 0.85 quality. The resulting data
+  // URL is stored in userProfile.photoUrl alongside URL-based photos. This
+  // keeps the cloud row small (~30-80 KB) so Supabase JSONB sync stays fast
+  // and cross-device restore works seamlessly.
+  const handlePhotoFileUpload = useCallback(
+    async (e: React.ChangeEvent<HTMLInputElement>) => {
+      const file = e.target.files?.[0];
+      // Always reset the input value so the same file can be picked twice
+      if (e.target) e.target.value = "";
+      if (!file) return;
+
+      // Validation
+      if (!file.type.startsWith("image/")) {
+        setPhotoUploadError(
+          locale === "it" ? "Seleziona un file immagine valido" : "Please select a valid image file"
+        );
+        return;
+      }
+      const MAX_FILE_MB = 8;
+      if (file.size > MAX_FILE_MB * 1024 * 1024) {
+        setPhotoUploadError(
+          locale === "it"
+            ? `File troppo grande (max ${MAX_FILE_MB}MB)`
+            : `File too large (max ${MAX_FILE_MB}MB)`
+        );
+        return;
+      }
+      setPhotoUploadError(null);
+      setPhotoUploading(true);
+
+      try {
+        const dataUrl = await compressImageToDataUrl(file, 256, 256, 0.85);
+        setUserProfile({ photoUrl: dataUrl });
+        setPhotoUrlDraft(dataUrl);
+        triggerSaved();
+      } catch (err) {
+        console.error("[LabelPulse Profile] Photo upload failed:", err);
+        setPhotoUploadError(
+          locale === "it"
+            ? "Errore durante l'elaborazione dell'immagine"
+            : "Error processing the image"
+        );
+      } finally {
+        setPhotoUploading(false);
+      }
+    },
+    [locale, setUserProfile, triggerSaved]
+  );
+
+  const triggerFilePicker = useCallback(() => {
+    fileInputRef.current?.click();
+  }, []);
 
   // Links handlers
   const updateLocalLink = useCallback(
@@ -235,11 +373,45 @@ export function ProducerProfile() {
       {/* ==================== PHOTO SECTION ==================== */}
       <Card className="bg-card/60 border-border/40">
         <CardContent className="p-6">
-          <p className="text-[10px] uppercase tracking-wider font-medium text-muted-foreground mb-4">
-            {t(locale, "profile.photoUrl" as any)}
-          </p>
+          <div className="flex items-center justify-between mb-4">
+            <p className="text-[10px] uppercase tracking-wider font-medium text-muted-foreground">
+              {t(locale, "profile.photoUrl" as any)}
+            </p>
+            {/* Quick upload button (always visible, primary CTA) */}
+            <Button
+              type="button"
+              size="sm"
+              variant="outline"
+              onClick={triggerFilePicker}
+              disabled={photoUploading}
+              className="h-7 gap-1.5 text-xs"
+            >
+              {photoUploading ? (
+                <>
+                  <Loader2 className="h-3 w-3 animate-spin" />
+                  {locale === "it" ? "Caricamento…" : "Uploading…"}
+                </>
+              ) : (
+                <>
+                  <Upload className="h-3 w-3" />
+                  {locale === "it" ? "Carica foto" : "Upload photo"}
+                </>
+              )}
+            </Button>
+            {/* Hidden file input — triggered by the button above */}
+            <input
+              ref={fileInputRef}
+              type="file"
+              accept="image/*"
+              onChange={handlePhotoFileUpload}
+              className="hidden"
+              aria-hidden="true"
+              tabIndex={-1}
+            />
+          </div>
+
           <div className="flex items-start gap-5">
-            {/* Avatar */}
+            {/* Avatar (with loading overlay during upload) */}
             <div className="relative group shrink-0">
               <Avatar className="h-24 w-24 ring-2 ring-border/40 ring-offset-2 ring-offset-background">
                 {userProfile.photoUrl ? (
@@ -252,21 +424,30 @@ export function ProducerProfile() {
                   {initials}
                 </AvatarFallback>
               </Avatar>
-              {/* Edit overlay */}
-              <button
-                type="button"
-                onClick={() => {
-                  setPhotoUrlDraft(userProfile.photoUrl);
-                  setShowPhotoInput(true);
-                }}
-                className="absolute inset-0 flex items-center justify-center rounded-full bg-black/50 opacity-0 group-hover:opacity-100 transition-opacity cursor-pointer"
-                aria-label="Change photo"
-              >
-                <Camera className="h-5 w-5 text-white" />
-              </button>
+              {/* Loading overlay during upload */}
+              {photoUploading && (
+                <div className="absolute inset-0 flex items-center justify-center rounded-full bg-black/60">
+                  <Loader2 className="h-6 w-6 text-white animate-spin" />
+                </div>
+              )}
+              {/* Edit overlay — opens URL input (for advanced users who want to paste a URL) */}
+              {!photoUploading && (
+                <button
+                  type="button"
+                  onClick={() => {
+                    setPhotoUrlDraft(userProfile.photoUrl);
+                    setShowPhotoInput(true);
+                  }}
+                  className="absolute inset-0 flex items-center justify-center rounded-full bg-black/50 opacity-0 group-hover:opacity-100 transition-opacity cursor-pointer"
+                  aria-label={locale === "it" ? "Modifica URL foto" : "Edit photo URL"}
+                  title={locale === "it" ? "Inserisci URL foto" : "Paste photo URL"}
+                >
+                  <Camera className="h-5 w-5 text-white" />
+                </button>
+              )}
             </div>
 
-            {/* Photo URL input */}
+            {/* Photo URL input (advanced — most users will click "Upload photo" above) */}
             <div className="flex-1 space-y-2">
               {showPhotoInput ? (
                 <Input
@@ -287,13 +468,36 @@ export function ProducerProfile() {
                   }}
                 >
                   {userProfile.photoUrl ? (
-                    <span className="truncate font-mono text-xs">{userProfile.photoUrl}</span>
+                    <span className="truncate font-mono text-xs">
+                      {userProfile.photoUrl.startsWith("data:")
+                        ? locale === "it"
+                          ? "Foto caricata dal file"
+                          : "Uploaded file"
+                        : userProfile.photoUrl}
+                    </span>
                   ) : (
-                    <span className="text-xs italic">Click to add a photo URL</span>
+                    <span className="text-xs italic">
+                      {locale === "it"
+                        ? "Carica un file o incolla un URL"
+                        : "Upload a file or paste a URL"}
+                    </span>
                   )}
                   <Pencil className="h-3 w-3 shrink-0 opacity-50" />
                 </div>
               )}
+              {/* Error display */}
+              {photoUploadError && (
+                <p className="text-xs text-red-400 flex items-center gap-1.5">
+                  <span className="inline-block h-1 w-1 rounded-full bg-red-400" />
+                  {photoUploadError}
+                </p>
+              )}
+              {/* Hint */}
+              <p className="text-[10px] text-muted-foreground/60">
+                {locale === "it"
+                  ? "JPG, PNG o GIF. Ridimensionata automaticamente a 256×256."
+                  : "JPG, PNG or GIF. Automatically resized to 256×256."}
+              </p>
             </div>
           </div>
         </CardContent>
