@@ -1,0 +1,1012 @@
+     1→"use client";
+     2→
+     3→import { useAppStore, getLabelTier, readSnapshotsSidecar, restoreSnapshotsFromSidecar } from "@/lib/store";
+     4→import type { Label, RankingSnapshot, RankingTimePeriod } from "@/lib/store";
+     5→import { t, type Locale } from "@/lib/i18n";
+     6→import { getLabelDiscoveryUrls } from "@/lib/label-links";
+     7→import {
+     8→  Trophy,
+     9→  TrendingUp,
+    10→  TrendingDown,
+    11→  Minus,
+    12→  ArrowUpRight,
+    13→  Flame,
+    14→  Eye,
+    15→  BarChart3,
+    16→  Crown,
+    17→  Medal,
+    18→  Star,
+    19→  Filter,
+    20→  ChevronDown,
+    21→  AlertTriangle,
+    22→  Clock,
+    23→  Calendar,
+    24→  Infinity,
+    25→  History,
+    26→  ExternalLink,
+    27→  Music2,
+    28→  RotateCcw,
+    29→} from "lucide-react";
+    30→import React, { useState, useMemo, useCallback, useEffect } from "react";
+    31→import { Button } from "@/components/ui/button";
+    32→
+    33→// ==================== TYPES ====================
+    34→
+    35→type SortMode = "rank" | "movement" | "points";
+    36→type MovementFilter = "all" | "rising" | "falling" | "new" | "stable";
+    37→
+    38→interface RankedLabel {
+    39→  label: Label;
+    40→  rank: number;
+    41→  prevRank: number | null; // null = not ranked before (new entry)
+    42→  points: number;
+    43→  movement: number | null; // positive = moved up, negative = moved down, null = new
+    44→  snapshotCount: number; // how many snapshots contributed to this period
+    45→}
+    46→
+    47→// ==================== HELPERS ====================
+    48→
+    49→/**
+    50→ * Compact row of clickable discovery icons for a label.
+    51→ * Renders tiny icon-buttons that open Beatport / Beatstats / SoundCloud /
+    52→ * Website in a new tab. Hidden entirely if the label has no name (defensive).
+    53→ *
+    54→ * @param size icon size in px (default 12 for inline use in dense rows)
+    55→ */
+    56→function LabelDiscoveryIcons({
+    57→  label,
+    58→  size = 12,
+    59→  showLabels = false,
+    60→}: {
+    61→  label: Label;
+    62→  size?: number;
+    63→  showLabels?: boolean;
+    64→}) {
+    65→  if (!label?.name) return null;
+    66→  const urls = getLabelDiscoveryUrls(label);
+    67→
+    68→  const btnClass =
+    69→    "inline-flex items-center gap-1 px-1.5 py-0.5 rounded text-[10px] font-medium transition-colors hover:bg-accent/40 shrink-0";
+    70→
+    71→  return (
+    72→    <div className="inline-flex items-center gap-0.5 ml-1">
+    73→      {/* Beatport — direct (green) if user-saved, search (muted) otherwise */}
+    74→      <a
+    75→        href={urls.beatport}
+    76→        target="_blank"
+    77→        rel="noopener noreferrer"
+    78→        title={
+    79→          urls.beatportIsDirect
+    80→            ? `Apri ${label.name} su Beatport (link diretto)`
+    81→            : `Cerca ${label.name} su Beatport`
+    82→        }
+    83→        className={`${btnClass} ${
+    84→          urls.beatportIsDirect
+    85→            ? "text-emerald-400 hover:text-emerald-300"
+    86→            : "text-muted-foreground hover:text-emerald-400"
+    87→        }`}
+    88→        onClick={(e) => e.stopPropagation()}
+    89→      >
+    90→        <ExternalLink style={{ width: size, height: size }} />
+    91→        {showLabels && <span>Beatport</span>}
+    92→      </a>
+    93→
+    94→      {/* Beatstats — always search (no direct-link field in schema yet) */}
+    95→      <a
+    96→        href={urls.beatstats}
+    97→        target="_blank"
+    98→        rel="noopener noreferrer"
+    99→        title={`Cerca ${label.name} su Beatstats`}
+   100→        className={`${btnClass} text-muted-foreground hover:text-amber-400`}
+   101→        onClick={(e) => e.stopPropagation()}
+   102→      >
+   103→        <BarChart3 style={{ width: size, height: size }} />
+   104→        {showLabels && <span>Beatstats</span>}
+   105→      </a>
+   106→
+   107→      {/* SoundCloud — only if a direct link exists (skip search, too noisy) */}
+   108→      {label.soundcloudLink && (
+   109→        <a
+   110→          href={urls.soundcloud}
+   111→          target="_blank"
+   112→          rel="noopener noreferrer"
+   113→          title={`Apri ${label.name} su SoundCloud`}
+   114→          className={`${btnClass} text-muted-foreground hover:text-orange-400`}
+   115→          onClick={(e) => e.stopPropagation()}
+   116→        >
+   117→          <Music2 style={{ width: size, height: size }} />
+   118→          {showLabels && <span>SoundCloud</span>}
+   119→        </a>
+   120→      )}
+   121→
+   122→      {/* Website — only if user provided one */}
+   123→      {label.website && (
+   124→        <a
+   125→          href={urls.website}
+   126→          target="_blank"
+   127→          rel="noopener noreferrer"
+   128→          title={`Apri sito ufficiale di ${label.name}`}
+   129→          className={`${btnClass} text-muted-foreground hover:text-primary`}
+   130→          onClick={(e) => e.stopPropagation()}
+   131→        >
+   132→          <ExternalLink style={{ width: size, height: size }} />
+   133→          {showLabels && <span>Sito</span>}
+   134→        </a>
+   135→      )}
+   136→    </div>
+   137→  );
+   138→}
+   139→
+   140→/**
+   141→ * Clickable label name — opens the LABEL DETAIL PAGE (the dialog inside
+   142→ * LabelFinder) instead of going to Beatport. The Beatport / Beatstats
+   143→ * icons next to the name (LabelDiscoveryIcons) remain the only way to
+   144→ * jump to those external sites — clicking the NAME itself navigates
+   145→ * internally so the user can edit data, listen to top tracks, see the
+   146→ * label's top artists, etc.
+   147→ *
+   148→ * The navigation works by setting `selectedLabelId` in the global store
+   149→ * (matches by id OR by name as fallback) and switching to the "labels"
+   150→ * tab. LabelFinder has a useEffect that watches selectedLabelId and
+   151→ * auto-opens its detail dialog.
+   152→ */
+   153→function ClickableLabelName({
+   154→  label,
+   155→  className = "",
+   156→  onOpen,
+   157→}: {
+   158→  label: Label;
+   159→  className?: string;
+   160→  onOpen?: (label: Label) => void;
+   161→}) {
+   162→  if (!label?.name) return null;
+   163→  return (
+   164→    <button
+   165→      type="button"
+   166→      onClick={(e) => {
+   167→        e.stopPropagation();
+   168→        onOpen?.(label);
+   169→      }}
+   170→      title={`Apri la pagina dedicata di ${label.name} (dati, top tracce, artisti)`}
+   171→      className={`hover:text-primary hover:underline cursor-pointer transition-colors text-left bg-transparent border-0 p-0 ${className}`}
+   172→    >
+   173→      {label.name}
+   174→    </button>
+   175→  );
+   176→}
+   177→
+   178→function getMovementIcon(movement: number | null): React.ReactNode {
+   179→  if (movement === null) return <ArrowUpRight className="h-3.5 w-3.5 text-cyan-400" />;
+   180→  if (movement > 0) return <TrendingUp className="h-3.5 w-3.5 text-emerald-400" />;
+   181→  if (movement < 0) return <TrendingDown className="h-3.5 w-3.5 text-red-400" />;
+   182→  return <Minus className="h-3.5 w-3.5 text-muted-foreground" />;
+   183→}
+   184→
+   185→function getMovementText(movement: number | null, locale: Locale): string {
+   186→  if (movement === null) return t(locale, "rankings.newEntry");
+   187→  if (movement > 0) return `+${movement}`;
+   188→  if (movement < 0) return `${movement}`;
+   189→  return "—";
+   190→}
+   191→
+   192→function getMovementColor(movement: number | null): string {
+   193→  if (movement === null) return "text-cyan-400";
+   194→  if (movement > 5) return "text-emerald-400 font-bold";
+   195→  if (movement > 0) return "text-emerald-400";
+   196→  if (movement < -5) return "text-red-400 font-bold";
+   197→  if (movement < 0) return "text-red-400";
+   198→  return "text-muted-foreground";
+   199→}
+   200→
+   201→function getTierBadge(tier: "top" | "mid" | "emerging" | null): { icon: React.ReactNode; color: string } {
+   202→  switch (tier) {
+   203→    case "top":
+   204→      return { icon: <Crown className="h-3 w-3" />, color: "bg-purple-500/20 text-purple-400 border-purple-500/30" };
+   205→    case "mid":
+   206→      return { icon: <Medal className="h-3 w-3" />, color: "bg-blue-500/20 text-blue-400 border-blue-500/30" };
+   207→    case "emerging":
+   208→      return { icon: <Star className="h-3 w-3" />, color: "bg-amber-500/20 text-amber-400 border-amber-500/30" };
+   209→    default:
+   210→      return { icon: null, color: "bg-secondary/50 text-muted-foreground border-border/30" };
+   211→  }
+   212→}
+   213→
+   214→function getPeriodLabel(period: RankingTimePeriod, locale: Locale): string {
+   215→  return t(locale, `rankings.period.${period}`);
+   216→}
+   217→
+   218→function getPeriodIcon(period: RankingTimePeriod): React.ComponentType<{ className?: string }> {
+   219→  switch (period) {
+   220→    case "current": return Flame;
+   221→    case "1m": return Clock;
+   222→    case "3m": return Calendar;
+   223→    case "1y": return History;
+   224→    case "all": return Infinity;
+   225→  }
+   226→}
+   227→
+   228→/**
+   229→ * Get the time cutoff for a period (in milliseconds from now).
+   230→ */
+   231→function getPeriodCutoff(period: RankingTimePeriod): number {
+   232→  const now = Date.now();
+   233→  switch (period) {
+   234→    case "current": return now; // Only current data
+   235→    case "1m": return now - 30 * 24 * 60 * 60 * 1000;
+   236→    case "3m": return now - 90 * 24 * 60 * 60 * 1000;
+   237→    case "1y": return now - 365 * 24 * 60 * 60 * 1000;
+   238→    case "all": return 0; // All time
+   239→  }
+   240→}
+   241→
+   242→// ==================== AGGREGATION LOGIC ====================
+   243→
+   244→/**
+   245→ * Aggregate ranking snapshots for a given genre and time period.
+   246→ * Returns a map of labelName -> { totalPoints, bestRank, snapshotCount, averageRank }
+   247→ */
+   248→function aggregateSnapshots(
+   249→  snapshots: RankingSnapshot[],
+   250→  genre: string,
+   251→  period: RankingTimePeriod
+   252→): Map<string, { totalPoints: number; bestRank: number; snapshotCount: number; averageRank: number; rankSum: number }> {
+   253→  const cutoff = getPeriodCutoff(period);
+   254→  const result = new Map<string, { totalPoints: number; bestRank: number; snapshotCount: number; averageRank: number; rankSum: number }>();
+   255→
+   256→  // Helper to get or create entry with defaults
+   257→  function getOrCreate(name: string): { totalPoints: number; bestRank: number; snapshotCount: number; averageRank: number; rankSum: number } {
+   258→    let entry = result.get(name);
+   259→    if (!entry) {
+   260→      entry = { totalPoints: 0, bestRank: 999, snapshotCount: 0, averageRank: 0, rankSum: 0 };
+   261→      result.set(name, entry);
+   262→    }
+   263→    return entry;
+   264→  }
+   265→
+   266→  for (const snapshot of snapshots) {
+   267→    if (new Date(snapshot.timestamp).getTime() < cutoff) continue;
+   268→    if (period === "current") continue; // Current period doesn't use snapshots
+   269→
+   270→    const genreData = snapshot.genres[genre];
+   271→    if (!genreData) continue;
+   272→
+   273→    for (const [labelName, data] of Object.entries(genreData)) {
+   274→      const existing = getOrCreate(labelName);
+   275→      existing.totalPoints += data.points;
+   276→      existing.rankSum += data.rank;
+   277→      existing.snapshotCount++;
+   278→      if (data.rank < existing.bestRank) existing.bestRank = data.rank;
+   279→    }
+   280→  }
+   281→
+   282→  // Calculate average rank
+   283→  for (const [, val] of result) {
+   284→    (val as any).averageRank = Math.round(val.rankSum / val.snapshotCount);
+   285→  }
+   286→
+   287→  return result;
+   288→}
+   289→
+   290→/**
+   291→ * Build ranked list for a genre, considering the time period.
+   292→ * - "current": uses live label data (rankByGenre)
+   293→ * - Other periods: aggregates snapshots and re-ranks by cumulative points
+   294→ */
+   295→function buildRankedList(
+   296→  labels: Label[],
+   297→  snapshots: RankingSnapshot[],
+   298→  genre: string,
+   299→  period: RankingTimePeriod
+   300→): RankedLabel[] {
+   301→  if (period === "current") {
+   302→    // Current view: use live label data
+   303→    const ranked: RankedLabel[] = [];
+   304→    for (const label of labels) {
+   305→      const rank = label.rankByGenre?.[genre];
+   306→      if (rank === undefined || rank === null) continue;
+   307→
+   308→      const prevRank = label.prevRankByGenre?.[genre] ?? null;
+   309→      const points = label.pointsByGenre?.[genre] ?? 0;
+   310→      let movement: number | null = null;
+   311→
+   312→      if (prevRank !== null && prevRank !== undefined) {
+   313→        movement = prevRank - rank;
+   314→      } else if (Object.keys(label.prevRankByGenre || {}).length > 0) {
+   315→        movement = null;
+   316→      }
+   317→
+   318→      ranked.push({ label, rank, prevRank, points, movement, snapshotCount: 1 });
+   319→    }
+   320→    return ranked;
+   321→  }
+   322→
+   323→  // Historical/cumulative view: aggregate snapshots
+   324→  const aggregated = aggregateSnapshots(snapshots, genre, period);
+   325→  if (aggregated.size === 0) return [];
+   326→
+   327→  // Sort by total points descending to determine cumulative rank
+   328→  const sorted = Array.from(aggregated.entries()).sort((a, b) => b[1].totalPoints - a[1].totalPoints);
+   329→
+   330→  // For movement in cumulative view, compare with the current live data
+   331→  const ranked: RankedLabel[] = [];
+   332→  for (let i = 0; i < sorted.length; i++) {
+   333→    const [labelName, data] = sorted[i];
+   334→    const cumulativeRank = i + 1;
+   335→
+   336→    // Find matching label in current data
+   337→    const matchingLabel = labels.find(l => l.name === labelName);
+   338→    const currentRank = matchingLabel?.rankByGenre?.[genre] ?? null;
+   339→
+   340→    // Movement: compare current live rank with cumulative rank
+   341→    let movement: number | null = null;
+   342→    if (currentRank !== null) {
+   343→      movement = currentRank - cumulativeRank; // positive = label is better live than cumulative (hot right now)
+   344→    }
+   345→
+   346→    // Use the label if found, otherwise create a minimal reference
+   347→    const label = matchingLabel || {
+   348→      id: `snapshot_${labelName.toLowerCase().replace(/[^a-z0-9]+/g, '_')}`,
+   349→      name: labelName,
+   350→      genre: genre,
+   351→      submissionType: "email" as const,
+   352→      contactInfo: "",
+   353→      status: "open" as const,
+   354→      notes: "",
+   355→      createdAt: new Date().toISOString(),
+   356→      emails: [],
+   357→      website: "",
+   358→      demoLink: "",
+   359→      socialLink: "",
+   360→      soundcloudLink: "",
+   361→      beatportLink: "",
+   362→      customLinks: [],
+   363→      genres: [genre],
+   364→      rankByGenre: { [genre]: currentRank || 999 },
+   365→      pointsByGenre: {},
+   366→      trending: false,
+   367→      trendingRankByGenre: {},
+   368→      trendingPointsByGenre: {},
+   369→      prevRankByGenre: {},
+   370→    };
+   371→
+   372→    ranked.push({
+   373→      label,
+   374→      rank: cumulativeRank,
+   375→      prevRank: currentRank,
+   376→      points: data.totalPoints,
+   377→      movement,
+   378→      snapshotCount: data.snapshotCount,
+   379→    });
+   380→  }
+   381→
+   382→  return ranked;
+   383→}
+   384→
+   385→// ==================== COMPONENT ====================
+   386→
+   387→export function RankingsPage() {
+   388→  const { labels, locale, rankingsUpdatedAt, rankingSnapshots, setActiveTab, setSelectedLabelId } = useAppStore();
+   389→  const snapshots = rankingSnapshots || []; // defensive: might be undefined for existing users
+   390→  const [selectedGenre, setSelectedGenre] = useState<string | null>(null);
+   391→  const [sortMode, setSortMode] = useState<SortMode>("rank");
+   392→  const [movementFilter, setMovementFilter] = useState<MovementFilter>("all");
+   393→  const [timePeriod, setTimePeriod] = useState<RankingTimePeriod>("current");
+   394→  const [showGenreDropdown, setShowGenreDropdown] = useState(false);
+   395→  const [spotlightShowAll, setSpotlightShowAll] = useState(false); // when true + genre selected, show global risers instead of genre-filtered
+   396→
+   397→  // Click on a label name → navigate to the LabelFinder tab and auto-open
+   398→  // the detail dialog for that label. Matches by id when possible, falls
+   399→  // back to name (LabelFinder's useEffect handles both).
+   400→  const handleOpenLabel = useCallback(
+   401→    (label: Label) => {
+   402→      setSelectedLabelId?.(label.id || label.name);
+   403→      setActiveTab("labels");
+   404→    },
+   405→    [setActiveTab, setSelectedLabelId]
+   406→  );
+   407→
+   408→  // Get all genres from labels, sorted alphabetically
+   409→  const allGenres = useMemo(() => {
+   410→    const genreSet = new Set<string>();
+   411→    for (const label of labels) {
+   412→      if (label.genres) {
+   413→        for (const g of label.genres) {
+   414→          genreSet.add(g);
+   415→        }
+   416→      }
+   417→    }
+   418→    return Array.from(genreSet).sort((a, b) => a.localeCompare(b));
+   419→  }, [labels]);
+   420→
+   421→  // Build ranked list for selected genre and period
+   422→  const rankedList = useMemo((): RankedLabel[] => {
+   423→    if (!selectedGenre) return [];
+   424→    return buildRankedList(labels, snapshots, selectedGenre, timePeriod);
+   425→  }, [labels, snapshots, selectedGenre, timePeriod]);
+   426→
+   427→  // Apply filters
+   428→  const filteredList = useMemo(() => {
+   429→    let result = [...rankedList];
+   430→
+   431→    // Movement filter
+   432→    switch (movementFilter) {
+   433→      case "rising":
+   434→        result = result.filter((l) => l.movement !== null && l.movement > 0);
+   435→        break;
+   436→      case "falling":
+   437→        result = result.filter((l) => l.movement !== null && l.movement < 0);
+   438→        break;
+   439→      case "new":
+   440→        result = result.filter((l) => l.movement === null);
+   441→        break;
+   442→      case "stable":
+   443→        result = result.filter((l) => l.movement === 0);
+   444→        break;
+   445→    }
+   446→
+   447→    // Sort
+   448→    switch (sortMode) {
+   449→      case "rank":
+   450→        result.sort((a, b) => a.rank - b.rank);
+   451→        break;
+   452→      case "movement":
+   453→        result.sort((a, b) => {
+   454→          if (a.movement === null && b.movement === null) return a.rank - b.rank;
+   455→          if (a.movement === null) return -1;
+   456→          if (b.movement === null) return 1;
+   457→          return b.movement - a.movement;
+   458→        });
+   459→        break;
+   460→      case "points":
+   461→        result.sort((a, b) => b.points - a.points);
+   462→        break;
+   463→    }
+   464→
+   465→    return result;
+   466→  }, [rankedList, movementFilter, sortMode]);
+   467→
+   468→  // Stats summary
+   469→  const stats = useMemo(() => {
+   470→    const total = rankedList.length;
+   471→    const rising = rankedList.filter((l) => l.movement !== null && l.movement > 0).length;
+   472→    const falling = rankedList.filter((l) => l.movement !== null && l.movement < 0).length;
+   473→    const newEntries = rankedList.filter((l) => l.movement === null).length;
+   474→
+   475→    return { total, rising, falling, newEntries };
+   476→  }, [rankedList]);
+   477→
+   478→  // Top rising labels across ALL genres (for the global spotlight section)
+   479→  const topRisers = useMemo(() => {
+   480→    const risers: { label: Label; genre: string; movement: number; rank: number }[] = [];
+   481→
+   482→    for (const label of labels) {
+   483→      if (!label.prevRankByGenre || Object.keys(label.prevRankByGenre).length === 0) continue;
+   484→      for (const genre of label.genres) {
+   485→        const currentRank = label.rankByGenre?.[genre];
+   486→        const prevRank = label.prevRankByGenre?.[genre];
+   487→        if (currentRank && prevRank) {
+   488→          const movement = prevRank - currentRank;
+   489→          if (movement > 0) {
+   490→            risers.push({ label, genre, movement, rank: currentRank });
+   491→          }
+   492→        }
+   493→      }
+   494→    }
+   495→
+   496→    return risers.sort((a, b) => b.movement - a.movement).slice(0, 10);
+   497→  }, [labels]);
+   498→
+   499→  // Top rising labels for the SELECTED genre (genre-specific spotlight)
+   500→  const topRisersForGenre = useMemo(() => {
+   501→    if (!selectedGenre) return [];
+   502→    const risers: { label: Label; genre: string; movement: number; rank: number }[] = [];
+   503→
+   504→    for (const label of labels) {
+   505→      const currentRank = label.rankByGenre?.[selectedGenre];
+   506→      const prevRank = label.prevRankByGenre?.[selectedGenre];
+   507→      if (currentRank && prevRank) {
+   508→        const movement = prevRank - currentRank;
+   509→        if (movement > 0) {
+   510→          risers.push({ label, genre: selectedGenre, movement, rank: currentRank });
+   511→        }
+   512→      }
+   513→    }
+   514→
+   515→    return risers.sort((a, b) => b.movement - a.movement).slice(0, 10);
+   516→  }, [labels, selectedGenre]);
+   517→
+   518→  const hasPreviousData = useMemo(() => {
+   519→    return labels.some((l) => l.prevRankByGenre && Object.keys(l.prevRankByGenre).length > 0);
+   520→  }, [labels]);
+   521→
+   522→  // ⚠️ FIX (2026-06-22): Don't show the "no history" alert until cloud sync
+   523→  // has completed. The cloud-first architecture loads data asynchronously
+   524→  // after login — at mount time, `labels` may be the seed-only set with no
+   525→  // prevRankByGenre. Showing the alert immediately confuses users who DO
+   526→  // have history in the cloud but haven't received it yet.
+   527→  // We wait for either:
+   528→  //   1. hasCloudSynced = true (cloud sync finished, data is final), OR
+   529→  //   2. hasPreviousData = true (already has prev ranks, no need to wait)
+   530→  const { hasCloudSynced } = useAppStore();
+   531→  const hideNoHistoryAlert = hasPreviousData || !hasCloudSynced;
+   532→
+   533→  // Snapshot stats for info display
+   534→  const snapshotStats = useMemo(() => {
+   535→    if (!snapshots || snapshots.length === 0) return { count: 0, oldest: null as string | null, newest: null as string | null };
+   536→    const sorted = [...snapshots].sort((a, b) => new Date(a.timestamp).getTime() - new Date(b.timestamp).getTime());
+   537→    return {
+   538→      count: snapshots.length,
+   539→      oldest: sorted[0].timestamp,
+   540→      newest: sorted[sorted.length - 1].timestamp,
+   541→    };
+   542→  }, [snapshots]);
+   543→
+   544→  // Spotlight risers: genre-filtered or global, based on toggle
+   545→  const spotlightRisers = useMemo(() => {
+   546→    if (!hasPreviousData) return [];
+   547→    const isGenreFiltered = selectedGenre && !spotlightShowAll;
+   548→    return isGenreFiltered ? topRisersForGenre : topRisers;
+   549→  }, [hasPreviousData, selectedGenre, spotlightShowAll, topRisers, topRisersForGenre]);
+   550→
+   551→  const hasSnapshots = snapshots.length > 0;
+   552→
+   553→  // === EMERGENCY HISTORY RECOVERY ===
+   554→  // If the live store has 0 snapshots but the dedicated sidecar backup slot
+   555→  // (labelpulse-snapshots-backup) has snapshots, show a one-click "restore history"
+   556→  // button. This is the safety-net UI for the scenario where a bad cloud sync,
+   557→  // a partial import, or a localStorage hiccup wipes the live rankingSnapshots
+   558→  // array but the sidecar survived.
+   559→  const [sidecarCount, setSidecarCount] = useState(0);
+   560→  const [restoredMsg, setRestoredMsg] = useState<string | null>(null);
+   561→  useEffect(() => {
+   562→    setSidecarCount(readSnapshotsSidecar().length);
+   563→  }, [snapshots.length]);
+   564→  const showRestoreHistoryBtn =
+   565→    !hasSnapshots && sidecarCount > 0 && labels.length > 0;
+   566→  const handleRestoreHistory = () => {
+   567→    const added = restoreSnapshotsFromSidecar();
+   568→    if (added > 0) {
+   569→      setRestoredMsg(
+   570→        locale === "it"
+   571→          ? `Storico recuperato: ${added} snapshot importati dal backup di emergenza.`
+   572→          : `History recovered: ${added} snapshot(s) imported from emergency backup.`
+   573→      );
+   574→    } else {
+   575→      setRestoredMsg(
+   576→        locale === "it"
+   577→          ? "Nessuno snapshot nuovo da recuperare (già sincronizzati)."
+   578→          : "No new snapshots to recover (already in sync)."
+   579→      );
+   580→    }
+   581→    setSidecarCount(readSnapshotsSidecar().length);
+   582→  };
+   583→
+   584→  return (
+   585→    <div className="space-y-6">
+   586→      {/* Alert if no previous data */}
+   587→      {!hideNoHistoryAlert && timePeriod === "current" && (
+   588→        <div className="flex items-start gap-3 p-4 rounded-lg bg-amber-500/10 border border-amber-500/30">
+   589→          <AlertTriangle className="h-5 w-5 text-amber-400 shrink-0 mt-0.5" />
+   590→          <div className="flex-1">
+   591→            <p className="text-sm text-amber-400 font-medium">{t(locale, "rankings.noHistory")}</p>
+   592→            <p className="text-xs text-muted-foreground mt-1">{t(locale, "rankings.noHistoryDesc")}</p>
+   593→            {showRestoreHistoryBtn && (
+   594→              <div className="mt-3 flex flex-col gap-2">
+   595→                <Button
+   596→                  onClick={handleRestoreHistory}
+   597→                  size="sm"
+   598→                  variant="outline"
+   599→                  className="gap-1.5 border-cyan-500/50 text-cyan-400 hover:bg-cyan-500/10 w-fit"
+   600→                >
+   601→                  <RotateCcw className="h-3.5 w-3.5" />
+   602→                  {locale === "it"
+   603→                    ? `Recupera storico dal backup di emergenza (${sidecarCount} snapshot)`
+   604→                    : `Restore history from emergency backup (${sidecarCount} snapshots)`}
+   605→                </Button>
+   606→                {restoredMsg && (
+   607→                  <p className="text-xs text-emerald-400">{restoredMsg}</p>
+   608→                )}
+   609→              </div>
+   610→            )}
+   611→          </div>
+   612→        </div>
+   613→      )}
+   614→
+   615→      {/* ⚠️ FIX (2026-06-22): Show "loading from cloud" banner while cloud
+   616→          sync is in progress and we don't have prev data yet. This replaces
+   617→          the misleading "no history" alert during the async cloud load. */}
+   618→      {!hasPreviousData && !hasCloudSynced && timePeriod === "current" && (
+   619→        <div className="flex items-start gap-3 p-4 rounded-lg bg-cyan-500/10 border border-cyan-500/30">
+   620→          <div className="h-5 w-5 rounded-full border-2 border-cyan-400 border-t-transparent animate-spin shrink-0 mt-0.5" />
+   621→          <div>
+   622→            <p className="text-sm text-cyan-400 font-medium">
+   623→              {locale === "it" ? "Caricamento dati dal cloud..." : "Loading data from cloud..."}
+   624→            </p>
+   625→            <p className="text-xs text-muted-foreground mt-1">
+   626→              {locale === "it"
+   627→                ? "Stiamo recuperando le tue classifiche e il tuo profilo dal cloud. Un attimo di pazienza."
+   628→                : "We're retrieving your charts and profile from the cloud. One moment please."}
+   629→            </p>
+   630→          </div>
+   631→        </div>
+   632→      )}
+   633→
+   634→      {/* If restore happened while history is now present, show success banner */}
+   635→      {restoredMsg && hasPreviousData && (
+   636→        <div className="flex items-start gap-3 p-3 rounded-lg bg-emerald-500/10 border border-emerald-500/30">
+   637→          <History className="h-4 w-4 text-emerald-400 shrink-0 mt-0.5" />
+   638→          <p className="text-xs text-emerald-400">{restoredMsg}</p>
+   639→        </div>
+   640→      )}
+   641→
+   642→      {/* Snapshot info banner */}
+   643→      {timePeriod !== "current" && !hasSnapshots && (
+   644→        <div className="flex items-start gap-3 p-4 rounded-lg bg-cyan-500/10 border border-cyan-500/30">
+   645→          <History className="h-5 w-5 text-cyan-400 shrink-0 mt-0.5" />
+   646→          <div>
+   647→            <p className="text-sm text-cyan-400 font-medium">{t(locale, "rankings.noSnapshots")}</p>
+   648→            <p className="text-xs text-muted-foreground mt-1">{t(locale, "rankings.noSnapshotsDesc")}</p>
+   649→          </div>
+   650→        </div>
+   651→      )}
+   652→
+   653→      {/* Snapshot stats (when viewing historical data) */}
+   654→      {timePeriod !== "current" && hasSnapshots && (
+   655→        <div className="flex items-center gap-3 p-3 rounded-lg bg-muted/30 border border-border/50">
+   656→          <History className="h-4 w-4 text-muted-foreground shrink-0" />
+   657→          <div className="flex flex-wrap gap-4 text-xs text-muted-foreground">
+   658→            <span>{snapshotStats.count} {t(locale, "rankings.snapshots")}</span>
+   659→            {snapshotStats.oldest && (
+   660→              <span>{t(locale, "rankings.from")}: {new Date(snapshotStats.oldest).toLocaleDateString(locale === "it" ? "it-IT" : "en-US")}</span>
+   661→            )}
+   662→            {snapshotStats.newest && (
+   663→              <span>{t(locale, "rankings.to")}: {new Date(snapshotStats.newest).toLocaleDateString(locale === "it" ? "it-IT" : "en-US")}</span>
+   664→            )}
+   665→          </div>
+   666→        </div>
+   667→      )}
+   668→
+   669→      {/* Spotlight: Top Risers */}
+   670→      {timePeriod === "current" && hasPreviousData && (spotlightRisers.length > 0 || (selectedGenre && !spotlightShowAll)) && (
+   671→        <div className="space-y-3">
+   672→          <div className="flex items-center justify-between gap-2">
+   673→            <div className="flex items-center gap-2">
+   674→              <Flame className="h-5 w-5 text-orange-400" />
+   675→              <h3 className="text-sm font-semibold text-foreground">
+   676→                {selectedGenre && !spotlightShowAll
+   677→                  ? t(locale, "rankings.spotlightGenre")
+   678→                  : t(locale, "rankings.spotlight")}
+   679→              </h3>
+   680→            </div>
+   681→            {/* Toggle: only show when a genre is selected */}
+   682→            {selectedGenre && (
+   683→              <div className="flex rounded-lg border border-border overflow-hidden">
+   684→                <button
+   685→                  onClick={() => setSpotlightShowAll(false)}
+   686→                  className={`px-2.5 py-1 text-[11px] font-medium transition-colors ${
+   687→                    !spotlightShowAll
+   688→                      ? "bg-primary/15 text-primary"
+   689→                      : "text-muted-foreground hover:text-foreground hover:bg-secondary/50"
+   690→                  }`}
+   691→                >
+   692→                  {selectedGenre}
+   693→                </button>
+   694→                <button
+   695→                  onClick={() => setSpotlightShowAll(true)}
+   696→                  className={`px-2.5 py-1 text-[11px] font-medium transition-colors ${
+   697→                    spotlightShowAll
+   698→                      ? "bg-primary/15 text-primary"
+   699→                      : "text-muted-foreground hover:text-foreground hover:bg-secondary/50"
+   700→                  }`}
+   701→                >
+   702→                  {t(locale, "rankings.spotlightAll")}
+   703→                </button>
+   704→              </div>
+   705→            )}
+   706→          </div>
+   707→          {spotlightRisers.length > 0 ? (
+   708→            <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-5 gap-2">
+   709→              {spotlightRisers.map((item, idx) => (
+   710→                <div
+   711→                  key={`${item.label.id}-${item.genre}`}
+   712→                  className="flex items-center gap-2 p-2.5 rounded-lg bg-gradient-to-r from-emerald-500/10 to-transparent border border-emerald-500/20"
+   713→                >
+   714→                  <span className="text-lg font-bold text-emerald-400 shrink-0">+{item.movement}</span>
+   715→                  <div className="min-w-0 flex-1">
+   716→                    <div className="flex items-center gap-1 min-w-0">
+   717→                      <ClickableLabelName
+   718→                        label={item.label}
+   719→                        className="text-xs font-medium text-foreground truncate"
+   720→                        onOpen={handleOpenLabel}
+   721→                      />
+   722→                    </div>
+   723→                    <div className="flex items-center gap-1 mt-0.5">
+   724→                      <p className="text-[10px] text-muted-foreground truncate">
+   725→                        {selectedGenre && !spotlightShowAll
+   726→                          ? `#${item.rank} · +${item.movement}`
+   727→                          : item.genre}
+   728→                      </p>
+   729→                      <LabelDiscoveryIcons label={item.label} size={10} />
+   730→                    </div>
+   731→                  </div>
+   732→                </div>
+   733→              ))}
+   734→            </div>
+   735→          ) : (
+   736→            <p className="text-xs text-muted-foreground py-4 text-center">
+   737→              {t(locale, "rankings.noRisersForGenre")}
+   738→            </p>
+   739→          )}
+   740→        </div>
+   741→      )}
+   742→
+   743→
+   744→      {/* Genre selector + Filters */}
+   745→      <div className="space-y-4">
+   746→        {/* Genre dropdown */}
+   747→        <div className="flex flex-col sm:flex-row gap-3">
+   748→          <div className="relative flex-1">
+   749→            <Button
+   750→              variant="outline"
+   751→              className="w-full justify-between text-sm"
+   752→              onClick={() => setShowGenreDropdown(!showGenreDropdown)}
+   753→            >
+   754→              <span className="flex items-center gap-2">
+   755→                <BarChart3 className="h-4 w-4 text-primary" />
+   756→                {selectedGenre || t(locale, "rankings.selectGenre")}
+   757→              </span>
+   758→              <ChevronDown className={`h-4 w-4 transition-transform ${showGenreDropdown ? "rotate-180" : ""}`} />
+   759→            </Button>
+   760→            {showGenreDropdown && (
+   761→              <div className="absolute z-50 mt-1 w-full max-h-64 overflow-y-auto rounded-lg border border-border bg-popover shadow-lg">
+   762→                {allGenres.map((genre) => {
+   763→                  const count = labels.filter((l) => l.rankByGenre?.[genre]).length;
+   764→                  return (
+   765→                    <button
+   766→                      key={genre}
+   767→                      onClick={() => {
+   768→                        setSelectedGenre(genre);
+   769→                        setSpotlightShowAll(false);
+   770→                        setShowGenreDropdown(false);
+   771→                      }}
+   772→                      className={`w-full flex items-center justify-between px-3 py-2 text-sm hover:bg-accent/50 transition-colors ${
+   773→                        selectedGenre === genre ? "bg-primary/10 text-primary font-medium" : "text-foreground"
+   774→                      }`}
+   775→                    >
+   776→                      <span className="truncate">{genre}</span>
+   777→                      <span className="text-xs text-muted-foreground shrink-0 ml-2">{count}</span>
+   778→                    </button>
+   779→                  );
+   780→                })}
+   781→              </div>
+   782→            )}
+   783→          </div>
+   784→
+   785→          {/* Sort & Filter controls */}
+   786→          {selectedGenre && (
+   787→            <div className="flex gap-2 flex-wrap">
+   788→              {/* Sort */}
+   789→              <div className="flex rounded-lg border border-border overflow-hidden">
+   790→                {([["rank", Trophy], ["movement", TrendingUp], ["points", BarChart3]] as const).map(([mode, Icon]) => (
+   791→                  <button
+   792→                    key={mode}
+   793→                    onClick={() => setSortMode(mode)}
+   794→                    className={`flex items-center gap-1.5 px-3 py-1.5 text-xs font-medium transition-colors ${
+   795→                      sortMode === mode
+   796→                        ? "bg-primary/15 text-primary"
+   797→                        : "text-muted-foreground hover:text-foreground hover:bg-secondary/50"
+   798→                    }`}
+   799→                  >
+   800→                    <Icon className="h-3.5 w-3.5" />
+   801→                    {t(locale, `rankings.sort.${mode}`)}
+   802→                  </button>
+   803→                ))}
+   804→              </div>
+   805→
+   806→              {/* Movement filter */}
+   807→              <div className="flex rounded-lg border border-border overflow-hidden">
+   808→                {([["all", Filter], ["rising", TrendingUp], ["falling", TrendingDown], ["new", ArrowUpRight]] as const).map(([filter, Icon]) => (
+   809→                  <button
+   810→                    key={filter}
+   811→                    onClick={() => setMovementFilter(filter)}
+   812→                    className={`flex items-center gap-1 px-2.5 py-1.5 text-xs font-medium transition-colors ${
+   813→                      movementFilter === filter
+   814→                        ? "bg-primary/15 text-primary"
+   815→                        : "text-muted-foreground hover:text-foreground hover:bg-secondary/50"
+   816→                    }`}
+   817→                    title={t(locale, `rankings.filter.${filter}`)}
+   818→                  >
+   819→                    <Icon className="h-3.5 w-3.5" />
+   820→                  </button>
+   821→                ))}
+   822→              </div>
+   823→            </div>
+   824→          )}
+   825→        </div>
+   826→
+   827→        {/* Time Period Selector */}
+   828→        {selectedGenre && (
+   829→          <div className="flex flex-col sm:flex-row items-start sm:items-center gap-2">
+   830→            <span className="text-xs text-muted-foreground font-medium shrink-0">{t(locale, "rankings.periodLabel")}:</span>
+   831→            <div className="flex rounded-lg border border-border overflow-hidden">
+   832→              {(["current", "1m", "3m", "1y", "all"] as RankingTimePeriod[]).map((period) => {
+   833→                const Icon = getPeriodIcon(period);
+   834→                const isDisabled = period !== "current" && !hasSnapshots;
+   835→                return (
+   836→                  <button
+   837→                    key={period}
+   838→                    onClick={() => !isDisabled && setTimePeriod(period)}
+   839→                    className={`flex items-center gap-1.5 px-3 py-1.5 text-xs font-medium transition-colors ${
+   840→                      timePeriod === period
+   841→                        ? "bg-cyan-500/15 text-cyan-400"
+   842→                        : isDisabled
+   843→                          ? "text-muted-foreground/40 cursor-not-allowed"
+   844→                          : "text-muted-foreground hover:text-foreground hover:bg-secondary/50"
+   845→                    }`}
+   846→                    title={isDisabled ? t(locale, "rankings.periodDisabled") : getPeriodLabel(period, locale)}
+   847→                  >
+   848→                    <Icon className="h-3.5 w-3.5" />
+   849→                    {getPeriodLabel(period, locale)}
+   850→                  </button>
+   851→                );
+   852→              })}
+   853→            </div>
+   854→          </div>
+   855→        )}
+   856→
+   857→        {/* Stats bar */}
+   858→        {selectedGenre && stats.total > 0 && (
+   859→          <div className="flex flex-wrap gap-3 text-xs">
+   860→            <span className="flex items-center gap-1 text-muted-foreground">
+   861→              <Eye className="h-3 w-3" /> {stats.total} {t(locale, "rankings.labels")}
+   862→            </span>
+   863→            {timePeriod === "current" && (
+   864→              <>
+   865→                <span className="flex items-center gap-1 text-emerald-400">
+   866→                  <TrendingUp className="h-3 w-3" /> {stats.rising} {t(locale, "rankings.rising")}
+   867→                </span>
+   868→                <span className="flex items-center gap-1 text-red-400">
+   869→                  <TrendingDown className="h-3 w-3" /> {stats.falling} {t(locale, "rankings.falling")}
+   870→                </span>
+   871→                <span className="flex items-center gap-1 text-cyan-400">
+   872→                  <ArrowUpRight className="h-3 w-3" /> {stats.newEntries} {t(locale, "rankings.newEntries")}
+   873→                </span>
+   874→              </>
+   875→            )}
+   876→            {timePeriod !== "current" && (
+   877→              <span className="flex items-center gap-1 text-cyan-400">
+   878→                <History className="h-3 w-3" /> {t(locale, "rankings.cumulativeView")}
+   879→              </span>
+   880→            )}
+   881→            {rankingsUpdatedAt && (
+   882→              <span className="flex items-center gap-1 text-muted-foreground ml-auto">
+   883→                {t(locale, "rankings.lastUpdate")}: {new Date(rankingsUpdatedAt).toLocaleDateString(locale === "it" ? "it-IT" : "en-US")}
+   884→              </span>
+   885→            )}
+   886→          </div>
+   887→        )}
+   888→
+   889→        {/* Rankings table */}
+   890→        {selectedGenre && filteredList.length > 0 && (
+   891→          <div className="rounded-lg border border-border/50 overflow-hidden">
+   892→            {/* Table header */}
+   893→            <div className={`grid items-center gap-1 px-3 py-2 bg-secondary/30 text-xs font-medium text-muted-foreground border-b border-border/50 ${
+   894→              timePeriod !== "current"
+   895→                ? "grid-cols-[3rem_1fr_4.5rem_4rem_4.5rem_3.5rem] sm:grid-cols-[3rem_1fr_5rem_5rem_5.5rem_4rem]"
+   896→                : "grid-cols-[3rem_1fr_4.5rem_4rem_4rem] sm:grid-cols-[3rem_1fr_5rem_5rem_5rem]"
+   897→            }`}>
+   898→              <span>#</span>
+   899→              <span>{t(locale, "rankings.colLabel")}</span>
+   900→              <span className="text-right">{t(locale, "rankings.colRank")}</span>
+   901→              <span className="text-right">{t(locale, "rankings.colMovement")}</span>
+   902→              <span className="text-right">{timePeriod !== "current" ? t(locale, "rankings.colCumPoints") : t(locale, "rankings.colPoints")}</span>
+   903→              {timePeriod !== "current" && (
+   904→                <span className="text-right">{t(locale, "rankings.colUpdates")}</span>
+   905→              )}
+   906→            </div>
+   907→
+   908→            {/* Table body */}
+   909→            <div className="divide-y divide-border/30">
+   910→              {filteredList.map((item) => {
+   911→                const tier = getLabelTier(item.label, selectedGenre!);
+   912→                const tierBadge = getTierBadge(tier);
+   913→
+   914→                return (
+   915→                  <div
+   916→                    key={`${item.label.id}-${item.rank}`}
+   917→                    className={`grid items-center gap-1 px-3 py-2.5 text-sm transition-colors hover:bg-secondary/20 ${
+   918→                      timePeriod !== "current"
+   919→                        ? "grid-cols-[3rem_1fr_4.5rem_4rem_4.5rem_3.5rem] sm:grid-cols-[3rem_1fr_5rem_5rem_5.5rem_4rem]"
+   920→                        : "grid-cols-[3rem_1fr_4.5rem_4rem_4rem] sm:grid-cols-[3rem_1fr_5rem_5rem_5rem]"
+   921→                    } ${item.rank <= 3 ? "bg-primary/5" : ""}`}
+   922→                  >
+   923→                    {/* Rank number */}
+   924→                    <span className={`font-mono font-bold ${item.rank <= 3 ? "text-primary" : "text-foreground"}`}>
+   925→                      {item.rank}
+   926→                    </span>
+   927→
+   928→                    {/* Label name + tier */}
+   929→                    <div className="flex items-center gap-2 min-w-0">
+   930→                      <ClickableLabelName
+   931→                        label={item.label}
+   932→                        className="font-medium text-foreground truncate"
+   933→                        onOpen={handleOpenLabel}
+   934→                      />
+   935→                      {timePeriod === "current" && (
+   936→                        <>
+   937→                          <span className={`shrink-0 flex items-center gap-0.5 px-1.5 py-0.5 rounded text-[10px] border ${tierBadge.color}`}>
+   938→                            {tierBadge.icon}
+   939→                            {tier === "top" ? "T" : tier === "mid" ? "M" : tier === "emerging" ? "E" : ""}
+   940→                          </span>
+   941→                          {item.label.trending && <Flame className="h-3 w-3 text-orange-400 shrink-0" />}
+   942→                        </>
+   943→                      )}
+   944→                      <LabelDiscoveryIcons label={item.label} size={11} />
+   945→                    </div>
+   946→
+   947→                    {/* Current rank */}
+   948→                    <span className="text-right font-mono text-foreground">
+   949→                      #{item.rank}
+   950→                    </span>
+   951→
+   952→                    {/* Movement */}
+   953→                    <div className="flex items-center justify-end gap-1">
+   954→                      {timePeriod === "current" ? (
+   955→                        <>
+   956→                          {getMovementIcon(item.movement)}
+   957→                          <span className={`font-mono text-xs ${getMovementColor(item.movement)}`}>
+   958→                            {getMovementText(item.movement, locale)}
+   959→                          </span>
+   960→                        </>
+   961→                      ) : (
+   962→                        <span className="font-mono text-xs text-muted-foreground">—</span>
+   963→                      )}
+   964→                    </div>
+   965→
+   966→                    {/* Points */}
+   967→                    <span className="text-right font-mono text-xs text-muted-foreground">
+   968→                      {item.points.toLocaleString(locale === "it" ? "it-IT" : "en-US")}
+   969→                    </span>
+   970→
+   971→                    {/* Snapshot count (only for cumulative views) */}
+   972→                    {timePeriod !== "current" && (
+   973→                      <span className="text-right font-mono text-[10px] text-muted-foreground">
+   974→                        {item.snapshotCount}×
+   975→                      </span>
+   976→                    )}
+   977→                  </div>
+   978→                );
+   979→              })}
+   980→            </div>
+   981→          </div>
+   982→        )}
+   983→
+   984→        {/* Empty state */}
+   985→        {selectedGenre && filteredList.length === 0 && (
+   986→          <div className="flex flex-col items-center justify-center py-12 text-center">
+   987→            <BarChart3 className="h-10 w-10 text-muted-foreground/30 mb-3" />
+   988→            <p className="text-sm text-muted-foreground">
+   989→              {timePeriod !== "current" && !hasSnapshots
+   990→                ? t(locale, "rankings.noSnapshots")
+   991→                : movementFilter !== "all"
+   992→                  ? t(locale, "rankings.noResultsFilter")
+   993→                  : t(locale, "rankings.noResults")}
+   994→            </p>
+   995→          </div>
+   996→        )}
+   997→
+   998→        {/* No genre selected */}
+   999→        {!selectedGenre && (
+  1000→          <div className="flex flex-col items-center justify-center py-16 text-center">
+  1001→            <Trophy className="h-14 w-14 text-primary/30 mb-4" />
+  1002→            <h3 className="text-lg font-semibold text-foreground mb-2">{t(locale, "rankings.title")}</h3>
+  1003→            <p className="text-sm text-muted-foreground max-w-md">
+  1004→              {t(locale, "rankings.selectGenrePrompt")}
+  1005→            </p>
+  1006→          </div>
+  1007→        )}
+  1008→      </div>
+  1009→    </div>
+  1010→  );
+  1011→}
+  1012→

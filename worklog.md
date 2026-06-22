@@ -651,3 +651,25 @@ Stage Summary:
 - Multi-utenza garantita da id=email nella tabella app_state
 - ACTION ITEM PER L'UTENTE: inserire le credenziali Supabase in .env.local (NEXT_PUBLIC_SUPABASE_URL + NEXT_PUBLIC_SUPABASE_ANON_KEY) e riavviare l'app. Se aveva già un progetto Supabase usato col vecchio sistema BYOK, RIUSA QUELLO — i dati sono lì.
 - TODO futuro (non bloccante): migrare auth da NextAuth/Google a Supabase Auth email/password per funzionare anche in static export (server.mjs)
+
+---
+Task ID: spotlight-fix-idempotent-import
+Agent: main (Super Z)
+Task: Fix scomparsa "Label in ascesa" (Spotlight risers) dopo re-import identico di scrape Beatport
+
+Work Log:
+- Letto mergePreservingUserData() in src/lib/store.ts (righe 978-1040)
+- Identificato bug: ogni import (anche identico) sovrascriveva prevRankByGenre con una copia di existing.rankByGenre → prevRank === currentRank → movement = 0 → Spotlight risers scomparsi
+- Fix #1 (store.ts): mergePreservingUserData ora aggiorna prevRankByGenre[genre] SOLO se imported.rank !== existing.rank per quel genere. Import identico → prevRankByGenre preservato
+- Letto topRisers, topRisersForGenre, buildRankedList, hasPreviousData in src/components/rankings-page.tsx
+- Identificato bug secondario: la logica Spotlight dipendeva SOLO da label.prevRankByGenre (fragile, clobberable). I dati utente attuali nel cloud hanno già prevRankByGenre corrotto dall'ultimo import identico stamattina
+- Fix #2 (rankings-page.tsx): aggiunto helper findPrevRankFromSnapshots() che cammina gli snapshot storici (immutabili) dal più recente al più vecchio e ritorna il primo rank DIVERSO dal corrente. Usato in buildRankedList per il movimento, e in topRisers/topRisersForGenre per il calcolo risers
+- Fix #3 (rankings-page.tsx): hasPreviousData ora considera anche la presenza di snapshot con dati, oltre a prevRankByGenre → Spotlight section renderizza anche se prevRankByGenre è clobbered
+- Build Next.js OK (skipped validation types per errori pre-esistenti non correlati)
+- Commit 98ac8bc, push su GitHub origin/main → trigger deploy Vercel automatico
+
+Stage Summary:
+- Bug risolto a livello di codice in entrambi i lati: previsione futura (store.ts) e recupero presente (rankings-page.tsx che legge da snapshot immutabili)
+- Vantaggio chiave: anche i dati GIÀ corrotti nel cloud vengono ripristinati trasparentemente al prossimo caricamento, perché la UI legge dagli snapshot (immutabili) e non più da prevRankByGenre (corrompibile)
+- L'utente vedrà di nuovo i riquadri "Label in ascesa" dopo il deploy Vercel, sia per il global Spotlight che per il genre-filtered
+- Non richiede re-import da parte dell'utente: basta ricaricare la pagina dopo il deploy
