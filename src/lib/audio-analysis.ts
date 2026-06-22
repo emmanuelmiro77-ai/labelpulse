@@ -465,17 +465,19 @@ async function runWebAudioFallback(
     progress: 1,
   });
 
-  // Fallback result: key is unknown, marked as C Major (8B) for compatibility
-  // but with confidence 0 so the UI can show it as "sconosciuta"
-  const camelot = pitchToCamelot(0, 1);
+  // Fallback result: key is unknown.
+  // We deliberately set camelot to "" (empty) instead of a fake code,
+  // because showing "8B + Sconosciuta" was misleading users into thinking
+  // essentia.js detected something. The UI now checks `key.confidence === 0`
+  // and renders an explicit "non disponibile" badge instead.
   return {
     bpm,
     bpmConfidence: 0.6, // lower confidence for fallback
     key: {
-      pitchClass: 0,
+      pitchClass: -1,           // -1 signals "no detection"
       mode: 1,
-      camelot: camelot.code,
-      name: "Sconosciuta",
+      camelot: "",              // empty: no fake Camelot code
+      name: "Non disponibile",
       confidence: 0,
     },
     energy,
@@ -605,7 +607,14 @@ export async function decodeAudio(
 
 /**
  * Compute energy (0-1) from mono audio data using RMS.
- * Electronic music typically ranges 0.4-0.8.
+ * Uses a logarithmic curve so:
+ *   - Very quiet tracks (RMS ~0.05, e.g. ambient, classical) → ~30%
+ *   - Typical electronic music (RMS ~0.15-0.25) → 50-75%
+ *   - Loud mastered club tracks (RMS ~0.30-0.40) → 80-92%
+ *   - Brickwalled/clipped (RMS > 0.45) → 95-100%
+ *
+ * Previous linear curve (rms/0.3)^0.7 saturated at 100% for any track
+ * with RMS > 0.3, making 30% of real electronic music look "maxed out".
  */
 export function computeEnergy(mono: Float32Array): number {
   if (mono.length === 0) return 0;
@@ -618,9 +627,19 @@ export function computeEnergy(mono: Float32Array): number {
     count++;
   }
   const rms = Math.sqrt(sumSquares / count);
-  // Normalize: typical electronic music RMS is ~0.05-0.25
-  // Map 0→0, 0.3→1 with a curve
-  const normalized = Math.min(1, Math.pow(rms / 0.3, 0.7));
+  if (rms < 1e-6) return 0;
+
+  // Logarithmic curve anchored at:
+  //   rms = 0.01 → ~5% ( silence-ish )
+  //   rms = 0.10 → ~55%
+  //   rms = 0.20 → ~75%
+  //   rms = 0.30 → ~87%
+  //   rms = 0.45 → ~96%
+  //   rms = 0.60 → ~100%
+  // log10(rms) range: -2 (0.01) to -0.22 (0.60)
+  const logRms = Math.log10(rms);
+  // Map [-2, -0.22] → [0, 1]
+  const normalized = Math.max(0, Math.min(1, (logRms + 2) / 1.78));
   return Math.round(normalized * 100) / 100;
 }
 
@@ -644,13 +663,22 @@ export function computeLoudness(mono: Float32Array): number {
 /**
  * Compute a danceability proxy (0-1) using beat-strength detection.
  * Based on how regular and strong the onsets are.
+ *
+ * Curves tuned so:
+ *   - 4-on-the-floor house/techno with strong kicks → 70-90%
+ *   - Generic electronic with moderate rhythm → 50-70%
+ *   - Ambient / beatless / irregular → 20-40%
+ *   - Maximum 100% only for tracks with exceptional beat regularity
+ *
+ * Previous formula gave 100% to any track with BPM in 100-140 range
+ * and moderately strong onsets — way too generous.
  */
 export function computeDanceability(
   mono: Float32Array,
   sampleRate: number,
   bpm: number
 ): number {
-  if (bpm <= 0) return 0.5;
+  if (bpm <= 0) return 0.3;
   // Compute spectral flux as a beat-strength proxy
   const windowSize = 1024;
   const hopSize = 512;
@@ -663,30 +691,70 @@ export function computeDanceability(
     windows.push(energy / windowSize);
   }
 
-  if (windows.length < 4) return 0.5;
+  if (windows.length < 4) return 0.3;
 
   // Compute flux (positive energy differences)
   let fluxSum = 0;
   let fluxCount = 0;
+  let baseEnergySum = 0;
   for (let i = 1; i < windows.length; i++) {
     const diff = windows[i] - windows[i - 1];
+    baseEnergySum += windows[i];
     if (diff > 0) {
       fluxSum += diff;
       fluxCount++;
     }
   }
   const avgFlux = fluxCount > 0 ? fluxSum / fluxCount : 0;
+  const avgBase = baseEnergySum / windows.length;
 
-  // BPM in danceable range (100-140) is preferred
-  const bpmScore = bpm >= 100 && bpm <= 140
-    ? 1
-    : bpm >= 80 && bpm <= 160
-      ? 0.7
-      : 0.4;
+  // **Regularity score**: how consistent are the onsets?
+  // Detect peaks at expected beat intervals and measure variance.
+  // High regularity (house/techno 4-on-floor) → high score.
+  // Irregular onsets (ambient, breaks) → low score.
+  const beatIntervalSamples = Math.round((60 / bpm) * sampleRate / hopSize);
+  let regularityScore = 0;
+  if (beatIntervalSamples > 0 && beatIntervalSamples < windows.length / 2) {
+    let periodicHits = 0;
+    let totalPeaks = 0;
+    const fluxes: number[] = [];
+    for (let i = 1; i < windows.length; i++) {
+      const diff = windows[i] - windows[i - 1];
+      fluxes.push(diff > 0 ? diff : 0);
+    }
+    const maxFlux = Math.max(...fluxes, 1e-9);
+    const threshold = maxFlux * 0.3;
+    for (let i = 0; i < fluxes.length; i++) {
+      if (fluxes[i] > threshold) {
+        totalPeaks++;
+        // Check if there's a peak ~beatIntervalSamples later
+        const nextIdx = i + beatIntervalSamples;
+        if (nextIdx < fluxes.length && fluxes[nextIdx] > threshold) {
+          periodicHits++;
+        }
+      }
+    }
+    regularityScore = totalPeaks > 0 ? periodicHits / totalPeaks : 0;
+  }
 
-  // Combine flux strength with BPM score
-  const fluxScore = Math.min(1, avgFlux * 50);
-  const danceability = 0.6 * bpmScore + 0.4 * fluxScore;
+  // BPM score: ideal is 110-135 (house/techno sweet spot)
+  // 100-140 = good, 80-160 = ok, outside = poor
+  // No longer returns 1.0 — even ideal BPM caps at 0.85
+  let bpmScore: number;
+  if (bpm >= 110 && bpm <= 135) bpmScore = 0.85;
+  else if (bpm >= 100 && bpm <= 140) bpmScore = 0.75;
+  else if (bpm >= 80 && bpm <= 160) bpmScore = 0.55;
+  else if (bpm >= 70 && bpm <= 180) bpmScore = 0.35;
+  else bpmScore = 0.15;
+
+  // Flux score: needs strong onsets relative to base energy
+  // (ratio matters more than absolute value — captures "punch")
+  const fluxRatio = avgBase > 1e-9 ? avgFlux / avgBase : 0;
+  const fluxScore = Math.min(1, fluxRatio * 8);
+
+  // Weighted combination — regularity is the dominant factor for danceability
+  // (a track with strong but irregular beats isn't really "danceable")
+  const danceability = 0.45 * bpmScore + 0.20 * fluxScore + 0.35 * regularityScore;
   return Math.round(Math.min(1, Math.max(0, danceability)) * 100) / 100;
 }
 

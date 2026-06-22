@@ -1088,7 +1088,13 @@ export function DemoTracker() {
                     </div>
                     <div className="bg-secondary/40 rounded p-1.5">
                       <p className="text-[9px] text-muted-foreground uppercase">Key</p>
-                      <p className="text-sm font-mono font-semibold text-primary">{formAnalysis.key.camelot}</p>
+                      {formAnalysis.key.confidence === 0 ? (
+                        <p className="text-[10px] font-mono font-semibold text-muted-foreground italic leading-tight pt-0.5">
+                          N/A
+                        </p>
+                      ) : (
+                        <p className="text-sm font-mono font-semibold text-primary">{formAnalysis.key.camelot}</p>
+                      )}
                     </div>
                     <div className="bg-secondary/40 rounded p-1.5">
                       <p className="text-[9px] text-muted-foreground uppercase">Energy</p>
@@ -1100,7 +1106,11 @@ export function DemoTracker() {
                     </div>
                   </div>
                   <div className="flex items-center justify-between text-[10px] text-muted-foreground">
-                    <span>{formAnalysis.key.name}</span>
+                    <span>
+                      {formAnalysis.key.confidence === 0
+                        ? <span className="italic text-amber-600 dark:text-amber-400">⚠ Key non disponibile (modalità fallback — ricarica la pagina e riprova)</span>
+                        : formAnalysis.key.name}
+                    </span>
                     <span>{Math.round(formAnalysis.duration)}s · {formAnalysis.loudness} dBFS</span>
                   </div>
                   {formAnalysis.analysisSource === "cyanite" && formAnalysis.cyaniteGenre && (

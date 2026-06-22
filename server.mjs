@@ -17,6 +17,10 @@ import { fileURLToPath } from 'node:url';
 const __dirname = path.dirname(fileURLToPath(import.meta.url));
 const PORT = parseInt(process.env.PORT || '3000', 10);
 const ROOT = path.join(__dirname, 'out');
+// Public dir as secondary fallback — Next.js static export sometimes
+// fails to copy large binary assets (e.g. essentia.js WASM, 2MB) to /out/.
+// Serving them from /public/ when missing in /out/ keeps audio analysis working.
+const PUBLIC_ROOT = path.join(__dirname, 'public');
 
 const MIME_TYPES = {
   '.html': 'text/html; charset=utf-8',
@@ -70,6 +74,17 @@ const server = http.createServer((req, res) => {
     // Try the requested file first
     let filePath = path.join(ROOT, safePath);
     let exists = fs.existsSync(filePath) && fs.statSync(filePath).isFile();
+
+    // Fallback to /public/ — needed because Next.js static export
+    // sometimes drops large binary assets (essentia.js WASM, etc.).
+    // Only do this for actual files with extensions, not for routes.
+    if (!exists && path.extname(safePath)) {
+      const publicPath = path.join(PUBLIC_ROOT, safePath);
+      if (fs.existsSync(publicPath) && fs.statSync(publicPath).isFile()) {
+        filePath = publicPath;
+        exists = true;
+      }
+    }
     
     // If not found, try with .html extension (Next.js static export convention)
     if (!exists && !path.extname(safePath)) {

@@ -67,7 +67,6 @@ self.addEventListener("fetch", (event) => {
   if (
     request.url.includes("/api/") ||
     request.url.includes("googleapis.com") ||
-    request.url.includes("next-auth") ||
     !request.url.startsWith(self.location.origin)
   ) {
     return;

@@ -531,7 +531,7 @@ export function PitchGenerator() {
             )}
             {trackAnalysis && (
               <Badge variant="outline" className="text-[10px] bg-primary/10 border-primary/30 text-primary">
-                <Sparkles className="h-2.5 w-2.5 mr-0.5" /> {trackAnalysis.bpm} BPM · {trackAnalysis.key.camelot}
+                <Sparkles className="h-2.5 w-2.5 mr-0.5" /> {trackAnalysis.bpm} BPM · {trackAnalysis.key.confidence === 0 ? "Key N/A" : trackAnalysis.key.camelot}
               </Badge>
             )}
           </div>
