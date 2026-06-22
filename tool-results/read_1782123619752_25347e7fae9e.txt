@@ -1,0 +1,1049 @@
+     1→"use client";
+     2→
+     3→import { useAppStore, type Demo, type DemoStatus, type Label } from "@/lib/store";
+     4→import { t, type Locale } from "@/lib/i18n";
+     5→import { useState, useMemo, useCallback } from "react";
+     6→import {
+     7→  Plus,
+     8→  Pencil,
+     9→  Trash2,
+    10→  Clock,
+    11→  ChevronRight,
+    12→  CheckCircle2,
+    13→  XCircle,
+    14→  Headphones,
+    15→  Send,
+    16→  Disc3,
+    17→  AlertTriangle,
+    18→  Search,
+    19→  Music,
+    20→  Eye,
+    21→  Mail,
+    22→  Link2,
+    23→  Calendar,
+    24→  User,
+    25→  FileText,
+    26→  Music2,
+    27→  ArrowLeft,
+    28→  Zap,
+    29→  Activity,
+    30→  Loader2,
+    31→  X,
+    32→  Upload,
+    33→} from "lucide-react";
+    34→import { Button } from "@/components/ui/button";
+    35→import { Badge } from "@/components/ui/badge";
+    36→import { Card, CardContent } from "@/components/ui/card";
+    37→import { Input } from "@/components/ui/input";
+    38→import {
+    39→  Dialog,
+    40→  DialogContent,
+    41→  DialogHeader,
+    42→  DialogTitle,
+    43→  DialogFooter,
+    44→} from "@/components/ui/dialog";
+    45→import {
+    46→  Select,
+    47→  SelectContent,
+    48→  SelectItem,
+    49→  SelectTrigger,
+    50→  SelectValue,
+    51→} from "@/components/ui/select";
+    52→import { Label as UILabel } from "@/components/ui/label";
+    53→import { Textarea } from "@/components/ui/textarea";
+    54→import { SimilarSuggestions } from "@/components/similar-suggestions";
+    55→
+    56→const STATUS_KEYS: DemoStatus[] = [
+    57→  "ready",
+    58→  "sent",
+    59→  "reviewing",
+    60→  "accepted",
+    61→  "rejected",
+    62→];
+    63→
+    64→const STATUS_ICONS: Record<DemoStatus, React.ReactNode> = {
+    65→  ready: <Disc3 className="h-3.5 w-3.5" />,
+    66→  sent: <Send className="h-3.5 w-3.5" />,
+    67→  reviewing: <Headphones className="h-3.5 w-3.5" />,
+    68→  accepted: <CheckCircle2 className="h-3.5 w-3.5" />,
+    69→  rejected: <XCircle className="h-3.5 w-3.5" />,
+    70→};
+    71→
+    72→const STATUS_COLORS: Record<
+    73→  DemoStatus,
+    74→  { color: string; bgColor: string; borderColor: string }
+    75→> = {
+    76→  ready: { color: "text-gray-400", bgColor: "bg-gray-500/10", borderColor: "border-gray-500/20" },
+    77→  sent: { color: "text-purple-400", bgColor: "bg-purple-500/10", borderColor: "border-purple-500/20" },
+    78→  reviewing: { color: "text-cyan-400", bgColor: "bg-cyan-500/10", borderColor: "border-cyan-500/20" },
+    79→  accepted: { color: "text-emerald-400", bgColor: "bg-emerald-500/10", borderColor: "border-emerald-500/20" },
+    80→  rejected: { color: "text-red-400", bgColor: "bg-red-500/10", borderColor: "border-red-500/20" },
+    81→};
+    82→
+    83→const STATUS_FLOW: DemoStatus[] = ["ready", "sent", "reviewing", "accepted"];
+    84→
+    85→function getDaysSince(dateStr: string | null): number | null {
+    86→  if (!dateStr) return null;
+    87→  return Math.floor((Date.now() - new Date(dateStr).getTime()) / 86400000);
+    88→}
+    89→
+    90→const STATUS_TKEYS: Record<DemoStatus, "demos.ready" | "demos.sent" | "demos.reviewing" | "demos.accepted" | "demos.rejected"> = {
+    91→  ready: "demos.ready",
+    92→  sent: "demos.sent",
+    93→  reviewing: "demos.reviewing",
+    94→  accepted: "demos.accepted",
+    95→  rejected: "demos.rejected",
+    96→};
+    97→
+    98→export function DemoTracker() {
+    99→  const { labels, demos, addDemo, updateDemo, deleteDemo, advanceDemoStatus, locale: _locale, getGenres, userProfile, artists, setActiveTab, setSelectedLabelId, setSelectedArtistId } =
+   100→    useAppStore();
+   101→  const locale = _locale as Locale;
+   102→  const genres = getGenres();
+   103→  const [viewMode, setViewMode] = useState<"kanban" | "table">("kanban");
+   104→  const [search, setSearch] = useState("");
+   105→  const [statusFilter, setStatusFilter] = useState("all");
+   106→  const [showAddDialog, setShowAddDialog] = useState(false);
+   107→  const [editingDemo, setEditingDemo] = useState<Demo | null>(null);
+   108→  const [deleteConfirmId, setDeleteConfirmId] = useState<string | null>(null);
+   109→
+   110→  // Detail dialog
+   111→  const [detailDemo, setDetailDemo] = useState<Demo | null>(null);
+   112→
+   113→  // Label history view
+   114→  const [labelHistoryId, setLabelHistoryId] = useState<string | null>(null);
+   115→
+   116→  const [formTrackName, setFormTrackName] = useState("");
+   117→  const [formLabelId, setFormLabelId] = useState("");
+   118→  const [formStatus, setFormStatus] = useState<DemoStatus>("ready");
+   119→  const [formSentDate, setFormSentDate] = useState("");
+   120→  const [formLink, setFormLink] = useState("");
+   121→  const [formLinks, setFormLinks] = useState<{ type: string; value: string }[]>([]);
+   122→  const [formNotes, setFormNotes] = useState("");
+   123→  const [formGenre, setFormGenre] = useState("");
+   124→  const [formBpm, setFormBpm] = useState("");
+   125→  const [formKey, setFormKey] = useState("");
+   126→  // Audio analysis state
+   127→  const [isAnalyzing, setIsAnalyzing] = useState(false);
+   128→  const [analysisProgress, setAnalysisProgress] = useState<{
+   129→    stage: string;
+   130→    message: string;
+   131→    progress: number;
+   132→  } | null>(null);
+   133→  const [analysisError, setAnalysisError] = useState<string | null>(null);
+   134→  const [formAnalysis, setFormAnalysis] = useState<Demo["analysis"] | null>(null);
+   135→
+   136→  const filteredDemos = useMemo(() => {
+   137→    return demos.filter((d) => {
+   138→      const matchSearch =
+   139→        !search ||
+   140→        d.trackName.toLowerCase().includes(search.toLowerCase()) ||
+   141→        d.notes.toLowerCase().includes(search.toLowerCase());
+   142→      const matchStatus = statusFilter === "all" || d.status === statusFilter;
+   143→      return matchSearch && matchStatus;
+   144→    });
+   145→  }, [demos, search, statusFilter]);
+   146→
+   147→  // Label history: all demos for a specific label
+   148→  const labelHistoryDemos = useMemo(() => {
+   149→    if (!labelHistoryId) return [];
+   150→    return demos
+   151→      .filter((d) => d.labelId === labelHistoryId)
+   152→      .sort((a, b) => new Date(b.createdAt).getTime() - new Date(a.createdAt).getTime());
+   153→  }, [demos, labelHistoryId]);
+   154→
+   155→  const labelHistoryName = useMemo(() => {
+   156→    if (!labelHistoryId) return "";
+   157→    return labels.find((l) => l.id === labelHistoryId)?.name ?? "";
+   158→  }, [labels, labelHistoryId]);
+   159→
+   160→  const getLabelName = (labelId: string) => {
+   161→    return labels.find((l) => l.id === labelId)?.name ?? "—";
+   162→  };
+   163→
+   164→  const resetForm = () => {
+   165→    setFormTrackName("");
+   166→    setFormLabelId("");
+   167→    setFormStatus("ready");
+   168→    setFormSentDate("");
+   169→    setFormLink("");
+   170→    setFormLinks([]);
+   171→    setFormNotes("");
+   172→    setFormGenre("");
+   173→    setFormBpm("");
+   174→    setFormKey("");
+   175→    setFormAnalysis(null);
+   176→    setAnalysisError(null);
+   177→    setAnalysisProgress(null);
+   178→  };
+   179→
+   180→  const openAdd = () => { resetForm(); setEditingDemo(null); setShowAddDialog(true); };
+   181→
+   182→  const openEdit = (demo: Demo) => {
+   183→    setFormTrackName(demo.trackName);
+   184→    setFormLabelId(demo.labelId);
+   185→    setFormStatus(demo.status);
+   186→    setFormSentDate(demo.sentDate ?? "");
+   187→    setFormLink(demo.link);
+   188→    setFormLinks(demo.links || []);
+   189→    setFormNotes(demo.notes);
+   190→    setFormGenre(demo.genre || "");
+   191→    setFormBpm(demo.bpm || "");
+   192→    setFormKey(demo.key || "");
+   193→    setFormAnalysis(demo.analysis || null);
+   194→    setAnalysisError(null);
+   195→    setAnalysisProgress(null);
+   196→    setEditingDemo(demo);
+   197→    setShowAddDialog(true);
+   198→  };
+   199→
+   200→  const handleSave = () => {
+   201→    if (!formTrackName.trim() || !formLabelId) return;
+   202→    const data = {
+   203→      trackName: formTrackName.trim(),
+   204→      labelId: formLabelId,
+   205→      status: formStatus,
+   206→      sentDate: formSentDate || null,
+   207→      link: formLink.trim(),
+   208→      links: formLinks.filter(l => l.value.trim()),
+   209→      notes: formNotes.trim(),
+   210→      pitchText: editingDemo?.pitchText || "",
+   211→      artistName: editingDemo?.artistName || userProfile.artistName || "",
+   212→      genre: formGenre.trim(),
+   213→      bpm: formBpm.trim(),
+   214→      key: formKey.trim(),
+   215→      analysis: formAnalysis || undefined,
+   216→    };
+   217→    if (editingDemo) { updateDemo(editingDemo.id, data); }
+   218→    else { addDemo(data); }
+   219→    setShowAddDialog(false);
+   220→    resetForm();
+   221→  };
+   222→
+   223→  const handleAnalyze = async () => {
+   224→    const audioSourceUrl = formLink.trim() || (formLinks.find(l => l.type === "soundcloud" || l.type === "audio")?.value?.trim() ?? "");
+   225→    if (!audioSourceUrl) {
+   226→      setAnalysisError("Inserisci un link SoundCloud o URL audio diretto, oppure usa 'Carica file'");
+   227→      return;
+   228→    }
+   229→    setIsAnalyzing(true);
+   230→    setAnalysisError(null);
+   231→    setAnalysisProgress({ stage: "fetching", message: "Inizio...", progress: 0 });
+   232→    try {
+   233→      // Dynamic import to keep the initial bundle small
+   234→      const { analyzeAudio, analyzeWithCyanite } = await import("@/lib/audio-analysis");
+   235→      const cyaniteToken = (userProfile as any)?.cyaniteApiToken?.trim?.() || "";
+   236→      // Safety timeout: abort analysis after 120s
+   237→      const timeoutMs = 120_000;
+   238→      const result = await Promise.race([
+   239→        cyaniteToken
+   240→          ? analyzeWithCyanite(audioSourceUrl, cyaniteToken, (p) => setAnalysisProgress(p))
+   241→          : analyzeAudio(audioSourceUrl, (p) => setAnalysisProgress(p)),
+   242→        new Promise<never>((_, reject) =>
+   243→          setTimeout(() => reject(new Error("Timeout: analisi troppo lunga (>120s). Prova con 'Carica file' o ricarica la pagina.")), timeoutMs)
+   244→        ),
+   245→      ]);
+   246→      setFormAnalysis(result);
+   247→      // Auto-fill BPM and key if empty or always update with analysis values
+   248→      setFormBpm(String(result.bpm));
+   249→      // Only auto-fill key if it was actually detected (confidence > 0)
+   250→      if (result.key.confidence > 0) {
+   251→        setFormKey(result.key.name);
+   252→      }
+   253→      setAnalysisProgress({ stage: "done", message: "Analisi completata!", progress: 1 });
+   254→      // Clear progress after 2 seconds
+   255→      setTimeout(() => setAnalysisProgress(null), 2000);
+   256→    } catch (err: any) {
+   257→      console.error("[analyze]", err);
+   258→      let userMsg = "Errore durante l'analisi";
+   259→      if (err?.message) {
+   260→        const m = err.message;
+   261→        if (/soundcloud|risolvere/i.test(m)) {
+   262→          userMsg = m; // already user-friendly from proxy
+   263→        } else if (/format|corrupt|decode/i.test(m)) {
+   264→          userMsg = `Il browser non è riuscito a decodificare l'audio scaricato. SoundCloud potrebbe aver restituito un formato non supportato. Prova con 'Carica file'. Dettagli: ${m}`;
+   265→        } else if (/wasm|essentia|memory/i.test(m)) {
+   266→          userMsg = `Errore del motore di analisi: ${m}. Prova con 'Carica file' (più affidabile).`;
+   267→        } else {
+   268→          userMsg = m;
+   269→        }
+   270→      } else if (typeof err === "string") {
+   271→        userMsg = err;
+   272→      }
+   273→      setAnalysisError(userMsg);
+   274→      setAnalysisProgress(null);
+   275→    } finally {
+   276→      setIsAnalyzing(false);
+   277→    }
+   278→  };
+   279→
+   280→  const handleAnalyzeFile = async (file: File) => {
+   281→    setIsAnalyzing(true);
+   282→    setAnalysisError(null);
+   283→    setAnalysisProgress({ stage: "fetching", message: `Lettura ${file.name}...`, progress: 0.2 });
+   284→    try {
+   285→      const { analyzeAudioFile } = await import("@/lib/audio-analysis");
+   286→      // Safety timeout: abort analysis after 120s to prevent infinite hang
+   287→      const timeoutMs = 120_000;
+   288→      const result = await Promise.race([
+   289→        analyzeAudioFile(file, (p) => setAnalysisProgress(p)),
+   290→        new Promise<never>((_, reject) =>
+   291→          setTimeout(() => reject(new Error("Timeout: analisi troppo lunga (>120s). Prova con un file più corto (max 60s) o ricarica la pagina.")), timeoutMs)
+   292→        ),
+   293→      ]);
+   294→      setFormAnalysis(result);
+   295→      setFormBpm(String(result.bpm));
+   296→      // Only auto-fill key if it was actually detected (confidence > 0)
+   297→      if (result.key.confidence > 0) {
+   298→        setFormKey(result.key.name);
+   299→      }
+   300→      setAnalysisProgress({ stage: "done", message: "Analisi completata!", progress: 1 });
+   301→      setTimeout(() => setAnalysisProgress(null), 2000);
+   302→    } catch (err: any) {
+   303→      console.error("[analyze file]", err);
+   304→      // Build a clear user-facing message
+   305→      let userMsg = "Errore durante l'analisi del file";
+   306→      if (err?.message) {
+   307→        const m = err.message;
+   308→        if (/format|corrupt|decode/i.test(m)) {
+   309→          userMsg = `Formato non supportato o file corrotto: ${m}`;
+   310→        } else if (/wasm|essentia|memory/i.test(m)) {
+   311→          userMsg = `Errore interno del motore di analisi (essentia.js): ${m}. Prova con un file più piccolo o un formato diverso (MP3 consigliato).`;
+   312→        } else {
+   313→          userMsg = m;
+   314→        }
+   315→      } else if (typeof err === "string") {
+   316→        userMsg = err;
+   317→      }
+   318→      setAnalysisError(userMsg);
+   319→      setAnalysisProgress(null);
+   320→    } finally {
+   321→      setIsAnalyzing(false);
+   322→    }
+   323→  };
+   324→
+   325→  const canAdvance = (status: DemoStatus) => STATUS_FLOW.indexOf(status) < STATUS_FLOW.length - 1;
+   326→
+   327→  // Cross-tab navigation from SimilarSuggestions panel inside the add/edit
+   328→  // dialog. Clicking a label name closes this dialog and opens the label
+   329→  // detail dialog in the Labels tab; clicking an artist name closes this
+   330→  // dialog and opens the artist detail page in the Artists tab. Promoting
+   331→  // a suggested label to the demo's target is in-dialog (no navigation).
+   332→  const handleOpenLabelFromSuggestion = useCallback(
+   333→    (label: Label) => {
+   334→      setShowAddDialog(false);
+   335→      setSelectedLabelId?.(label.id || label.name);
+   336→      setActiveTab("labels");
+   337→    },
+   338→    [setActiveTab, setSelectedLabelId]
+   339→  );
+   340→  const handleOpenArtistFromSuggestion = useCallback(
+   341→    (artistId: string) => {
+   342→      setShowAddDialog(false);
+   343→      setSelectedArtistId?.(artistId);
+   344→      setActiveTab("artists");
+   345→      if (typeof window !== "undefined") {
+   346→        window.scrollTo({ top: 0, behavior: "smooth" });
+   347→      }
+   348→    },
+   349→    [setActiveTab, setSelectedArtistId]
+   350→  );
+   351→  const handleSelectLabelAsTarget = useCallback(
+   352→    (label: Label) => {
+   353→      setFormLabelId(label.id);
+   354→      // Auto-fill genre if the demo doesn't have one yet and the label has a best genre
+   355→      if (!formGenre.trim() && label.genres?.length) {
+   356→        setFormGenre(label.genres[0]);
+   357→      }
+   358→    },
+   359→    [formGenre]
+   360→  );
+   361→
+   362→  // If viewing label history, show that instead
+   363→  if (labelHistoryId) {
+   364→    return (
+   365→      <div className="space-y-4">
+   366→        <div className="flex items-center gap-3">
+   367→          <Button variant="ghost" size="sm" onClick={() => setLabelHistoryId(null)} className="text-muted-foreground hover:text-foreground">
+   368→            <ArrowLeft className="h-4 w-4 mr-1.5" />
+   369→            {t(locale, "demos.backToTracker")}
+   370→          </Button>
+   371→        </div>
+   372→
+   373→        <div className="flex items-center gap-2">
+   374→          <Music2 className="h-5 w-5 text-primary" />
+   375→          <h3 className="text-lg font-bold text-foreground">{labelHistoryName}</h3>
+   376→          <Badge variant="secondary" className="text-[10px]">{labelHistoryDemos.length} {t(locale, "demos.submissions")}</Badge>
+   377→        </div>
+   378→
+   379→        {labelHistoryDemos.length === 0 ? (
+   380→          <div className="text-center py-12 text-muted-foreground">
+   381→            <Music className="h-10 w-10 mx-auto mb-2 opacity-30" />
+   382→            <p className="text-sm">{t(locale, "demos.noDemos")}</p>
+   383→          </div>
+   384→        ) : (
+   385→          <div className="space-y-2">
+   386→            {labelHistoryDemos.map((demo) => {
+   387→              const config = STATUS_COLORS[demo.status];
+   388→              const daysSince = getDaysSince(demo.sentDate);
+   389→              return (
+   390→                <Card
+   391→                  key={demo.id}
+   392→                  className="bg-card/80 border-border/30 hover:border-primary/30 transition-all cursor-pointer"
+   393→                  onClick={() => setDetailDemo(demo)}
+   394→                >
+   395→                  <CardContent className="p-4">
+   396→                    <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-2">
+   397→                      <div className="flex-1 min-w-0">
+   398→                        <div className="flex items-center gap-2 flex-wrap">
+   399→                          <h4 className="text-sm font-semibold text-foreground">{demo.trackName}</h4>
+   400→                          <Badge variant="outline" className={`${config.bgColor} ${config.color} ${config.borderColor} text-[10px]`}>
+   401→                            {STATUS_ICONS[demo.status]}
+   402→                            <span className="ml-1">{t(locale, STATUS_TKEYS[demo.status])}</span>
+   403→                          </Badge>
+   404→                          {demo.artistName && (
+   405→                            <span className="text-[10px] text-muted-foreground font-mono flex items-center gap-0.5">
+   406→                              <User className="h-2.5 w-2.5" /> {demo.artistName}
+   407→                            </span>
+   408→                          )}
+   409→                        </div>
+   410→                        <div className="flex flex-wrap items-center gap-x-3 gap-y-0.5 mt-1 text-[11px] text-muted-foreground">
+   411→                          {demo.sentDate && (
+   412→                            <span className="flex items-center gap-1">
+   413→                              <Calendar className="h-3 w-3" /> {demo.sentDate}
+   414→                              {daysSince !== null && <span className="ml-0.5">({daysSince}{t(locale, "dash.daysAgo")})</span>}
+   415→                            </span>
+   416→                          )}
+   417→                          {demo.link && (
+   418→                            <span className="flex items-center gap-1 font-mono truncate max-w-[200px]">
+   419→                              <Link2 className="h-3 w-3" /> {demo.link}
+   420→                            </span>
+   421→                          )}
+   422→                          {demo.pitchText && (
+   423→                            <span className="flex items-center gap-1 text-primary/50">
+   424→                              <FileText className="h-3 w-3" /> {t(locale, "demos.hasPitch")}
+   425→                            </span>
+   426→                          )}
+   427→                        </div>
+   428→                      </div>
+   429→                      <div className="flex items-center gap-1 shrink-0">
+   430→                        <Button variant="ghost" size="icon" className="h-7 w-7" onClick={(e) => { e.stopPropagation(); setDetailDemo(demo); }} title={t(locale, "demos.viewDetail")}>
+   431→                          <Eye className="h-3.5 w-3.5" />
+   432→                        </Button>
+   433→                        {canAdvance(demo.status) && (
+   434→                          <Button variant="ghost" size="icon" className="h-7 w-7" onClick={(e) => { e.stopPropagation(); advanceDemoStatus(demo.id); }} title={t(locale, "demos.advance")}>
+   435→                            <ChevronRight className="h-3.5 w-3.5" />
+   436→                          </Button>
+   437→                        )}
+   438→                        <Button variant="ghost" size="icon" className="h-7 w-7" onClick={(e) => { e.stopPropagation(); openEdit(demo); }}>
+   439→                          <Pencil className="h-3.5 w-3.5" />
+   440→                        </Button>
+   441→                      </div>
+   442→                    </div>
+   443→                  </CardContent>
+   444→                </Card>
+   445→              );
+   446→            })}
+   447→          </div>
+   448→        )}
+   449→
+   450→        {/* Detail Dialog (reused) */}
+   451→        <DemoDetailDialog demo={detailDemo} onClose={() => setDetailDemo(null)} locale={locale} getLabelName={getLabelName} />
+   452→      </div>
+   453→    );
+   454→  }
+   455→
+   456→  return (
+   457→    <div className="space-y-4">
+   458→      {/* Controls */}
+   459→      <div className="flex flex-col sm:flex-row gap-3">
+   460→        <div className="relative flex-1">
+   461→          <Search className="absolute left-3 top-1/2 -translate-y-1/2 h-4 w-4 text-muted-foreground" />
+   462→          <Input
+   463→            placeholder={t(locale, "demos.search")}
+   464→            value={search}
+   465→            onChange={(e) => setSearch(e.target.value)}
+   466→            className="pl-9 bg-secondary/50 border-border/50"
+   467→          />
+   468→        </div>
+   469→        <Select value={statusFilter} onValueChange={setStatusFilter}>
+   470→          <SelectTrigger className="w-full sm:w-[170px] bg-secondary/50 border-border/50">
+   471→            <SelectValue placeholder={t(locale, "demos.allStatuses")} />
+   472→          </SelectTrigger>
+   473→          <SelectContent>
+   474→            <SelectItem value="all">{t(locale, "demos.allStatuses")}</SelectItem>
+   475→            {STATUS_KEYS.map((s) => (
+   476→              <SelectItem key={s} value={s}>
+   477→                {t(locale, STATUS_TKEYS[s])}
+   478→              </SelectItem>
+   479→            ))}
+   480→          </SelectContent>
+   481→        </Select>
+   482→        <div className="flex gap-2">
+   483→          <Button variant={viewMode === "kanban" ? "default" : "outline"} size="sm" onClick={() => setViewMode("kanban")} className="text-xs">
+   484→            {t(locale, "demos.kanban")}
+   485→          </Button>
+   486→          <Button variant={viewMode === "table" ? "default" : "outline"} size="sm" onClick={() => setViewMode("table")} className="text-xs">
+   487→            {t(locale, "demos.table")}
+   488→          </Button>
+   489→        </div>
+   490→        <Button onClick={openAdd} className="glow-purple shrink-0">
+   491→          <Plus className="h-4 w-4 mr-1.5" />
+   492→          {t(locale, "demos.addDemo")}
+   493→        </Button>
+   494→      </div>
+   495→
+   496→      {/* Kanban View */}
+   497→      {viewMode === "kanban" && (
+   498→        <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-5 gap-3 min-h-[400px]">
+   499→          {STATUS_KEYS.map((status) => {
+   500→            const config = STATUS_COLORS[status];
+   501→            const columnDemos = filteredDemos.filter((d) => d.status === status);
+   502→            return (
+   503→              <div key={status} className={`rounded-xl border ${config.borderColor} ${config.bgColor} p-3 space-y-2`}>
+   504→                <div className="flex items-center gap-2 mb-1">
+   505→                  <span className={config.color}>{STATUS_ICONS[status]}</span>
+   506→                  <span className={`text-xs font-semibold uppercase tracking-wider ${config.color}`}>
+   507→                    {t(locale, STATUS_TKEYS[status])}
+   508→                  </span>
+   509→                  <span className="ml-auto text-[10px] font-mono text-muted-foreground bg-secondary/50 px-1.5 py-0.5 rounded">
+   510→                    {columnDemos.length}
+   511→                  </span>
+   512→                </div>
+   513→                {columnDemos.map((demo) => {
+   514→                  const daysSince = getDaysSince(demo.sentDate);
+   515→                  const isOverdue = (demo.status === "sent" || demo.status === "reviewing") && daysSince !== null && daysSince > 14;
+   516→                  return (
+   517→                    <Card
+   518→                      key={demo.id}
+   519→                      className={`bg-card/80 border-border/30 hover:border-primary/20 transition-all group cursor-pointer ${isOverdue ? "ring-1 ring-amber-500/40" : ""}`}
+   520→                      onClick={() => setDetailDemo(demo)}
+   521→                    >
+   522→                      <CardContent className="p-3 space-y-1.5">
+   523→                        <div className="flex items-start justify-between gap-1">
+   524→                          <h4 className="text-sm font-semibold text-foreground leading-tight">{demo.trackName}</h4>
+   525→                          <div className="flex items-center gap-0.5 opacity-0 group-hover:opacity-100 transition-opacity shrink-0">
+   526→                            <Button variant="ghost" size="icon" className="h-6 w-6" onClick={(e) => { e.stopPropagation(); setDetailDemo(demo); }} title={t(locale, "demos.viewDetail")}>
+   527→                              <Eye className="h-3 w-3" />
+   528→                            </Button>
+   529→                            {canAdvance(demo.status) && (
+   530→                              <Button variant="ghost" size="icon" className="h-6 w-6" onClick={(e) => { e.stopPropagation(); advanceDemoStatus(demo.id); }} title={t(locale, "demos.advance")}>
+   531→                                <ChevronRight className="h-3 w-3" />
+   532→                              </Button>
+   533→                            )}
+   534→                            <Button variant="ghost" size="icon" className="h-6 w-6" onClick={(e) => { e.stopPropagation(); openEdit(demo); }}>
+   535→                              <Pencil className="h-3 w-3" />
+   536→                            </Button>
+   537→                            <Button variant="ghost" size="icon" className="h-6 w-6 hover:text-destructive" onClick={(e) => { e.stopPropagation(); setDeleteConfirmId(demo.id); }}>
+   538→                              <Trash2 className="h-3 w-3" />
+   539→                            </Button>
+   540→                          </div>
+   541→                        </div>
+   542→                        <p
+   543→                          className="text-xs text-primary/70 font-medium cursor-pointer hover:underline"
+   544→                          onClick={(e) => { e.stopPropagation(); setLabelHistoryId(demo.labelId); }}
+   545→                        >
+   546→                          {getLabelName(demo.labelId)}
+   547→                        </p>
+   548→                        {demo.sentDate && (
+   549→                          <div className="flex items-center gap-1.5 text-[11px] text-muted-foreground">
+   550→                            <Clock className="h-3 w-3" />
+   551→                            <span>{demo.sentDate}{daysSince !== null && <span className={isOverdue ? "text-amber-400 font-semibold ml-1" : "ml-1"}>({daysSince}{t(locale, "dash.daysAgo")})</span>}</span>
+   552→                          </div>
+   553→                        )}
+   554→                        {demo.pitchText && (
+   555→                          <div className="flex items-center gap-1 text-[10px] text-primary/50">
+   556→                            <FileText className="h-2.5 w-2.5" /> {t(locale, "demos.hasPitch")}
+   557→                          </div>
+   558→                        )}
+   559→                        {demo.analysis && (
+   560→                          <div className="flex items-center gap-1.5 text-[10px] text-muted-foreground pt-0.5">
+   561→                            <Activity className={`h-2.5 w-2.5 ${demo.analysis.analysisSource === "cyanite" ? "text-primary" : "text-emerald-400"}`} />
+   562→                            <span className="font-mono">
+   563→                              {demo.analysis.bpm} BPM · {demo.analysis.key.camelot}
+   564→                            </span>
+   565→                            <span className="text-muted-foreground/60">·</span>
+   566→                            <span>{Math.round(demo.analysis.energy * 100)}% E</span>
+   567→                          </div>
+   568→                        )}
+   569→                        {isOverdue && (
+   570→                          <div className="flex items-center gap-1 text-[11px] text-amber-400 font-medium">
+   571→                            <AlertTriangle className="h-3 w-3" />
+   572→                            {t(locale, "demos.followUp")}
+   573→                          </div>
+   574→                        )}
+   575→                      </CardContent>
+   576→                    </Card>
+   577→                  );
+   578→                })}
+   579→                {columnDemos.length === 0 && <div className="text-center py-6 text-muted-foreground/40 text-xs">—</div>}
+   580→              </div>
+   581→            );
+   582→          })}
+   583→        </div>
+   584→      )}
+   585→
+   586→      {/* Table View */}
+   587→      {viewMode === "table" && (
+   588→        <div className="rounded-xl border border-border/40 overflow-hidden">
+   589→          <div className="overflow-x-auto">
+   590→            <table className="w-full text-sm">
+   591→              <thead className="bg-secondary/30">
+   592→                <tr className="text-left text-xs font-mono uppercase tracking-wider text-muted-foreground">
+   593→                  <th className="px-4 py-3">{t(locale, "demos.trackName")}</th>
+   594→                  <th className="px-4 py-3">{t(locale, "demos.targetLabel")}</th>
+   595→                  <th className="px-4 py-3">{t(locale, "labels.status")}</th>
+   596→                  <th className="px-4 py-3">{t(locale, "demos.sentDate")}</th>
+   597→                  <th className="px-4 py-3">{t(locale, "demos.daysSince")}</th>
+   598→                  <th className="px-4 py-3 text-right">{t(locale, "demos.actions")}</th>
+   599→                </tr>
+   600→              </thead>
+   601→              <tbody className="divide-y divide-border/20">
+   602→                {filteredDemos.map((demo) => {
+   603→                  const config = STATUS_COLORS[demo.status];
+   604→                  const daysSince = getDaysSince(demo.sentDate);
+   605→                  const isOverdue = (demo.status === "sent" || demo.status === "reviewing") && daysSince !== null && daysSince > 14;
+   606→                  return (
+   607→                    <tr
+   608→                      key={demo.id}
+   609→                      className="hover:bg-secondary/20 transition-colors cursor-pointer"
+   610→                      onClick={() => setDetailDemo(demo)}
+   611→                    >
+   612→                      <td className="px-4 py-3">
+   613→                        <div className="font-medium text-foreground">{demo.trackName}</div>
+   614→                        {demo.artistName && <div className="text-[10px] text-muted-foreground/60 mt-0.5">{demo.artistName}</div>}
+   615→                        {demo.notes && <div className="text-[11px] text-muted-foreground/60 mt-0.5 line-clamp-1">{demo.notes}</div>}
+   616→                      </td>
+   617→                      <td className="px-4 py-3">
+   618→                        <span
+   619→                          className="text-primary/80 text-xs font-medium cursor-pointer hover:underline"
+   620→                          onClick={(e) => { e.stopPropagation(); setLabelHistoryId(demo.labelId); }}
+   621→                        >
+   622→                          {getLabelName(demo.labelId)}
+   623→                        </span>
+   624→                      </td>
+   625→                      <td className="px-4 py-3">
+   626→                        <Badge variant="outline" className={`${config.bgColor} ${config.color} ${config.borderColor}`}>
+   627→                          {STATUS_ICONS[demo.status]}
+   628→                          <span className="ml-1">{t(locale, STATUS_TKEYS[demo.status])}</span>
+   629→                        </Badge>
+   630→                      </td>
+   631→                      <td className="px-4 py-3 text-xs text-muted-foreground font-mono">{demo.sentDate ?? "—"}</td>
+   632→                      <td className="px-4 py-3 text-xs font-mono">
+   633→                        {daysSince !== null ? (
+   634→                          <span className={isOverdue ? "text-amber-400 font-semibold" : "text-muted-foreground"}>
+   635→                            {daysSince}{t(locale, "dash.daysAgo")}
+   636→                          </span>
+   637→                        ) : <span className="text-muted-foreground">—</span>}
+   638→                      </td>
+   639→                      <td className="px-4 py-3 text-right">
+   640→                        <div className="flex items-center justify-end gap-1">
+   641→                          <Button variant="ghost" size="icon" className="h-7 w-7" onClick={(e) => { e.stopPropagation(); setDetailDemo(demo); }} title={t(locale, "demos.viewDetail")}>
+   642→                            <Eye className="h-3.5 w-3.5" />
+   643→                          </Button>
+   644→                          {canAdvance(demo.status) && (
+   645→                            <Button variant="ghost" size="icon" className="h-7 w-7" onClick={(e) => { e.stopPropagation(); advanceDemoStatus(demo.id); }} title={t(locale, "demos.advance")}>
+   646→                              <ChevronRight className="h-3.5 w-3.5" />
+   647→                            </Button>
+   648→                          )}
+   649→                          <Button variant="ghost" size="icon" className="h-7 w-7" onClick={(e) => { e.stopPropagation(); openEdit(demo); }}>
+   650→                            <Pencil className="h-3.5 w-3.5" />
+   651→                          </Button>
+   652→                          <Button variant="ghost" size="icon" className="h-7 w-7 hover:text-destructive" onClick={(e) => { e.stopPropagation(); setDeleteConfirmId(demo.id); }}>
+   653→                            <Trash2 className="h-3.5 w-3.5" />
+   654→                          </Button>
+   655→                        </div>
+   656→                      </td>
+   657→                    </tr>
+   658→                  );
+   659→                })}
+   660→                {filteredDemos.length === 0 && (
+   661→                  <tr><td colSpan={6} className="px-4 py-12 text-center text-muted-foreground">
+   662→                    <Music className="h-10 w-10 mx-auto mb-2 opacity-30" />
+   663→                    <p className="text-sm">{t(locale, "demos.noDemos")}</p>
+   664→                  </td></tr>
+   665→                )}
+   666→              </tbody>
+   667→            </table>
+   668→          </div>
+   669→        </div>
+   670→      )}
+   671→
+   672→      {/* Detail Dialog */}
+   673→      <DemoDetailDialog demo={detailDemo} onClose={() => setDetailDemo(null)} locale={locale} getLabelName={getLabelName} />
+   674→
+   675→      {/* Add/Edit Dialog */}
+   676→      <Dialog open={showAddDialog} onOpenChange={setShowAddDialog}>
+   677→        <DialogContent className="sm:max-w-2xl bg-card border-border/50 max-h-[90vh] overflow-y-auto">
+   678→          <DialogHeader>
+   679→            <DialogTitle>{editingDemo ? t(locale, "demos.editDemo") : t(locale, "demos.addDemo")}</DialogTitle>
+   680→          </DialogHeader>
+   681→          <div className="space-y-4 py-2">
+   682→            <div className="space-y-1.5">
+   683→              <UILabel className="text-xs font-mono uppercase text-muted-foreground">{t(locale, "demos.trackName")}</UILabel>
+   684→              <Input value={formTrackName} onChange={(e) => setFormTrackName(e.target.value)} placeholder="e.g. Midnight Drive" className="bg-secondary/50" />
+   685→            </div>
+   686→            <div className="grid grid-cols-2 gap-3">
+   687→              <div className="space-y-1.5">
+   688→                <UILabel className="text-xs font-mono uppercase text-muted-foreground">{t(locale, "demos.targetLabel")}</UILabel>
+   689→                <Select value={formLabelId} onValueChange={setFormLabelId}>
+   690→                  <SelectTrigger className="bg-secondary/50"><SelectValue placeholder={t(locale, "demos.selectLabel")} /></SelectTrigger>
+   691→                  <SelectContent>
+   692→                    {labels.filter((l) => l.status === "open").slice(0, 50).map((l) => (
+   693→                      <SelectItem key={l.id} value={l.id}>{l.name}</SelectItem>
+   694→                    ))}
+   695→                  </SelectContent>
+   696→                </Select>
+   697→              </div>
+   698→              <div className="space-y-1.5">
+   699→                <UILabel className="text-xs font-mono uppercase text-muted-foreground">{t(locale, "labels.status")}</UILabel>
+   700→                <Select value={formStatus} onValueChange={(v) => setFormStatus(v as DemoStatus)}>
+   701→                  <SelectTrigger className="bg-secondary/50"><SelectValue /></SelectTrigger>
+   702→                  <SelectContent>
+   703→                    {STATUS_KEYS.map((s) => (<SelectItem key={s} value={s}>{t(locale, STATUS_TKEYS[s])}</SelectItem>))}
+   704→                  </SelectContent>
+   705→                </Select>
+   706→              </div>
+   707→            </div>
+   708→            <div className="space-y-1.5">
+   709→              <UILabel className="text-xs font-mono uppercase text-muted-foreground">{t(locale, "demos.scLink")}</UILabel>
+   710→              <Input value={formLink} onChange={(e) => setFormLink(e.target.value)} placeholder="https://soundcloud.com/..." className="bg-secondary/50" />
+   711→            </div>
+   712→            {/* Additional demo links */}
+   713→            {formLinks.map((fl, idx) => (
+   714→              <div key={idx} className="flex items-center gap-1.5">
+   715→                <Select value={fl.type} onValueChange={(v) => {
+   716→                  const newLinks = [...formLinks];
+   717→                  newLinks[idx] = { ...newLinks[idx], type: v };
+   718→                  setFormLinks(newLinks);
+   719→                }}>
+   720→                  <SelectTrigger className="bg-secondary/50 w-[120px] shrink-0 h-9 text-xs">
+   721→                    <SelectValue />
+   722→                  </SelectTrigger>
+   723→                  <SelectContent>
+   724→                    <SelectItem value="soundcloud">SoundCloud</SelectItem>
+   725→                    <SelectItem value="dropbox">Dropbox</SelectItem>
+   726→                    <SelectItem value="wetransfer">WeTransfer</SelectItem>
+   727→                    <SelectItem value="drive">Google Drive</SelectItem>
+   728→                    <SelectItem value="other">{t(locale, "labels.linkTypeOther")}</SelectItem>
+   729→                  </SelectContent>
+   730→                </Select>
+   731→                <Input value={fl.value} onChange={(e) => {
+   732→                  const newLinks = [...formLinks];
+   733→                  newLinks[idx] = { ...newLinks[idx], value: e.target.value };
+   734→                  setFormLinks(newLinks);
+   735→                }} placeholder="https://..." className="bg-secondary/50 flex-1 text-sm" />
+   736→                <Button variant="ghost" size="icon" className="shrink-0 h-9 w-9 text-muted-foreground hover:text-destructive"
+   737→                  onClick={() => setFormLinks(formLinks.filter((_, i) => i !== idx))}>
+   738→                  <X className="h-3.5 w-3.5" />
+   739→                </Button>
+   740→              </div>
+   741→            ))}
+   742→            <Button variant="outline" size="sm" className="w-full border-dashed text-muted-foreground hover:text-primary"
+   743→              onClick={() => setFormLinks([...formLinks, { type: "dropbox", value: "" }])}>
+   744→              <Plus className="h-3 w-3 mr-1" /> {t(locale, "demos.addLink")}
+   745→            </Button>
+   746→            <div className="grid grid-cols-3 gap-3">
+   747→              <div className="space-y-1.5">
+   748→                <UILabel className="text-xs font-mono uppercase text-muted-foreground">{t(locale, "demos.genre")}</UILabel>
+   749→                <Input value={formGenre} onChange={(e) => setFormGenre(e.target.value)} placeholder="Techno" className="bg-secondary/50" />
+   750→              </div>
+   751→              <div className="space-y-1.5">
+   752→                <UILabel className="text-xs font-mono uppercase text-muted-foreground">BPM</UILabel>
+   753→                <Input value={formBpm} onChange={(e) => setFormBpm(e.target.value)} placeholder="128" className="bg-secondary/50" />
+   754→              </div>
+   755→              <div className="space-y-1.5">
+   756→                <UILabel className="text-xs font-mono uppercase text-muted-foreground">Key</UILabel>
+   757→                <Input value={formKey} onChange={(e) => setFormKey(e.target.value)} placeholder="Am" className="bg-secondary/50" />
+   758→              </div>
+   759→            </div>
+   760→
+   761→            {/* Audio Analysis */}
+   762→            <div className="space-y-2 rounded-md border border-primary/30 bg-primary/5 p-3">
+   763→              <div className="flex items-center justify-between gap-2 flex-wrap">
+   764→                <div className="flex items-center gap-2">
+   765→                  <Activity className="h-3.5 w-3.5 text-primary" />
+   766→                  <span className="text-xs font-mono uppercase text-primary">Analisi Audio</span>
+   767→                  {formAnalysis && (
+   768→                    <Badge variant="outline" className="text-[10px] bg-primary/10 border-primary/30 text-primary">
+   769→                      {formAnalysis.analysisSource === "cyanite" ? "Cyanite" : "Free"}
+   770→                    </Badge>
+   771→                  )}
+   772→                </div>
+   773→                <div className="flex items-center gap-1.5">
+   774→                  <label className="cursor-pointer">
+   775→                    <input
+   776→                      type="file"
+   777→                      accept="audio/*,.mp3,.wav,.m4a,.ogg,.flac"
+   778→                      className="hidden"
+   779→                      onChange={(e) => {
+   780→                        const f = e.target.files?.[0];
+   781→                        if (f) handleAnalyzeFile(f);
+   782→                        e.target.value = ""; // reset for reuse
+   783→                      }}
+   784→                    />
+   785→                    <span className="inline-flex items-center gap-1 px-2.5 h-7 text-xs bg-secondary hover:bg-secondary/70 rounded-md border border-border/50 transition-colors">
+   786→                      <Upload className="h-3 w-3" /> Carica file
+   787→                    </span>
+   788→                  </label>
+   789→                  <Button
+   790→                    type="button"
+   791→                    variant="default"
+   792→                    size="sm"
+   793→                    onClick={handleAnalyze}
+   794→                    disabled={isAnalyzing || (!formLink.trim() && !formLinks.some(l => l.value.trim()))}
+   795→                    className="h-7 text-xs"
+   796→                  >
+   797→                    {isAnalyzing ? (
+   798→                      <>
+   799→                        <Loader2 className="h-3 w-3 mr-1 animate-spin" /> Analisi...
+   800→                      </>
+   801→                    ) : (
+   802→                      <>
+   803→                        <Zap className="h-3 w-3 mr-1" /> Analizza link
+   804→                      </>
+   805→                    )}
+   806→                  </Button>
+   807→                </div>
+   808→              </div>
+   809→
+   810→              {/* Progress bar */}
+   811→              {analysisProgress && analysisProgress.stage !== "done" && (
+   812→                <div className="space-y-1">
+   813→                  <div className="flex items-center justify-between text-[10px] text-muted-foreground">
+   814→                    <span>{analysisProgress.message}</span>
+   815→                    <span>{Math.round(analysisProgress.progress * 100)}%</span>
+   816→                  </div>
+   817→                  <div className="h-1 bg-secondary rounded-full overflow-hidden">
+   818→                    <div
+   819→                      className="h-full bg-primary transition-all"
+   820→                      style={{ width: `${analysisProgress.progress * 100}%` }}
+   821→                    />
+   822→                  </div>
+   823→                </div>
+   824→              )}
+   825→
+   826→              {/* Error */}
+   827→              {analysisError && (
+   828→                <div className="flex items-start gap-1.5 text-[11px] text-destructive">
+   829→                  <AlertTriangle className="h-3 w-3 mt-0.5 shrink-0" />
+   830→                  <span>{analysisError}</span>
+   831→                </div>
+   832→              )}
+   833→
+   834→              {/* Results */}
+   835→              {formAnalysis && (
+   836→                <div className="space-y-2">
+   837→                  <div className="grid grid-cols-4 gap-2 text-center">
+   838→                    <div className="bg-secondary/40 rounded p-1.5">
+   839→                      <p className="text-[9px] text-muted-foreground uppercase">BPM</p>
+   840→                      <p className="text-sm font-mono font-semibold text-primary">{formAnalysis.bpm}</p>
+   841→                    </div>
+   842→                    <div className="bg-secondary/40 rounded p-1.5">
+   843→                      <p className="text-[9px] text-muted-foreground uppercase">Key</p>
+   844→                      <p className="text-sm font-mono font-semibold text-primary">{formAnalysis.key.camelot}</p>
+   845→                    </div>
+   846→                    <div className="bg-secondary/40 rounded p-1.5">
+   847→                      <p className="text-[9px] text-muted-foreground uppercase">Energy</p>
+   848→                      <p className="text-sm font-mono font-semibold text-primary">{Math.round(formAnalysis.energy * 100)}%</p>
+   849→                    </div>
+   850→                    <div className="bg-secondary/40 rounded p-1.5">
+   851→                      <p className="text-[9px] text-muted-foreground uppercase">Dance</p>
+   852→                      <p className="text-sm font-mono font-semibold text-primary">{Math.round(formAnalysis.danceability * 100)}%</p>
+   853→                    </div>
+   854→                  </div>
+   855→                  <div className="flex items-center justify-between text-[10px] text-muted-foreground">
+   856→                    <span>{formAnalysis.key.name}</span>
+   857→                    <span>{Math.round(formAnalysis.duration)}s · {formAnalysis.loudness} dBFS</span>
+   858→                  </div>
+   859→                  {formAnalysis.analysisSource === "cyanite" && formAnalysis.cyaniteGenre && (
+   860→                    <div className="text-[10px] text-muted-foreground">
+   861→                      <span className="text-primary/70">Genere (Cyanite):</span> {formAnalysis.cyaniteGenre}
+   862→                    </div>
+   863→                  )}
+   864→                  {formAnalysis.analysisSource === "cyanite" && formAnalysis.cyaniteMoods && formAnalysis.cyaniteMoods.length > 0 && (
+   865→                    <div className="text-[10px] text-muted-foreground">
+   866→                      <span className="text-primary/70">Mood:</span> {formAnalysis.cyaniteMoods.join(", ")}
+   867→                    </div>
+   868→                  )}
+   869→                  {formAnalysis.analysisSource === "cyanite" && formAnalysis.cyaniteInstruments && formAnalysis.cyaniteInstruments.length > 0 && (
+   870→                    <div className="text-[10px] text-muted-foreground">
+   871→                      <span className="text-primary/70">Strumenti:</span> {formAnalysis.cyaniteInstruments.join(", ")}
+   872→                    </div>
+   873→                  )}
+   874→                </div>
+   875→              )}
+   876→
+   877→              <p className="text-[10px] text-muted-foreground leading-tight">
+   878→                {userProfile.cyaniteApiToken ? (
+   879→                  <>Analisi avanzata con <span className="text-primary">Cyanite</span> (BYOK). Rimuovi il token dal Profilo per usare l'analisi gratuita.</>
+   880→                ) : (
+   881→                  <>Analisi gratuita in-browser (BPM, key, energia). Per genere/mood/strumenti, aggiungi un token <span className="text-primary">Cyanite</span> nel Profilo.</>
+   882→                )}
+   883→              </p>
+   884→              <p className="text-[10px] text-muted-foreground/70 leading-tight">
+   885→                💡 <strong>Suggerimento</strong>: se l'analisi del link SoundCloud fallisce, usa <span className="text-primary">"Carica file"</span> per analizzare direttamente il tuo MP3/WAV — è il metodo più affidabile.
+   886→              </p>
+   887→            </div>
+   888→
+   889→            {/* Similar labels & artists suggestions — auto-matched from the
+   890→                scraped Beatport DB based on the track's BPM, key (Camelot),
+   891→                and genre. Helps the user answer "who do I send this to?"
+   892→                without having to scroll through 1192 labels manually. */}
+   893→            <SimilarSuggestions
+   894→              analysis={formAnalysis}
+   895→              genre={formGenre}
+   896→              manualBpm={formBpm}
+   897→              manualKey={formKey}
+   898→              artists={artists}
+   899→              labels={labels}
+   900→              locale={locale}
+   901→              onOpenLabel={handleOpenLabelFromSuggestion}
+   902→              onOpenArtist={handleOpenArtistFromSuggestion}
+   903→              onSelectLabel={handleSelectLabelAsTarget}
+   904→            />
+   905→
+   906→            <div className="grid grid-cols-2 gap-3">
+   907→              <div className="space-y-1.5">
+   908→                <UILabel className="text-xs font-mono uppercase text-muted-foreground">{t(locale, "demos.dateSent")}</UILabel>
+   909→                <Input type="date" value={formSentDate} onChange={(e) => setFormSentDate(e.target.value)} className="bg-secondary/50" />
+   910→              </div>
+   911→            </div>
+   912→            <div className="space-y-1.5">
+   913→              <UILabel className="text-xs font-mono uppercase text-muted-foreground">{t(locale, "labels.notes")}</UILabel>
+   914→              <Textarea value={formNotes} onChange={(e) => setFormNotes(e.target.value)} placeholder="BPM, key..." rows={2} className="bg-secondary/50 resize-none" />
+   915→            </div>
+   916→          </div>
+   917→          <DialogFooter>
+   918→            <Button variant="ghost" onClick={() => setShowAddDialog(false)}>{t(locale, "labels.cancel")}</Button>
+   919→            <Button onClick={handleSave} disabled={!formTrackName.trim() || !formLabelId}>
+   920→              {editingDemo ? t(locale, "labels.update") : t(locale, "labels.save")}
+   921→            </Button>
+   922→          </DialogFooter>
+   923→        </DialogContent>
+   924→      </Dialog>
+   925→
+   926→      {/* Delete Confirm */}
+   927→      <Dialog open={!!deleteConfirmId} onOpenChange={() => setDeleteConfirmId(null)}>
+   928→        <DialogContent className="sm:max-w-sm bg-card border-border/50">
+   929→          <DialogHeader><DialogTitle>{t(locale, "demos.deleteConfirm")}</DialogTitle></DialogHeader>
+   930→          <p className="text-sm text-muted-foreground">{t(locale, "demos.deleteConfirmMsg")}</p>
+   931→          <DialogFooter>
+   932→            <Button variant="ghost" onClick={() => setDeleteConfirmId(null)}>{t(locale, "labels.cancel")}</Button>
+   933→            <Button variant="destructive" onClick={() => { if (deleteConfirmId) { deleteDemo(deleteConfirmId); setDeleteConfirmId(null); } }}>
+   934→              {t(locale, "labels.delete")}
+   935→            </Button>
+   936→          </DialogFooter>
+   937→        </DialogContent>
+   938→      </Dialog>
+   939→    </div>
+   940→  );
+   941→}
+   942→
+   943→// ==================== DETAIL DIALOG COMPONENT ====================
+   944→
+   945→function DemoDetailDialog({
+   946→  demo,
+   947→  onClose,
+   948→  locale,
+   949→  getLabelName,
+   950→}: {
+   951→  demo: Demo | null;
+   952→  onClose: () => void;
+   953→  locale: string;
+   954→  getLabelName: (id: string) => string;
+   955→}) {
+   956→  if (!demo) return null;
+   957→
+   958→  const config = STATUS_COLORS[demo.status];
+   959→  const daysSince = getDaysSince(demo.sentDate);
+   960→  const labelName = getLabelName(demo.labelId);
+   961→
+   962→  return (
+   963→    <Dialog open={!!demo} onOpenChange={(open) => { if (!open) onClose(); }}>
+   964→      <DialogContent className="sm:max-w-2xl bg-card border-border/50 max-h-[90vh] overflow-y-auto">
+   965→        <DialogHeader>
+   966→          <DialogTitle className="flex items-center gap-2 flex-wrap">
+   967→            <Music className="h-5 w-5 text-primary" />
+   968→            <span>{demo.trackName}</span>
+   969→            <Badge variant="outline" className={`${config.bgColor} ${config.color} ${config.borderColor} text-[10px]`}>
+   970→              {STATUS_ICONS[demo.status]}
+   971→              <span className="ml-1">{t(locale, STATUS_TKEYS[demo.status])}</span>
+   972→            </Badge>
+   973→          </DialogTitle>
+   974→        </DialogHeader>
+   975→
+   976→        <div className="space-y-4 py-2">
+   977→          {/* Key info grid */}
+   978→          <div className="grid grid-cols-2 sm:grid-cols-4 gap-3">
+   979→            <div className="bg-secondary/30 rounded-lg p-3">
+   980→              <p className="text-[10px] text-muted-foreground uppercase flex items-center gap-1"><Music2 className="h-3 w-3" /> {t(locale, "demos.targetLabel")}</p>
+   981→              <p className="text-sm font-semibold text-primary mt-1 truncate">{labelName}</p>
+   982→            </div>
+   983→            {demo.sentDate && (
+   984→              <div className="bg-secondary/30 rounded-lg p-3">
+   985→                <p className="text-[10px] text-muted-foreground uppercase flex items-center gap-1"><Calendar className="h-3 w-3" /> {t(locale, "demos.sentDate")}</p>
+   986→                <p className="text-sm font-semibold text-foreground mt-1">{demo.sentDate}</p>
+   987→                {daysSince !== null && <p className="text-[10px] text-muted-foreground mt-0.5">{daysSince} {t(locale, "dash.daysAgo")}</p>}
+   988→              </div>
+   989→            )}
+   990→            {demo.artistName && (
+   991→              <div className="bg-secondary/30 rounded-lg p-3">
+   992→                <p className="text-[10px] text-muted-foreground uppercase flex items-center gap-1"><User className="h-3 w-3" /> {t(locale, "pitch.artistName")}</p>
+   993→                <p className="text-sm font-semibold text-foreground mt-1 truncate">{demo.artistName}</p>
+   994→              </div>
+   995→            )}
+   996→            <div className="bg-secondary/30 rounded-lg p-3">
+   997→              <p className="text-[10px] text-muted-foreground uppercase">{t(locale, "labels.status")}</p>
+   998→              <p className={`text-sm font-bold mt-1 ${config.color}`}>{t(locale, STATUS_TKEYS[demo.status])}</p>
+   999→            </div>
+  1000→          </div>
+  1001→
+  1002→          {/* SoundCloud Link */}
+  1003→          {demo.link && (
+  1004→            <div className="space-y-1.5">
+  1005→              <UILabel className="text-xs font-mono uppercase text-muted-foreground flex items-center gap-1">
+  1006→                <Link2 className="h-3 w-3" /> {t(locale, "pitch.scLink")}
+  1007→              </UILabel>
+  1008→              <a href={demo.link} target="_blank" rel="noopener noreferrer" className="text-sm text-primary hover:underline font-mono break-all">
+  1009→                {demo.link}
+  1010→              </a>
+  1011→            </div>
+  1012→          )}
+  1013→
+  1014→          {/* Notes */}
+  1015→          {demo.notes && (
+  1016→            <div className="space-y-1.5">
+  1017→              <UILabel className="text-xs font-mono uppercase text-muted-foreground">{t(locale, "labels.notes")}</UILabel>
+  1018→              <p className="text-sm text-foreground/80">{demo.notes}</p>
+  1019→            </div>
+  1020→          )}
+  1021→
+  1022→          {/* Pitch text (the email that was sent) */}
+  1023→          {demo.pitchText && (
+  1024→            <div className="space-y-2 border-t border-border/30 pt-3">
+  1025→              <UILabel className="text-xs font-mono uppercase text-muted-foreground flex items-center gap-1">
+  1026→                <FileText className="h-3 w-3" /> {t(locale, "demos.pitchSent")}
+  1027→              </UILabel>
+  1028→              <Card className="bg-card/80 border-border/30">
+  1029→                <CardContent className="p-4 max-h-[350px] overflow-y-auto">
+  1030→                  <pre className="text-[11px] leading-relaxed whitespace-pre-wrap font-mono text-foreground/80">{demo.pitchText}</pre>
+  1031→                </CardContent>
+  1032→              </Card>
+  1033→            </div>
+  1034→          )}
+  1035→
+  1036→          {/* Creation date */}
+  1037→          <div className="text-[10px] text-muted-foreground/40 font-mono pt-1">
+  1038→            {t(locale, "demos.createdOn")} {new Date(demo.createdAt).toLocaleString(locale === "it" ? "it-IT" : locale === "es" ? "es-ES" : locale === "fr" ? "fr-FR" : locale === "de" ? "de-DE" : locale === "pt" ? "pt-PT" : "en-US")}
+  1039→          </div>
+  1040→        </div>
+  1041→
+  1042→        <DialogFooter>
+  1043→          <Button variant="ghost" onClick={onClose}>{t(locale, "labels.close")}</Button>
+  1044→        </DialogFooter>
+  1045→      </DialogContent>
+  1046→    </Dialog>
+  1047→  );
+  1048→}
+  1049→
