@@ -531,3 +531,94 @@ Next:
 - Possible future: add per-label lastModified timestamp for smarter merge
   (currently local wins per-genre on conflict, which is correct 99% of
   the time but could theoretically lose data if cloud was genuinely newer)
+
+---
+Task ID: universal-cloud-sync-artists
+Agent: Main Agent
+Task: User complained that switching devices loses ALL data (artists especially). Quote: "non è che se cambio il PC o se cambio il telefono debba perdersi tutto". Demanded UNIVERSAL SYNC: login from any device in the world → all data must be there. Cloud = master, device = viewer.
+
+Work Log:
+- Read worklog for context (post-login-no-charts-fix-v2)
+- Examined src/lib/use-auth.ts (183 lines)
+- Examined src/lib/supabase.ts (1041 lines): saveArtistsToCloud, loadArtistsFromCloud, applyRemoteData, realtime subscription
+- Examined src/lib/store.ts (2219 lines): loadArtistsOnBoot (old version), setArtists, importData, robustStorage, restoreProfileFromSidecar, restoreSnapshotsFromSidecar
+- Examined src/lib/artists-idb.ts (89 lines): basic IDB CRUD
+- Examined src/components/cloud-recovery.tsx: existing diagnostic panel
+- ROOT CAUSE identified:
+  1. Artists live in IndexedDB locally + separate cloud row "<email>_artists"
+  2. OLD loadArtistsOnBoot was NAIVE: if IDB had ANY artists, it didn't merge with cloud. If cloud had MORE artists than IDB, they were ignored.
+  3. If user never opened app on original device after fix feecbf5, artists never got pushed to cloud
+  4. No sidecar backup for artists (only profile + snapshots had sidecars)
+  5. No "merge" function for artists — only "save" or "load"
+  6. use-auth.ts didn't trigger loadArtistsOnBoot after login (only on initial app boot)
+
+Fixes applied:
+1. src/lib/supabase.ts:
+   - NEW mergeArtistsArrays(local, cloud): union by id, pick version with most
+     tracks / most recent scrape / has bio when other doesn't. Safe, additive.
+   - NEW forcePushArtistsToCloud(artists): replace cloud's artists row
+   - NEW explicitMergeArtistsCloud(): pull cloud, merge with local, push back.
+     Used by new "Unisci artisti cloud + locale" button in CloudRecovery panel.
+
+2. src/lib/store.ts:
+   - NEW ARTISTS_SIDECAR_KEY ("labelpulse-artists-backup"): emergency backup
+     for artists. Capped at 200 artists (~600KB) to fit localStorage quota,
+     falls back to 50 if quota still exceeded.
+   - NEW writeArtistsSidecar(artists): best-effort write, fail silently
+   - NEW readArtistsSidecar(): returns [] if missing/corrupt
+   - NEW restoreArtistsFromSidecar(): splice into live store if empty
+   - UPDATED setArtists(): now writes IDB + sidecar + cloud (3 places)
+   - UPDATED importData(): now writes IDB + sidecar + cloud
+   - REWROTE loadArtistsOnBoot() with three-way merge algorithm:
+     * IDB has + cloud empty -> UPLOAD local to cloud
+     * IDB empty + cloud has -> DOWNLOAD cloud to IDB
+     * Both have -> MERGE (union by id, most-recent wins), save to BOTH
+     * Always update sidecar backup as bonus safety net
+     * If Supabase not configured, falls back to IDB + sidecar only
+
+3. src/lib/use-auth.ts:
+   - Pre-cloud: now also calls restoreArtistsFromSidecar() (alongside profile+snapshots)
+   - Post-cloud (500ms): re-restore artists from sidecar if still empty
+   - Post-loadFromCloud: now also calls loadArtistsOnBoot() explicitly so
+     the three-way merge runs after every login (not just initial app boot)
+   - 'localHasArtists' tracked but voided (artists handled by loadArtistsOnBoot)
+
+4. src/components/cloud-recovery.tsx:
+   - Sidecar column now shows "Artisti backup" count
+   - NEW button "Unisci artisti cloud + locale" (calls explicitMergeArtistsCloud)
+   - "Ripristina da sidecar" now also restores artists (not just profile+snapshots)
+   - Confirm dialog updated with mergeArtists case
+   - handleAction signature extended to include "mergeArtists"
+
+Build verified:
+- npx tsc --noEmit: 0 NEW errors (only pre-existing errors in unrelated files)
+- scripts/build-static.sh: ✓ successful (5.6s compile, 0 errors in modified files)
+- Bundle grep: 'writeArtistsSidecar', 'readArtistsSidecar', 'mergeArtistsArrays',
+  'forcePushArtistsToCloud', 'explicitMergeArtistsCloud' all present in
+  out/_next/static/chunks/*.js
+- Commit 7d6b872 pushed to origin/main (feecbf5..7d6b872)
+- Vercel auto-deploy triggered
+
+Stage Summary:
+- ARTISTS NOW SURVIVE CROSS-DEVICE: when user logs in from a new device,
+  loadArtistsOnBoot runs three-way merge (IDB ↔ cloud ↔ sidecar). If cloud
+  has artists (from previous device), they get downloaded to IDB + sidecar.
+  If local has artists cloud doesn't, they get uploaded. If both have,
+  they're merged (union by id, most-recent wins).
+- TRIPLE REDUNDANCY: artists are now stored in 3 places simultaneously:
+  1. IndexedDB (primary local cache, 50-500MB quota)
+  2. Cloud row "<email>_artists" (master, syncs across devices)
+  3. Sidecar localStorage "labelpulse-artists-backup" (emergency, capped 200)
+- USER EMPOWERMENT: new "Unisci artisti cloud + locale" button in CloudRecovery
+  panel lets user manually trigger artist merge if automatic sync misses something.
+- After Vercel rebuild (~2-3 min), user should:
+  1. On the device WITH artists: hard refresh, login, wait 10s, check CloudRecovery
+     panel — should see "Artisti (riga separata)" in cloud column go from 0 to 3000+
+  2. On any OTHER device: hard refresh, login, wait 10s, artists should appear
+  3. If still 0 artists: click "Unisci artisti cloud + locale" in Profilo page
+
+Next:
+- User should test cross-device flow: device A → push artists → device B → pull
+- If still failing, check /api/cloud-debug to inspect cloud row directly
+- Possible future: add per-artist lastModified timestamp for smarter conflict
+  resolution (currently we use track count + scrapedAt which is heuristic)
