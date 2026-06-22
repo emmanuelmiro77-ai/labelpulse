@@ -314,3 +314,24 @@ Stage Summary:
   audio analysis — they should now see a real Camelot code (e.g. 8A for A minor)
   instead of "8B + Sconosciuta", and Energy/Dance values in the 60-90% range
   instead of always 100%
+
+---
+Task ID: vercel-auth-fix
+Agent: Main Agent
+Task: User reported Vercel deployment (my-project-ivory-nine.vercel.app) login broken — "This page couldn't load. A server error occurred" when clicking login button.
+
+Work Log:
+- Identified root cause: previous commit (1711925) added `export const dynamic = "force-static"` and `generateStaticParams() { return [] }` to src/app/api/auth/[...nextauth]/route.ts to make it work with the local static-export build
+- This directive is UNCONDITIONAL — it forces the route to be static on Vercel too, where it must be dynamic
+- Effect: /api/auth/signin/google returned a static 404 instead of running NextAuth handler
+- Fix: removed the force-static directive entirely from the route file
+- The local static-export build doesn't need it anyway — scripts/build-static.sh temporarily moves src/app/api/ out of the way during the build, so this route is never included in the static bundle
+- Verified with `npx next build` (Vercel-style, no NEXT_EXPORT): route shows as ƒ (Dynamic) server-rendered on demand ✓
+- Rebuilt local static bundle with build-static.sh: works, essentia.js files copied to out/ ✓
+- Commit 7942562 pushed to origin/main, Vercel rebuild triggered
+
+Stage Summary:
+- Vercel deployment will be fixed after rebuild completes (~2-3 minutes)
+- Login button will work again — clicking it triggers the dynamic NextAuth handler
+- Local static deployment continues to work (server.mjs serves static files, no /api/* routes)
+- The build-static.sh script remains the correct way to build for the local server
