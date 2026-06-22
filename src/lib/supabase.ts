@@ -829,6 +829,168 @@ export async function loadArtistsFromCloud(): Promise<any[]> {
 }
 
 /**
+ * Merge two artist arrays by id (union). When the same id appears in both,
+ * keep the version with the most-recent `scrapedAt` (or the local one on tie).
+ * This is the artist equivalent of mergeCloudData: safe, additive, never
+ * removes data.
+ *
+ * Used by:
+ *  - loadArtistsOnBoot (when both IDB and cloud have artists)
+ *  - explicitMergeArtistsCloud (user-triggered from CloudRecovery panel)
+ */
+export function mergeArtistsArrays(local: any[], cloud: any[]): any[] {
+  const a = Array.isArray(local) ? local : [];
+  const b = Array.isArray(cloud) ? cloud : [];
+  const byId = new Map<string, any>();
+  const byName = new Map<string, any>();
+
+  // Insert cloud first (so local can override on conflict below)
+  for (const c of b) {
+    if (!c || typeof c !== "object") continue;
+    const id = c.id || c.artistId || `_${c.name?.toLowerCase?.() || ""}`;
+    byId.set(id, { ...c });
+    const nm = (c.name || c.artistName || "").toString().toLowerCase().trim();
+    if (nm) byName.set(nm, { ...c });
+  }
+
+  for (const l of a) {
+    if (!l || typeof l !== "object") continue;
+    const id = l.id || l.artistId || `_${(l.name || l.artistName || "").toLowerCase()}`;
+    const nm = (l.name || l.artistName || "").toString().toLowerCase().trim();
+    const existing = byId.get(id) || (nm ? byName.get(nm) : undefined);
+
+    if (!existing) {
+      byId.set(id, { ...l });
+      if (nm) byName.set(nm, { ...l });
+      continue;
+    }
+
+    // Both have this artist — keep the one with most tracks / most recent scrape
+    const exTracks = Array.isArray(existing.tracksByGenre)
+      ? Object.values(existing.tracksByGenre).flat().length
+      : (Array.isArray(existing.tracks) ? existing.tracks.length : 0);
+    const loTracks = Array.isArray(l.tracksByGenre)
+      ? Object.values(l.tracksByGenre).flat().length
+      : (Array.isArray(l.tracks) ? l.tracks.length : 0);
+
+    const exTs = new Date(existing.scrapedAt || existing.updatedAt || 0).getTime();
+    const loTs = new Date(l.scrapedAt || l.updatedAt || 0).getTime();
+
+    // Local wins if it has more tracks OR more recent scrape OR has bio when existing doesn't
+    const localHasBio = !!((l as any).bio || (l as any).bioSummary);
+    const exHasBio = !!((existing as any).bio || (existing as any).bioSummary);
+
+    let pickLocal = false;
+    if (loTracks > exTracks) pickLocal = true;
+    else if (loTracks === exTracks && loTs > exTs) pickLocal = true;
+    else if (localHasBio && !exHasBio) pickLocal = true;
+
+    if (pickLocal) {
+      const merged = { ...existing, ...l };
+      // Preserve any extra fields from cloud that local doesn't have
+      for (const k of Object.keys(existing)) {
+        if (!(k in l) && merged[k] === undefined) merged[k] = existing[k];
+      }
+      byId.set(id, merged);
+      if (nm) byName.set(nm, merged);
+    } else {
+      // Keep cloud's version but ensure local-only fields are preserved
+      const merged = { ...l, ...existing };
+      for (const k of Object.keys(l)) {
+        if (!(k in existing) && merged[k] === undefined) merged[k] = l[k];
+      }
+      byId.set(id, merged);
+      if (nm) byName.set(nm, merged);
+    }
+  }
+
+  return Array.from(byId.values());
+}
+
+/**
+ * Force-push the current local artists to cloud (REPLACING cloud's artists).
+ * Used by:
+ *  - CloudRecovery panel ("Sovrascrivi cloud con locale")
+ *  - loadArtistsOnBoot when local has artists and cloud is empty/has fewer
+ *
+ * Returns true on success.
+ */
+export async function forcePushArtistsToCloud(artists: any[]): Promise<boolean> {
+  const supabase = getSupabase();
+  if (!supabase) return false;
+  if (!Array.isArray(artists) || artists.length === 0) return false;
+
+  try {
+    const { error } = await supabase.from(CLOUD_TABLE).upsert(
+      {
+        id: getArtistsCloudRowId(),
+        data: { artists, savedAt: new Date().toISOString() },
+        updated_at: new Date().toISOString(),
+      },
+      { onConflict: "id" }
+    );
+
+    if (error) {
+      console.error("[LabelPulse Cloud] Force-push artists error:", error.message);
+      return false;
+    }
+
+    console.info(
+      `[LabelPulse Cloud] Force-push artists: ${artists.length} → cloud (overwrite).`
+    );
+    return true;
+  } catch (err) {
+    console.error("[LabelPulse Cloud] Force-push artists exception:", err);
+    return false;
+  }
+}
+
+/**
+ * Explicit merge of local + cloud artists. Pulls cloud, runs mergeArtistsArrays,
+ * pushes the merged result back to cloud. Used by the CloudRecovery panel
+ * (button "Unisci cloud + locale" — extended to cover artists too).
+ *
+ * Returns a summary for the UI to display.
+ */
+export async function explicitMergeArtistsCloud(): Promise<{
+  ok: boolean;
+  summary: string;
+}> {
+  const cloudArtists = await loadArtistsFromCloud();
+  const localState = useAppStore.getState();
+  const localArtists = Array.isArray(localState.artists) ? localState.artists : [];
+
+  if (localArtists.length === 0 && cloudArtists.length === 0) {
+    return { ok: false, summary: "Nessun artista né in locale né nel cloud." };
+  }
+
+  const merged = mergeArtistsArrays(localArtists, cloudArtists);
+
+  // Update local store
+  useAppStore.setState({ artists: merged });
+
+  // Lazy import to avoid circular dep
+  try {
+    const storeMod = await import("./store");
+    if (typeof (storeMod as any).saveArtistsToIDB === "function") {
+      // Save to IDB too so future boots are instant
+      const { saveArtistsToIDB } = await import("./artists-idb");
+      await saveArtistsToIDB(merged);
+    }
+  } catch {}
+
+  // Push merged to cloud (overwrite cloud's artists row)
+  const pushed = await forcePushArtistsToCloud(merged);
+
+  return {
+    ok: pushed,
+    summary:
+      `Artisti merge: locale=${localArtists.length} + cloud=${cloudArtists.length} → ${merged.length} mergiati. ` +
+      (pushed ? "Risultato spinto al cloud." : "Push al cloud fallito."),
+  };
+}
+
+/**
  * Returns the timestamp of the last artists cloud sync, or null if never synced.
  * Useful for the diagnostic UI to show "artists last synced: X ago".
  */

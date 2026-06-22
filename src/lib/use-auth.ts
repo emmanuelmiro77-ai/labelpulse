@@ -9,6 +9,8 @@ import {
   forceCloudSync,
   restoreProfileFromSidecar,
   restoreSnapshotsFromSidecar,
+  restoreArtistsFromSidecar,
+  loadArtistsOnBoot,
 } from "./store";
 
 /**
@@ -29,6 +31,12 @@ import {
  *     the user doesn't see an empty artistName/bio/links after login.
  *  4. When a session becomes unauthenticated (user logged out), optionally
  *     reset the local store to seed data so the next user starts fresh.
+ *
+ * ⚠️ UNIVERSAL SYNC (post "Burundi complaint" 2026-06-23):
+ * The user must be able to login from ANY device and see all their data.
+ * After cloud sync, we ALSO trigger loadArtistsOnBoot() which does its own
+ * three-way merge (IDB ↔ cloud) — so artists are guaranteed to be present
+ * after login, even on a brand new device.
  *
  * Must be mounted ONCE at the top of the app (inside AuthProvider, e.g., in
  * the root page). Calling this hook multiple times is safe but wasteful.
@@ -58,16 +66,17 @@ export function useAuthEffect(): void {
     lastActedEmailRef.current = email;
 
     // ⚠️ BEFORE doing anything with the cloud, restore the user profile
-    // from the sidecar backup. This ensures that even if the cloud sync
-    // ends up pulling nothing (first login from this email) or wiping
-    // the store, the user's identity (artistName, bio, email, links)
-    // is preserved from local sidecar.
+    // AND artists from the sidecar backups. This ensures that even if the
+    // cloud sync ends up pulling nothing (first login from this email) or
+    // wiping the store, the user's identity (artistName, bio, email, links)
+    // AND their artists (scrape data) are preserved from local sidecar.
     try {
       const profileRestored = restoreProfileFromSidecar();
       const snapshotsRestored = restoreSnapshotsFromSidecar();
-      if (profileRestored || snapshotsRestored > 0) {
+      const artistsRestored = restoreArtistsFromSidecar();
+      if (profileRestored || snapshotsRestored > 0 || artistsRestored > 0) {
         console.info(
-          `[LabelPulse Auth] Pre-cloud-restore: profile=${profileRestored ? "OK" : "niente"}, snapshots=${snapshotsRestored} recuperati.`
+          `[LabelPulse Auth] Pre-cloud-restore: profile=${profileRestored ? "OK" : "niente"}, snapshots=${snapshotsRestored} recuperati, artists=${artistsRestored} recuperati.`
         );
       }
     } catch (e) {
@@ -89,6 +98,13 @@ export function useAuthEffect(): void {
       `[LabelPulse Auth] User authenticated (${email}). Triggering cloud load.`
     );
     loadFromCloud().then(() => {
+      // ⚠️ UNIVERSAL SYNC: also trigger artists boot loader. This does its
+      // own three-way merge (IDB ↔ cloud ↔ sidecar) and is the ONLY way
+      // artists survive a device switch. See store.ts:loadArtistsOnBoot.
+      loadArtistsOnBoot().catch((e) =>
+        console.warn("[LabelPulse Auth] loadArtistsOnBoot failed:", e)
+      );
+
       // ⚠️ CRITICAL FIX (data-loss bug 2026-06-22):
       // PREVIOUSLY this block did `forceCloudSync()` 1 second after
       // loadFromCloud completed, whenever local had any data. The merge
@@ -118,6 +134,7 @@ export function useAuthEffect(): void {
             (Array.isArray(s.userProfile?.links) && s.userProfile.links.length > 0);
           const localHasDemos = s.demos.length > 0;
           const localHasSnapshots = s.rankingSnapshots.length > 0;
+          const localHasArtists = (s.artists?.length ?? 0) > 0;
           const localHasUserEditedLabels =
             Array.isArray(s.labels) &&
             s.labels.some((l: any) =>
@@ -138,6 +155,9 @@ export function useAuthEffect(): void {
               "[LabelPulse Auth] Local is empty after cloud load — NOT pushing to cloud (would overwrite cloud with empty data)."
             );
           }
+          // ⚠️ Artists: handled by loadArtistsOnBoot above (separate row sync).
+          // No need to push them again here.
+          void localHasArtists;
         } catch (e) {
           console.warn("[LabelPulse Auth] Post-cloud sync check failed:", e);
         }
@@ -160,9 +180,10 @@ export function useAuthEffect(): void {
       setTimeout(() => {
         try {
           const again = restoreProfileFromSidecar();
-          if (again) {
+          const artistsAgain = restoreArtistsFromSidecar();
+          if (again || artistsAgain > 0) {
             console.info(
-              "[LabelPulse Auth] Post-cloud profile restore triggered (sidecar had data the live store was missing). Profile is now visible; will sync on next user edit."
+              `[LabelPulse Auth] Post-cloud restore: profile=${again ? "OK" : "niente"}, artists=${artistsAgain} recuperati.`
             );
           }
         } catch {}

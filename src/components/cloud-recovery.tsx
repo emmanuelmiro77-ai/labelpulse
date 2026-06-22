@@ -33,11 +33,11 @@ import {
   AlertDialogDescription, AlertDialogFooter, AlertDialogHeader, AlertDialogTitle,
 } from "@/components/ui/alert-dialog";
 import { useToast } from "@/hooks/use-toast";
-import { useAppStore, restoreProfileFromSidecar, restoreSnapshotsFromSidecar } from "@/lib/store";
+import { useAppStore, restoreProfileFromSidecar, restoreSnapshotsFromSidecar, restoreArtistsFromSidecar } from "@/lib/store";
 import {
   getMainCloudSyncInfo, getArtistsCloudSyncInfo,
   forcePushLocalToCloud, forcePullCloudToLocal,
-  explicitMergeLocalAndCloud, isSupabaseConfigured,
+  explicitMergeLocalAndCloud, explicitMergeArtistsCloud, isSupabaseConfigured,
 } from "@/lib/supabase";
 
 interface LocalState {
@@ -90,9 +90,10 @@ export function CloudRecovery() {
   const [artistsCloud, setArtistsCloud] = useState<ArtistsCloudState | null>(null);
   const [sidecarProfile, setSidecarProfile] = useState<boolean>(false);
   const [sidecarSnapshots, setSidecarSnapshots] = useState<number>(0);
+  const [sidecarArtists, setSidecarArtists] = useState<number>(0);
   const [loading, setLoading] = useState(false);
   const [actionLoading, setActionLoading] = useState<string | null>(null);
-  const [confirmAction, setConfirmAction] = useState<null | "push" | "pull" | "merge">(null);
+  const [confirmAction, setConfirmAction] = useState<null | "push" | "pull" | "merge" | "mergeArtists">(null);
 
   const configured = isSupabaseConfigured();
 
@@ -124,6 +125,7 @@ export function CloudRecovery() {
       try {
         const sideProfileRaw = localStorage.getItem("labelpulse-profile-backup");
         const sideSnapsRaw = localStorage.getItem("labelpulse-snapshots-backup");
+        const sideArtistsRaw = localStorage.getItem("labelpulse-artists-backup");
         if (sideProfileRaw) {
           try {
             const p = JSON.parse(sideProfileRaw);
@@ -142,9 +144,19 @@ export function CloudRecovery() {
         } else {
           setSidecarSnapshots(0);
         }
+        if (sideArtistsRaw) {
+          try {
+            const ar = JSON.parse(sideArtistsRaw);
+            const arr = ar?.artists;
+            setSidecarArtists(Array.isArray(arr) ? arr.length : 0);
+          } catch { setSidecarArtists(0); }
+        } else {
+          setSidecarArtists(0);
+        }
       } catch {
         setSidecarProfile(false);
         setSidecarSnapshots(0);
+        setSidecarArtists(0);
       }
 
       // Cloud state (if configured)
@@ -170,7 +182,7 @@ export function CloudRecovery() {
     refresh();
   }, [refresh]);
 
-  const handleAction = async (action: "push" | "pull" | "merge" | "sidecar") => {
+  const handleAction = async (action: "push" | "pull" | "merge" | "mergeArtists" | "sidecar") => {
     setActionLoading(action);
     try {
       if (action === "push") {
@@ -201,9 +213,17 @@ export function CloudRecovery() {
       } else if (action === "sidecar") {
         const p = restoreProfileFromSidecar();
         const sn = restoreSnapshotsFromSidecar();
+        const ar = restoreArtistsFromSidecar();
         toast({
           title: "Ripristino sidecar",
-          description: `Profilo: ${p ? "OK" : "niente"}, Snapshot: ${sn} recuperati.`,
+          description: `Profilo: ${p ? "OK" : "niente"}, Snapshot: ${sn} recuperati, Artisti: ${ar} recuperati.`,
+        });
+      } else if (action === "mergeArtists") {
+        const result = await explicitMergeArtistsCloud();
+        toast({
+          title: result.ok ? "Merge artisti completato" : "Errore",
+          description: result.summary,
+          variant: result.ok ? "default" : "destructive",
         });
       }
       await refresh();
@@ -325,6 +345,7 @@ export function CloudRecovery() {
             <div className="space-y-1 text-xs text-muted-foreground">
               <StatRow label="Profilo backup" value={sidecarProfile ? "OK" : "vuoto"} highlight={!sidecarProfile} />
               <StatRow label="Snapshot backup" value={sidecarSnapshots} highlight={sidecarSnapshots === 0} />
+              <StatRow label="Artisti backup" value={sidecarArtists} highlight={sidecarArtists === 0} />
             </div>
             <div className="text-[10px] text-muted-foreground/70 pt-1 border-t border-border/30 mt-2">
               Questi backup vivono in localStorage e sopravvivono anche se il cloud o lo store principale vengono wipeati.
@@ -343,6 +364,16 @@ export function CloudRecovery() {
           >
             {actionLoading === "merge" ? <Loader2 className="h-3.5 w-3.5 animate-spin" /> : <RefreshCw className="h-3.5 w-3.5" />}
             Unisci cloud + locale
+          </Button>
+          <Button
+            size="sm"
+            variant="outline"
+            onClick={() => setConfirmAction("mergeArtists")}
+            disabled={!configured || actionLoading !== null}
+            className="gap-1.5"
+          >
+            {actionLoading === "mergeArtists" ? <Loader2 className="h-3.5 w-3.5 animate-spin" /> : <RefreshCw className="h-3.5 w-3.5" />}
+            Unisci artisti cloud + locale
           </Button>
           <Button
             size="sm"
@@ -417,6 +448,7 @@ export function CloudRecovery() {
               {confirmAction === "push" && "Sovrascrivere il cloud con i dati locali?"}
               {confirmAction === "pull" && "Sovrascrivere i dati locali con il cloud?"}
               {confirmAction === "merge" && "Unire cloud e locale?"}
+              {confirmAction === "mergeArtists" && "Unire artisti cloud e locale?"}
             </AlertDialogTitle>
             <AlertDialogDescription>
               {confirmAction === "push" && (
@@ -435,6 +467,12 @@ export function CloudRecovery() {
                 "gli snapshot vengono uniti per id. Il risultato verrà poi spinto al cloud. " +
                 "È l&apos;operazione più sicura — non perde dati da nessuna parte."
               )}
+              {confirmAction === "mergeArtists" && (
+                "Verrà eseguito un merge intelligente degli artisti: gli artisti locali " +
+                "e cloud vengono uniti per id. Se lo stesso artista esiste in entrambi, " +
+                "viene tenuta la versione con più tracce / bio / scrape più recente. " +
+                "Il risultato viene salvato in locale, IDB, sidecar e cloud."
+              )}
             </AlertDialogDescription>
           </AlertDialogHeader>
           <AlertDialogFooter>
@@ -442,7 +480,7 @@ export function CloudRecovery() {
             <AlertDialogAction
               onClick={() => confirmAction && handleAction(confirmAction)}
               className={
-                confirmAction === "merge"
+                (confirmAction === "merge" || confirmAction === "mergeArtists")
                   ? "bg-cyan-500 hover:bg-cyan-600 text-white"
                   : "bg-amber-500 hover:bg-amber-600 text-white"
               }

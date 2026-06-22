@@ -707,6 +707,89 @@ export function restoreProfileFromSidecar(): boolean {
   return false;
 }
 
+// ==================== ARTISTS SIDE CAR ====================
+// Like PROFILE_BACKUP_KEY but for the artists array. A full Beatport scrape
+// produces ~3400 artists / ~9MB. localStorage has a 5-10MB quota on most
+// browsers, so we TRY to write artists here but FAIL GRACEFULLY if quota
+// exceeded — the IndexedDB + cloud are the primary stores, this is just
+// an emergency backup for when both fail.
+//
+// Strategy:
+//  - writeArtistsSidecar: best-effort write, truncate if needed (keep first
+//    N artists rather than fail entirely). Skip silently if quota exceeded.
+//  - readArtistsSidecar: returns [] if missing/corrupt
+//  - restoreArtistsFromSidecar: splice into live store if local is empty
+const ARTISTS_SIDECAR_KEY = "labelpulse-artists-backup";
+const ARTISTS_SIDECAR_MAX = 200; // cap to first 200 artists (~600KB) to fit quota
+
+export function writeArtistsSidecar(artists: any[]): void {
+  if (typeof window === "undefined") return;
+  if (!Array.isArray(artists) || artists.length === 0) return;
+  try {
+    // If small enough, write all. Otherwise, write first N + a marker.
+    const capped = artists.length > ARTISTS_SIDECAR_MAX
+      ? artists.slice(0, ARTISTS_SIDECAR_MAX)
+      : artists;
+    const payload = JSON.stringify({
+      savedAt: new Date().toISOString(),
+      count: artists.length,
+      capped: artists.length > ARTISTS_SIDECAR_MAX,
+      artists: capped,
+    });
+    safeLocalStorageSet(ARTISTS_SIDECAR_KEY, payload);
+  } catch (e) {
+    // Quota exceeded — try with even fewer artists
+    try {
+      const tiny = artists.slice(0, 50);
+      const payload = JSON.stringify({
+        savedAt: new Date().toISOString(),
+        count: artists.length,
+        capped: true,
+        artists: tiny,
+      });
+      safeLocalStorageSet(ARTISTS_SIDECAR_KEY, payload);
+    } catch {
+      // Give up silently — IDB + cloud are the primary stores
+    }
+  }
+}
+
+export function readArtistsSidecar(): any[] {
+  if (typeof window === "undefined") return [];
+  const raw = safeLocalStorageGet(ARTISTS_SIDECAR_KEY);
+  if (!raw) return [];
+  try {
+    const parsed = JSON.parse(raw);
+    const arr = parsed?.artists;
+    return Array.isArray(arr) ? arr : [];
+  } catch {
+    return [];
+  }
+}
+
+/**
+ * Restore artists from sidecar IF the live store has 0 artists.
+ * Returns the number of artists restored (0 if nothing happened).
+ * Does NOT replace live artists if live already has data — sidecar is
+ * only an emergency recovery, not a primary source.
+ */
+export function restoreArtistsFromSidecar(): number {
+  if (typeof window === "undefined") return 0;
+  const sidecar = readArtistsSidecar();
+  if (sidecar.length === 0) return 0;
+
+  const current = useAppStore.getState().artists || [];
+  if (current.length > 0) return 0;
+
+  useAppStore.setState({ artists: sidecar });
+  console.info(
+    `[LabelPulse] Restored ${sidecar.length} artists from sidecar backup (live store was empty).`
+  );
+  // Also persist to IDB so future boots are fast
+  saveArtistsToIDB(sidecar).catch(() => {});
+  return sidecar.length;
+}
+
 // ==================== NO SEED DEMOS ====================
 
 // ==================== STORE ====================
@@ -1157,6 +1240,9 @@ export const useAppStore = create<AppState>()(
           saveArtistsToIDB(artists).catch((e) =>
             console.warn("[LabelPulse] Failed to persist artists to IndexedDB:", e)
           );
+          // ⚠️ Also write to sidecar backup (labelpulse-artists-backup) for
+          // emergency recovery. Best-effort — fails silently if quota exceeded.
+          writeArtistsSidecar(artists);
           // ⚠️ Also push to cloud (separate row "<email>_artists") for cross-device sync
           import("./supabase").then(({ saveArtistsToCloud }) => {
             saveArtistsToCloud(artists).catch((e) =>
@@ -1485,6 +1571,8 @@ export const useAppStore = create<AppState>()(
             saveArtistsToIDB(mergedArtists).catch((e) =>
               console.warn("[LabelPulse Import] Failed to persist artists to IndexedDB:", e)
             );
+            // ⚠️ Also write sidecar backup for emergency recovery
+            writeArtistsSidecar(mergedArtists);
             // ⚠️ Also push artists to cloud (separate row "<email>_artists")
             // so the user can access them on other devices. Non-blocking.
             import("./supabase").then(({ saveArtistsToCloud }) => {
@@ -2171,46 +2259,122 @@ function mergeCloudData(cloudData: any, localState: any): Partial<AppState> {
 }
 
 // ===================================================================
-// ARTIST BOOT LOADER
+// ARTIST BOOT LOADER — UNIVERSAL CLOUD SYNC
 // Called once on app boot (after Zustand rehydration) to load artists
 // from IndexedDB into the in-memory store. Non-blocking — UI renders
 // immediately with artists:[] and populates when IDB returns.
 //
-// ⚠️ CROSS-DEVICE SYNC: if IDB is empty (first login on a new device),
-// falls back to loading artists from cloud (separate row "<email>_artists").
-// This is the only way artists survive a device switch — they're too large
-// for the main app_state row, so they live in their own row.
+// ⚠️ UNIVERSAL SYNC STRATEGY (post "Burundi complaint" 2026-06-23):
+// The user must be able to login from ANY device (their phone, their
+// PC, Mickey Mouse's phone, Donald Duck's PC in Burundi) and see all
+// their data. The cloud is the master source; the device is a viewer.
+//
+// Algorithm:
+//   1. Load artists from IndexedDB (local cache, fast)
+//   2. ALWAYS fetch artists from cloud (in parallel if IDB had data)
+//   3. Three-way decision:
+//      a. IDB empty + cloud has artists → download cloud → save to IDB
+//      b. IDB has artists + cloud empty → push IDB → cloud
+//      c. Both have artists → MERGE (union by id, most-recent wins),
+//         save merged to BOTH IDB and cloud
+//   4. Always also persist to ARTISTS_SIDECAR_KEY for emergency recovery
+//
+// This runs in the background and never blocks UI. Even if cloud takes
+// 5 seconds to respond, the user sees IDB data immediately (if any).
 // ===================================================================
 export async function loadArtistsOnBoot(): Promise<void> {
   if (typeof window === "undefined") return;
   try {
-    let artists = await loadArtistsFromIDB();
-    if (artists.length > 0) {
-      useAppStore.setState({ artists });
-      console.info(`[LabelPulse] Loaded ${artists.length} artists from IndexedDB`);
-      // Also push to cloud if cloud doesn't have them yet (non-blocking)
-      // — this ensures the cloud row stays in sync with what's in IDB.
-      import("./supabase").then(({ saveArtistsToCloud, getArtistsCloudSyncInfo }) => {
-        getArtistsCloudSyncInfo().then((info) => {
-          if (info && (info.count === 0 || info.count < artists.length)) {
-            console.info(`[LabelPulse] Cloud has ${info.count} artists, local has ${artists.length}. Pushing local to cloud.`);
-            saveArtistsToCloud(artists).catch(() => {});
-          }
-        }).catch(() => {});
-      }).catch(() => {});
+    const idbArtists = await loadArtistsFromIDB();
+
+    // Show IDB data immediately (if any) so UI isn't empty while cloud loads
+    if (idbArtists.length > 0) {
+      useAppStore.setState({ artists: idbArtists });
+      console.info(`[LabelPulse] Loaded ${idbArtists.length} artists from IndexedDB`);
     } else {
-      // IDB is empty — try cloud (first login on new device, or after clearing browser data)
-      console.info("[LabelPulse] IndexedDB has 0 artists. Trying cloud...");
-      const { loadArtistsFromCloud } = await import("./supabase");
-      const cloudArtists = await loadArtistsFromCloud();
-      if (cloudArtists.length > 0) {
-        useAppStore.setState({ artists: cloudArtists });
-        // Also persist to IDB so future loads are fast (no network round-trip)
-        await saveArtistsToIDB(cloudArtists);
-        console.info(`[LabelPulse] Loaded ${cloudArtists.length} artists from cloud → IDB`);
+      console.info("[LabelPulse] IndexedDB has 0 artists — trying cloud...");
+    }
+
+    // Try sidecar backup first (faster than cloud, survives offline)
+    const sidecarArtists = readArtistsSidecar();
+    if (idbArtists.length === 0 && sidecarArtists.length > 0) {
+      console.info(`[LabelPulse] Sidecar has ${sidecarArtists.length} artists — restoring immediately while cloud loads.`);
+      useAppStore.setState({ artists: sidecarArtists });
+      saveArtistsToIDB(sidecarArtists).catch(() => {});
+    }
+
+    // If Supabase not configured, we're done (offline-only mode)
+    if (!isSupabaseConfigured()) {
+      console.info("[LabelPulse] Supabase not configured — skipping cloud artists sync.");
+      return;
+    }
+
+    // Lazy-import the cloud sync functions
+    const { loadArtistsFromCloud, saveArtistsToCloud, mergeArtistsArrays, forcePushArtistsToCloud }
+      = await import("./supabase");
+
+    const cloudArtists = await loadArtistsFromCloud();
+    const currentLocal = useAppStore.getState().artists || idbArtists;
+
+    if (cloudArtists.length === 0 && currentLocal.length === 0) {
+      console.info("[LabelPulse] No artists in cloud or local. User has not imported a scrape yet.");
+      return;
+    }
+
+    // Case A: cloud has artists, local doesn't → DOWNLOAD
+    if (cloudArtists.length > 0 && currentLocal.length === 0) {
+      console.info(`[LabelPulse] ⬇️  Cloud has ${cloudArtists.length} artists, local has 0. DOWNLOADING from cloud → IDB.`);
+      useAppStore.setState({ artists: cloudArtists });
+      await saveArtistsToIDB(cloudArtists);
+      writeArtistsSidecar(cloudArtists);
+      return;
+    }
+
+    // Case B: local has artists, cloud doesn't → UPLOAD
+    if (currentLocal.length > 0 && cloudArtists.length === 0) {
+      console.info(`[LabelPulse] ⬆️  Local has ${currentLocal.length} artists, cloud has 0. UPLOADING local → cloud.`);
+      await forcePushArtistsToCloud(currentLocal);
+      writeArtistsSidecar(currentLocal);
+      return;
+    }
+
+    // Case C: both have artists → MERGE
+    if (currentLocal.length > 0 && cloudArtists.length > 0) {
+      const merged = mergeArtistsArrays(currentLocal, cloudArtists);
+      const changed = merged.length !== currentLocal.length
+        || merged.length !== cloudArtists.length
+        || merged.some((m: any, i: number) => {
+          const cl = cloudArtists.find((c: any) => (c.id || c.artistId) === (m.id || m.artistId));
+          const lo = currentLocal.find((l: any) => (l.id || l.artistId) === (m.id || m.artistId));
+          return cl && lo && JSON.stringify(cl) !== JSON.stringify(lo);
+        });
+
+      if (merged.length > currentLocal.length) {
+        console.info(
+          `[LabelPulse] 🔀  Merge: local=${currentLocal.length} + cloud=${cloudArtists.length} → ${merged.length} artists. ` +
+          `Updating local + cloud.`
+        );
+        useAppStore.setState({ artists: merged });
+        await saveArtistsToIDB(merged);
+        writeArtistsSidecar(merged);
+        // Push merged back to cloud so other devices get the union too
+        await forcePushArtistsToCloud(merged);
+      } else if (changed) {
+        console.info(
+          `[LabelPulse] 🔀  Merge resolved conflicts (same count, different content). Updating local + cloud.`
+        );
+        useAppStore.setState({ artists: merged });
+        await saveArtistsToIDB(merged);
+        writeArtistsSidecar(merged);
+        await forcePushArtistsToCloud(merged);
       } else {
-        console.info("[LabelPulse] No artists in cloud either. User has not imported a scrape yet.");
+        console.info(
+          `[LabelPulse] ✅  Artists in sync: local=${currentLocal.length}, cloud=${cloudArtists.length}. No merge needed.`
+        );
+        // Still update sidecar (cheap, and ensures we always have a fresh local backup)
+        writeArtistsSidecar(currentLocal);
       }
+      return;
     }
   } catch (e) {
     console.warn("[LabelPulse] Failed to load artists on boot:", e);
