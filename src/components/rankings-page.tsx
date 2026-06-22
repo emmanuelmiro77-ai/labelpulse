@@ -519,6 +519,17 @@ export function RankingsPage() {
     return labels.some((l) => l.prevRankByGenre && Object.keys(l.prevRankByGenre).length > 0);
   }, [labels]);
 
+  // ⚠️ FIX (2026-06-22): Don't show the "no history" alert until cloud sync
+  // has completed. The cloud-first architecture loads data asynchronously
+  // after login — at mount time, `labels` may be the seed-only set with no
+  // prevRankByGenre. Showing the alert immediately confuses users who DO
+  // have history in the cloud but haven't received it yet.
+  // We wait for either:
+  //   1. hasCloudSynced = true (cloud sync finished, data is final), OR
+  //   2. hasPreviousData = true (already has prev ranks, no need to wait)
+  const { hasCloudSynced } = useAppStore();
+  const hideNoHistoryAlert = hasPreviousData || !hasCloudSynced;
+
   // Snapshot stats for info display
   const snapshotStats = useMemo(() => {
     if (!snapshots || snapshots.length === 0) return { count: 0, oldest: null as string | null, newest: null as string | null };
@@ -573,7 +584,7 @@ export function RankingsPage() {
   return (
     <div className="space-y-6">
       {/* Alert if no previous data */}
-      {!hasPreviousData && timePeriod === "current" && (
+      {!hideNoHistoryAlert && timePeriod === "current" && (
         <div className="flex items-start gap-3 p-4 rounded-lg bg-amber-500/10 border border-amber-500/30">
           <AlertTriangle className="h-5 w-5 text-amber-400 shrink-0 mt-0.5" />
           <div className="flex-1">
@@ -597,6 +608,25 @@ export function RankingsPage() {
                 )}
               </div>
             )}
+          </div>
+        </div>
+      )}
+
+      {/* ⚠️ FIX (2026-06-22): Show "loading from cloud" banner while cloud
+          sync is in progress and we don't have prev data yet. This replaces
+          the misleading "no history" alert during the async cloud load. */}
+      {!hasPreviousData && !hasCloudSynced && timePeriod === "current" && (
+        <div className="flex items-start gap-3 p-4 rounded-lg bg-cyan-500/10 border border-cyan-500/30">
+          <div className="h-5 w-5 rounded-full border-2 border-cyan-400 border-t-transparent animate-spin shrink-0 mt-0.5" />
+          <div>
+            <p className="text-sm text-cyan-400 font-medium">
+              {locale === "it" ? "Caricamento dati dal cloud..." : "Loading data from cloud..."}
+            </p>
+            <p className="text-xs text-muted-foreground mt-1">
+              {locale === "it"
+                ? "Stiamo recuperando le tue classifiche e il tuo profilo dal cloud. Un attimo di pazienza."
+                : "We're retrieving your charts and profile from the cloud. One moment please."}
+            </p>
           </div>
         </div>
       )}
