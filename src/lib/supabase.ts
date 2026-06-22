@@ -1198,3 +1198,5 @@ export async function explicitMergeLocalAndCloud(): Promise<{
       `Risultato spinto al cloud.`,
   };
 }
+
+// Build trigger: 2026-06-22T19:38:57Z - force Vercel redeploy with cloud-first code
