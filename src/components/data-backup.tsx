@@ -13,6 +13,7 @@ import {
 } from "@/components/ui/popover";
 import { useToast } from "@/hooks/use-toast";
 import { RankingsWizard } from "@/components/rankings-wizard";
+import { CloudDiagnostic } from "@/components/cloud-diagnostic";
 import { isAdminEmail } from "@/lib/supabase";
 
 export function DataBackup() {
@@ -113,6 +114,9 @@ export function DataBackup() {
               {locale === "it" ? "Modalità Admin" : "Admin mode"}
             </div>
           )}
+
+          {/* Cloud Diagnostic — ADMIN ONLY */}
+          {isAdmin && <CloudDiagnostic />}
 
           {/* Rankings Wizard — ADMIN ONLY */}
           {isAdmin ? (

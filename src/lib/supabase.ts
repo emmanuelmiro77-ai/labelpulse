@@ -722,6 +722,167 @@ export async function loadStateFromCloud(): Promise<object | null> {
   }
 }
 
+// ==================== CLOUD DIAGNOSTIC (ADMIN-ONLY) ====================
+
+/**
+ * Diagnostic snapshot of both cloud rows (global + personal) for the admin UI.
+ * Returns metadata about each row without fetching the full JSON payload —
+ * just what the admin needs to verify that the last scrape landed correctly
+ * and to spot data-shape anomalies (e.g., labels count drift).
+ *
+ * Returns null if Supabase is not configured.
+ */
+export interface CloudDiagnosticRow {
+  id: string;
+  exists: boolean;
+  updatedAt: string | null;
+  // Shape metrics (computed server-side via JSONB operators to avoid pulling
+  // the whole payload over the wire)
+  labelsCount: number;
+  snapshotsCount: number;
+  customLabelsCount: number;
+  beatportWithPersonalDataCount: number;
+  rankingsUpdatedAt: string | null;
+  lastGlobalUpdate: string | null;
+  sizeBytes: number | null; // pg_sizeof the jsonb column, rough byte size
+}
+
+export interface CloudDiagnostic {
+  personal: CloudDiagnosticRow;
+  global: CloudDiagnosticRow;
+  fetchedAt: string; // ISO timestamp
+  currentEmail: string | null;
+  isAdmin: boolean;
+}
+
+/**
+ * Compute shape metrics for a single cloud row by fetching the row and
+ * inspecting the JSONB client-side. Pulls the full payload once but keeps
+ * the analysis simple (no PostgREST-side JSONB operators required).
+ */
+async function computeRowMetrics(
+  supabase: SupabaseClient,
+  rowId: string
+): Promise<CloudDiagnosticRow> {
+  // Single SELECT that returns everything we need.
+  // We pull the full `data` JSONB and compute metrics client-side. This is
+  // simpler than trying to use server-side JSONB operators (which PostgREST
+  // doesn't expose cleanly) and the payload is typically <500KB.
+  const { data, error } = await supabase
+    .from(CLOUD_TABLE)
+    .select("id, updated_at, data")
+    .eq("id", rowId)
+    .single();
+
+  if (error) {
+    if (error.code === "PGRST116") {
+      // Row doesn't exist — return empty shape
+      return {
+        id: rowId,
+        exists: false,
+        updatedAt: null,
+        labelsCount: 0,
+        snapshotsCount: 0,
+        customLabelsCount: 0,
+        beatportWithPersonalDataCount: 0,
+        rankingsUpdatedAt: null,
+        lastGlobalUpdate: null,
+        sizeBytes: null,
+      };
+    }
+    console.error(`[LabelPulse Cloud] Diagnostic row ${rowId} error:`, error.message);
+    return {
+      id: rowId,
+      exists: false,
+      updatedAt: null,
+      labelsCount: 0,
+      snapshotsCount: 0,
+      customLabelsCount: 0,
+      beatportWithPersonalDataCount: 0,
+      rankingsUpdatedAt: null,
+      lastGlobalUpdate: null,
+      sizeBytes: null,
+    };
+  }
+
+  // Compute metrics client-side from the data JSON.
+  const d: any = data?.data || {};
+  const labels: any[] = Array.isArray(d.labels) ? d.labels : [];
+  const snapshots: any[] = Array.isArray(d.rankingSnapshots) ? d.rankingSnapshots : [];
+
+  let customCount = 0;
+  let beatportWithPersonalCount = 0;
+  for (const lbl of labels) {
+    if (!lbl || typeof lbl !== "object") continue;
+    if (lbl.isCustom === true) {
+      customCount++;
+      continue;
+    }
+    // Beatport label — check if it has any real personal data
+    const hasNotes = typeof lbl.notes === "string" && lbl.notes.trim() !== "";
+    const hasEmails = Array.isArray(lbl.emails) ? lbl.emails.length > 0 : (!!lbl.emails && String(lbl.emails).trim() !== "");
+    const hasNonOpenStatus = typeof lbl.status === "string" && lbl.status !== "" && lbl.status !== "open";
+    const hasWebsite = typeof lbl.website === "string" && lbl.website.trim() !== "";
+    const hasDemoLink = typeof lbl.demoLink === "string" && lbl.demoLink.trim() !== "";
+    const hasSocialLink = typeof lbl.socialLink === "string" && lbl.socialLink.trim() !== "";
+    const hasSoundcloudLink = typeof lbl.soundcloudLink === "string" && lbl.soundcloudLink.trim() !== "";
+    const hasCustomLinks = Array.isArray(lbl.customLinks) ? lbl.customLinks.length > 0 : false;
+    if (hasNotes || hasEmails || hasNonOpenStatus || hasWebsite || hasDemoLink ||
+        hasSocialLink || hasSoundcloudLink || hasCustomLinks) {
+      beatportWithPersonalCount++;
+    }
+  }
+
+  // Compute approximate byte size from the JSON string. Uses UTF-8 byte length.
+  let sizeBytes: number | null = null;
+  try {
+    sizeBytes = new Blob([JSON.stringify(d)]).size;
+  } catch {
+    sizeBytes = null;
+  }
+
+  return {
+    id: rowId,
+    exists: true,
+    updatedAt: data?.updated_at || null,
+    labelsCount: labels.length,
+    snapshotsCount: snapshots.length,
+    customLabelsCount: customCount,
+    beatportWithPersonalDataCount: beatportWithPersonalCount,
+    rankingsUpdatedAt: d.rankingsUpdatedAt || null,
+    lastGlobalUpdate: d.lastGlobalUpdate || null,
+    sizeBytes,
+  };
+}
+
+/**
+ * Fetch the full diagnostic snapshot (both rows). Admin-only UI helper.
+ * Safe to call from non-admin too — just returns the same data shape,
+ * but the UI typically only renders this for admins.
+ */
+export async function getCloudDiagnostic(): Promise<CloudDiagnostic | null> {
+  const supabase = getSupabase();
+  if (!supabase) return null;
+
+  try {
+    const [personal, global] = await Promise.all([
+      computeRowMetrics(supabase, getCloudRowId()),
+      computeRowMetrics(supabase, getGlobalCloudRowId()),
+    ]);
+
+    return {
+      personal,
+      global,
+      fetchedAt: new Date().toISOString(),
+      currentEmail: _currentUserEmail,
+      isAdmin: isCurrentUserAdmin(),
+    };
+  } catch (err) {
+    console.error("[LabelPulse Cloud] Diagnostic exception:", err);
+    return null;
+  }
+}
+
 // ==================== REALTIME SUBSCRIPTION ====================
 
 /**
