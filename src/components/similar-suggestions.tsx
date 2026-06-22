@@ -89,13 +89,14 @@ export function SimilarSuggestions({
   const profile: TrackProfile | null = useMemo(() => {
     const fromAnalysis = profileFromAnalysis(analysis, genre);
 
-    // Manual values — only valid if non-empty
+    // Parse manual values (note: local vars MUST NOT shadow the prop names,
+    // otherwise JS throws "Cannot access X before initialization" due to TDZ).
     const manualBpmNum = manualBpm ? parseInt(manualBpm, 10) : NaN;
-    const manualBpm = Number.isFinite(manualBpmNum) && manualBpmNum > 0 ? manualBpmNum : null;
+    const parsedManualBpm = Number.isFinite(manualBpmNum) && manualBpmNum > 0 ? manualBpmNum : null;
     const manualKeyClean = manualKey?.trim() || null;
 
     // Manual wins over analysis when present
-    const bpm = manualBpm ?? fromAnalysis?.bpm ?? null;
+    const bpm = parsedManualBpm ?? fromAnalysis?.bpm ?? null;
     const camelotKey = manualKeyClean || fromAnalysis?.camelotKey || null;
     const finalGenre = genre?.trim() || null;
 

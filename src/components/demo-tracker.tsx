@@ -749,76 +749,93 @@ export function DemoTracker() {
                     </Button>
                   </PopoverTrigger>
                   <PopoverContent className="w-[--radix-popover-trigger-width] p-0" align="start">
-                    <Command shouldFilter={true} filter={(value, search) => {
-                      // Custom filter: match label name case-insensitively
-                      const label = labels.find((l) => l.id === value);
-                      if (!label) return 0;
-                      const name = label.name.toLowerCase();
-                      const q = search.toLowerCase().trim();
-                      if (!q) return 1;
-                      if (name.startsWith(q)) return 1;
-                      if (name.includes(q)) return 0.7;
-                      // Also search by genre
-                      const genres = (label.genres || []).join(" ").toLowerCase();
-                      if (genres.includes(q)) return 0.4;
-                      return 0;
-                    }}>
+                    <Command shouldFilter={false}>
                       <CommandInput
                         placeholder={locale === "it" ? "Cerca label per nome o genere…" : "Search label by name or genre…"}
                         value={labelSearchQuery}
                         onValueChange={setLabelSearchQuery}
                       />
                       <CommandList>
-                        <CommandEmpty>
-                          {locale === "it" ? "Nessuna label trovata." : "No label found."}
-                        </CommandEmpty>
-                        <CommandGroup heading={locale === "it" ? "Tutte le label" : "All labels"}>
-                          {/* Show open labels first, then closed — limit to 200 for performance */}
-                          {labels
-                            .slice()
+                        {(() => {
+                          // Pre-filter the labels array here instead of relying
+                          // on cmdk's filter function. The filter prop captures
+                          // a closure over `labels` at first render — but Zustand
+                          // hasn't hydrated yet at first render, so the closure
+                          // is empty and the filter always returns 0.
+                          const q = labelSearchQuery.toLowerCase().trim();
+                          const filtered = labels
+                            .filter((l) => {
+                              if (!q) return true;
+                              // Match by name (case-insensitive)
+                              if (l.name.toLowerCase().includes(q)) return true;
+                              // Match by genre
+                              if ((l.genres || []).some((g) => g.toLowerCase().includes(q))) return true;
+                              return false;
+                            })
                             .sort((a, b) => {
-                              // Open labels first
+                              // Open labels first, then alphabetical
                               if (a.status === "open" && b.status !== "open") return -1;
                               if (a.status !== "open" && b.status === "open") return 1;
+                              // When searching, sort by startsWith first
+                              if (q) {
+                                const aStarts = a.name.toLowerCase().startsWith(q) ? 0 : 1;
+                                const bStarts = b.name.toLowerCase().startsWith(q) ? 0 : 1;
+                                if (aStarts !== bStarts) return aStarts - bStarts;
+                              }
                               return a.name.localeCompare(b.name);
                             })
-                            .slice(0, 250)
-                            .map((l) => (
-                              <CommandItem
-                                key={l.id}
-                                value={l.id}
-                                onSelect={(v) => {
-                                  setFormLabelId(v === formLabelId ? "" : v);
-                                  setLabelComboboxOpen(false);
-                                  setLabelSearchQuery("");
-                                  // Auto-fill genre if the demo doesn't have one yet
-                                  if (!formGenre.trim() && l.genres?.length) {
-                                    setFormGenre(l.genres[0]);
-                                  }
-                                }}
-                                className="flex items-center gap-2"
-                              >
-                                <Check
-                                  className={`h-3.5 w-3.5 ${formLabelId === l.id ? "opacity-100" : "opacity-0"}`}
-                                />
-                                <div className="flex-1 min-w-0">
-                                  <div className="flex items-center gap-1.5">
-                                    <span className="text-sm truncate">{l.name}</span>
-                                    {l.status === "closed" && (
-                                      <Badge className="text-[8px] px-1 py-0 shrink-0 bg-red-500/20 text-red-400 border-red-500/30">
-                                        {locale === "it" ? "chiusa" : "closed"}
-                                      </Badge>
+                            .slice(0, 250);
+
+                          if (filtered.length === 0) {
+                            return (
+                              <CommandEmpty>
+                                {locale === "it" ? "Nessuna label trovata." : "No label found."}
+                              </CommandEmpty>
+                            );
+                          }
+
+                          return (
+                            <CommandGroup heading={locale === "it"
+                              ? `${filtered.length} label${filtered.length === labels.length ? "" : ` di ${labels.length}`}`
+                              : `${filtered.length} label${filtered.length === labels.length ? "" : ` of ${labels.length}`}`}>
+                              {filtered.map((l) => (
+                                <CommandItem
+                                  key={l.id}
+                                  value={l.id}
+                                  onSelect={(v) => {
+                                    setFormLabelId(v === formLabelId ? "" : v);
+                                    setLabelComboboxOpen(false);
+                                    setLabelSearchQuery("");
+                                    // Auto-fill genre if the demo doesn't have one yet
+                                    if (!formGenre.trim() && l.genres?.length) {
+                                      setFormGenre(l.genres[0]);
+                                    }
+                                  }}
+                                  className="flex items-center gap-2"
+                                >
+                                  <Check
+                                    className={`h-3.5 w-3.5 ${formLabelId === l.id ? "opacity-100" : "opacity-0"}`}
+                                  />
+                                  <div className="flex-1 min-w-0">
+                                    <div className="flex items-center gap-1.5">
+                                      <span className="text-sm truncate">{l.name}</span>
+                                      {l.status === "closed" && (
+                                        <Badge className="text-[8px] px-1 py-0 shrink-0 bg-red-500/20 text-red-400 border-red-500/30">
+                                          {locale === "it" ? "chiusa" : "closed"}
+                                        </Badge>
+                                      )}
+                                    </div>
+                                    {l.genres?.length > 0 && (
+                                      <span className="text-[10px] text-muted-foreground truncate block">
+                                        {l.genres.join(", ")}
+                                      </span>
                                     )}
                                   </div>
-                                  {l.genres?.length > 0 && (
-                                    <span className="text-[10px] text-muted-foreground truncate block">
-                                      {l.genres.join(", ")}
-                                    </span>
-                                  )}
-                                </div>
-                              </CommandItem>
-                            ))}
-                        </CommandGroup>
+                                </CommandItem>
+                              ))}
+                            </CommandGroup>
+                          );
+                        })()}
                       </CommandList>
                     </Command>
                   </PopoverContent>
