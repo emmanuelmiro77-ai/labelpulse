@@ -335,3 +335,112 @@ Stage Summary:
 - Login button will work again — clicking it triggers the dynamic NextAuth handler
 - Local static deployment continues to work (server.mjs serves static files, no /api/* routes)
 - The build-static.sh script remains the correct way to build for the local server
+
+---
+Task ID: post-login-no-charts-fix
+Agent: Main Agent
+Task: User reported "logs in with email, sees no charts, no artists, no profile data" despite localStorage having extensive data (House, Dubstep, Amapiano — 100+ labels with rankByGenre/pointsByGenre). Console showed: "[LabelPulse Cloud] Realtime update received, updated_at: 2026-06-22T14:53:51.941+00:00"
+
+Work Log:
+- Read worklog to understand context: previous session ended with Vercel
+  auth fix (commit 7942562) — removed force-static from [...nextauth] route
+- Read src/app/page.tsx — confirmed hasRehydrated gate, useAuthEffect,
+  loadFromCloud, loadArtistsOnBoot, forceCloudSync on visibility/unload
+- Read src/lib/use-auth.ts — useAuthEffect flow: restoreProfileFromSidecar
+  → restoreSnapshotsFromSidecar → loadFromCloud → 3s forceCloudSync →
+  4.5s restoreProfileFromSidecar
+- Read src/lib/store.ts:loadFromCloud + mergeCloudData (lines 1755-2061)
+- Read src/lib/supabase.ts:setupRealtimeSubscription + applyRemoteData
+  (lines 403-668)
+- Read src/lib/store.ts:robustStorage (getItem/setItem with sidecars)
+- Read src/lib/store.ts:LABEL_DEFAULTS — confirmed Beatport data fields
+  default to empty: genres:[], rankByGenre:{}, pointsByGenre:{},
+  trending:false, etc.
+- ROOT CAUSE IDENTIFIED: mergeCloudData and applyRemoteData had
+  labelUserEditFields list that ONLY preserved user-edit fields
+  (emails, notes, website, demoLink, socialLink, status, tier, etc.)
+  from local labels during cloud merge. Beatport data fields were
+  NOT in the list. So if cloud had labels with EMPTY rankByGenre
+  (stale cloud row, or seed labels from a fresh cloud row), the
+  merge took cloud's empty values and DROPPED local's real scraped
+  data. Result: labels existed but with no rankings → "no charts".
+  Same bug existed in applyRemoteData (realtime path) — when the
+  realtime echo arrived (the 14:53:51 log), it could wipe the
+  user's Beatport data again.
+- Verified the smoking-gun log: "Realtime update received" fires
+  on every realtime event BEFORE the shouldApply check, so the log
+  firing doesn't necessarily mean data was lost — but in this case
+  the merge logic was indeed broken.
+- Also identified: sidecar profile restore in use-auth.ts was at
+  4500ms after loadFromCloud — too slow, user sees empty profile
+  for 4.5s. Should be immediate (or near-immediate).
+
+Fixes applied:
+1. src/lib/store.ts:mergeCloudData — added beatportObjectFields list
+   (rankByGenre, pointsByGenre, trendingRankByGenre, trendingPointsByGenre,
+   prevRankByGenre). For each label that exists in both cloud and local:
+   - Object fields: merged as { ...cloudObj, ...localObj } (local wins
+     per genre, cloud's data preserved for genres local doesn't have)
+   - Array field (genres): union with dedupe
+   - Boolean (trending): OR — true wins
+   This means: if local has House:1 and cloud has Techno:3, merged has
+   both. If local has House:2 and cloud has House:1, local wins.
+2. src/lib/supabase.ts:applyRemoteData — mirrored the same Beatport
+   data merge logic for the realtime-update path
+3. src/lib/store.ts:loadFromCloud — added immediate (setTimeout 0)
+   restoreProfileFromSidecar + restoreSnapshotsFromSidecar AFTER
+   setState(merged). The previous 4.5s timeout in use-auth.ts was
+   too slow.
+4. src/lib/supabase.ts:applyRemoteData — same immediate sidecar
+   restore after setState(merged), so realtime echo can't wipe
+   profile/snapshots
+5. src/lib/use-auth.ts — reduced post-cloud profile restore from
+   4500ms to 500ms (in-merge restore handles immediate case; this
+   is just a second safety net for realtime echo)
+
+Build + bundle verified:
+- npx tsc --noEmit: 0 NEW errors (pre-existing errors in store.ts at
+  lines 1268, 1277, 1279, 1281, 1325, 1336, 1338 and labelUserEditFields
+  type complaints at 1984-1985 are unchanged from HEAD)
+- scripts/build-static.sh: ✓ successful (5.3s compile, 0 errors in
+  modified files, essentia.js files copied to out/)
+- Bundle grep: 'Post-merge sidecar restore', 'Post-realtime sidecar
+  restore', 'trendingRankByGenre' all present in
+  out/_next/static/chunks/175j1rb8r0lyw.js
+- Local server restarted, HTTP 200 OK on http://localhost:3000/
+
+Commit: 50e74f1 "fix(sync): preserve Beatport data fields in cloud merge
+— fixes post-login 'no charts'"
+Pushed to origin/main successfully (7942562..50e74f1)
+Vercel redeploy triggered
+
+Stage Summary:
+- User's localStorage data (House/Dubstep/Amapiano snapshots with 100+
+  labels and ranks/points) is now preserved through the cloud merge.
+  Even if the cloud row is stale or empty, the user's local scrape
+  data is kept.
+- The realtime echo (the "Realtime update received" log the user saw)
+  no longer wipes the user's data — applyRemoteData now uses the same
+  union-by-genre merge for Beatport fields, and immediately re-restores
+  profile/snapshots from sidecar if the live store ended up empty.
+- Profile restore now happens in <500ms instead of 4.5s, so the user
+  no longer sees an empty profile for any perceptible time after login.
+- After Vercel rebuild (~2-3 min), the user should hard-refresh and
+  re-test login. They should see their charts/artists/profile immediately.
+- If the user is still seeing empty data, they should:
+  1. Hard refresh (Ctrl+Shift+R)
+  2. Open browser console and look for logs:
+     "[LabelPulse Cloud] MERGE RESULT — profile from cloud: ..."
+     "[LabelPulse Cloud] Post-merge sidecar restore: ..."
+     "[LabelPulse Cloud] Post-realtime sidecar restore: ..."
+  3. If sidecar restore fired, the data should now be visible. If not,
+     there's a different bug — need to inspect what's in cloud row
+     via /api/cloud-debug endpoint.
+
+Next:
+- User should test login on Vercel deployment after rebuild completes
+- If data still missing, check /api/cloud-debug to see what's in the
+  cloud row for the user's email
+- Possible future improvement: add per-label timestamp so we can do
+  smarter merge (e.g., "this label's rankByGenre was scraped 2h ago,
+  cloud's was scraped 5d ago → local wins definitively")
