@@ -3,7 +3,7 @@
 import { useAppStore } from "@/lib/store";
 import { t } from "@/lib/i18n";
 import { useState, useRef } from "react";
-import { Download, Upload, Database, AlertTriangle } from "lucide-react";
+import { Download, Upload, Database, AlertTriangle, Info, FileDown, FileUp, Save } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import {
   Popover,
@@ -72,17 +72,18 @@ export function DataBackup() {
       <PopoverTrigger asChild>
         <Button
           variant="ghost"
-          size="icon"
-          className={`text-muted-foreground hover:text-cyan-400 relative ${isRankingsStale ? "animate-pulse" : ""}`}
+          size="sm"
+          className={`gap-1.5 text-xs text-muted-foreground hover:text-cyan-400 relative ${isRankingsStale ? "animate-pulse" : ""}`}
           title={t(locale, "data.title")}
         >
           <Database className="h-4 w-4" />
+          <span>{t(locale, "data.title")}</span>
           {isRankingsStale && (
             <span className="absolute -top-0.5 -right-0.5 w-2 h-2 bg-amber-400 rounded-full" />
           )}
         </Button>
       </PopoverTrigger>
-      <PopoverContent className="w-80 p-4 max-h-[70vh] overflow-y-auto" align="end">
+      <PopoverContent className="w-80 p-4 max-h-[80vh] overflow-y-auto" align="end">
         <div className="space-y-4">
           <div className="text-sm font-semibold flex items-center gap-2">
             <Database className="h-4 w-4 text-cyan-400" />
@@ -94,9 +95,13 @@ export function DataBackup() {
 
           <div className="border-t border-border/30" />
 
-          {/* Export */}
+          {/* Export — Download Backup */}
           <div className="space-y-2">
-            <p className="text-xs text-muted-foreground">{t(locale, "data.exportDesc")}</p>
+            <div className="flex items-center gap-1.5">
+              <FileDown className="h-3.5 w-3.5 text-emerald-400" />
+              <p className="text-xs font-medium text-foreground">{t(locale, "data.btnDownloadBackup_title")}</p>
+            </div>
+            <p className="text-[11px] text-muted-foreground leading-relaxed">{t(locale, "data.btnDownloadBackup_desc")}</p>
             <Button onClick={handleExport} className="w-full" size="sm" variant="outline">
               <Download className="h-3.5 w-3.5 mr-1.5" />
               {t(locale, "data.exportButton")}
@@ -105,23 +110,31 @@ export function DataBackup() {
 
           <div className="border-t border-border/30" />
 
-          {/* Import Full Backup */}
+          {/* Import — Restore Backup */}
           <div className="space-y-2">
-            <p className="text-xs text-muted-foreground">{t(locale, "data.importDesc")}</p>
+            <div className="flex items-center gap-1.5">
+              <FileUp className="h-3.5 w-3.5 text-cyan-400" />
+              <p className="text-xs font-medium text-foreground">{t(locale, "data.btnImportBackup_title")}</p>
+            </div>
+            <p className="text-[11px] text-muted-foreground leading-relaxed">{t(locale, "data.btnImportBackup_desc")}</p>
             {importWarning && (
               <div className="flex items-start gap-2 p-2 rounded-md bg-amber-500/10 border border-amber-500/30">
-                <AlertTriangle className="h-4 w-4 text-amber-400 shrink-0 mt-0.5" />
-                <p className="text-xs text-amber-400">{t(locale, "data.importDesc")}</p>
+                <AlertTriangle className="h-3.5 w-3.5 text-amber-400 shrink-0 mt-0.5" />
+                <p className="text-[11px] text-amber-400">
+                  {locale === "it"
+                    ? "Conferma: i dati del file verranno uniti a quelli attuali. Le tue note/email esistenti rimangono."
+                    : "Confirm: file data will be merged with current. Your existing notes/emails stay."}
+                </p>
               </div>
             )}
             <Button
               onClick={handleImportClick}
-              variant={importWarning ? "destructive" : "outline"}
+              variant={importWarning ? "default" : "outline"}
               className="w-full"
               size="sm"
             >
               <Upload className="h-3.5 w-3.5 mr-1.5" />
-              {importWarning ? t(locale, "data.importButton") + " (conferma)" : t(locale, "data.importButton")}
+              {importWarning ? t(locale, "data.importButton") + " ✓" : t(locale, "data.importButton")}
             </Button>
             <input
               ref={fileInputRef}
@@ -130,6 +143,55 @@ export function DataBackup() {
               onChange={handleFileChange}
               className="hidden"
             />
+          </div>
+
+          <div className="border-t border-border/30" />
+
+          {/* "What each button does" — disambiguation table */}
+          <div className="space-y-2">
+            <div className="flex items-center gap-1.5">
+              <Info className="h-3.5 w-3.5 text-amber-400" />
+              <p className="text-xs font-medium text-foreground">{t(locale, "data.whatDoesWhat")}</p>
+            </div>
+            <p className="text-[11px] text-muted-foreground">{t(locale, "data.whatDoesWhatHint")}</p>
+
+            <div className="space-y-2 mt-1">
+              {/* Save (top icon) */}
+              <div className="rounded-md border border-border/40 bg-secondary/30 p-2">
+                <div className="flex items-center gap-1.5 mb-1">
+                  <Save className="h-3 w-3 text-emerald-400" />
+                  <p className="text-[11px] font-medium text-foreground">{t(locale, "data.btnSaveFile_title")}</p>
+                </div>
+                <p className="text-[10px] text-muted-foreground leading-snug">{t(locale, "data.btnSaveFile_desc")}</p>
+              </div>
+
+              {/* Download Backup */}
+              <div className="rounded-md border border-border/40 bg-secondary/30 p-2">
+                <div className="flex items-center gap-1.5 mb-1">
+                  <FileDown className="h-3 w-3 text-cyan-400" />
+                  <p className="text-[11px] font-medium text-foreground">{t(locale, "data.btnDownloadBackup_title")}</p>
+                </div>
+                <p className="text-[10px] text-muted-foreground leading-snug">{t(locale, "data.btnDownloadBackup_desc")}</p>
+              </div>
+
+              {/* Restore Backup */}
+              <div className="rounded-md border border-border/40 bg-secondary/30 p-2">
+                <div className="flex items-center gap-1.5 mb-1">
+                  <FileUp className="h-3 w-3 text-violet-400" />
+                  <p className="text-[11px] font-medium text-foreground">{t(locale, "data.btnImportBackup_title")}</p>
+                </div>
+                <p className="text-[10px] text-muted-foreground leading-snug">{t(locale, "data.btnImportBackup_desc")}</p>
+              </div>
+
+              {/* Save changes (label dialog) */}
+              <div className="rounded-md border border-border/40 bg-secondary/30 p-2">
+                <div className="flex items-center gap-1.5 mb-1">
+                  <Save className="h-3 w-3 text-blue-400" />
+                  <p className="text-[11px] font-medium text-foreground">{t(locale, "data.btnSaveLabel_title")}</p>
+                </div>
+                <p className="text-[10px] text-muted-foreground leading-snug">{t(locale, "data.btnSaveLabel_desc")}</p>
+              </div>
+            </div>
           </div>
         </div>
       </PopoverContent>

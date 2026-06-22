@@ -245,16 +245,32 @@ export function AutoSave() {
 
   return (
     <div className="flex items-center gap-1">
-      {/* Quick Save Button */}
+      {/* Quick Save Button
+          ⚠️ DISAMBIGUATION (2026-06-22):
+          - If auto-save is configured → "Salva nel file" (writes to disk)
+          - If NOT configured → "Scarica backup" (downloads JSON, same as
+            the Database button). We change the label so the user knows
+            what they're getting.
+      */}
       <Button
         variant="ghost"
         size="sm"
-        className="text-muted-foreground hover:text-emerald-400 gap-1.5 text-xs h-8 px-2"
+        className={`gap-1.5 text-xs h-8 px-2 ${autoSaveEnabled ? "text-muted-foreground hover:text-emerald-400" : "text-muted-foreground hover:text-cyan-400"}`}
         onClick={handleManualSave}
-        title={t(locale, "autosave.saveNow")}
+        title={
+          autoSaveEnabled
+            ? t(locale, "autosave.saveNow") + " → " + (savePath || "")
+            : (locale === "it"
+                ? "Scarica un backup JSON completo (auto-save non configurato)"
+                : "Download a full JSON backup (auto-save not configured)")
+        }
       >
         <Save className="h-3.5 w-3.5" />
-        <span className="hidden sm:inline">{t(locale, "autosave.saveNow")}</span>
+        <span className="hidden sm:inline">
+          {autoSaveEnabled
+            ? t(locale, "autosave.saveNow")
+            : (locale === "it" ? "Scarica backup" : "Download backup")}
+        </span>
       </Button>
 
       {/* Auto-save Settings */}
@@ -279,6 +295,18 @@ export function AutoSave() {
             <p className="text-xs text-muted-foreground">
               {t(locale, "autosave.description")}
             </p>
+
+            {/* Disambiguation hint when auto-save is NOT configured */}
+            {!autoSaveEnabled && (
+              <div className="flex items-start gap-2 p-2 rounded-md bg-amber-500/10 border border-amber-500/30">
+                <AlertCircle className="h-3.5 w-3.5 text-amber-400 shrink-0 mt-0.5" />
+                <p className="text-[11px] text-amber-400 leading-relaxed">
+                  {locale === "it"
+                    ? "Auto-save NON configurato. Il tasto \"Salva\" qui a sinistra scaricherà un backup JSON (come il tasto Database), NON scriverà in un file sul disco. Per attivare il salvataggio automatico nel disco, clicca \"Scegli Percorso Backup\" qui sotto."
+                    : "Auto-save NOT configured. The \"Save\" button on the left will download a JSON backup (like the Database button), NOT write to a disk file. To enable automatic disk-file saving, click \"Choose Backup Path\" below."}
+                </p>
+              </div>
+            )}
 
             {autoSaveEnabled ? (
               <div className="space-y-3">

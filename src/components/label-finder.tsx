@@ -1790,9 +1790,12 @@ export function LabelFinder() {
                       variant="default"
                       onClick={saveAllDetails}
                       className="gap-1.5"
+                      title={locale === "it"
+                        ? "Salva le modifiche a questa label (email, note, status, link) nello store locale e nel cloud. Non scarica file."
+                        : "Save changes to this label (emails, notes, status, links) to local store and cloud. Doesn't download a file."}
                     >
                       <Save className="h-3.5 w-3.5" />
-                      {locale === "it" ? "Salva" : "Save"}
+                      {locale === "it" ? "Salva modifiche" : "Save changes"}
                     </Button>
                     <Button variant="ghost" onClick={() => setDetailLabel(null)}>{t(locale, "labels.close")}</Button>
                   </div>
