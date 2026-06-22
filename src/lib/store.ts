@@ -1418,7 +1418,21 @@ export const useAppStore = create<AppState>()(
               ...imported,
               id: imported.id || genId(),
               createdAt: imported.createdAt || new Date().toISOString(),
-              isCustom: imported.isCustom ?? true,
+              // ⚠️ CRITICAL FIX (bug 2026-06-23):
+              // Default isCustom to FALSE (not true). The previous default
+              // (`imported.isCustom ?? true`) caused every freshly-imported
+              // Beatport label that was NEW to the user's local state to be
+              // marked isCustom=true — even though it came straight from the
+              // Beatport scraper via RankingsWizard, which never sets
+              // isCustom. This produced hundreds of ghost "custom" labels
+              // with no user data attached (notes/emails/links all empty),
+              // bloating the personal cloud row.
+              //
+              // The correct default for labels arriving via importData()
+              // is FALSE (Beatport-sourced). True custom labels (added
+              // manually via "Add label" UI) explicitly set isCustom=true
+              // before calling their own add path, so they're unaffected.
+              isCustom: imported.isCustom ?? false,
               genres: imported.genres || [],
               rankByGenre: imported.rankByGenre || {},
               pointsByGenre: imported.pointsByGenre || {},
