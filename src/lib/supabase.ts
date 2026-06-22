@@ -583,6 +583,39 @@ async function applyRemoteData(cloudData: any): Promise<void> {
           (existing as any)[f] = lv;
         }
       }
+      // ⚠️ CRITICAL FIX (data-loss bug 2026-06-22, post-login "no charts"):
+      // Also preserve Beatport data fields (rankByGenre, pointsByGenre, etc.)
+      // from local. Without this, a realtime echo of a partial cloud row
+      // (e.g., one that lost rankByGenre during a previous bad sync) would
+      // wipe the user's just-restored scraped data.
+      // Same logic as mergeCloudData in store.ts:
+      //   - Object fields: union by genre key, local wins on conflict
+      //   - Array field (genres): union (dedupe)
+      //   - Boolean (trending): true wins
+      for (const f of ["rankByGenre", "pointsByGenre", "trendingRankByGenre", "trendingPointsByGenre", "prevRankByGenre"]) {
+        const lv = (ll as any)[f];
+        if (lv && typeof lv === "object" && !Array.isArray(lv)) {
+          const cv = (existing as any)[f];
+          const baseObj = (cv && typeof cv === "object" && !Array.isArray(cv)) ? cv : {};
+          (existing as any)[f] = { ...baseObj, ...lv };
+        }
+      }
+      if (Array.isArray(ll.genres) && ll.genres.length > 0) {
+        const cv = Array.isArray(existing.genres) ? existing.genres : [];
+        const seen = new Set(cv.map((g: any) => String(g).toLowerCase().trim()));
+        const mergedGenres = [...cv];
+        for (const g of ll.genres) {
+          const key = String(g).toLowerCase().trim();
+          if (key && !seen.has(key)) {
+            seen.add(key);
+            mergedGenres.push(g);
+          }
+        }
+        existing.genres = mergedGenres;
+      }
+      if (ll.trending === true) {
+        existing.trending = true;
+      }
     } else {
       labelsById.set(ll.id, { ...ll });
       if (nm) labelsByName.set(nm, ll);
@@ -666,4 +699,29 @@ async function applyRemoteData(cloudData: any): Promise<void> {
   if (cloudData.locale) merged.locale = cloudData.locale;
 
   useAppStore.setState(merged);
+
+  // ⚠️ CRITICAL FIX (post-login "no profile / no charts" bug 2026-06-22):
+  // After applying the remote data, immediately re-restore profile and
+  // snapshots from sidecar backups if the live store is now empty. The
+  // merge above should preserve local data, but in edge cases (partial
+  // cloud row, schema drift, an older app version) the merged result can
+  // still be missing data the user definitely had. The sidecar backups
+  // are the safety net — splice them back in. Runs on next tick so
+  // setState has committed first.
+  setTimeout(() => {
+    try {
+      // Lazy import to avoid circular dep at module load
+      import("./store").then((storeMod: any) => {
+        const profileRestored = storeMod.restoreProfileFromSidecar?.();
+        const snapsRestored = storeMod.restoreSnapshotsFromSidecar?.();
+        if (profileRestored || snapsRestored > 0) {
+          console.info(
+            `[LabelPulse Cloud] Post-realtime sidecar restore: profile=${profileRestored ? "OK" : "niente"}, snaps=${snapsRestored} recuperati.`
+          );
+        }
+      });
+    } catch (e) {
+      console.warn("[LabelPulse Cloud] Post-realtime sidecar restore failed:", e);
+    }
+  }, 0);
 }

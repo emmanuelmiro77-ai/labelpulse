@@ -1889,6 +1889,31 @@ export async function loadFromCloud(): Promise<void> {
         ...merged,
         hasCloudSynced: true,
       });
+
+      // ⚠️ CRITICAL FIX (post-login "no profile / no charts" bug 2026-06-22):
+      // Immediately re-restore profile and snapshots from sidecar backups.
+      // The cloud merge above should preserve local data (mergeProfiles keeps
+      // non-empty local fields, mergeSnapshots unions by id), but in edge
+      // cases (cloud row partially corrupt, schema drift, an older app
+      // version that wrote a bad row) the merged result can still end up
+      // missing the profile or snapshots that the user definitely had.
+      // The sidecar backups (labelpulse-profile-backup, labelpulse-snapshots-backup)
+      // are the user's safety net — splice them back in immediately if the
+      // live store is now empty but the sidecar has data. This runs on the
+      // next tick so setState has committed first.
+      setTimeout(() => {
+        try {
+          const profileRestored = restoreProfileFromSidecar();
+          const snapsRestored = restoreSnapshotsFromSidecar();
+          if (profileRestored || snapsRestored > 0) {
+            console.info(
+              `[LabelPulse Cloud] Post-merge sidecar restore: profile=${profileRestored ? "OK" : "niente"}, snaps=${snapsRestored} recuperati.`
+            );
+          }
+        } catch (e) {
+          console.warn("[LabelPulse Cloud] Post-merge sidecar restore failed:", e);
+        }
+      }, 0);
     } else {
       // I dati locali sono più recenti o uguali — mantieni i dati locali, aggiorna il cloud
       console.log("[LabelPulse Cloud] Local data is up to date. Cloud sync complete.");
@@ -1971,6 +1996,33 @@ function mergeCloudData(cloudData: any, localState: any): Partial<AppState> {
   }
   // Merge local labels: if exists in cloud by id or name, merge user-edit
   // fields from local (non-empty wins). Otherwise add as new.
+  //
+  // ⚠️ CRITICAL FIX (data-loss bug 2026-06-22, post-login "no charts"):
+  // The previous merge ONLY preserved user-edit fields (emails, notes, etc.)
+  // from local. It did NOT preserve Beatport data fields (rankByGenre,
+  // pointsByGenre, genres, trending, etc.). So if cloud had labels with
+  // EMPTY rankByGenre (e.g., a stale cloud row from before the user's
+  // latest scrape, or seed labels from a fresh cloud), the merge silently
+  // took cloud's empty values and DROPPED local's real scraped data.
+  // Result: user logged in and saw "no charts" even though their local
+  // data was intact.
+  //
+  // FIX: also merge Beatport data fields, using:
+  //   - For object fields (rankByGenre, pointsByGenre, etc.): UNION by
+  //     genre key, local wins on conflict. Cloud's data is preserved for
+  //     genres local doesn't have.
+  //   - For array field (genres): union (dedupe).
+  //   - For boolean (trending): OR — true wins.
+  // This way: if local has House:1 and cloud has Techno:3, merged has
+  // both. If local has House:2 and cloud has House:1, local wins (local
+  // is the user's most recent scrape on this device).
+  const beatportObjectFields = [
+    "rankByGenre",
+    "pointsByGenre",
+    "trendingRankByGenre",
+    "trendingPointsByGenre",
+    "prevRankByGenre",
+  ] as const;
   for (const ll of localLabels) {
     if (!ll || typeof ll !== "object") continue;
     const nm = ll.name?.toLowerCase().trim();
@@ -1982,6 +2034,34 @@ function mergeCloudData(cloudData: any, localState: any): Partial<AppState> {
         if (Array.isArray(lv) ? lv.length > 0 : (lv && String(lv).trim() !== "")) {
           (existing as any)[f] = lv;
         }
+      }
+      // Merge Beatport data fields from local (union by genre, local wins)
+      for (const f of beatportObjectFields) {
+        const lv = (ll as any)[f];
+        if (lv && typeof lv === "object" && !Array.isArray(lv)) {
+          const cv = (existing as any)[f];
+          const baseObj = (cv && typeof cv === "object" && !Array.isArray(cv)) ? cv : {};
+          // Start with cloud's values, then override with local's (local wins)
+          (existing as any)[f] = { ...baseObj, ...lv };
+        }
+      }
+      // genres (array): union
+      if (Array.isArray(ll.genres) && ll.genres.length > 0) {
+        const cv = Array.isArray(existing.genres) ? existing.genres : [];
+        const seen = new Set(cv.map((g: any) => String(g).toLowerCase().trim()));
+        const mergedGenres = [...cv];
+        for (const g of ll.genres) {
+          const key = String(g).toLowerCase().trim();
+          if (key && !seen.has(key)) {
+            seen.add(key);
+            mergedGenres.push(g);
+          }
+        }
+        existing.genres = mergedGenres;
+      }
+      // trending (boolean): true wins
+      if (ll.trending === true) {
+        existing.trending = true;
       }
     } else {
       const label: Label = { ...LABEL_DEFAULTS, ...ll };

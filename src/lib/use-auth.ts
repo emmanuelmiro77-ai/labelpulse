@@ -150,6 +150,13 @@ export function useAuthEffect(): void {
       // will trigger syncToCloud naturally, and that's safer than risk a
       // race condition where the sidecar restore happens before the merge
       // from loadFromCloud is fully committed.
+      //
+      // The post-merge sidecar restore inside loadFromCloud already runs at
+      // setTimeout(0) — this 500ms timeout is a SECOND safety net in case
+      // the realtime echo arrives after the in-merge restore and overwrites
+      // the profile again. 500ms is enough for the realtime echo to settle
+      // (it's typically <100ms after the upload) but short enough that the
+      // user doesn't see an empty profile for 4.5s.
       setTimeout(() => {
         try {
           const again = restoreProfileFromSidecar();
@@ -159,7 +166,7 @@ export function useAuthEffect(): void {
             );
           }
         } catch {}
-      }, 4500);
+      }, 500);
     });
   }, [status, session?.user?.email, hasRehydrated, hasCloudSynced]);
 
