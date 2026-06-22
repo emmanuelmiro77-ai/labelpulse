@@ -47,6 +47,45 @@ interface RankedLabel {
 // ==================== HELPERS ====================
 
 /**
+ * Find the "previous rank" for a label in a given genre by walking the
+ * historical snapshots from most-recent to oldest, returning the FIRST
+ * snapshot whose rank for that label/genre DIFFERS from currentRank.
+ *
+ * WHY: prevRankByGenre on the label can be clobbered by an identical
+ * re-import (the merge logic snapshots the live rank into prev even when
+ * nothing changed). When that happens, prevRankByGenre[genre] === currentRank
+ * → movement = 0 → Spotlight risers disappear. Snapshots, on the other hand,
+ * are immutable historical records and are never clobbered, so they are the
+ * authoritative source of "what was the rank before it became what it is now".
+ *
+ * @param snapshots        all ranking snapshots (will be sorted DESC here)
+ * @param labelName        label name to look up (snapshots key by name, not id)
+ * @param genre            genre key
+ * @param currentRank      the label's CURRENT rank in this genre
+ * @returns                the previous rank (different from currentRank), or
+ *                         undefined if no historical snapshot has a different
+ *                         rank for this label/genre.
+ */
+function findPrevRankFromSnapshots(
+  snapshots: RankingSnapshot[],
+  labelName: string,
+  genre: string,
+  currentRank: number,
+): number | undefined {
+  // Sort by timestamp DESC — we want the most recent DIFFERENT rank.
+  const sorted = [...snapshots].sort(
+    (a, b) => new Date(b.timestamp).getTime() - new Date(a.timestamp).getTime(),
+  );
+  for (const snap of sorted) {
+    const entry = snap.genres?.[genre]?.[labelName];
+    if (entry && typeof entry.rank === "number" && entry.rank !== currentRank) {
+      return entry.rank;
+    }
+  }
+  return undefined;
+}
+
+/**
  * Compact row of clickable discovery icons for a label.
  * Renders tiny icon-buttons that open Beatport / Beatstats / SoundCloud /
  * Website in a new tab. Hidden entirely if the label has no name (defensive).
@@ -305,7 +344,23 @@ function buildRankedList(
       const rank = label.rankByGenre?.[genre];
       if (rank === undefined || rank === null) continue;
 
-      const prevRank = label.prevRankByGenre?.[genre] ?? null;
+      // PRIORITY 1: look up "previous rank" from immutable historical snapshots.
+      // This is robust against identical re-imports that would otherwise zero
+      // out prevRankByGenre. We fall back to label.prevRankByGenre only if no
+      // snapshot has a different rank (label was never ranked differently).
+      let prevRank: number | null = findPrevRankFromSnapshots(snapshots, label.name, genre, rank) ?? null;
+      if (prevRank === null) {
+        // No snapshot with a different rank → fall back to label.prevRankByGenre
+        // (which may still be set from a previous import).
+        prevRank = label.prevRankByGenre?.[genre] ?? null;
+        // If prevRankByGenre[genre] equals current rank, treat as "no previous"
+        // (the label has never actually changed rank — show as stable, not as a
+        // riser with movement=0 which is misleading).
+        if (prevRank !== null && prevRank === rank) {
+          prevRank = null;
+        }
+      }
+
       const points = label.pointsByGenre?.[genre] ?? 0;
       let movement: number | null = null;
 
@@ -476,48 +531,59 @@ export function RankingsPage() {
   }, [rankedList]);
 
   // Top rising labels across ALL genres (for the global spotlight section)
+  // Reads "previous rank" directly from immutable historical snapshots — this
+  // is robust against identical re-imports that would otherwise zero out
+  // label.prevRankByGenre and make Spotlight risers disappear.
   const topRisers = useMemo(() => {
     const risers: { label: Label; genre: string; movement: number; rank: number }[] = [];
 
     for (const label of labels) {
-      if (!label.prevRankByGenre || Object.keys(label.prevRankByGenre).length === 0) continue;
+      if (!label.rankByGenre || Object.keys(label.rankByGenre).length === 0) continue;
       for (const genre of label.genres) {
         const currentRank = label.rankByGenre?.[genre];
-        const prevRank = label.prevRankByGenre?.[genre];
-        if (currentRank && prevRank) {
+        if (!currentRank) continue;
+        // Look up the most recent DIFFERENT rank in historical snapshots.
+        const prevRank = findPrevRankFromSnapshots(snapshots, label.name, genre, currentRank);
+        if (prevRank !== undefined && prevRank > currentRank) {
           const movement = prevRank - currentRank;
-          if (movement > 0) {
-            risers.push({ label, genre, movement, rank: currentRank });
-          }
+          risers.push({ label, genre, movement, rank: currentRank });
         }
       }
     }
 
     return risers.sort((a, b) => b.movement - a.movement).slice(0, 10);
-  }, [labels]);
+  }, [labels, snapshots]);
 
   // Top rising labels for the SELECTED genre (genre-specific spotlight)
+  // Same snapshot-based logic as topRisers above.
   const topRisersForGenre = useMemo(() => {
     if (!selectedGenre) return [];
     const risers: { label: Label; genre: string; movement: number; rank: number }[] = [];
 
     for (const label of labels) {
       const currentRank = label.rankByGenre?.[selectedGenre];
-      const prevRank = label.prevRankByGenre?.[selectedGenre];
-      if (currentRank && prevRank) {
+      if (!currentRank) continue;
+      const prevRank = findPrevRankFromSnapshots(snapshots, label.name, selectedGenre, currentRank);
+      if (prevRank !== undefined && prevRank > currentRank) {
         const movement = prevRank - currentRank;
-        if (movement > 0) {
-          risers.push({ label, genre: selectedGenre, movement, rank: currentRank });
-        }
+        risers.push({ label, genre: selectedGenre, movement, rank: currentRank });
       }
     }
 
     return risers.sort((a, b) => b.movement - a.movement).slice(0, 10);
-  }, [labels, selectedGenre]);
+  }, [labels, snapshots, selectedGenre]);
 
   const hasPreviousData = useMemo(() => {
-    return labels.some((l) => l.prevRankByGenre && Object.keys(l.prevRankByGenre).length > 0);
-  }, [labels]);
+    // Consider "previous data" present if either:
+    // - At least one label has prevRankByGenre populated, OR
+    // - There is at least one historical snapshot with genre data.
+    //   (Snapshots are the authoritative source for risers — checking them
+    //   here ensures the Spotlight section renders even when prevRankByGenre
+    //   has been clobbered by an identical re-import.)
+    const labelsHavePrev = labels.some((l) => l.prevRankByGenre && Object.keys(l.prevRankByGenre).length > 0);
+    const hasSnapshots = snapshots.length > 0 && snapshots.some(s => Object.keys(s.genres || {}).length > 0);
+    return labelsHavePrev || hasSnapshots;
+  }, [labels, snapshots]);
 
   // ⚠️ FIX (2026-06-22): Don't show the "no history" alert until cloud sync
   // has completed. The cloud-first architecture loads data asynchronously

@@ -978,10 +978,42 @@ function mergeArtists(existing: Artist[], incoming: Artist[], now: string): Arti
 function mergePreservingUserData(existing: Label, imported: Label): Partial<Label> {
   // Before overwriting ranking data, save the current rank as "previous" snapshot.
   // This allows the Rankings page to show movement arrows (↑↓) between imports.
-  const hasNewRankData = Object.keys(imported.rankByGenre || {}).length > 0;
-  const currentRank = hasNewRankData && Object.keys(existing.rankByGenre || {}).length > 0
-    ? { ...existing.rankByGenre }
-    : existing.prevRankByGenre || {};
+  //
+  // IDEMPOTENT IMPORT FIX: previously, every import — even an identical re-import —
+  // would clobber prevRankByGenre with a copy of the current rankByGenre. After
+  // an identical re-import, prevRank == currentRank for every genre, so all
+  // movements became 0 and Spotlight risers disappeared. This broke the UX:
+  // "if I re-import the same scrape, I should see what I saw before".
+  //
+  // The fix: only snapshot the existing rank as "previous" for genres where the
+  // rank has actually CHANGED. For genres where imported rank === existing rank,
+  // preserve the existing prevRankByGenre[genre] so users keep seeing the risers
+  // they had before the (identical) re-import.
+  const importedRank = imported.rankByGenre || {};
+  const existingRank = existing.rankByGenre || {};
+  const existingPrev = existing.prevRankByGenre || {};
+  const hasNewRankData = Object.keys(importedRank).length > 0;
+
+  let newPrevRankByGenre: Record<string, number>;
+  if (hasNewRankData) {
+    // Start from the existing prev snapshot — we only overwrite entries for
+    // genres where the rank actually changed.
+    newPrevRankByGenre = { ...existingPrev };
+    for (const [genre, newRank] of Object.entries(importedRank)) {
+      const oldRank = existingRank[genre];
+      if (oldRank !== undefined && oldRank !== newRank) {
+        // Rank changed for this genre → snapshot the old rank as "previous".
+        newPrevRankByGenre[genre] = oldRank;
+      }
+      // If oldRank === newRank → leave existing prevRankByGenre[genre] untouched
+      // (preserves the snapshot from the last actual change → risers persist).
+      // If oldRank is undefined (genre new for this label) → don't set prev
+      // (label is a new entry for this genre, no previous rank to compare to).
+    }
+  } else {
+    // No new rank data → keep existing prevRankByGenre unchanged.
+    newPrevRankByGenre = existingPrev;
+  }
 
   return {
     // User-editable data — ALWAYS prefer existing if it has real data
@@ -1002,8 +1034,8 @@ function mergePreservingUserData(existing: Label, imported: Label): Partial<Labe
     trendingRankByGenre: Object.keys(imported.trendingRankByGenre || {}).length ? imported.trendingRankByGenre : existing.trendingRankByGenre,
     trendingPointsByGenre: Object.keys(imported.trendingPointsByGenre || {}).length ? imported.trendingPointsByGenre : existing.trendingPointsByGenre,
 
-    // Ranking history — save current rank as "previous" when new data arrives
-    prevRankByGenre: currentRank,
+    // Ranking history — idempotent: only update prev when rank actually changed
+    prevRankByGenre: newPrevRankByGenre,
   };
 }
 
