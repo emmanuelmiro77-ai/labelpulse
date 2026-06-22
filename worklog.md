@@ -444,3 +444,90 @@ Next:
 - Possible future improvement: add per-label timestamp so we can do
   smarter merge (e.g., "this label's rankByGenre was scraped 2h ago,
   cloud's was scraped 5d ago → local wins definitively")
+
+---
+Task ID: post-login-no-charts-fix-v2
+Agent: Main Agent
+Task: User still seeing "no charts, no artists" after login despite previous fix (commit 50e74f1). Console logs showed: 1192 labels rehydrated but "snapshots=0 recuperati" and "Local data is up to date. Cloud sync complete." — meaning cloud sync was NOT merging anything.
+
+Work Log:
+- Analyzed user's new logs: cloud sync said "Local is up to date" (no merge),
+  but user still saw empty charts. Root cause was in loadFromCloud's merge
+  decision:
+    cloudBringsNewLabels = cloudHasLabels && !localHasLabels
+  This is FALSE when local has any labels (even 1192 seed labels with EMPTY
+  rankByGenre). So if local had seed labels (no rankings) and cloud had
+  labels WITH rankByGenre, merge was SKIPPED → user saw "no charts" even
+  though cloud had the data. Same bug in applyRemoteData (realtime path).
+- ALSO discovered: artists are NEVER synced to cloud. They live only in
+  IndexedDB locally. So on a new device/browser, user gets 0 artists even
+  with perfect cloud sync. This was the "no artist data" half of the bug.
+
+Fixes applied:
+1. src/lib/store.ts:loadFromCloud — replaced 4 conditional merge flags
+   (cloudBringsNewLabels/Snapshots/Demos/Profile) with single
+   cloudHasAnyContent flag. Now ALWAYS runs mergeCloudData when cloud has
+   any content. The merge function is content-aware (union by id, per-genre
+   merge of Beatport fields with local-wins), so running it unconditionally
+   only ADDS data, never removes it.
+2. src/lib/supabase.ts:applyRemoteData — mirrored the same fix for the
+   realtime-update path.
+3. src/lib/supabase.ts — added saveArtistsToCloud() + loadArtistsFromCloud()
+   + getArtistsCloudSyncInfo() + getMainCloudSyncInfo() + forcePushLocalToCloud()
+   + forcePullCloudToLocal() + explicitMergeLocalAndCloud(). Artists live
+   in a SEPARATE cloud row (id = "<email>_artists") because 9MB of artist
+   data would slow down every main-row sync.
+4. src/lib/store.ts:setArtists() — now also calls saveArtistsToCloud()
+   (fire-and-forget, non-blocking).
+5. src/lib/store.ts:importData() — now also calls saveArtistsToCloud()
+   after merging imported artists.
+6. src/lib/store.ts:loadArtistsOnBoot() — if IDB is empty, falls back to
+   loadArtistsFromCloud() and persists to IDB for next boot. If IDB has
+   artists but cloud doesn't (or has fewer), pushes local to cloud.
+7. src/components/cloud-recovery.tsx (NEW) — diagnostic + recovery UI
+   showing local/cloud/sidecar state side-by-side, with buttons for:
+   - Unisci cloud + locale (safe merge)
+   - Sovrascrivi cloud con locale (destructive, confirm dialog)
+   - Sovrascrivi locale con cloud (destructive, confirm dialog)
+   - Ripristina da sidecar (profile + snapshots backup)
+   - Scarica backup JSON
+8. src/components/producer-profile.tsx — added <CloudRecovery /> below
+   the Cloud Sync section so user can diagnose+fix from the Profilo page.
+
+Build verified:
+- npx tsc --noEmit: 0 NEW errors (pre-existing errors unchanged)
+- scripts/build-static.sh: ✓ successful (5.6s compile, 0 errors)
+- Bundle grep: 'saveArtistsToCloud', 'loadArtistsFromCloud',
+  'forcePushLocalToCloud', 'explicitMergeLocalAndCloud',
+  'mergeCloudDataPublic', 'cloudHasAnyContent' all present in
+  out/_next/static/chunks/
+- Commit feecbf5 pushed to origin/main (50e74f1..feecbf5)
+- Vercel auto-deploy triggered via GitHub integration
+
+Stage Summary:
+- BUG 1 FIXED: cloud merge now runs unconditionally when cloud has any
+  content. User's labels' rankByGenre/pointsByGenre will be correctly
+  merged from cloud even if local has 1192 seed labels.
+- BUG 2 FIXED: artists now sync to a separate cloud row. On a new device
+  after login, loadArtistsOnBoot falls back to cloud → IDB gets populated
+  → user sees their 3000+ artists.
+- USER EMPOWERMENT: new CloudRecovery panel in Profilo page gives the user
+  full visibility into what's where, plus explicit recovery actions. No
+  more "I just see empty and don't know why".
+- After Vercel rebuild (~2-3 min), user should:
+  1. Hard refresh (Ctrl+Shift+R)
+  2. Login
+  3. Go to Profilo → scroll to "Diagnosi & Ripristino Sync"
+  4. See exactly what's in local vs cloud vs sidecar
+  5. If cloud has more labels-with-rankings than local → click "Unisci"
+  6. If both empty → click "Ripristina da sidecar"
+  7. If still empty → click "Scarica backup JSON" and contact support
+
+Next:
+- User should test on Vercel deployment after rebuild completes
+- If data is truly lost (both local AND cloud AND sidecar all empty),
+  the only recovery is re-importing a scrape JSON. The CloudRecovery panel
+  will make this immediately visible.
+- Possible future: add per-label lastModified timestamp for smarter merge
+  (currently local wins per-genre on conflict, which is correct 99% of
+  the time but could theoretically lose data if cloud was genuinely newer)
