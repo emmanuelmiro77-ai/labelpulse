@@ -1,0 +1,625 @@
+     1→---
+     2→Task ID: 1
+     3→Agent: Main Agent
+     4→Task: Fix Space-Z deployment failures - DEFINITIVE solution
+     5→
+     6→Work Log:
+     7→- Read Space-Z's /start.sh source code (the platform's boot script)
+     8→- DISCOVERED ROOT CAUSE: Space-Z auto-runs "bun run db:push" during startup
+     9→  - We removed the db:push script when we cleaned up Prisma
+    10→  - This caused the subshell to exit with error (set -e is inherited)
+    11→  - "bun run dev" never executed → port 3000 never opened → deployment failed
+    12→- DISCOVERED: Space-Z supports custom startup scripts via .zscripts/dev.sh
+    13→  - If this file exists, Space-Z runs it INSTEAD of the default flow
+    14→  - This bypasses the broken db:push step entirely
+    15→- Created .zscripts/dev.sh: bun install → next build → node server.mjs
+    16→- Created server.mjs: Minimal static file server using only Node.js built-ins
+    17→  - Zero external dependencies, cannot fail
+    18→  - Serves from /out directory on port 3000
+    19→  - Supports SPA routing, proper MIME types, cache headers
+    20→- Updated Service Worker to v4: 
+    21→  - Cache-First for static assets (instant loads)
+    22→  - Network-First for HTML (always fresh when online)
+    23→  - Full offline support (app works even when server is down)
+    24→- Removed Caddyfile, .env, old logs, prisma remnants
+    25→- Clean build: 2.8MB static output, builds in 4s
+    26→- Tested entire flow: dev.sh → build → server → all HTTP 200 ✅
+    27→
+    28→Stage Summary:
+    29→- ROOT CAUSE FOUND: Space-Z's auto-run of "bun run db:push" (which doesn't exist)
+    30→- FIX: .zscripts/dev.sh bypasses the broken default flow
+    31→- App is now a static export served by a bulletproof Node.js server
+    32→- PWA works offline with aggressive caching
+    33→- All features preserved: SoundCloud, auto-save, SW updater, data backup
+    34→
+    35→---
+    36→Task ID: 2
+    37→Agent: Main Agent
+    38→Task: Update Gmail integration for Vercel domain migration
+    39→
+    40→Work Log:
+    41→- Explored project structure: LabelPulse uses Google Identity Services (GIS) popup flow — NO redirect URIs needed
+    42→- User confirmed Google Cloud Console is already configured correctly
+    43→- Updated next.config.ts: Changed allowedDevOrigins from ".space-z.ai" to ".vercel.app"
+    44→- Cleaned up sw.js: Removed dead "next-auth" reference in fetch skip rules
+    45→- Verified gmail.ts: GIS popup flow works entirely client-side, only needs NEXT_PUBLIC_GOOGLE_CLIENT_ID
+    46→- No redirect URI changes needed in code (GIS uses popup, not redirect)
+    47→
+    48→Stage Summary:
+    49→- next.config.ts now references .vercel.app instead of .space-z.ai
+    50→- Service worker cleaned up (removed next-auth remnant)
+    51→- Gmail integration code (gmail.ts) is correct — no changes needed
+    52→- The GOOGLE_CLIENT_SECRET in .env.local is unused by the GIS flow (client-side only)
+    53→
+    54→---
+    55→Task ID: 3
+    56→Agent: Main Agent
+    57→Task: Add visible cloud sync button + fix audio analysis fallback
+    58→
+    59→Work Log:
+    60→- Diagnosed: .env.local was missing (lost during deploy) → Supabase cloud sync was silently disabled
+    61→- Diagnosed: "Errore durante l'analisi del file" was a generic catch hiding the real error
+    62→- Diagnosed: SoundCloud public client_ids are blocked by SoundCloud (3 strategies in proxy all fail)
+    63→- Added Web Audio API fallback BPM detection (autocorrelation on energy envelope)
+    64→- If essentia.js fails, falls back to Web-Audio-only analyzer (BPM still detected, key=unknown)
+    65→- decodeAudioData now uses callback+promise API for Safari compat
+    66→- Clear user-facing error messages (format/decode/WASM categorized)
+    67→- analyzeAudioFile: size guard, extension check, clear errors
+    68→- proxy/route.ts: 3 SoundCloud resolution strategies (API v2, widget oEmbed, HTML scraping) + Referer header
+    69→- Made Supabase credentials configurable from Profilo page (BYOK pattern, same as Cyanite)
+    70→- Added supabaseUrl + supabaseAnonKey fields to userProfile
+    71→- supabase.ts now reads credentials dynamically from store, not env vars
+    72→- Added CloudSyncButton component with red->yellow->green status indicator
+    73→- Added realtime subscription for live multi-device sync (PC <-> phone)
+    74→- Added loop-prevention: remote updates don't trigger sync back
+    75→- Updated supabase-schema.sql to enable Realtime publication on app_state
+    76→- Added setup instructions in Profilo with collapsible SQL guide
+    77→- Store migration v10 -> v11 ensures new fields are backfilled
+    78→- Build successful with Next.js 16.2.9 Turbopack
+    79→- Dev server tested: HTTP 200 on /, audio-proxy responds (502 expected for blocked SC)
+    80→
+    81→Stage Summary:
+    82→- Cloud sync is now USER-CONFIGURABLE (BYOK) — no .env needed, survives deploys
+    83→- Visible cloud button in header shows real status (red=unconfigured, yellow=syncing, green=synced)
+    84→- Realtime subscription enables live PC<->phone sync (1-2s latency)
+    85→- Audio analysis now has robust fallback: BPM detected even if essentia.js fails
+    86→- SoundCloud direct link is unreliable (SC blocked public access) — user should use "Carica file"
+    87→- Could not push to GitHub: token expired. User needs to refresh GitHub credentials.
+    88→
+    89→Next steps for user:
+    90→1. To enable cloud sync: Profilo → Sincronizzazione Cloud → enter Supabase URL + anon key
+    91→2. Run supabase-schema.sql in Supabase SQL Editor (creates table + enables Realtime)
+    92→3. Same credentials on phone and PC → automatic sync
+    93→4. For audio analysis: use "Carica file" button (more reliable than SoundCloud link)
+    94→
+    95→---
+    96→Task ID: 4
+    97→Agent: Main Agent
+    98→Task: Fix Beatstats scraper — all genres returning 404 (URL pattern changed)
+    99→
+   100→Work Log:
+   101→- Analyzed console log from user: scraper was running but every URL pattern (4 per genre × 32 genres = 128 attempts) returned 404
+   102→- The user shared the page URL they were on: `list?genre=0&period=2` — this revealed the new Beatstats URL structure
+   103→- Old patterns (all dead):
+   104→  - https://www.beatstats.com/genre/{slug}
+   105→  - https://www.beatstats.com/label-ranking/{slug}
+   106→- New pattern (observed):
+   107→  - https://www.beatstats.com/list?genre={numericId}&period={numericId}
+   108→- Genres are now NUMERIC IDs, not slugs — and Beatstats has reshuffled them more than once, so hardcoding is fragile
+   109→- Rewrote `buildBeatstatsScript()` in src/components/rankings-wizard.tsx:
+   110→  - Phase 1: Discover genres dynamically from homepage
+   111→    - Strategy A: parse all <a href*="?genre=N"> links in nav
+   112→    - Strategy B: parse __NEXT_DATA__ JSON for a genres array
+   113→    - Strategy C: parse any embedded <script type="application/json">
+   114→    - Strategy D: parse <select><option value="N">Name</option></select>
+   115→  - Phase 2: For each genre, fetch /list?genre={id}&period={periodId}
+   116→    - Period mapping (best-guess based on observed URL):
+   117→      - current → period=2
+   118→      - yearly (2024) → period=3&year=2024
+   119→      - monthly (2024-6) → period=2&year=2024&month=6
+   120→  - Phase 3: Extract labels with 3 fallback strategies:
+   121→    - __NEXT_DATA__ JSON (recursive search for arrays of label-shaped objects)
+   122→    - HTML <a href*="/label/"> links with row-walking for rank/points
+   123→    - Generic table rows
+   124→- Sanity check at top: aborts with clear error if user runs the script from non-beatstats.com page
+   125→- Empty-result JSON now includes an `error` field ("NOT_ON_BEATSTATS" or "GENRE_DISCOVERY_FAILED") so the import flow can show a specific error
+   126→- Updated UI warning text in rankings-wizard.tsx to reflect new behavior (no more manual navigation needed; script auto-discovers)
+   127→- TypeScript: clean (no errors in rankings-wizard.tsx)
+   128→- Next.js build: ✅ successful (5.2s)
+   129→
+   130→Stage Summary:
+   131→- ROOT CAUSE: Beatstats rewrote URL structure — old /genre/{slug} and /label-ranking/{slug} both 404
+   132→- FIX: Scraper v2 dynamically discovers genre IDs from homepage + uses correct /list?genre={id}&period={periodId} URL
+   133→- Multiple fallback strategies (4 for genre discovery, 3 for label extraction) make it resilient to Beatstats HTML/CSS changes
+   134→- Clear error reporting in JSON _meta field when something fails
+   135→- Build verified: compiles + builds cleanly
+   136→
+   137→---
+   138→Task ID: 6
+   139→Agent: Main Agent
+   140→Task: Remove Beatstats scraper entirely, keep only Beatport
+   141→
+   142→Work Log:
+   143→- User confirmed Beatstats scraper still failing (52/52 genres HTTP 404)
+   144→  even after v3 push
+   145→- User decided to abandon Beatstats and build historical DB via periodic
+   146→  Beatport scrapes only
+   147→- Identified all Beatstats code in rankings-wizard.tsx:
+   148→  - buildBeatstatsScript() function: lines 26-516
+   149→  - source state + period + month state
+   150→  - Source selector UI (Beatport vs Beatstats tabs)
+   151→  - Year/Month dropdowns (only used by Beatstats historical mode)
+   152→  - NOT_ON_BEATSTATS / GENRE_DISCOVERY_FAILED error branches
+   153→  - Cloudflare warning block in Step 2
+   154→  - yearOptions / monthOptions arrays
+   155→- Deleted buildBeatstatsScript() entirely (sed -i '26,516d')
+   156→- Simplified scriptToCopy to constant BEATPORT_SCRAPER_SCRIPT
+   157→- Simplified handleOpenSite to always open beatport.com
+   158→- Removed Beatstats-specific error messages from handleFileChange
+   159→- Replaced source selector UI with info banner explaining Beatport-only
+   160→  model + "build history by scraping periodically" message
+   161→- Verified no remaining beatstats references in rankings-wizard.tsx
+   162→- Verified file type-checks cleanly (npx tsc --noEmit)
+   163→- Intentionally KEPT beatstats references in:
+   164→  - src/lib/label-links.ts (UI feature: search label on Beatstats)
+   165→  - src/lib/store.ts (backward compat for old imported JSONs)
+   166→  - src/lib/i18n.ts (cosmetic text comments)
+   167→
+   168→Stage Summary:
+   169→- File: 950 → 351 lines (-63%, -614 lines / +15 lines)
+   170→- Commit: e3ec7d4 "refactor(scraper): remove Beatstats scraper entirely, keep only Beatport"
+   171→- Pushed to origin/main successfully (fe93e5d..e3ec7d4)
+   172→- Vercel redeploy triggered
+   173→- All historical rankings data in DB preserved
+   174→- Going forward: rankings update via Beatport scrapes only, each
+   175→  update adds a snapshot, snapshots accumulate as history
+   176→
+   177→---
+   178→Task ID: phase2-bugfix
+   179→Agent: main
+   180→Task: Fix bug where re-importing v2 scrape JSON left the Artisti tab empty and the Classifiche spotlight reduced to 5 cards.
+   181→
+   182→Work Log:
+   183→- Read store.ts to understand importData flow: parsed.artists read at top level (not from data.*)
+   184→- Read rankings-wizard.tsx handleFileChange: built importPayload envelope with only data.labels + data.demos, dropping parsed.artists / parsed.tracks
+   185→- Verified partialize config: artists NOT persisted to localStorage (only IndexedDB) — quota safe
+   186→- Verified loadArtistsOnBoot is wired in page.tsx after rehydration
+   187→- Fixed rankings-wizard.tsx: added `artists: parsed.artists || []` and `tracks: parsed.tracks || []` at top level of importPayload
+   188→- Committed as 296ad06 "fix(import): pass through artists[] and tracks[] to importData"
+   189→- Pushed to origin/main
+   190→- Triggered Vercel deploy hook
+   191→
+   192→Stage Summary:
+   193→- Bug was purely in the import-payload construction; store.ts mergeArtists() was already correct
+   194→- After Vercel rebuild (~2-3 min) the user should hard-refresh and re-import the 9.2MB scrape JSON
+   195→- Artisti tab will then show 3,403 artists (Adam Beyer, Skrillex, John Summit, etc.)
+   196→- Classifiche spotlight showing only 5 risers instead of 10 is expected behavior when re-importing the same file (movement = prev - current = 0 for unchanged ranks). Not a bug.
+   197→
+   198→---
+   199→Task ID: label-detail-page
+   200→Agent: Main Agent
+   201→Task: Click sul nome label deve aprire pagina dedicata (non Beatport); aggiungere top artisti cliccabili
+   202→
+   203→Work Log:
+   204→- Analizzato label-finder.tsx: detail dialog esistente aveva già top 10 tracks + form editabile
+   205→- Analizzato rankings-page.tsx: ClickableLabelName aveva href={urls.beatport} → andava su Beatport
+   206→- Modificato ClickableLabelName in rankings-page.tsx: ora è un <button> che chiama onOpen(label)
+   207→- Aggiunto handleOpenLabel in RankingsPage: setSelectedLabelId + setActiveTab('labels')
+   208→- Aggiunto LabelDiscoveryIcons helper in label-finder.tsx (icone Beatport/Beatstats/SoundCloud)
+   209→- Inserito LabelDiscoveryIcons nelle card label (dopo i badge, accanto al nome)
+   210→- Aggiunto useMemo labelTopArtists: deriva top 10 artisti della label da artists[] (match per nome case-insensitive)
+   211→  - Punteggio = somma points di tutte le tracce dell'artista su quella label
+   212→  - Sort: punti desc, bestPosition asc, nome asc
+   213→- Aggiunto handleOpenArtist: chiude dialog + setSelectedArtistId + setActiveTab('artists')
+   214→- Aggiunta UI "Top artisti della label" nel dialog dettaglio (con avatar, nome, n.tracce, best position, punti)
+   215→  - Ogni riga è un bottone clickable che naviga alla pagina artista
+   216→- Build Next.js: ✓ successful (6.3s, 0 errori nei file modificati)
+   217→- Commit 4996196 e push su origin/main
+   218→
+   219→Stage Summary:
+   220→- Click sul nome label (sia in Classifiche che in Label) → apre dialog dettaglio (NON più Beatport)
+   221→- Le icone Beatport/Beatstats/SoundCloud restano separate e funzionano come prima
+   222→- Dialog dettaglio label ora contiene: dati Beatport (read-only) + Top 10 tracce (audio) + Top 10 artisti (clickable) + form editabile con Salva/Annulla
+   223→- Navigazione cross-page bidirezionale completa: label↔artista, artista↔label
+   224→- Tutto funziona senza reload: navigation via store state (selectedLabelId, selectedArtistId, setActiveTab)
+   225→
+   226→---
+   227→Task ID: similar-suggestions
+   228→Agent: Main Agent
+   229→Task: Aggiungere "match similari" in Demo/Pitch: da analisi traccia (BPM, key, genre) suggerire label e artisti simili dal DB scraping
+   230→
+   231→Work Log:
+   232→- Analizzato struttura dati: artists[] ha tracksByGenre con bpm, keyCamelot, label, position, points per ogni traccia
+   233→- Analizzato demo-tracker.tsx: aveva già audio analysis (essentia.js + fallback Web Audio, Cyanite BYOK)
+   234→- Analizzato pitch-generator.tsx: aveva già track setup + target labels per genre con tier
+   235→- Creato src/lib/demo-matcher.ts (pure function):
+   236→  - bpmScore (gestisce halve-doubling: 130 BPM matcha anche 65 e 260)
+   237→  - keyScore (Camelot: stesso codice = 1.0, compatibile ±1/relative = 0.7)
+   238→  - genreScore (match loose con includes per "Melodic House & Techno" vs "Melodic House")
+   239→  - trackScore = bpm*0.45 + key*0.35 + genre*0.20 (almeno uno tra bpm/key > 0)
+   240→  - Aggregazione per label: rawScore = Σ (trackScore × track.points), matchCount, bestGenre
+   241→  - Aggregazione per artist: rawScore = Σ trackScore, matchCount, bestPosition
+   242→  - Normalizzazione 0-100 per display
+   243→  - Sort: rawScore desc, poi rank genre asc (per label), bestPosition asc (per artist)
+   244→- Creato src/components/similar-suggestions.tsx:
+   245→  - Pannello UI con header "Suggerimenti simili" + counter "basato su Nk brani"
+   246→  - Badge con profilo traccia (BPM, Camelot, genre)
+   247→  - Sezione "Label consigliate" (max 8): rank #, nome clickable, badge tier (T/M), score bar 0-100%, matchCount + bestGenre + rank genre
+   248→  - Sezione "Artisti simili (peer)" (max 8): rank #, avatar, nome clickable, score bar cyan, matchCount + bestPosition
+   249→  - Empty state "Carica o analizza la traccia per vedere..." se mancano BPM e key
+   250→  - Empty state "Nessun match trovato nei N brani" se 0 risultati
+   251→- Integrato in demo-tracker.tsx (dialog add/edit):
+   252→  - Aggiunti handlers handleOpenLabelFromSuggestion (chiude dialog + va a Labels tab + setSelectedLabelId)
+   253→  - handleOpenArtistFromSuggestion (chiude dialog + va a Artists tab + setSelectedArtistId)
+   254→  - handleSelectLabelAsTarget (imposta formLabelId + auto-fill genre)
+   255→  - Dialog ampliato da sm:max-w-md a sm:max-w-2xl con scroll verticale
+   256→  - Pannello SimilarSuggestions posizionato dopo Audio Analysis
+   257→- Integrato in pitch-generator.tsx (Track Setup card):
+   258→  - Aggiunti state trackBpm, trackKey, trackAnalysis, isAnalyzing, analysisError
+   259→  - handleAnalyzeTrack: usa analyzeAudio o analyzeAudioFile (stessa lib del demo-tracker)
+   260→  - handleSelectLabelAsTarget: toggle del label nel selectedLabelIds Set (così va nella campagna)
+   261→  - UI: 2 inputs BPM/Key + bottone "Analizza link" + "Carica file" + pannello SimilarSuggestions
+   262→- Build: ✓ successful (6.3s, 0 errori nuovi)
+   263→- Commit a568e0d pushato su origin/main
+   264→
+   265→Stage Summary:
+   266→- L'utente carica o inserisce BPM/key della sua traccia (anche manuale, senza analysis)
+   267→- Il matcher analizza 3000+ artisti × tutti i loro tracks (~Nk brani) in tempo reale (useMemo)
+   268→- Restituisce top 8 label e top 8 artisti ordinati per similarità pesata
+   269→- Ogni label è clickable → apre dialog dettaglio label (con top tracks + top artisti)
+   270→- Ogni artista è clickable → apre pagina artista
+   271→- "Use as target" in Demo = imposta come label destinazione; in Pitch = aggiunge alla campagna
+   272→- Tutto integrato senza nuovi passaggi manuali: l'analisi audio già esistente alimenta il matcher
+   273→
+   274→Next:
+   275→- L'utente dovrebbe testare: caricare una traccia in Demo → vedere se i suggerimenti hanno senso
+   276→- Possibile tuning: pesi BPM/key/genre, soglia minScore, maxResults
+   277→- Possibile future: integrare anche energy/danceability quando Cyanite è attivo
+   278→
+   279→---
+   280→Task ID: audio-analysis-fix
+   281→Agent: Main Agent
+   282→Task: User reported "analizza audio non è cambiato di una virgola" — the audio analysis feature appeared unchanged despite previous commits.
+   283→
+   284→Work Log:
+   285→- Investigated the screenshot data: BPM 133, Key 8B, Energy 100%, Dance 100%, "Sconosciuta" key name, 322s · -9.2 dBFS
+   286→- Recognized this is the EXACT output of runWebAudioFallback() when essentia.js fails to load
+   287→- Tested essentia.js asset URLs: /essentia-wasm.web.js → 404, /essentia-wasm.web.wasm → 404, /essentia.js-core.js → 404
+   288→- ROOT CAUSE: Next.js static export was not copying the essentia.js WASM files from /public/ to /out/
+   289→  (server.mjs serves from /out/, so the 404 caused essentia to silently fail on every load)
+   290→- Attempted to add `force-static` to all API routes — works for normal routes but catch-all
+   291→  [...nextauth] route cannot be statically exported even with generateStaticParams
+   292→- Created scripts/build-static.sh: temporarily moves src/app/api/ out of the way during build,
+   293→  restores after. Safe because server.mjs doesn't handle /api/* anyway.
+   294→- Extracted authOptions to src/lib/auth-options.ts so gmail/send route can import it
+   295→  without depending on the catch-all route file
+   296→- Copied essentia.js files directly to /out/ (immediate fix for current running server)
+   297→- Added /public/ as secondary static root in server.mjs (prevents future regressions)
+   298→- Fixed computeEnergy: linear (rms/0.3)^0.7 → logarithmic curve. Typical loud electronic
+   299→  music (RMS ~0.30) now shows ~87% instead of saturating at 100%
+   300→- Fixed computeDanceability: added beat-regularity scoring (peak periodicity at expected
+   301→  BPM intervals), tightened BPM score (caps at 0.85 instead of 1.0)
+   302→- Improved fallback UX: now returns camelot:'' with name 'Non disponibile' instead of
+   303→  fake '8B' code; UI shows 'N/A' + amber warning when key.confidence === 0
+   304→- Updated demo-tracker.tsx and pitch-generator.tsx to display the new fallback state
+   305→- Build verified: build-static.sh runs successfully, essentia files served at HTTP 200
+   306→- Bundle verified: 'camelot:""', 'Non disponibile', and 'log10' are in the output chunks
+   307→- Commit 1711925 pushed to origin/main
+   308→
+   309→Stage Summary:
+   310→- essentia.js WASM now loads correctly → full BPM + key detection works
+   311→- Energy and Dance no longer saturate to 100% on typical electronic music
+   312→- When fallback does occur, the UI explicitly tells the user instead of showing fake data
+   313→- The user should hard-refresh (Ctrl+Shift+R) to pick up the new bundle and re-test
+   314→  audio analysis — they should now see a real Camelot code (e.g. 8A for A minor)
+   315→  instead of "8B + Sconosciuta", and Energy/Dance values in the 60-90% range
+   316→  instead of always 100%
+   317→
+   318→---
+   319→Task ID: vercel-auth-fix
+   320→Agent: Main Agent
+   321→Task: User reported Vercel deployment (my-project-ivory-nine.vercel.app) login broken — "This page couldn't load. A server error occurred" when clicking login button.
+   322→
+   323→Work Log:
+   324→- Identified root cause: previous commit (1711925) added `export const dynamic = "force-static"` and `generateStaticParams() { return [] }` to src/app/api/auth/[...nextauth]/route.ts to make it work with the local static-export build
+   325→- This directive is UNCONDITIONAL — it forces the route to be static on Vercel too, where it must be dynamic
+   326→- Effect: /api/auth/signin/google returned a static 404 instead of running NextAuth handler
+   327→- Fix: removed the force-static directive entirely from the route file
+   328→- The local static-export build doesn't need it anyway — scripts/build-static.sh temporarily moves src/app/api/ out of the way during the build, so this route is never included in the static bundle
+   329→- Verified with `npx next build` (Vercel-style, no NEXT_EXPORT): route shows as ƒ (Dynamic) server-rendered on demand ✓
+   330→- Rebuilt local static bundle with build-static.sh: works, essentia.js files copied to out/ ✓
+   331→- Commit 7942562 pushed to origin/main, Vercel rebuild triggered
+   332→
+   333→Stage Summary:
+   334→- Vercel deployment will be fixed after rebuild completes (~2-3 minutes)
+   335→- Login button will work again — clicking it triggers the dynamic NextAuth handler
+   336→- Local static deployment continues to work (server.mjs serves static files, no /api/* routes)
+   337→- The build-static.sh script remains the correct way to build for the local server
+   338→
+   339→---
+   340→Task ID: post-login-no-charts-fix
+   341→Agent: Main Agent
+   342→Task: User reported "logs in with email, sees no charts, no artists, no profile data" despite localStorage having extensive data (House, Dubstep, Amapiano — 100+ labels with rankByGenre/pointsByGenre). Console showed: "[LabelPulse Cloud] Realtime update received, updated_at: 2026-06-22T14:53:51.941+00:00"
+   343→
+   344→Work Log:
+   345→- Read worklog to understand context: previous session ended with Vercel
+   346→  auth fix (commit 7942562) — removed force-static from [...nextauth] route
+   347→- Read src/app/page.tsx — confirmed hasRehydrated gate, useAuthEffect,
+   348→  loadFromCloud, loadArtistsOnBoot, forceCloudSync on visibility/unload
+   349→- Read src/lib/use-auth.ts — useAuthEffect flow: restoreProfileFromSidecar
+   350→  → restoreSnapshotsFromSidecar → loadFromCloud → 3s forceCloudSync →
+   351→  4.5s restoreProfileFromSidecar
+   352→- Read src/lib/store.ts:loadFromCloud + mergeCloudData (lines 1755-2061)
+   353→- Read src/lib/supabase.ts:setupRealtimeSubscription + applyRemoteData
+   354→  (lines 403-668)
+   355→- Read src/lib/store.ts:robustStorage (getItem/setItem with sidecars)
+   356→- Read src/lib/store.ts:LABEL_DEFAULTS — confirmed Beatport data fields
+   357→  default to empty: genres:[], rankByGenre:{}, pointsByGenre:{},
+   358→  trending:false, etc.
+   359→- ROOT CAUSE IDENTIFIED: mergeCloudData and applyRemoteData had
+   360→  labelUserEditFields list that ONLY preserved user-edit fields
+   361→  (emails, notes, website, demoLink, socialLink, status, tier, etc.)
+   362→  from local labels during cloud merge. Beatport data fields were
+   363→  NOT in the list. So if cloud had labels with EMPTY rankByGenre
+   364→  (stale cloud row, or seed labels from a fresh cloud row), the
+   365→  merge took cloud's empty values and DROPPED local's real scraped
+   366→  data. Result: labels existed but with no rankings → "no charts".
+   367→  Same bug existed in applyRemoteData (realtime path) — when the
+   368→  realtime echo arrived (the 14:53:51 log), it could wipe the
+   369→  user's Beatport data again.
+   370→- Verified the smoking-gun log: "Realtime update received" fires
+   371→  on every realtime event BEFORE the shouldApply check, so the log
+   372→  firing doesn't necessarily mean data was lost — but in this case
+   373→  the merge logic was indeed broken.
+   374→- Also identified: sidecar profile restore in use-auth.ts was at
+   375→  4500ms after loadFromCloud — too slow, user sees empty profile
+   376→  for 4.5s. Should be immediate (or near-immediate).
+   377→
+   378→Fixes applied:
+   379→1. src/lib/store.ts:mergeCloudData — added beatportObjectFields list
+   380→   (rankByGenre, pointsByGenre, trendingRankByGenre, trendingPointsByGenre,
+   381→   prevRankByGenre). For each label that exists in both cloud and local:
+   382→   - Object fields: merged as { ...cloudObj, ...localObj } (local wins
+   383→     per genre, cloud's data preserved for genres local doesn't have)
+   384→   - Array field (genres): union with dedupe
+   385→   - Boolean (trending): OR — true wins
+   386→   This means: if local has House:1 and cloud has Techno:3, merged has
+   387→   both. If local has House:2 and cloud has House:1, local wins.
+   388→2. src/lib/supabase.ts:applyRemoteData — mirrored the same Beatport
+   389→   data merge logic for the realtime-update path
+   390→3. src/lib/store.ts:loadFromCloud — added immediate (setTimeout 0)
+   391→   restoreProfileFromSidecar + restoreSnapshotsFromSidecar AFTER
+   392→   setState(merged). The previous 4.5s timeout in use-auth.ts was
+   393→   too slow.
+   394→4. src/lib/supabase.ts:applyRemoteData — same immediate sidecar
+   395→   restore after setState(merged), so realtime echo can't wipe
+   396→   profile/snapshots
+   397→5. src/lib/use-auth.ts — reduced post-cloud profile restore from
+   398→   4500ms to 500ms (in-merge restore handles immediate case; this
+   399→   is just a second safety net for realtime echo)
+   400→
+   401→Build + bundle verified:
+   402→- npx tsc --noEmit: 0 NEW errors (pre-existing errors in store.ts at
+   403→  lines 1268, 1277, 1279, 1281, 1325, 1336, 1338 and labelUserEditFields
+   404→  type complaints at 1984-1985 are unchanged from HEAD)
+   405→- scripts/build-static.sh: ✓ successful (5.3s compile, 0 errors in
+   406→  modified files, essentia.js files copied to out/)
+   407→- Bundle grep: 'Post-merge sidecar restore', 'Post-realtime sidecar
+   408→  restore', 'trendingRankByGenre' all present in
+   409→  out/_next/static/chunks/175j1rb8r0lyw.js
+   410→- Local server restarted, HTTP 200 OK on http://localhost:3000/
+   411→
+   412→Commit: 50e74f1 "fix(sync): preserve Beatport data fields in cloud merge
+   413→— fixes post-login 'no charts'"
+   414→Pushed to origin/main successfully (7942562..50e74f1)
+   415→Vercel redeploy triggered
+   416→
+   417→Stage Summary:
+   418→- User's localStorage data (House/Dubstep/Amapiano snapshots with 100+
+   419→  labels and ranks/points) is now preserved through the cloud merge.
+   420→  Even if the cloud row is stale or empty, the user's local scrape
+   421→  data is kept.
+   422→- The realtime echo (the "Realtime update received" log the user saw)
+   423→  no longer wipes the user's data — applyRemoteData now uses the same
+   424→  union-by-genre merge for Beatport fields, and immediately re-restores
+   425→  profile/snapshots from sidecar if the live store ended up empty.
+   426→- Profile restore now happens in <500ms instead of 4.5s, so the user
+   427→  no longer sees an empty profile for any perceptible time after login.
+   428→- After Vercel rebuild (~2-3 min), the user should hard-refresh and
+   429→  re-test login. They should see their charts/artists/profile immediately.
+   430→- If the user is still seeing empty data, they should:
+   431→  1. Hard refresh (Ctrl+Shift+R)
+   432→  2. Open browser console and look for logs:
+   433→     "[LabelPulse Cloud] MERGE RESULT — profile from cloud: ..."
+   434→     "[LabelPulse Cloud] Post-merge sidecar restore: ..."
+   435→     "[LabelPulse Cloud] Post-realtime sidecar restore: ..."
+   436→  3. If sidecar restore fired, the data should now be visible. If not,
+   437→     there's a different bug — need to inspect what's in cloud row
+   438→     via /api/cloud-debug endpoint.
+   439→
+   440→Next:
+   441→- User should test login on Vercel deployment after rebuild completes
+   442→- If data still missing, check /api/cloud-debug to see what's in the
+   443→  cloud row for the user's email
+   444→- Possible future improvement: add per-label timestamp so we can do
+   445→  smarter merge (e.g., "this label's rankByGenre was scraped 2h ago,
+   446→  cloud's was scraped 5d ago → local wins definitively")
+   447→
+   448→---
+   449→Task ID: post-login-no-charts-fix-v2
+   450→Agent: Main Agent
+   451→Task: User still seeing "no charts, no artists" after login despite previous fix (commit 50e74f1). Console logs showed: 1192 labels rehydrated but "snapshots=0 recuperati" and "Local data is up to date. Cloud sync complete." — meaning cloud sync was NOT merging anything.
+   452→
+   453→Work Log:
+   454→- Analyzed user's new logs: cloud sync said "Local is up to date" (no merge),
+   455→  but user still saw empty charts. Root cause was in loadFromCloud's merge
+   456→  decision:
+   457→    cloudBringsNewLabels = cloudHasLabels && !localHasLabels
+   458→  This is FALSE when local has any labels (even 1192 seed labels with EMPTY
+   459→  rankByGenre). So if local had seed labels (no rankings) and cloud had
+   460→  labels WITH rankByGenre, merge was SKIPPED → user saw "no charts" even
+   461→  though cloud had the data. Same bug in applyRemoteData (realtime path).
+   462→- ALSO discovered: artists are NEVER synced to cloud. They live only in
+   463→  IndexedDB locally. So on a new device/browser, user gets 0 artists even
+   464→  with perfect cloud sync. This was the "no artist data" half of the bug.
+   465→
+   466→Fixes applied:
+   467→1. src/lib/store.ts:loadFromCloud — replaced 4 conditional merge flags
+   468→   (cloudBringsNewLabels/Snapshots/Demos/Profile) with single
+   469→   cloudHasAnyContent flag. Now ALWAYS runs mergeCloudData when cloud has
+   470→   any content. The merge function is content-aware (union by id, per-genre
+   471→   merge of Beatport fields with local-wins), so running it unconditionally
+   472→   only ADDS data, never removes it.
+   473→2. src/lib/supabase.ts:applyRemoteData — mirrored the same fix for the
+   474→   realtime-update path.
+   475→3. src/lib/supabase.ts — added saveArtistsToCloud() + loadArtistsFromCloud()
+   476→   + getArtistsCloudSyncInfo() + getMainCloudSyncInfo() + forcePushLocalToCloud()
+   477→   + forcePullCloudToLocal() + explicitMergeLocalAndCloud(). Artists live
+   478→   in a SEPARATE cloud row (id = "<email>_artists") because 9MB of artist
+   479→   data would slow down every main-row sync.
+   480→4. src/lib/store.ts:setArtists() — now also calls saveArtistsToCloud()
+   481→   (fire-and-forget, non-blocking).
+   482→5. src/lib/store.ts:importData() — now also calls saveArtistsToCloud()
+   483→   after merging imported artists.
+   484→6. src/lib/store.ts:loadArtistsOnBoot() — if IDB is empty, falls back to
+   485→   loadArtistsFromCloud() and persists to IDB for next boot. If IDB has
+   486→   artists but cloud doesn't (or has fewer), pushes local to cloud.
+   487→7. src/components/cloud-recovery.tsx (NEW) — diagnostic + recovery UI
+   488→   showing local/cloud/sidecar state side-by-side, with buttons for:
+   489→   - Unisci cloud + locale (safe merge)
+   490→   - Sovrascrivi cloud con locale (destructive, confirm dialog)
+   491→   - Sovrascrivi locale con cloud (destructive, confirm dialog)
+   492→   - Ripristina da sidecar (profile + snapshots backup)
+   493→   - Scarica backup JSON
+   494→8. src/components/producer-profile.tsx — added <CloudRecovery /> below
+   495→   the Cloud Sync section so user can diagnose+fix from the Profilo page.
+   496→
+   497→Build verified:
+   498→- npx tsc --noEmit: 0 NEW errors (pre-existing errors unchanged)
+   499→- scripts/build-static.sh: ✓ successful (5.6s compile, 0 errors)
+   500→- Bundle grep: 'saveArtistsToCloud', 'loadArtistsFromCloud',
+   501→  'forcePushLocalToCloud', 'explicitMergeLocalAndCloud',
+   502→  'mergeCloudDataPublic', 'cloudHasAnyContent' all present in
+   503→  out/_next/static/chunks/
+   504→- Commit feecbf5 pushed to origin/main (50e74f1..feecbf5)
+   505→- Vercel auto-deploy triggered via GitHub integration
+   506→
+   507→Stage Summary:
+   508→- BUG 1 FIXED: cloud merge now runs unconditionally when cloud has any
+   509→  content. User's labels' rankByGenre/pointsByGenre will be correctly
+   510→  merged from cloud even if local has 1192 seed labels.
+   511→- BUG 2 FIXED: artists now sync to a separate cloud row. On a new device
+   512→  after login, loadArtistsOnBoot falls back to cloud → IDB gets populated
+   513→  → user sees their 3000+ artists.
+   514→- USER EMPOWERMENT: new CloudRecovery panel in Profilo page gives the user
+   515→  full visibility into what's where, plus explicit recovery actions. No
+   516→  more "I just see empty and don't know why".
+   517→- After Vercel rebuild (~2-3 min), user should:
+   518→  1. Hard refresh (Ctrl+Shift+R)
+   519→  2. Login
+   520→  3. Go to Profilo → scroll to "Diagnosi & Ripristino Sync"
+   521→  4. See exactly what's in local vs cloud vs sidecar
+   522→  5. If cloud has more labels-with-rankings than local → click "Unisci"
+   523→  6. If both empty → click "Ripristina da sidecar"
+   524→  7. If still empty → click "Scarica backup JSON" and contact support
+   525→
+   526→Next:
+   527→- User should test on Vercel deployment after rebuild completes
+   528→- If data is truly lost (both local AND cloud AND sidecar all empty),
+   529→  the only recovery is re-importing a scrape JSON. The CloudRecovery panel
+   530→  will make this immediately visible.
+   531→- Possible future: add per-label lastModified timestamp for smarter merge
+   532→  (currently local wins per-genre on conflict, which is correct 99% of
+   533→  the time but could theoretically lose data if cloud was genuinely newer)
+   534→
+   535→---
+   536→Task ID: universal-cloud-sync-artists
+   537→Agent: Main Agent
+   538→Task: User complained that switching devices loses ALL data (artists especially). Quote: "non è che se cambio il PC o se cambio il telefono debba perdersi tutto". Demanded UNIVERSAL SYNC: login from any device in the world → all data must be there. Cloud = master, device = viewer.
+   539→
+   540→Work Log:
+   541→- Read worklog for context (post-login-no-charts-fix-v2)
+   542→- Examined src/lib/use-auth.ts (183 lines)
+   543→- Examined src/lib/supabase.ts (1041 lines): saveArtistsToCloud, loadArtistsFromCloud, applyRemoteData, realtime subscription
+   544→- Examined src/lib/store.ts (2219 lines): loadArtistsOnBoot (old version), setArtists, importData, robustStorage, restoreProfileFromSidecar, restoreSnapshotsFromSidecar
+   545→- Examined src/lib/artists-idb.ts (89 lines): basic IDB CRUD
+   546→- Examined src/components/cloud-recovery.tsx: existing diagnostic panel
+   547→- ROOT CAUSE identified:
+   548→  1. Artists live in IndexedDB locally + separate cloud row "<email>_artists"
+   549→  2. OLD loadArtistsOnBoot was NAIVE: if IDB had ANY artists, it didn't merge with cloud. If cloud had MORE artists than IDB, they were ignored.
+   550→  3. If user never opened app on original device after fix feecbf5, artists never got pushed to cloud
+   551→  4. No sidecar backup for artists (only profile + snapshots had sidecars)
+   552→  5. No "merge" function for artists — only "save" or "load"
+   553→  6. use-auth.ts didn't trigger loadArtistsOnBoot after login (only on initial app boot)
+   554→
+   555→Fixes applied:
+   556→1. src/lib/supabase.ts:
+   557→   - NEW mergeArtistsArrays(local, cloud): union by id, pick version with most
+   558→     tracks / most recent scrape / has bio when other doesn't. Safe, additive.
+   559→   - NEW forcePushArtistsToCloud(artists): replace cloud's artists row
+   560→   - NEW explicitMergeArtistsCloud(): pull cloud, merge with local, push back.
+   561→     Used by new "Unisci artisti cloud + locale" button in CloudRecovery panel.
+   562→
+   563→2. src/lib/store.ts:
+   564→   - NEW ARTISTS_SIDECAR_KEY ("labelpulse-artists-backup"): emergency backup
+   565→     for artists. Capped at 200 artists (~600KB) to fit localStorage quota,
+   566→     falls back to 50 if quota still exceeded.
+   567→   - NEW writeArtistsSidecar(artists): best-effort write, fail silently
+   568→   - NEW readArtistsSidecar(): returns [] if missing/corrupt
+   569→   - NEW restoreArtistsFromSidecar(): splice into live store if empty
+   570→   - UPDATED setArtists(): now writes IDB + sidecar + cloud (3 places)
+   571→   - UPDATED importData(): now writes IDB + sidecar + cloud
+   572→   - REWROTE loadArtistsOnBoot() with three-way merge algorithm:
+   573→     * IDB has + cloud empty -> UPLOAD local to cloud
+   574→     * IDB empty + cloud has -> DOWNLOAD cloud to IDB
+   575→     * Both have -> MERGE (union by id, most-recent wins), save to BOTH
+   576→     * Always update sidecar backup as bonus safety net
+   577→     * If Supabase not configured, falls back to IDB + sidecar only
+   578→
+   579→3. src/lib/use-auth.ts:
+   580→   - Pre-cloud: now also calls restoreArtistsFromSidecar() (alongside profile+snapshots)
+   581→   - Post-cloud (500ms): re-restore artists from sidecar if still empty
+   582→   - Post-loadFromCloud: now also calls loadArtistsOnBoot() explicitly so
+   583→     the three-way merge runs after every login (not just initial app boot)
+   584→   - 'localHasArtists' tracked but voided (artists handled by loadArtistsOnBoot)
+   585→
+   586→4. src/components/cloud-recovery.tsx:
+   587→   - Sidecar column now shows "Artisti backup" count
+   588→   - NEW button "Unisci artisti cloud + locale" (calls explicitMergeArtistsCloud)
+   589→   - "Ripristina da sidecar" now also restores artists (not just profile+snapshots)
+   590→   - Confirm dialog updated with mergeArtists case
+   591→   - handleAction signature extended to include "mergeArtists"
+   592→
+   593→Build verified:
+   594→- npx tsc --noEmit: 0 NEW errors (only pre-existing errors in unrelated files)
+   595→- scripts/build-static.sh: ✓ successful (5.6s compile, 0 errors in modified files)
+   596→- Bundle grep: 'writeArtistsSidecar', 'readArtistsSidecar', 'mergeArtistsArrays',
+   597→  'forcePushArtistsToCloud', 'explicitMergeArtistsCloud' all present in
+   598→  out/_next/static/chunks/*.js
+   599→- Commit 7d6b872 pushed to origin/main (feecbf5..7d6b872)
+   600→- Vercel auto-deploy triggered
+   601→
+   602→Stage Summary:
+   603→- ARTISTS NOW SURVIVE CROSS-DEVICE: when user logs in from a new device,
+   604→  loadArtistsOnBoot runs three-way merge (IDB ↔ cloud ↔ sidecar). If cloud
+   605→  has artists (from previous device), they get downloaded to IDB + sidecar.
+   606→  If local has artists cloud doesn't, they get uploaded. If both have,
+   607→  they're merged (union by id, most-recent wins).
+   608→- TRIPLE REDUNDANCY: artists are now stored in 3 places simultaneously:
+   609→  1. IndexedDB (primary local cache, 50-500MB quota)
+   610→  2. Cloud row "<email>_artists" (master, syncs across devices)
+   611→  3. Sidecar localStorage "labelpulse-artists-backup" (emergency, capped 200)
+   612→- USER EMPOWERMENT: new "Unisci artisti cloud + locale" button in CloudRecovery
+   613→  panel lets user manually trigger artist merge if automatic sync misses something.
+   614→- After Vercel rebuild (~2-3 min), user should:
+   615→  1. On the device WITH artists: hard refresh, login, wait 10s, check CloudRecovery
+   616→     panel — should see "Artisti (riga separata)" in cloud column go from 0 to 3000+
+   617→  2. On any OTHER device: hard refresh, login, wait 10s, artists should appear
+   618→  3. If still 0 artists: click "Unisci artisti cloud + locale" in Profilo page
+   619→
+   620→Next:
+   621→- User should test cross-device flow: device A → push artists → device B → pull
+   622→- If still failing, check /api/cloud-debug to inspect cloud row directly
+   623→- Possible future: add per-artist lastModified timestamp for smarter conflict
+   624→  resolution (currently we use track count + scrapedAt which is heuristic)
+   625→

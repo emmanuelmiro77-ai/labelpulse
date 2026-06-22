@@ -34,7 +34,7 @@ import {
  *   - Setup hint if not configured
  */
 export function CloudSyncButton() {
-  const { locale, userProfile } = useAppStore();
+  const { locale } = useAppStore();
   const { toast } = useToast();
   const [status, setStatus] = useState<CloudSyncStatus>("unconfigured");
   const [lastSyncAt, setLastSyncAt] = useState<string | null>(null);
@@ -59,26 +59,25 @@ export function CloudSyncButton() {
     };
   }, []);
 
-  // Detect credentials changes (when user enters/removes Supabase creds in Profilo)
+  // Detect credentials changes — now read from env vars, but we still
+  // want to trigger an initial load when the component mounts.
   useEffect(() => {
-    const creds = (userProfile as any)?.supabaseUrl && (userProfile as any)?.supabaseAnonKey;
-    if (creds && status === "unconfigured") {
-      // Credentials were just added — try to load from cloud
+    if (isSupabaseConfigured() && status === "unconfigured") {
       setStatus("connecting");
       loadFromCloud().catch((err) => {
         console.error("[CloudSyncButton] Initial load failed:", err);
       });
-    } else if (!creds && status !== "unconfigured") {
-      // Credentials were removed
+    } else if (!isSupabaseConfigured() && status !== "unconfigured") {
       setStatus("unconfigured");
     }
-  }, [userProfile?.supabaseUrl, userProfile?.supabaseAnonKey]);
+    // Re-check on every render (env vars are static, so this is just for safety)
+  }, [status]);
 
   const handleManualSync = useCallback(async () => {
     if (!isSupabaseConfigured()) {
       toast({
         title: "Cloud non configurato",
-        description: "Vai in Profilo → Sincronizzazione Cloud per configurare Supabase.",
+        description: "Configura NEXT_PUBLIC_SUPABASE_URL e NEXT_PUBLIC_SUPABASE_ANON_KEY nel file .env.local e riavvia l'app.",
         variant: "destructive",
       });
       return;
@@ -111,8 +110,8 @@ export function CloudSyncButton() {
   switch (status) {
     case "unconfigured":
       Icon = CloudOff;
-      iconColor = "text-muted-foreground hover:text-amber-400";
-      title = "Cloud non configurato — clicca per scoprire come attivarlo";
+      iconColor = "text-muted-foreground hover:text-red-400";
+      title = "⚠️ Cloud non configurato — configura .env.local o i dati saranno persi cambiando dispositivo";
       break;
     case "connecting":
       Icon = Loader2;
@@ -201,11 +200,15 @@ export function CloudSyncButton() {
 
           {/* Setup hint */}
           {status === "unconfigured" && (
-            <div className="p-2 rounded-md bg-amber-500/10 border border-amber-500/30">
-              <p className="text-[11px] text-amber-400 leading-relaxed">
-                Configura Supabase in <strong>Profilo → Sincronizzazione Cloud</strong> per
-                avere i tuoi demo e le tue label sincronizzate tra PC e telefono in
-                tempo reale.
+            <div className="p-2 rounded-md bg-red-500/10 border border-red-500/30">
+              <p className="text-[11px] text-red-400 leading-relaxed">
+                ⚠️ <strong>Cloud non configurato.</strong> Apri il file
+                <code className="px-1 py-0.5 rounded bg-secondary/50 text-foreground mx-1">.env.local</code>
+                e inserisci le credenziali Supabase nei campi
+                <code className="px-1 py-0.5 rounded bg-secondary/50 text-foreground mx-1">NEXT_PUBLIC_SUPABASE_URL</code>
+                e
+                <code className="px-1 py-0.5 rounded bg-secondary/50 text-foreground ml-1">NEXT_PUBLIC_SUPABASE_ANON_KEY</code>,
+                poi riavvia l'app. Senza cloud, i dati saranno persi cambiando dispositivo.
               </p>
             </div>
           )}
@@ -237,7 +240,7 @@ export function CloudSyncButton() {
           <p className="text-[10px] text-muted-foreground/70 text-center pt-1">
             {status === "synced"
               ? "I tuoi dati sono sincronizzati su tutti i dispositivi."
-              : "Configura in Profilo per attivare il sync multi-device."}
+              : "Configura .env.local per attivare il sync multi-device."}
           </p>
         </div>
       </PopoverContent>

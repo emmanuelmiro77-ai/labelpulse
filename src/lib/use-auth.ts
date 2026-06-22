@@ -6,47 +6,34 @@ import { setCurrentUserEmail, isSupabaseConfigured } from "./supabase";
 import {
   useAppStore,
   loadFromCloud,
-  forceCloudSync,
-  restoreProfileFromSidecar,
-  restoreSnapshotsFromSidecar,
-  restoreArtistsFromSidecar,
   loadArtistsOnBoot,
 } from "./store";
 
 /**
  * Hook that bridges NextAuth session ↔ LabelPulse cloud sync.
  *
- * Responsibilities:
- *  1. Push the current user's email into the cloud-sync module so that
- *     saveStateToCloud / loadStateFromCloud use the correct row id
- *     (the user's email instead of the legacy "default").
- *  2. When a session becomes authenticated (user just logged in), trigger
- *     loadFromCloud() so that the local store gets populated from the user's
- *     cloud row. This is what makes "open the app on a new phone → login →
- *     all my data appears" work.
- *  3. BEFORE pulling from cloud, restore the user profile from the sidecar
- *     backup. This is the safety net: if the cloud has no data for this
- *     email yet (first login from this account) but the user has a profile
- *     saved locally in PROFILE_BACKUP_KEY, that profile gets restored so
- *     the user doesn't see an empty artistName/bio/links after login.
- *  4. When a session becomes unauthenticated (user logged out), optionally
- *     reset the local store to seed data so the next user starts fresh.
+ * ⚠️ CLOUD-FIRST (migrazione 2026-06-23):
+ * Logica volontariamente SEMPLICE per essere infallibile:
  *
- * ⚠️ UNIVERSAL SYNC (post "Burundi complaint" 2026-06-23):
- * The user must be able to login from ANY device and see all their data.
- * After cloud sync, we ALSO trigger loadArtistsOnBoot() which does its own
- * three-way merge (IDB ↔ cloud) — so artists are guaranteed to be present
- * after login, even on a brand new device.
+ *  1. Quando l'utente fa login (email disponibile), la passiamo al
+ *     modulo cloud-sync così saveStateToCloud / loadStateFromCloud
+ *     usano id=email come chiave nella tabella app_state.
+ *  2. Al primo login da un'email (o cambio email), chiamiamo
+ *     loadFromCloud() — il cloud è la SOURCE OF TRUTH, e i dati
+ *     locali vengono mergiati (union by id, non sovrascritura).
+ *  3. loadArtistsOnBoot() viene chiamato subito dopo per fare il
+ *     merge degli artisti (IDB ↔ cloud).
  *
- * Must be mounted ONCE at the top of the app (inside AuthProvider, e.g., in
- * the root page). Calling this hook multiple times is safe but wasteful.
+ * Tutto qui. Niente sidecar restore, niente timeout post-login, niente
+ * merge a tre vie. Quelle erano safety-net per il vecchio sistema BYOK
+ * dove il sync poteva fallire silenziosamente. Ora le credenziali sono
+ * obbligatorie via env vars, quindi il sync non fallisce.
+ *
+ * Must be mounted ONCE at the top of the app (inside AuthProvider).
  */
 export function useAuthEffect(): void {
   const { data: session, status } = useSession();
   const hasRehydrated = useAppStore((s) => s.hasRehydrated);
-  const hasCloudSynced = useAppStore((s) => s.hasCloudSynced);
-  // Track the last email we acted on, so we only fire loadFromCloud() once
-  // per actual email change (not on every status flicker).
   const lastActedEmailRef = useRef<string | null>(null);
 
   // Step 1: keep the cloud-sync module informed about the current user.
@@ -65,137 +52,31 @@ export function useAuthEffect(): void {
     if (lastActedEmailRef.current === email) return;
     lastActedEmailRef.current = email;
 
-    // ⚠️ BEFORE doing anything with the cloud, restore the user profile
-    // AND artists from the sidecar backups. This ensures that even if the
-    // cloud sync ends up pulling nothing (first login from this email) or
-    // wiping the store, the user's identity (artistName, bio, email, links)
-    // AND their artists (scrape data) are preserved from local sidecar.
-    try {
-      const profileRestored = restoreProfileFromSidecar();
-      const snapshotsRestored = restoreSnapshotsFromSidecar();
-      const artistsRestored = restoreArtistsFromSidecar();
-      if (profileRestored || snapshotsRestored > 0 || artistsRestored > 0) {
-        console.info(
-          `[LabelPulse Auth] Pre-cloud-restore: profile=${profileRestored ? "OK" : "niente"}, snapshots=${snapshotsRestored} recuperati, artists=${artistsRestored} recuperati.`
-        );
-      }
-    } catch (e) {
-      console.warn("[LabelPulse Auth] Sidecar restore failed:", e);
-    }
-
-    // Only trigger cloud pull if Supabase is configured (BYOK or env vars).
-    // If not configured, the user can still use the app locally — they'll
-    // just not have multi-device sync until they set credentials in Profile.
+    // If Supabase is not configured, log loudly — the user needs to know.
     if (!isSupabaseConfigured()) {
-      console.info(
-        "[LabelPulse Auth] User is logged in but Supabase is not configured. " +
-        "Multi-device sync is OFF until credentials are set in Profile."
+      console.error(
+        "[LabelPulse Auth] ⚠️ Supabase non configurato! " +
+        "Configura NEXT_PUBLIC_SUPABASE_URL e NEXT_PUBLIC_SUPABASE_ANON_KEY " +
+        "nel file .env.local e riavvia l'app. Senza cloud, i dati saranno " +
+        "persi cambiando dispositivo."
       );
       return;
     }
 
     console.info(
-      `[LabelPulse Auth] User authenticated (${email}). Triggering cloud load.`
+      `[LabelPulse Auth] User authenticated (${email}). Loading from cloud...`
     );
     loadFromCloud().then(() => {
-      // ⚠️ UNIVERSAL SYNC: also trigger artists boot loader. This does its
-      // own three-way merge (IDB ↔ cloud ↔ sidecar) and is the ONLY way
-      // artists survive a device switch. See store.ts:loadArtistsOnBoot.
       loadArtistsOnBoot().catch((e) =>
         console.warn("[LabelPulse Auth] loadArtistsOnBoot failed:", e)
       );
-
-      // ⚠️ CRITICAL FIX (data-loss bug 2026-06-22):
-      // PREVIOUSLY this block did `forceCloudSync()` 1 second after
-      // loadFromCloud completed, whenever local had any data. The merge
-      // logic in loadFromCloud now correctly UNIONS local + cloud arrays
-      // by id (instead of replacing), so after loadFromCloud the local
-      // state may have NEW data that wasn't in cloud. We DO want to push
-      // that back to cloud so the new data survives.
-      //
-      // BUT we must NOT push if the local arrays are EMPTY (which would
-      // overwrite cloud with empty data). The check below ensures we
-      // only push when local genuinely has content to contribute.
-      //
-      // Additionally, we now defer this push by 3 seconds (instead of 1s)
-      // to give the realtime subscription time to settle, and we make it
-      // conditional on local having MORE content than what we can verify
-      // cloud had (we can't see cloud here, but if local has any user
-      // edits, snapshots, or demos, those need to be backed up).
-      setTimeout(() => {
-        try {
-          const s = useAppStore.getState();
-          const localProfileHasData =
-            !!s.userProfile?.artistName ||
-            !!s.userProfile?.bio ||
-            !!s.userProfile?.email ||
-            !!s.userProfile?.scLink ||
-            !!s.userProfile?.photoUrl ||
-            (Array.isArray(s.userProfile?.links) && s.userProfile.links.length > 0);
-          const localHasDemos = s.demos.length > 0;
-          const localHasSnapshots = s.rankingSnapshots.length > 0;
-          const localHasArtists = (s.artists?.length ?? 0) > 0;
-          const localHasUserEditedLabels =
-            Array.isArray(s.labels) &&
-            s.labels.some((l: any) =>
-              (l.emails && l.emails.length > 0) ||
-              (l.notes && l.notes.trim() !== "") ||
-              (l.website && l.website.trim() !== "") ||
-              (l.demoLink && l.demoLink.trim() !== "") ||
-              (l.status && l.status !== "to_contact" && l.status !== "")
-            );
-
-          if (localProfileHasData || localHasDemos || localHasSnapshots || localHasUserEditedLabels) {
-            console.info(
-              "[LabelPulse Auth] Local has real data after cloud merge — pushing merged result to cloud so new data survives on other devices."
-            );
-            forceCloudSync();
-          } else {
-            console.info(
-              "[LabelPulse Auth] Local is empty after cloud load — NOT pushing to cloud (would overwrite cloud with empty data)."
-            );
-          }
-          // ⚠️ Artists: handled by loadArtistsOnBoot above (separate row sync).
-          // No need to push them again here.
-          void localHasArtists;
-        } catch (e) {
-          console.warn("[LabelPulse Auth] Post-cloud sync check failed:", e);
-        }
-      }, 3000);
-
-      // ⚠️ POST-CLOUD SAFETY NET: after cloud sync, the cloud might have
-      // sent an empty/partial profile (e.g., a fresh cloud row). Re-restore
-      // from sidecar if the live profile is now empty but the sidecar had data.
-      // Note: we do NOT auto-push to cloud here anymore — the next user edit
-      // will trigger syncToCloud naturally, and that's safer than risk a
-      // race condition where the sidecar restore happens before the merge
-      // from loadFromCloud is fully committed.
-      //
-      // The post-merge sidecar restore inside loadFromCloud already runs at
-      // setTimeout(0) — this 500ms timeout is a SECOND safety net in case
-      // the realtime echo arrives after the in-merge restore and overwrites
-      // the profile again. 500ms is enough for the realtime echo to settle
-      // (it's typically <100ms after the upload) but short enough that the
-      // user doesn't see an empty profile for 4.5s.
-      setTimeout(() => {
-        try {
-          const again = restoreProfileFromSidecar();
-          const artistsAgain = restoreArtistsFromSidecar();
-          if (again || artistsAgain > 0) {
-            console.info(
-              `[LabelPulse Auth] Post-cloud restore: profile=${again ? "OK" : "niente"}, artists=${artistsAgain} recuperati.`
-            );
-          }
-        } catch {}
-      }, 500);
-    });
-  }, [status, session?.user?.email, hasRehydrated, hasCloudSynced]);
+    }).catch((e) =>
+      console.error("[LabelPulse Auth] loadFromCloud failed:", e)
+    );
+  }, [status, session?.user?.email, hasRehydrated]);
 
   // Step 3: on logout, clear the last-acted email so re-login re-triggers
-  // the cloud load. We do NOT wipe the local store on logout — that would
-  // be destructive (the user might just be switching accounts on a shared
-  // device, and we want their data to still be there if they log back in).
-  // If the user wants a full wipe, they can use the "Reset data" button.
+  // the cloud load.
   useEffect(() => {
     if (status === "unauthenticated") {
       lastActedEmailRef.current = null;

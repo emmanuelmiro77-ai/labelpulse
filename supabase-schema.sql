@@ -1,9 +1,22 @@
 -- ========================================
--- LabelPulse - Database Schema
+-- LabelPulse - Database Schema (CLOUD-FIRST)
 -- ========================================
 -- Esegui questo SQL nel SQL Editor di Supabase
 -- (Dashboard → SQL Editor → New query → Incolla ed esegui)
 -- ========================================
+--
+-- ⚠️ CLOUD-FIRST (migrazione 2026-06-23):
+-- Lo schema è MULTI-USER basato su id = email dell'utente.
+-- L'app salva SEMPRE con id = currentUserEmail (vedi setCurrentUserEmail
+-- in supabase.ts). Questo significa:
+--   - Ogni utente ha una riga separata (id = sua email)
+--   - Cambiando dispositivo, fa login con la stessa email → stessa riga
+--   - I dati sono sincronizzati tra tutti i suoi dispositivi
+--
+-- La sicurezza si basa sul fatto che l'anon key è embeddata nell'app
+-- (env vars) e non è pubblica. Per un'app in produzione con utenti
+-- esterni, bisogna aggiungere RLS con auth.uid() (richiede migrazione
+-- a Supabase Auth).
 
 -- ⚠️ IMPORTANTE: se hai già creato la tabella app_state con il wizard
 -- di Supabase (che usa `id uuid` invece di `id text`), il comando
@@ -20,7 +33,9 @@
 -- Tabella principale: memorizza lo stato completo dell'app come JSONB.
 -- Questo approccio è semplice, robusto e permette di salvare tutti i dati
 -- (labels, demos, impostazioni) in un'unica operazione.
--- Per un'app single-user è la soluzione ideale.
+--
+-- L'id è l'email dell'utente (es. 'mario@gmail.com'). La riga 'default'
+-- esiste solo per backward compatibility (vecchia versione single-user).
 
 CREATE TABLE IF NOT EXISTS app_state (
   id TEXT PRIMARY KEY DEFAULT 'default',

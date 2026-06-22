@@ -4,6 +4,7 @@ import { useAppStore, loadFromCloud, forceCloudSync, loadArtistsOnBoot } from "@
 import { t, LOCALE_NAMES, LOCALE_FLAGS, type Locale } from "@/lib/i18n";
 import { useAuthEffect } from "@/lib/use-auth";
 import { useSession } from "next-auth/react";
+import { isSupabaseConfigured } from "@/lib/supabase";
 import {
   LayoutDashboard,
   Music2,
@@ -17,6 +18,8 @@ import {
   Loader2,
   User,
   Users,
+  AlertTriangle,
+  CloudOff,
 } from "lucide-react";
 import { useState, useEffect } from "react";
 import { Button } from "@/components/ui/button";
@@ -39,8 +42,7 @@ import { CloudSyncButton } from "@/components/cloud-sync-button";
 import { AuthButton } from "@/components/auth-button";
 import { BetaFeedbackButton } from "@/components/beta-feedback-button";
 import { WelcomeOnboarding } from "@/components/welcome-onboarding";
-import { BarChart3 } from "lucide-react";
-import { LogIn, AlertTriangle } from "lucide-react";
+import { BarChart3, LogIn } from "lucide-react";
 import ArtistExplorer from "@/components/artist-explorer";
 
 const NAV_KEYS = [
@@ -127,6 +129,15 @@ export default function Home() {
         </div>
       </div>
     );
+  }
+
+  // ⚠️ CLOUD-FIRST SAFETY GATE (2026-06-23):
+  // Se Supabase non è configurato (env vars mancanti), l'app NON deve
+  // funzionare in "modalità offline" — era quello che causava la perdita
+  // dati silenziosa. Invece, blocchiamo con una schermata chiara che
+  // spiega all'utente come configurare .env.local.
+  if (!isSupabaseConfigured()) {
+    return <CloudNotConfiguredScreen />;
   }
 
   const handleNav = (tab: typeof activeTab) => {
@@ -410,6 +421,112 @@ export default function Home() {
 
       {/* Welcome onboarding (shows once per device on first login) */}
       <WelcomeOnboarding />
+    </div>
+  );
+}
+
+/**
+ * CloudNotConfiguredScreen
+ *
+ * Schermata di BLOCCO mostrata quando le credenziali Supabase non sono
+ * configurate in .env.local. L'app NON funziona in modalità offline
+ * — era quello che causava la perdita dati silenziosa.
+ *
+ * Spiega all'utente come configurare .env.local e riavviare l'app.
+ */
+function CloudNotConfiguredScreen() {
+  return (
+    <div className="min-h-screen flex items-center justify-center bg-background p-4">
+      <div className="max-w-2xl w-full">
+        <div className="rounded-2xl border border-amber-500/40 bg-amber-500/5 p-8">
+          {/* Header */}
+          <div className="flex items-center gap-3 mb-6">
+            <div className="w-12 h-12 rounded-full bg-amber-500/15 border border-amber-500/40 flex items-center justify-center">
+              <CloudOff className="h-6 w-6 text-amber-400" />
+            </div>
+            <div>
+              <h1 className="text-xl font-bold text-foreground">
+                Cloud non configurato
+              </h1>
+              <p className="text-xs text-muted-foreground font-mono">
+                LabelPulse richiede il cloud per funzionare
+              </p>
+            </div>
+          </div>
+
+          {/* Why */}
+          <div className="mb-6 p-4 rounded-lg bg-secondary/30 border border-border/40">
+            <p className="text-sm text-foreground/90 leading-relaxed">
+              <strong>Perché vedi questa schermata?</strong> L'app è
+              cloud-first: ogni salvataggio viene pushato a Supabase in
+              tempo reale, e al login da qualsiasi dispositivo il cloud è
+              la source of truth. Senza credenziali Supabase, i dati
+              restano bloccati nel browser corrente — e cambiando PC,
+              telefono, o pulendo la cache, sono persi.
+            </p>
+          </div>
+
+          {/* Steps */}
+          <div className="space-y-3 mb-6">
+            <h2 className="text-sm font-semibold text-foreground uppercase tracking-wider">
+              Come configurare (2 minuti, gratis)
+            </h2>
+            <ol className="space-y-2.5 text-sm text-muted-foreground">
+              <li className="flex gap-3">
+                <span className="shrink-0 w-6 h-6 rounded-full bg-primary/15 text-primary text-xs font-bold flex items-center justify-center">1</span>
+                <span>
+                  Vai su <a href="https://supabase.com" target="_blank" rel="noopener noreferrer" className="text-primary hover:underline">supabase.com</a> e fai login o sign up (gratis con GitHub/Google)
+                </span>
+              </li>
+              <li className="flex gap-3">
+                <span className="shrink-0 w-6 h-6 rounded-full bg-primary/15 text-primary text-xs font-bold flex items-center justify-center">2</span>
+                <span>Crea un nuovo progetto (Free tier va benissimo). Aspetta 2 minuti che si provisioni.</span>
+              </li>
+              <li className="flex gap-3">
+                <span className="shrink-0 w-6 h-6 rounded-full bg-primary/15 text-primary text-xs font-bold flex items-center justify-center">3</span>
+                <span>
+                  Vai in <strong>Project Settings → API</strong> e copia:
+                  <ul className="mt-1 ml-4 space-y-0.5 text-xs">
+                    <li>• <strong>Project URL</strong> (es. https://abc123.supabase.co)</li>
+                    <li>• <strong>anon public</strong> key (una stringa JWT lunga)</li>
+                  </ul>
+                </span>
+              </li>
+              <li className="flex gap-3">
+                <span className="shrink-0 w-6 h-6 rounded-full bg-primary/15 text-primary text-xs font-bold flex items-center justify-center">4</span>
+                <span>
+                  Vai in <strong>SQL Editor → New query</strong>, incolla tutto il
+                  contenuto di <code className="px-1.5 py-0.5 rounded bg-secondary/50 text-foreground text-xs">supabase-schema.sql</code> (nella root del progetto) e premi <strong>Run</strong>.
+                </span>
+              </li>
+              <li className="flex gap-3">
+                <span className="shrink-0 w-6 h-6 rounded-full bg-primary/15 text-primary text-xs font-bold flex items-center justify-center">5</span>
+                <span>
+                  Apri il file <code className="px-1.5 py-0.5 rounded bg-secondary/50 text-foreground text-xs">/home/z/my-project/.env.local</code> e incolla le credenziali nei campi
+                  <code className="px-1.5 py-0.5 rounded bg-secondary/50 text-foreground text-xs ml-1">NEXT_PUBLIC_SUPABASE_URL</code> e
+                  <code className="px-1.5 py-0.5 rounded bg-secondary/50 text-foreground text-xs ml-1">NEXT_PUBLIC_SUPABASE_ANON_KEY</code>.
+                </span>
+              </li>
+              <li className="flex gap-3">
+                <span className="shrink-0 w-6 h-6 rounded-full bg-primary/15 text-primary text-xs font-bold flex items-center justify-center">6</span>
+                <span>
+                  Riavvia l'app: <code className="px-1.5 py-0.5 rounded bg-secondary/50 text-foreground text-xs">bash run-server.sh</code>
+                </span>
+              </li>
+            </ol>
+          </div>
+
+          {/* Tip */}
+          <div className="p-3 rounded-lg bg-emerald-500/10 border border-emerald-500/30">
+            <p className="text-xs text-emerald-400 leading-relaxed">
+              <strong>💡 Se avevi già un progetto Supabase</strong> (usato con
+              il vecchio sistema "inserisci credenziali nel Profilo"), RIUSA
+              QUELLO. I tuoi dati precedenti sono ancora lì — basta
+              incollare le stesse credenziali in .env.local.
+            </p>
+          </div>
+        </div>
+      </div>
     </div>
   );
 }

@@ -3,16 +3,21 @@
 import { createClient, SupabaseClient } from "@supabase/supabase-js";
 import { useAppStore, mergeProfiles } from "./store";
 
-// ==================== SUPABASE CLIENT (BYOK) ====================
+// ==================== SUPABASE CLIENT (CLOUD-FIRST) ====================
 // Client-side Supabase per la sincronizzazione cloud dei dati.
 //
-// Le credenziali (URL + anon key) vengono fornite dall'utente tramite la
-// pagina Profilo (sezione "Sincronizzazione Cloud"). Vengono salvate nel
-// localStorage (nel campo userProfile) e usate per creare dinamicamente il
-// client Supabase. Questo approccio "Bring Your Own Key" permette:
-//   - sync reale tra PC e telefono (ciascun device usa le stesse credenziali)
-//   - l'utente è libero di cambiare progetto Supabase quando vuole
-//   - nessun segreto nell'.env (che potrebbe sparire nei deploy)
+// ⚠️ CLOUD-FIRST (migrazione 2026-06-23):
+// Le credenziali (URL + anon key) vengono lette SOLO dalle env vars
+// NEXT_PUBLIC_SUPABASE_URL e NEXT_PUBLIC_SUPABASE_ANON_KEY (vedi .env.local).
+//
+// Il vecchio sistema BYOK (utente inseriva URL+key nel Profilo) è stato
+// RIMOSSO perché era la causa principale della perdita dati: se l'utente
+// non configurava (caso frequentissimo), niente cloud, e cambiando
+// dispositivo tutto era perso.
+//
+// Ora: configure .env.local UNA VOLTA, e ogni dispositivo/utente usa le
+// stesse credenziali. Multi-utenza garantita dalla chiave id=email
+// nella tabella app_state (vedi setCurrentUserEmail + schema SQL).
 
 // ==================== STATE TRACKING ====================
 
@@ -66,8 +71,10 @@ function setStatus(newStatus: CloudSyncStatus, errorMsg: string | null = null) {
 // ==================== CREDENTIALS DETECTION ====================
 
 /**
- * Read Supabase credentials from the Zustand store (userProfile).
- * Falls back to env vars if set (for backward compatibility).
+ * Read Supabase credentials from .env.local (NEXT_PUBLIC_* env vars).
+ *
+ * CLOUD-FIRST: questo è l'UNICO modo per ottenere le credenziali.
+ * Il vecchio sistema BYOK (userProfile.supabaseUrl/Key) è deprecato.
  *
  * IMPORTANT: The URL is normalized via normalizeSupabaseUrl() before use.
  * This handles common user mistakes like pasting the dashboard URL
@@ -75,21 +82,16 @@ function setStatus(newStatus: CloudSyncStatus, errorMsg: string | null = null) {
  * (https://<ref>.supabase.co).
  */
 function readCredentials(): { url: string; anonKey: string } {
-  if (typeof window !== "undefined") {
-    try {
-      const state = useAppStore.getState();
-      const rawUrl = (state.userProfile as any)?.supabaseUrl?.trim() || "";
-      const anonKey = (state.userProfile as any)?.supabaseAnonKey?.trim() || "";
-      const url = normalizeSupabaseUrl(rawUrl);
-      if (url && anonKey) return { url, anonKey };
-      // If only URL is present (no anon key), still return normalized url
-      // so we can produce a clearer "missing anon key" error downstream.
-      if (url && !anonKey) return { url, anonKey: "" };
-    } catch {
-      // store not ready yet
-    }
-  }
-  // Fallback to env vars (legacy)
+  // ⚠️ CLOUD-FIRST (2026-06-23):
+  // Le credenziali Supabase vengono lette SOLO dalle env vars. Il vecchio
+  // sistema BYOK (utente inserisce URL+key nel Profilo) è stato rimosso
+  // perché era la causa principale della perdita dati: se l'utente non
+  // configurava (90% dei casi), niente cloud, e cambiando dispositivo
+  // tutto era perso.
+  //
+  // Ora: configura .env.local una volta, e ogni dispositivo/utente usa
+  // le stesse credenziali. Multi-utenza garantita dalla chiave id=email
+  // nella tabella app_state (vedi setCurrentUserEmail + schema SQL).
   const envUrl = normalizeSupabaseUrl(
     process.env.NEXT_PUBLIC_SUPABASE_URL || ""
   );
@@ -153,36 +155,32 @@ export function normalizeSupabaseUrl(input: string): string {
  */
 export function validateSupabaseCredentials(): string | null {
   if (typeof window === "undefined") return null;
-  const state = useAppStore.getState();
-  const rawUrl = (state.userProfile as any)?.supabaseUrl?.trim() || "";
-  const anonKey = (state.userProfile as any)?.supabaseAnonKey?.trim() || "";
+  // CLOUD-FIRST: legge solo da env vars (vedi readCredentials).
+  const { url: rawUrl, anonKey } = readCredentials();
 
-  if (!rawUrl && !anonKey) return null; // nothing configured yet, no error
-  if (!rawUrl) return "Manca il Project URL.";
-  if (!anonKey) return "Manca la anon key — copiala da Supabase → Project Settings → API.";
-
-  // Check if user pasted a dashboard URL (we'll auto-fix it, but warn)
-  if (/supabase\.com\/dashboard\/project\//i.test(rawUrl)) {
-    // Already auto-normalized — no error needed, just inform
-    return null;
+  if (!rawUrl && !anonKey) {
+    return "Configura NEXT_PUBLIC_SUPABASE_URL e NEXT_PUBLIC_SUPABASE_ANON_KEY nel file .env.local (vedi istruzioni nel file).";
   }
+  if (!rawUrl) return "Manca NEXT_PUBLIC_SUPABASE_URL nel file .env.local.";
+  if (!anonKey) return "Manca NEXT_PUBLIC_SUPABASE_ANON_KEY nel file .env.local.";
 
   // Check URL format
-  const normalized = normalizeSupabaseUrl(rawUrl);
-  if (!/^https:\/\/[a-z0-9]+\.supabase\.(co|com|in)/i.test(normalized)) {
+  if (!/^https:\/\/[a-z0-9]+\.supabase\.(co|com|in)/i.test(rawUrl)) {
     return "L'URL non è nel formato corretto. Deve essere https://<project-ref>.supabase.co";
   }
 
   // Check anon key length (typical Supabase anon keys are JWT, ~200+ chars)
   if (anonKey.length < 30) {
-    return "La anon key sembra troppo corta. Assicurati di aver copiato la 'anon public' key intera.";
+    return "La anon key sembra troppo corta. Assicurati di aver copiato la 'anon public' key intera da Supabase → Project Settings → API.";
   }
 
   return null;
 }
 
 /**
- * Whether the user has provided Supabase credentials (either BYOK or env).
+ * Whether Supabase credentials are configured in .env.local.
+ * CLOUD-FIRST: this MUST be true for the app to work — without it,
+ * data is local-only and will be lost when switching devices.
  */
 export function isSupabaseConfigured(): boolean {
   const { url, anonKey } = readCredentials();

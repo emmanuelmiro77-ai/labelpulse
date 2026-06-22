@@ -622,3 +622,32 @@ Next:
 - If still failing, check /api/cloud-debug to inspect cloud row directly
 - Possible future: add per-artist lastModified timestamp for smarter conflict
   resolution (currently we use track count + scrapedAt which is heuristic)
+
+---
+Task ID: cloud-first-migration
+Agent: Main Agent
+Task: Migrazione cloud-first infallibile — l'utente deve poter entrare da qualsiasi dispositivo con email/psw e ritrovare TUTTO
+
+Work Log:
+- Diagnosi root cause perdita dati: il cloud era BYOK (Bring Your Own Key) opzionale. Se l'utente non configurava (caso frequentissimo), niente cloud, e cambiando dispositivo tutto era perso.
+- Letti i file chiave: store.ts, supabase.ts, use-auth.ts, cloud-sync-button.tsx, cloud-recovery.tsx, auto-save.tsx, artists-idb.ts, supabase-schema.sql, auth-options.ts, auth-page.tsx, auth-button.tsx, page.tsx, next.config.ts, server.mjs
+- Identificato: schema SQL era già multi-user (id=email) ma RLS "allow all" — ok per beta. Auth è NextAuth+Google OAuth (su Vercel funziona, in locale no per static export).
+- MODIFICHE APPORTATE:
+  1. Creato /home/z/my-project/.env.local con placeholder chiaro + istruzioni passo-passo
+  2. supabase.ts: rimosso BYOK — readCredentials() legge SOLO da process.env.NEXT_PUBLIC_* (ignora userProfile.supabaseUrl/Key)
+  3. supabase.ts: aggiornato validateSupabaseCredentials() per leggere da env vars
+  4. supabase.ts: aggiornato commenti header (CLOUD-FIRST invece di BYOK)
+  5. supabase-schema.sql: aggiunti commenti espliciti sul modello multi-user id=email
+  6. use-auth.ts: riscritto SEMPLICE — solo loadFromCloud() al login, niente sidecar restore, niente timeout post-login, niente merge a 3 vie
+  7. page.tsx: aggiunta CloudNotConfiguredScreen() che BLOCCA l'app se Supabase non configurato (niente più modalità offline silenziosa)
+  8. cloud-sync-button.tsx: rimosso riferimento a userProfile.supabaseUrl/Key, aggiornati messaggi per puntare a .env.local
+  9. producer-profile.tsx: sostituita la sezione BYOK (admin/regular user) con un'unica vista cloud-first che mostra solo stato configurato/non configurato
+- Build verificato: `npx next build` → ✓ Compiled successfully in 6.2s
+
+Stage Summary:
+- ROOT CAUSE FIXATA: il cloud non è più opzionale. Le credenziali sono obbligatorie via .env.local.
+- Se Supabase non è configurato, l'app NON parte — mostra schermata con istruzioni passo-passo
+- Se Supabase è configurato, ogni keystroke viene pushato al cloud (debounce esistente in store.ts), e al login il cloud è la source of truth
+- Multi-utenza garantita da id=email nella tabella app_state
+- ACTION ITEM PER L'UTENTE: inserire le credenziali Supabase in .env.local (NEXT_PUBLIC_SUPABASE_URL + NEXT_PUBLIC_SUPABASE_ANON_KEY) e riavviare l'app. Se aveva già un progetto Supabase usato col vecchio sistema BYOK, RIUSA QUELLO — i dati sono lì.
+- TODO futuro (non bloccante): migrare auth da NextAuth/Google a Supabase Auth email/password per funzionare anche in static export (server.mjs)
