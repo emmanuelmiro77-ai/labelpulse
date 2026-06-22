@@ -698,3 +698,34 @@ Stage Summary:
 - L'utente vede subito cosa sta guardando grazie al banner con il count filtrato e il pulsante reset
 - Coerenza visiva: colori coerenti con il movimento (emerald salite, red scese, cyan nuove)
 - Accessibilità: title attributes IT/EN su ogni bottone, disabled state quando count = 0
+
+---
+Task ID: profile-photo-file-upload
+Agent: main (Super Z)
+Task: Permettere upload foto profilo da file (non solo URL)
+
+Work Log:
+- Letto producer-profile.tsx: la PHOTO SECTION era gestita solo da URL (Input text + edit overlay con Camera icon)
+- Verificato cloud sync: saveStateToCloud in supabase.ts salva già userProfile.photoUrl nel JSONB row, e loadStateFromCloud lo recupera. Nessuna modifica cloud necessaria — data URL è solo una stringa che inizia con "data:image/jpeg;base64,..." invece di "https://..."
+- Aggiunti imports: Upload, Loader2 da lucide-react; useRef da React
+- Aggiunto helper compressImageToDataUrl(file, size, quality): legge il file con FileReader, fa cover-fit crop su canvas 256x256 (centrato), riencode JPEG 0.85 per formati non-PNG (PNG preservato per trasparenza). Output ~30-80KB base64
+- Aggiunti state: photoUploading (loading), photoUploadError (messaggio), fileInputRef (ref per <input type=file>)
+- Aggiunto handler handlePhotoFileUpload: validation tipo (image/*), size max 8MB, chiama compressImageToDataUrl, salva su userProfile.photoUrl via setUserProfile → trigger cloud sync automatico
+- Aggiunto triggerFilePicker: apre il file picker nativo
+- Ristrutturata PHOTO SECTION:
+  - Header con titolo + pulsante "Carica foto / Upload photo" (outline, sempre visibile)
+  - Input file nascosto (ref-based, accept image/*)
+  - Avatar con overlay di loading (spinner bianco) durante upload
+  - Edit overlay Camera → apre URL input (per chi vuole incollare URL)
+  - Display che mostra "Foto caricata dal file" invece del base64 se è data URL
+  - Error display rosso per validazioni fallite
+  - Hint text IT/EN: "JPG, PNG o GIF. Ridimensionata automaticamente a 256×256."
+- Build Next.js OK
+- Commit 5c4417f, push su GitHub → trigger deploy Vercel
+
+Stage Summary:
+- Feature completa e cloud-first: la foto caricata da file viene compressa client-side e salvata nel campo userProfile.photoUrl esistente (data URL invece di http URL)
+- Cross-device trasparente: il data URL viene syncato al cloud Supabase come ogni altro campo del profilo. Al login da altro dispositivo, l'avatar si carica dal data URL memorizzato
+- Compressione client-side mantiene la row cloud piccola (~30-80KB) per sync veloce
+- UX bilanciata: pulsante "Carica foto" sempre visibile (CTA primario), URL input ancora disponibile per utenti avanzati (edit overlay camera)
+- Validazione robusta: tipo file, size max 8MB, error display localizzato IT/EN
