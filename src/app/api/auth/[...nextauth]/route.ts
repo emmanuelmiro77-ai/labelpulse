@@ -1,14 +1,15 @@
 import NextAuth from "next-auth";
 import { authOptions } from "@/lib/auth-options";
 
-// Required for static export — NextAuth's catch-all [...nextauth] route
-// can't be statically pre-rendered, so we mark it force-static and provide
-// an empty generateStaticParams so Next.js doesn't try to enumerate paths.
-// On Vercel (NEXT_EXPORT not set), this route is dynamic and works normally.
-export const dynamic = "force-static";
-export function generateStaticParams() {
-  return [];
-}
+// Note: this route handler is DYNAMIC on Vercel (handles /api/auth/signin,
+// /api/auth/callback/*, /api/auth/session, etc.).
+//
+// For the local static-export build (server.mjs deployment), scripts/build-static.sh
+// temporarily moves src/app/api/ out of the way before running `next build`,
+// so this file is not included in the static bundle. Do NOT add
+// `export const dynamic = "force-static"` here — that would break the
+// Vercel deployment by making this route return a static 404 instead of
+// running the NextAuth handler.
 
 const handler = NextAuth(authOptions);
 
