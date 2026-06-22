@@ -1,0 +1,1572 @@
+     1→     1→"use client";
+     2→     2→
+     3→     3→import { createClient, SupabaseClient } from "@supabase/supabase-js";
+     4→     4→import { useAppStore, mergeProfiles } from "./store";
+     5→     5→
+     6→     6→// ==================== SUPABASE CLIENT (CLOUD-FIRST) ====================
+     7→     7→// Client-side Supabase per la sincronizzazione cloud dei dati.
+     8→     8→//
+     9→     9→// ⚠️ CLOUD-FIRST (migrazione 2026-06-23):
+    10→    10→// Le credenziali (URL + anon key) vengono lette SOLO dalle env vars
+    11→    11→// NEXT_PUBLIC_SUPABASE_URL e NEXT_PUBLIC_SUPABASE_ANON_KEY (vedi .env.local).
+    12→    12→//
+    13→    13→// Il vecchio sistema BYOK (utente inseriva URL+key nel Profilo) è stato
+    14→    14→// RIMOSSO perché era la causa principale della perdita dati: se l'utente
+    15→    15→// non configurava (caso frequentissimo), niente cloud, e cambiando
+    16→    16→// dispositivo tutto era perso.
+    17→    17→//
+    18→    18→// Ora: configure .env.local UNA VOLTA, e ogni dispositivo/utente usa le
+    19→    19→// stesse credenziali. Multi-utenza garantita dalla chiave id=email
+    20→    20→// nella tabella app_state (vedi setCurrentUserEmail + schema SQL).
+    21→    21→
+    22→    22→// ==================== STATE TRACKING ====================
+    23→    23→
+    24→    24→export type CloudSyncStatus =
+    25→    25→  | "unconfigured"   // nessuna credenziale
+    26→    26→  | "connecting"     // credenziali presenti, caricando dati iniziali
+    27→    27→  | "synced"         // ultimo sync riuscito
+    28→    28→  | "syncing"        // sync in corso
+    29→    29→  | "error";         // ultimo sync fallito
+    30→    30→
+    31→    31→let _supabase: SupabaseClient | null = null;
+    32→    32→let _currentCredsKey: string = ""; // stringa "url|key" usata per detectare cambi
+    33→    33→let _status: CloudSyncStatus = "unconfigured";
+    34→    34→let _lastSyncAt: string | null = null;
+    35→    35→let _lastError: string | null = null;
+    36→    36→let _realtimeChannel: any = null;
+    37→    37→let _realtimeGlobalChannel: any = null; // GLOBAL row realtime subscription (admin updates)
+    38→    38→let _isApplyingRemoteUpdate: boolean = false; // evita loop di sync
+    39→    39→
+    40→    40→type Listener = () => void;
+    41→    41→const listeners = new Set<Listener>();
+    42→    42→
+    43→    43→export function getCloudStatus(): CloudSyncStatus {
+    44→    44→  return _status;
+    45→    45→}
+    46→    46→
+    47→    47→export function getLastSyncAt(): string | null {
+    48→    48→  return _lastSyncAt;
+    49→    49→}
+    50→    50→
+    51→    51→export function getLastError(): string | null {
+    52→    52→  return _lastError;
+    53→    53→}
+    54→    54→
+    55→    55→export function subscribeToCloudStatus(listener: Listener): () => void {
+    56→    56→  listeners.add(listener);
+    57→    57→  return () => listeners.delete(listener);
+    58→    58→}
+    59→    59→
+    60→    60→function setStatus(newStatus: CloudSyncStatus, errorMsg: string | null = null) {
+    61→    61→  _status = newStatus;
+    62→    62→  if (errorMsg !== null) _lastError = errorMsg;
+    63→    63→  if (newStatus === "synced" || newStatus === "syncing") {
+    64→    64→    _lastError = null;
+    65→    65→  }
+    66→    66→  if (newStatus === "synced") {
+    67→    67→    _lastSyncAt = new Date().toISOString();
+    68→    68→  }
+    69→    69→  listeners.forEach((l) => l());
+    70→    70→}
+    71→    71→
+    72→    72→// ==================== CREDENTIALS DETECTION ====================
+    73→    73→
+    74→    74→/**
+    75→    75→ * Read Supabase credentials from .env.local (NEXT_PUBLIC_* env vars).
+    76→    76→ *
+    77→    77→ * CLOUD-FIRST: questo è l'UNICO modo per ottenere le credenziali.
+    78→    78→ * Il vecchio sistema BYOK (userProfile.supabaseUrl/Key) è deprecato.
+    79→    79→ *
+    80→    80→ * IMPORTANT: The URL is normalized via normalizeSupabaseUrl() before use.
+    81→    81→ * This handles common user mistakes like pasting the dashboard URL
+    82→    82→ * (https://supabase.com/dashboard/project/<ref>) instead of the API URL
+    83→    83→ * (https://<ref>.supabase.co).
+    84→    84→ */
+    85→    85→function readCredentials(): { url: string; anonKey: string } {
+    86→    86→  // ⚠️ CLOUD-FIRST (2026-06-23):
+    87→    87→  // Le credenziali Supabase vengono lette SOLO dalle env vars. Il vecchio
+    88→    88→  // sistema BYOK (utente inserisce URL+key nel Profilo) è stato rimosso
+    89→    89→  // perché era la causa principale della perdita dati: se l'utente non
+    90→    90→  // configurava (90% dei casi), niente cloud, e cambiando dispositivo
+    91→    91→  // tutto era perso.
+    92→    92→  //
+    93→    93→  // Ora: configura .env.local una volta, e ogni dispositivo/utente usa
+    94→    94→  // le stesse credenziali. Multi-utenza garantita dalla chiave id=email
+    95→    95→  // nella tabella app_state (vedi setCurrentUserEmail + schema SQL).
+    96→    96→  const envUrl = normalizeSupabaseUrl(
+    97→    97→    process.env.NEXT_PUBLIC_SUPABASE_URL || ""
+    98→    98→  );
+    99→    99→  const envKey = process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY || "";
+   100→   100→  return { url: envUrl, anonKey: envKey };
+   101→   101→}
+   102→   102→
+   103→   103→/**
+   104→   104→ * Normalize a user-supplied Supabase URL into the API format
+   105→   105→ * (https://<project-ref>.supabase.co).
+   106→   106→ *
+   107→   107→ * Handles:
+   108→   108→ *   - Dashboard URLs: https://supabase.com/dashboard/project/<ref>/...
+   109→   109→ *     → https://<ref>.supabase.co
+   110→   110→ *   - URLs with trailing slash or path: stripped
+   111→   111→ *   - URLs without protocol: https:// prefix added
+   112→   112→ *   - URLs that are already correct: returned unchanged
+   113→   113→ *
+   114→   114→ * Returns "" if the input is empty or doesn't look like a Supabase URL.
+   115→   115→ */
+   116→   116→export function normalizeSupabaseUrl(input: string): string {
+   117→   117→  if (!input) return "";
+   118→   118→  let url = input.trim();
+   119→   119→
+   120→   120→  // Add protocol if missing
+   121→   121→  if (!/^https?:\/\//i.test(url)) {
+   122→   122→    url = "https://" + url;
+   123→   123→  }
+   124→   124→
+   125→   125→  // Case 1: Dashboard URL → extract project ref
+   126→   126→  //   https://supabase.com/dashboard/project/<ref>
+   127→   127→  //   https://supabase.com/dashboard/project/<ref>/settings/api
+   128→   128→  const dashMatch = url.match(
+   129→   129→    /supabase\.com\/dashboard\/project\/([a-z0-9]+)/i
+   130→   130→  );
+   131→   131→  if (dashMatch) {
+   132→   132→    return `https://${dashMatch[1].toLowerCase()}.supabase.co`;
+   133→   133→  }
+   134→   134→
+   135→   135→  // Case 2: Already in API format (https://<ref>.supabase.co[/...])
+   136→   136→  const apiMatch = url.match(/^(https?:\/\/)([a-z0-9]+)\.supabase\.(co|com|in)/i);
+   137→   137→  if (apiMatch) {
+   138→   138→    // Strip any trailing path/slash, keep just the host
+   139→   139→    try {
+   140→   140→      const u = new URL(url);
+   141→   141→      return `${u.protocol}//${u.hostname.toLowerCase()}`;
+   142→   142→    } catch {
+   143→   143→      return url;
+   144→   144→    }
+   145→   145→  }
+   146→   146→
+   147→   147→  // Case 3: Unknown format — return as-is, will fail at fetch time
+   148→   148→  // (better to let the user see the error than silently mangle it)
+   149→   149→  return url;
+   150→   150→}
+   151→   151→
+   152→   152→/**
+   153→   153→ * Returns a human-readable validation error for the current credentials,
+   154→   154→ * or null if credentials look valid. Used to give the user actionable
+   155→   155→ * feedback in the Profilo UI before they even try to sync.
+   156→   156→ */
+   157→   157→export function validateSupabaseCredentials(): string | null {
+   158→   158→  if (typeof window === "undefined") return null;
+   159→   159→  // CLOUD-FIRST: legge solo da env vars (vedi readCredentials).
+   160→   160→  const { url: rawUrl, anonKey } = readCredentials();
+   161→   161→
+   162→   162→  if (!rawUrl && !anonKey) {
+   163→   163→    return "Configura NEXT_PUBLIC_SUPABASE_URL e NEXT_PUBLIC_SUPABASE_ANON_KEY nel file .env.local (vedi istruzioni nel file).";
+   164→   164→  }
+   165→   165→  if (!rawUrl) return "Manca NEXT_PUBLIC_SUPABASE_URL nel file .env.local.";
+   166→   166→  if (!anonKey) return "Manca NEXT_PUBLIC_SUPABASE_ANON_KEY nel file .env.local.";
+   167→   167→
+   168→   168→  // Check URL format
+   169→   169→  if (!/^https:\/\/[a-z0-9]+\.supabase\.(co|com|in)/i.test(rawUrl)) {
+   170→   170→    return "L'URL non è nel formato corretto. Deve essere https://<project-ref>.supabase.co";
+   171→   171→  }
+   172→   172→
+   173→   173→  // Check anon key length (typical Supabase anon keys are JWT, ~200+ chars)
+   174→   174→  if (anonKey.length < 30) {
+   175→   175→    return "La anon key sembra troppo corta. Assicurati di aver copiato la 'anon public' key intera da Supabase → Project Settings → API.";
+   176→   176→  }
+   177→   177→
+   178→   178→  return null;
+   179→   179→}
+   180→   180→
+   181→   181→/**
+   182→   182→ * Whether Supabase credentials are configured in .env.local.
+   183→   183→ * CLOUD-FIRST: this MUST be true for the app to work — without it,
+   184→   184→ * data is local-only and will be lost when switching devices.
+   185→   185→ */
+   186→   186→export function isSupabaseConfigured(): boolean {
+   187→   187→  const { url, anonKey } = readCredentials();
+   188→   188→  return !!(url && anonKey);
+   189→   189→}
+   190→   190→
+   191→   191→/**
+   192→   192→ * Translate a low-level fetch/supabase error into an actionable Italian
+   193→   193→ * message. The browser surfaces network errors (CORS, DNS, refused
+   194→   194→ * connection) as "TypeError: Failed to fetch" which is useless to the
+   195→   195→ * user — we replace it with a hint about URL/key correctness.
+   196→   196→ */
+   197→   197→function humanizeCloudError(err: any): string {
+   198→   198→  const raw = err?.message || err?.toString?.() || String(err);
+   199→   199→  const lower = raw.toLowerCase();
+   200→   200→
+   201→   201→  if (lower.includes("failed to fetch") || lower.includes("networkerror")) {
+   202→   202→    return (
+   203→   203→      "Impossibile contattare Supabase. Cause possibili:\n" +
+   204→   204→      "• URL non corretto (deve essere https://<project-ref>.supabase.co, NON l'URL del dashboard)\n" +
+   205→   205→      "• Anon key mancante o sbagliata\n" +
+   206→   206→      "• Il progetto Supabase è in pausa (riattivalo dal dashboard)"
+   207→   207→    );
+   208→   208→  }
+   209→   209→  if (lower.includes("cors")) {
+   210→   210→    return "Blocco CORS: verifica che l'URL sia https://<project-ref>.supabase.co e che la anon key sia corretta.";
+   211→   211→  }
+   212→   212→  if (lower.includes("jwt") || lower.includes("invalid api key")) {
+   213→   213→    return "Anon key non valida. Copia da Supabase → Project Settings → API → 'anon public' (NON la service_role key).";
+   214→   214→  }
+   215→   215→  if (lower.includes("relation") && lower.includes("does not exist")) {
+   216→   216→    return (
+   217→   217→      "La tabella 'app_state' non esiste su Supabase. Vai in Supabase → SQL Editor " +
+   218→   218→      "→ incolla il contenuto di supabase-schema.sql → esegui."
+   219→   219→    );
+   220→   220→  }
+   221→   221→  if (lower.includes("permission denied") || lower.includes("rls")) {
+   222→   222→    return (
+   223→   223→      "Permessi insufficienti sulla tabella 'app_state'. Esegui di nuovo " +
+   224→   224→      "supabase-schema.sql in Supabase → SQL Editor (contiene i GRANT necessari)."
+   225→   225→    );
+   226→   226→  }
+   227→   227→  return raw;
+   228→   228→}
+   229→   229→
+   230→   230→/**
+   231→   231→ * Get or create the Supabase client. If the credentials have changed
+   232→   232→ * since the last call, a new client is created and the old realtime
+   233→   233→ * channel is torn down.
+   234→   234→ */
+   235→   235→export function getSupabase(): SupabaseClient | null {
+   236→   236→  if (typeof window === "undefined") return null;
+   237→   237→
+   238→   238→  const { url, anonKey } = readCredentials();
+   239→   239→  if (!url || !anonKey) {
+   240→   240→    // No credentials — reset everything
+   241→   241→    if (_supabase) {
+   242→   242→      teardownRealtime();
+   243→   243→      _supabase = null;
+   244→   244→      _currentCredsKey = "";
+   245→   245→    }
+   246→   246→    // Surface a clear error if URL is present but anon key is missing
+   247→   247→    if (url && !anonKey) {
+   248→   248→      setStatus(
+   249→   249→        "error",
+   250→   250→        "Manca la anon key — copiala da Supabase → Project Settings → API → 'anon public'"
+   251→   251→      );
+   252→   252→    } else if (_status !== "unconfigured" && _status !== "error") {
+   253→   253→      setStatus("unconfigured");
+   254→   254→    }
+   255→   255→    return null;
+   256→   256→  }
+   257→   257→
+   258→   258→  const credsKey = `${url}|${anonKey}`;
+   259→   259→  if (_supabase && _currentCredsKey === credsKey) {
+   260→   260→    return _supabase;
+   261→   261→  }
+   262→   262→
+   263→   263→  // Credentials changed (or first time) — create a fresh client
+   264→   264→  try {
+   265→   265→    if (_supabase) {
+   266→   266→      teardownRealtime();
+   267→   267→      _supabase = null;
+   268→   268→    }
+   269→   269→    _supabase = createClient(url, anonKey, {
+   270→   270→      auth: { persistSession: false },
+   271→   271→    });
+   272→   272→    _currentCredsKey = credsKey;
+   273→   273→    return _supabase;
+   274→   274→  } catch (err) {
+   275→   275→    console.error("[LabelPulse Cloud] Failed to create client:", err);
+   276→   276→    setStatus("error", err instanceof Error ? err.message : String(err));
+   277→   277→    return null;
+   278→   278→  }
+   279→   279→}
+   280→   280→
+   281→   281→// ==================== CLOUD SYNC FUNCTIONS ====================
+   282→   282→
+   283→   283→const CLOUD_TABLE = "app_state";
+   284→   284→// Backward-compat default for users who have not logged in with Google yet.
+   285→   285→// Once they do, the row id becomes their lowercased email — so each Google
+   286→   286→// account maps to its own isolated row in app_state (multi-profile support).
+   287→   287→const DEFAULT_CLOUD_ROW_ID = "default";
+   288→   288→
+   289→   289→// Module-level holder for the current user's email. Populated by
+   290→   290→// useAuthEffect() (see use-auth.ts) — must be set BEFORE any cloud sync
+   291→   291→// operation, otherwise we'd fall back to "default" and mix profiles.
+   292→   292→let _currentUserEmail: string | null = null;
+   293→   293→
+   294→   294→/**
+   295→   295→ * Set the current user's email (called from useAuthEffect on session change).
+   296→   296→ * Pass null on logout. When null, cloud sync falls back to the legacy "default"
+   297→   297→ * row id (so existing users without Google login keep their data).
+   298→   298→ */
+   299→   299→export function setCurrentUserEmail(email: string | null): void {
+   300→   300→  const normalized = email?.trim().toLowerCase() || null;
+   301→   301→  if (_currentUserEmail !== normalized) {
+   302→   302→    _currentUserEmail = normalized;
+   303→   303→    // Invalidate the cached Supabase client so the next call re-evaluates
+   304→   304→    // credentials + row id. Not strictly required (creds don't depend on email)
+   305→   305→    // but keeps the state consistent.
+   306→   306→  }
+   307→   307→}
+   308→   308→
+   309→   309→/**
+   310→   310→ * Returns the row id to use for cloud sync. Uses the logged-in user's email
+   311→   311→ * if available, falls back to "default" for legacy / unauthenticated users.
+   312→   312→ */
+   313→   313→function getCloudRowId(): string {
+   314→   314→  return _currentUserEmail || DEFAULT_CLOUD_ROW_ID;
+   315→   315→}
+   316→   316→
+   317→   317→// ==================== ADMIN / GLOBAL DATA ====================
+   318→   318→// Only admin emails can push Beatport scrape data (labels rankings, artists,
+   319→   319→// snapshots) to the GLOBAL cloud row. Regular users can ONLY read it —
+   320→   320→// their personal row holds profile, demos, and per-label personalizations
+   321→   321→// (emails, notes, status) but never Beatport ranking data.
+   322→   322→//
+   323→   323→// To add another admin, append their lowercase email here.
+   324→   324→const ADMIN_EMAILS = new Set<string>([
+   325→   325→  "emmanuel.miro77@gmail.com",
+   326→   326→]);
+   327→   327→
+   328→   328→/**
+   329→   329→ * Returns true if the given email is an admin (can push to global rankings).
+   330→   330→ * Case-insensitive, trims whitespace. Returns false for null/undefined/empty.
+   331→   331→ */
+   332→   332→export function isAdminEmail(email: string | null | undefined): boolean {
+   333→   333→  if (!email) return false;
+   334→   334→  return ADMIN_EMAILS.has(email.trim().toLowerCase());
+   335→   335→}
+   336→   336→
+   337→   337→/**
+   338→   338→ * Returns true if the currently logged-in user (set via setCurrentUserEmail)
+   339→   339→ * is an admin. Convenience wrapper used by saveStateToCloud and the UI to
+   340→   340→ * decide whether to write to the global row.
+   341→   341→ */
+   342→   342→function isCurrentUserAdmin(): boolean {
+   343→   343→  return isAdminEmail(_currentUserEmail);
+   344→   344→}
+   345→   345→
+   346→   346→// The id of the GLOBAL cloud row that holds the shared Beatport data
+   347→   347→// (labels with rank/points/genres, artists, rankingSnapshots, rankingsUpdatedAt).
+   348→   348→// Read by everyone, written only by admin. Lives in the same app_state table
+   349→   349→// — no SQL migration needed.
+   350→   350→const GLOBAL_CLOUD_ROW_ID = "global";
+   351→   351→
+   352→   352→/**
+   353→   353→ * Returns the row id for the GLOBAL shared data (Beatport rankings, artists,
+   354→   354→ * snapshots). Same for all users — they all read the same global row.
+   355→   355→ */
+   356→   356→function getGlobalCloudRowId(): string {
+   357→   357→  return GLOBAL_CLOUD_ROW_ID;
+   358→   358→}
+   359→   359→
+   360→   360→/**
+   361→   361→ * Returns the row id for the per-user artists (suffixed "_artists").
+   362→   362→ * Admin's artists row is suffixed "_artists_global" so it is shared with
+   363→   363→ * all users — admin's scrape updates the global artists, and users see it.
+   364→   364→ */
+   365→   365→function getArtistsCloudRowId(): string {
+   366→   366→  // Admin's artists are GLOBAL — every user reads the same.
+   367→   367→  if (isCurrentUserAdmin()) {
+   368→   368→    return `${GLOBAL_CLOUD_ROW_ID}_artists`;
+   369→   369→  }
+   370→   370→  return `${getCloudRowId()}_artists`;
+   371→   371→}
+   372→   372→
+   373→   373→/**
+   374→   374→ * Returns the row id for the GLOBAL artists (read by everyone, written by
+   375→   375→ * admin only). Used by loadArtistsFromCloud to always pull from global,
+   376→   376→ * regardless of who's logged in.
+   377→   377→ */
+   378→   378→function getGlobalArtistsCloudRowId(): string {
+   379→   379→  return `${GLOBAL_CLOUD_ROW_ID}_artists`;
+   380→   380→}
+   381→   381→
+   382→   382→/**
+   383→   383→ * SPLIT STRATEGY — what goes where:
+   384→   384→ *
+   385→   385→ * GLOBAL ROW (id='global', written only by admin):
+   386→   386→ *   - labels[*].id, name, genres, rankByGenre, pointsByGenre, trending,
+   387→   387→ *     trendingRankByGenre, trendingPointsByGenre, beatportLink, isCustom(false)
+   388→   388→ *   - rankingSnapshots
+   389→   389→ *   - rankingsUpdatedAt
+   390→   390→ *   - (artists saved separately via saveArtistsToCloud → global_artists row)
+   391→   391→ *
+   392→   392→ * PERSONAL ROW (id=email, written by each user):
+   393→   393→ *   - userProfile (artist name, email, bio, links, photo, etc.)
+   394→   394→ *   - demos (the user's pitch submissions)
+   395→   395→ *   - labels[*].PERSONAL fields: emails, contactInfo, website, demoLink,
+   396→   396→ *     socialLink, soundcloudLink, customLinks, notes, status, submissionType,
+   397→   397→ *     genre (user-set), createdAt
+   398→   398→ *   - labels[*] with isCustom=true (user-added labels not from Beatport)
+   399→   399→ *   - gmailAuth, locale, lastSavedAt
+   400→   400→ *
+   401→   401→ * Merge at load time:
+   402→   402→ *   - Start from global labels (Beatport truth)
+   403→   403→ *   - For each, look up the personal entry by id (or by name fallback)
+   404→   404→ *     and splice in user-edit fields if present
+   405→   405→ *   - Append personal-only custom labels
+   406→   406→ *   - artists: load from global_artists row
+   407→   407→ *   - snapshots: from global
+   408→   408→ *   - rankingsUpdatedAt: from global
+   409→   409→ *   - userProfile, demos, gmailAuth, locale, lastSavedAt: from personal
+   410→   410→ */
+   411→   411→const LABEL_BEATPORT_FIELDS = [
+   412→   412→  "id", "name",
+   413→   413→  "genres", "rankByGenre", "pointsByGenre",
+   414→   414→  "trending", "trendingRankByGenre", "trendingPointsByGenre",
+   415→   415→  "beatportLink", "isCustom",
+   416→   416→] as const;
+   417→   417→
+   418→   418→const LABEL_PERSONAL_FIELDS = [
+   419→   419→  "emails", "contactInfo", "website", "demoLink", "socialLink",
+   420→   420→  "soundcloudLink", "customLinks", "notes", "status",
+   421→   421→  "submissionType", "genre", "createdAt",
+   422→   422→] as const;
+   423→   423→
+   424→   424→/**
+   425→   425→ * Build the GLOBAL payload (what admin pushes to id='global').
+   426→   426→ * Only Beatport-sourced labels (isCustom !== true) are included; user's
+   427→   427→ * custom labels stay in their personal row.
+   428→   428→ */
+   429→   429→function buildGlobalPayload(state: any): object {
+   430→   430→  const labels = Array.isArray(state?.labels) ? state.labels : [];
+   431→   431→  const globalLabels = labels
+   432→   432→    .filter((l: any) => l && typeof l === "object" && !l.isCustom)
+   433→   433→    .map((l: any) => {
+   434→   434→      const out: Record<string, any> = {};
+   435→   435→      for (const f of LABEL_BEATPORT_FIELDS) {
+   436→   436→        if (l[f] !== undefined) out[f] = l[f];
+   437→   437→      }
+   438→   438→      return out;
+   439→   439→    });
+   440→   440→
+   441→   441→  return {
+   442→   442→    labels: globalLabels,
+   443→   443→    rankingSnapshots: Array.isArray(state?.rankingSnapshots) ? state.rankingSnapshots : [],
+   444→   444→    rankingsUpdatedAt: state?.rankingsUpdatedAt || null,
+   445→   445→    lastGlobalUpdate: new Date().toISOString(),
+   446→   446→  };
+   447→   447→}
+   448→   448→
+   449→   449→/**
+   450→   450→ * Build the PERSONAL payload (what each user pushes to id=email).
+   451→   451→ * Includes profile, demos, and per-label personal fields. Custom labels
+   452→   452→ * (isCustom=true) are included in full.
+   453→   453→ */
+   454→   454→function buildPersonalPayload(state: any): object {
+   455→   455→  const labels = Array.isArray(state?.labels) ? state.labels : [];
+   456→   456→  const personalLabels = labels
+   457→   457→    .filter((l: any) => l && typeof l === "object")
+   458→   458→    .map((l: any) => {
+   459→   459→      if (l.isCustom) {
+   460→   460→        // Custom (user-added) labels go in full — they have no Beatport side.
+   461→   461→        return { ...l };
+   462→   462→      }
+   463→   463→      // Beatport labels: only the personal fields. We include id+name so we
+   464→   464→      // can match them against the global labels at merge time.
+   465→   465→      const out: Record<string, any> = { id: l.id, name: l.name };
+   466→   466→      for (const f of LABEL_PERSONAL_FIELDS) {
+   467→   467→        // Only include non-empty personal fields to keep the row small.
+   468→   468→        const v = l[f];
+   469→   469→        if (v === undefined || v === null) continue;
+   470→   470→        if (Array.isArray(v) ? v.length > 0 : (String(v).trim() !== "")) {
+   471→   471→          out[f] = v;
+   472→   472→        }
+   473→   473→      }
+   474→   474→      return out;
+   475→   475→    })
+   476→   476→    .filter((l: any) => {
+   477→   477→      // Drop labels that have NO personal data and aren't custom — they'd
+   478→   478→      // just bloat the personal row for no reason.
+   479→   479→      if (l.isCustom) return true;
+   480→   480→      const keys = Object.keys(l).filter((k) => k !== "id" && k !== "name");
+   481→   481→      return keys.length > 0;
+   482→   482→    });
+   483→   483→
+   484→   484→  return {
+   485→   485→    labels: personalLabels,
+   486→   486→    demos: Array.isArray(state?.demos) ? state.demos : [],
+   487→   487→    userProfile: state?.userProfile || {},
+   488→   488→    gmailAuth: state?.gmailAuth || null,
+   489→   489→    locale: state?.locale || null,
+   490→   490→    lastSavedAt: state?.lastSavedAt || new Date().toISOString(),
+   491→   491→  };
+   492→   492→}
+   493→   493→
+   494→   494→/**
+   495→   495→ * Merge a global Beatport label with its personal overlay.
+   496→   496→ * Personal fields overwrite global ones (user-edited notes/emails/status win).
+   497→   497→ */
+   498→   498→function mergeGlobalAndPersonalLabel(global: any, personal: any): any {
+   499→   499→  const merged: Record<string, any> = { ...global };
+   500→   500→  for (const f of LABEL_PERSONAL_FIELDS) {
+   501→   501→    const v = personal?.[f];
+   502→   502→    if (v === undefined || v === null) continue;
+   503→   503→    if (Array.isArray(v) ? v.length > 0 : (String(v).trim() !== "")) {
+   504→   504→      merged[f] = v;
+   505→   505→    }
+   506→   506→  }
+   507→   507→  return merged;
+   508→   508→}
+   509→   509→
+   510→   510→/**
+   511→   511→ * Merge the global cloud data with the personal cloud data, producing the
+   512→   512→ * final state to hydrate the store with.
+   513→   513→ *
+   514→   514→ * Strategy:
+   515→   515→ * - labels: start from global (Beatport truth), splice in personal fields.
+   516→   516→ *           Append personal-only custom labels (isCustom=true).
+   517→   517→ * - rankingSnapshots, rankingsUpdatedAt: from global.
+   518→   518→ * - userProfile, demos, gmailAuth, locale, lastSavedAt: from personal.
+   519→   519→ *
+   520→   520→ * Falls back gracefully if either side is missing (e.g., new user with no
+   521→   521→ * personal row yet, or admin who hasn't pushed global yet).
+   522→   522→ */
+   523→   523→export function mergeGlobalAndPersonalCloud(global: any, personal: any): any {
+   524→   524→  const globalLabels = Array.isArray(global?.labels) ? global.labels : [];
+   525→   525→  const personalLabels = Array.isArray(personal?.labels) ? personal.labels : [];
+   526→   526→
+   527→   527→  const personalById = new Map<string, any>();
+   528→   528→  const personalByName = new Map<string, any>();
+   529→   529→  for (const pl of personalLabels) {
+   530→   530→    if (!pl || typeof pl !== "object") continue;
+   531→   531→    if (pl.id) personalById.set(pl.id, pl);
+   532→   532→    const nm = pl.name?.toLowerCase().trim();
+   533→   533→    if (nm) personalByName.set(nm, pl);
+   534→   534→  }
+   535→   535→
+   536→   536→  // Track which personal labels got merged into a global one
+   537→   537→  const consumedPersonalIds = new Set<string>();
+   538→   538→  const consumedPersonalNames = new Set<string>();
+   539→   539→
+   540→   540→  const mergedLabels: any[] = [];
+   541→   541→  for (const gl of globalLabels) {
+   542→   542→    if (!gl || typeof gl !== "object") continue;
+   543→   543→    const personalMatch = (gl.id && personalById.get(gl.id)) ||
+   544→   544→      (gl.name && personalByName.get(gl.name.toLowerCase().trim()));
+   545→   545→    if (personalMatch) {
+   546→   546→      if (personalMatch.id) consumedPersonalIds.add(personalMatch.id);
+   547→   547→      const nm = personalMatch.name?.toLowerCase().trim();
+   548→   548→      if (nm) consumedPersonalNames.add(nm);
+   549→   549→      mergedLabels.push(mergeGlobalAndPersonalLabel(gl, personalMatch));
+   550→   550→    } else {
+   551→   551→      // No personal overlay — use global as-is, fill defaults for personal fields
+   552→   552→      mergedLabels.push({
+   553→   553→        emails: [],
+   554→   554→        contactInfo: "",
+   555→   555→        website: "",
+   556→   556→        demoLink: "",
+   557→   557→        socialLink: "",
+   558→   558→        soundcloudLink: "",
+   559→   559→        customLinks: [],
+   560→   560→        notes: "",
+   561→   561→        status: "open",
+   562→   562→        submissionType: "email",
+   563→   563→        genre: "",
+   564→   564→        createdAt: new Date().toISOString(),
+   565→   565→        ...gl,
+   566→   566→      });
+   567→   567→    }
+   568→   568→  }
+   569→   569→
+   570→   570→  // Append personal-only labels (custom labels not in global)
+   571→   571→  for (const pl of personalLabels) {
+   572→   572→    if (!pl || typeof pl !== "object") continue;
+   573→   573→    const idConsumed = pl.id && consumedPersonalIds.has(pl.id);
+   574→   574→    const nameConsumed = pl.name && consumedPersonalNames.has(pl.name.toLowerCase().trim());
+   575→   575→    if (idConsumed || nameConsumed) continue;
+   576→   576→    // This is a custom label (or one the user added manually) — include in full
+   577→   577→    mergedLabels.push({ ...pl });
+   578→   578→  }
+   579→   579→
+   580→   580→  return {
+   581→   581→    labels: mergedLabels,
+   582→   582→    demos: personal?.demos || [],
+   583→   583→    userProfile: personal?.userProfile || {},
+   584→   584→    gmailAuth: personal?.gmailAuth || null,
+   585→   585→    locale: personal?.locale || null,
+   586→   586→    rankingSnapshots: global?.rankingSnapshots || [],
+   587→   587→    rankingsUpdatedAt: global?.rankingsUpdatedAt || null,
+   588→   588→    lastSavedAt: personal?.lastSavedAt || new Date().toISOString(),
+   589→   589→  };
+   590→   590→}
+   591→   591→
+   592→   592→/**
+   593→   593→ * Salva lo stato completo dell'app su Supabase.
+   594→   594→ * Usa upsert per creare o aggiornare il record.
+   595→   595→ *
+   596→   596→ * CLOUD-FIRST SPLIT (2026-06-23): this function now writes to TWO rows:
+   597→   597→ *   1. id='global' — Beatport rankings, snapshots, rankingsUpdatedAt
+   598→   598→ *      (only admin can write here; non-admin saves are silently skipped
+   599→   599→ *      for the global row to prevent users from clobbering shared data)
+   600→   600→ *   2. id=email — profile, demos, per-label personal fields
+   601→   601→ *      (every user writes here)
+   602→   602→ *
+   603→   603→ * Artists are saved separately via saveArtistsToCloud (id='global_artists'
+   604→   604→ * for admin, id='<email>_artists' for users — but loadArtistsFromCloud
+   605→   605→ * always reads from global_artists).
+   606→   606→ */
+   607→   607→export async function saveStateToCloud(data: object): Promise<boolean> {
+   608→   608→  const supabase = getSupabase();
+   609→   609→  if (!supabase) return false;
+   610→   610→
+   611→   611→  setStatus("syncing");
+   612→   612→
+   613→   613→  const now = new Date().toISOString();
+   614→   614→  const personalPayload = buildPersonalPayload(data);
+   615→   615→  const adminUser = isCurrentUserAdmin();
+   616→   616→
+   617→   617→  try {
+   618→   618→    // Step 1: always write the personal row (every user has one)
+   619→   619→    const personalResult = await supabase.from(CLOUD_TABLE).upsert(
+   620→   620→      {
+   621→   621→        id: getCloudRowId(),
+   622→   622→        data: personalPayload,
+   623→   623→        updated_at: now,
+   624→   624→      },
+   625→   625→      { onConflict: "id" }
+   626→   626→    );
+   627→   627→    if (personalResult.error) {
+   628→   628→      console.error("[LabelPulse Cloud] Personal save error:", personalResult.error.message);
+   629→   629→      setStatus("error", humanizeCloudError(personalResult.error));
+   630→   630→      return false;
+   631→   631→    }
+   632→   632→
+   633→   633→    // Step 2: if admin, ALSO write the global row (Beatport truth)
+   634→   634→    if (adminUser) {
+   635→   635→      const globalPayload = buildGlobalPayload(data);
+   636→   636→      const globalResult = await supabase.from(CLOUD_TABLE).upsert(
+   637→   637→        {
+   638→   638→          id: getGlobalCloudRowId(),
+   639→   639→          data: globalPayload,
+   640→   640→          updated_at: now,
+   641→   641→        },
+   642→   642→        { onConflict: "id" }
+   643→   643→      );
+   644→   644→      if (globalResult.error) {
+   645→   645→        console.error("[LabelPulse Cloud] Global save error:", globalResult.error.message);
+   646→   646→        // Don't fail the whole save — personal data was saved successfully
+   647→   647→        console.warn("[LabelPulse Cloud] Continuing despite global save error (personal save succeeded)");
+   648→   648→      } else {
+   649→   649→        console.info("[LabelPulse Cloud] Admin global row updated: labels=" +
+   650→   650→          (globalPayload as any).labels?.length + ", snapshots=" +
+   651→   651→          (globalPayload as any).rankingSnapshots?.length);
+   652→   652→      }
+   653→   653→    }
+   654→   654→
+   655→   655→    setStatus("synced");
+   656→   656→    return true;
+   657→   657→  } catch (err) {
+   658→   658→    console.error("[LabelPulse Cloud] Save exception:", err);
+   659→   659→    setStatus("error", humanizeCloudError(err));
+   660→   660→    return false;
+   661→   661→  }
+   662→   662→}
+   663→   663→
+   664→   664→/**
+   665→   665→ * Carica lo stato completo dell'app da Supabase.
+   666→   666→ *
+   667→   667→ * CLOUD-FIRST SPLIT (2026-06-23): reads from BOTH rows and merges:
+   668→   668→ *   - id='global' → Beatport rankings, snapshots, rankingsUpdatedAt
+   669→   669→ *   - id=email → profile, demos, per-label personal fields
+   670→   670→ *
+   671→   671→ * Returns null if BOTH rows are empty (first-time user with no data).
+   672→   672→ */
+   673→   673→export async function loadStateFromCloud(): Promise<object | null> {
+   674→   674→  const supabase = getSupabase();
+   675→   675→  if (!supabase) return null;
+   676→   676→
+   677→   677→  try {
+   678→   678→    // Fetch both rows in parallel — they're independent.
+   679→   679→    const [personalRes, globalRes] = await Promise.all([
+   680→   680→      supabase
+   681→   681→        .from(CLOUD_TABLE)
+   682→   682→        .select("data, updated_at")
+   683→   683→        .eq("id", getCloudRowId())
+   684→   684→        .single(),
+   685→   685→      supabase
+   686→   686→        .from(CLOUD_TABLE)
+   687→   687→        .select("data, updated_at")
+   688→   688→        .eq("id", getGlobalCloudRowId())
+   689→   689→        .single(),
+   690→   690→    ]);
+   691→   691→
+   692→   692→    // Personal row: error other than "no rows" is a real failure
+   693→   693→    if (personalRes.error && personalRes.error.code !== "PGRST116") {
+   694→   694→      console.error("[LabelPulse Cloud] Personal load error:", personalRes.error.message);
+   695→   695→      setStatus("error", humanizeCloudError(personalRes.error));
+   696→   696→      return null;
+   697→   697→    }
+   698→   698→
+   699→   699→    // Global row: error other than "no rows" is a real failure
+   700→   700→    if (globalRes.error && globalRes.error.code !== "PGRST116") {
+   701→   701→      console.error("[LabelPulse Cloud] Global load error:", globalRes.error.message);
+   702→   702→      setStatus("error", humanizeCloudError(globalRes.error));
+   703→   703→      return null;
+   704→   704→    }
+   705→   705→
+   706→   706→    const personalData = personalRes.data?.data || null;
+   707→   707→    const globalData = globalRes.data?.data || null;
+   708→   708→
+   709→   709→    if (!personalData && !globalData) {
+   710→   710→      // First-time user: no data anywhere
+   711→   711→      return null;
+   712→   712→    }
+   713→   713→
+   714→   714→    const merged = mergeGlobalAndPersonalCloud(globalData, personalData);
+   715→   715→
+   716→   716→    setStatus("synced");
+   717→   717→    return merged;
+   718→   718→  } catch (err) {
+   719→   719→    console.error("[LabelPulse Cloud] Load exception:", err);
+   720→   720→    setStatus("error", humanizeCloudError(err));
+   721→   721→    return null;
+   722→   722→  }
+   723→   723→}
+   724→   724→
+   725→   725→// ==================== REALTIME SUBSCRIPTION ====================
+   726→   726→
+   727→   727→/**
+   728→   728→ * Subscribe to changes on the app_state row so that updates from
+   729→   729→ * other devices (PC ↔ phone) are reflected in near-real-time.
+   730→   730→ *
+   731→   731→ * CLOUD-FIRST SPLIT (2026-06-23): sets up TWO subscriptions:
+   732→   732→ *   1. PERSONAL row (id=email) — profile/demos/per-label personal fields
+   733→   733→ *   2. GLOBAL row (id='global') — admin's Beatport rankings/snapshots/artists
+   734→   734→ *
+   735→   735→ * When a remote UPDATE arrives:
+   736→   736→ *   1. set _isApplyingRemoteUpdate = true (so we don't bounce the change back)
+   737→   737→ *   2. fetch the latest data from BOTH cloud rows
+   738→   738→ *   3. merge it into the local store via applyRemoteData
+   739→   739→ *   4. set _isApplyingRemoteUpdate = false
+   740→   740→ */
+   741→   741→export function setupRealtimeSubscription(): () => void {
+   742→   742→  const supabase = getSupabase();
+   743→   743→  if (!supabase) return () => {};
+   744→   744→
+   745→   745→  // Tear down any existing channel first
+   746→   746→  teardownRealtime();
+   747→   747→
+   748→   748→  try {
+   749→   749→    // ---- PERSONAL channel: own row updates (profile edits from other devices) ----
+   750→   750→    const personalChannel = supabase
+   751→   751→      .channel("app_state_personal")
+   752→   752→      .on(
+   753→   753→        "postgres_changes",
+   754→   754→        {
+   755→   755→          event: "UPDATE",
+   756→   756→          schema: "public",
+   757→   757→          table: CLOUD_TABLE,
+   758→   758→          filter: `id=eq.${getCloudRowId()}`,
+   759→   759→        },
+   760→   760→        async (payload: any) => {
+   761→   761→          if (_isApplyingRemoteUpdate) return;
+   762→   762→          const newData = payload?.new?.data;
+   763→   763→          if (!newData) return;
+   764→   764→          console.log("[LabelPulse Cloud] Realtime PERSONAL update, applying personal overlay...");
+   765→   765→          _isApplyingRemoteUpdate = true;
+   766→   766→          try {
+   767→   767→            // Personal update: only the personal overlay changed. We need to
+   768→   768→            // re-merge with the global row to produce the final state.
+   769→   769→            // Easiest: just reload both from cloud.
+   770→   770→            const fresh = await loadStateFromCloud();
+   771→   771→            if (fresh) await applyRemoteData(fresh);
+   772→   772→            setStatus("synced");
+   773→   773→          } finally {
+   774→   774→            _isApplyingRemoteUpdate = false;
+   775→   775→          }
+   776→   776→        }
+   777→   777→      )
+   778→   778→      .subscribe((status: string) => {
+   779→   779→        if (status === "SUBSCRIBED") {
+   780→   780→          console.log("[LabelPulse Cloud] Realtime PERSONAL subscription active");
+   781→   781→        } else if (status === "CHANNEL_ERROR" || status === "TIMED_OUT") {
+   782→   782→          console.warn("[LabelPulse Cloud] Personal subscription issue:", status);
+   783→   783→        }
+   784→   784→      });
+   785→   785→
+   786→   786→    // ---- GLOBAL channel: admin pushed a new scrape — refresh rankings ----
+   787→   787→    const globalChannel = supabase
+   788→   788→      .channel("app_state_global")
+   789→   789→      .on(
+   790→   790→        "postgres_changes",
+   791→   791→        {
+   792→   792→          event: "UPDATE",
+   793→   793→          schema: "public",
+   794→   794→          table: CLOUD_TABLE,
+   795→   795→          filter: `id=eq.${getGlobalCloudRowId()}`,
+   796→   796→        },
+   797→   797→        async (payload: any) => {
+   798→   798→          if (_isApplyingRemoteUpdate) return;
+   799→   799→          const newData = payload?.new?.data;
+   800→   800→          if (!newData) return;
+   801→   801→          console.log("[LabelPulse Cloud] Realtime GLOBAL update (admin pushed new rankings), refreshing...");
+   802→   802→          _isApplyingRemoteUpdate = true;
+   803→   803→          try {
+   804→   804→            // Global update: admin pushed new Beatport data. Reload both rows
+   805→   805→            // and re-merge so the user sees the new rankings immediately.
+   806→   806→            const fresh = await loadStateFromCloud();
+   807→   807→            if (fresh) await applyRemoteData(fresh);
+   808→   808→            setStatus("synced");
+   809→   809→          } finally {
+   810→   810→            _isApplyingRemoteUpdate = false;
+   811→   811→          }
+   812→   812→        }
+   813→   813→      )
+   814→   814→      .subscribe((status: string) => {
+   815→   815→        if (status === "SUBSCRIBED") {
+   816→   816→          console.log("[LabelPulse Cloud] Realtime GLOBAL subscription active");
+   817→   817→        } else if (status === "CHANNEL_ERROR" || status === "TIMED_OUT") {
+   818→   818→          console.warn("[LabelPulse Cloud] Global subscription issue:", status);
+   819→   819→        }
+   820→   820→      });
+   821→   821→
+   822→   822→    // Track both channels for teardown
+   823→   823→    _realtimeChannel = personalChannel;
+   824→   824→    _realtimeGlobalChannel = globalChannel;
+   825→   825→    return teardownRealtime;
+   826→   826→  } catch (err) {
+   827→   827→    console.warn("[LabelPulse Cloud] Realtime setup failed:", err);
+   828→   828→    return () => {};
+   829→   829→  }
+   830→   830→}
+   831→   831→
+   832→   832→function teardownRealtime() {
+   833→   833→  const supabase = _supabase;
+   834→   834→  if (_realtimeChannel) {
+   835→   835→    try {
+   836→   836→      if (supabase) supabase.removeChannel(_realtimeChannel);
+   837→   837→    } catch {
+   838→   838→      // ignore
+   839→   839→    }
+   840→   840→    _realtimeChannel = null;
+   841→   841→  }
+   842→   842→  if (_realtimeGlobalChannel) {
+   843→   843→    try {
+   844→   844→      if (supabase) supabase.removeChannel(_realtimeGlobalChannel);
+   845→   845→    } catch {
+   846→   846→      // ignore
+   847→   847→    }
+   848→   848→    _realtimeGlobalChannel = null;
+   849→   849→  }
+   850→   850→}
+   851→   851→
+   852→   852→/**
+   853→   853→ * Returns true if the current saveStateToCloud call should be skipped
+   854→   854→ * because we're applying a remote update (avoids loop).
+   855→   855→ */
+   856→   856→export function isApplyingRemoteUpdate(): boolean {
+   857→   857→  return _isApplyingRemoteUpdate;
+   858→   858→}
+   859→   859→
+   860→   860→/**
+   861→   861→ * Apply remote data to the local store. Uses the same merge logic
+   862→   862→ * as loadFromCloud().
+   863→   863→ *
+   864→   864→ * CRITICAL SAFETY RULE: same as mergeCloudData in store.ts — never
+   865→   865→ * overwrite local non-empty arrays with empty cloud arrays. This is
+   866→   866→ * the realtime-update path, and we want the same protection here.
+   867→   867→ */
+   868→   868→async function applyRemoteData(cloudData: any): Promise<void> {
+   869→   869→  // Lazy require to avoid circular import
+   870→   870→  const store = useAppStore.getState();
+   871→   871→  const localLastSavedAt = store.lastSavedAt
+   872→   872→    ? new Date(store.lastSavedAt).getTime()
+   873→   873→    : 0;
+   874→   874→  const cloudLastSavedAt = cloudData?.lastSavedAt
+   875→   875→    ? new Date(cloudData.lastSavedAt).getTime()
+   876→   876→    : 0;
+   877→   877→
+   878→   878→  // ⚠️ CRITICAL: Content-aware merge decision (same as loadFromCloud).
+   879→   879→  // The old code did `if (cloudLastSavedAt <= localLastSavedAt) return;`
+   880→   880→  // which would silently DROP realtime updates if the local timestamp was
+   881→   881→  // newer or equal — even if the cloud had profile data local didn't have.
+   882→   882→  //
+   883→   883→  // This was the realtime-update variant of the same bug that wiped user
+   884→   884→  // data on re-login. Always apply if cloud brings new profile data, even
+   885→   885→  // if its timestamp looks "older".
+   886→   886→  const cloudProfileHasData =
+   887→   887→    !!cloudData?.userProfile?.artistName ||
+   888→   888→    !!cloudData?.userProfile?.bio ||
+   889→   889→    !!cloudData?.userProfile?.email ||
+   890→   890→    !!cloudData?.userProfile?.scLink ||
+   891→   891→    !!cloudData?.userProfile?.photoUrl ||
+   892→   892→    (Array.isArray(cloudData?.userProfile?.links) && cloudData.userProfile.links.length > 0);
+   893→   893→  const localProfileHasData =
+   894→   894→    !!store.userProfile?.artistName ||
+   895→   895→    !!store.userProfile?.bio ||
+   896→   896→    !!store.userProfile?.email ||
+   897→   897→    !!store.userProfile?.scLink ||
+   898→   898→    !!store.userProfile?.photoUrl ||
+   899→   899→    (Array.isArray(store.userProfile?.links) && store.userProfile.links.length > 0);
+   900→   900→
+   901→   901→  const cloudBringsNewProfile = cloudProfileHasData && !localProfileHasData;
+   902→   902→  const cloudHasLabels = Array.isArray(cloudData?.labels) && cloudData.labels.length > 0;
+   903→   903→  const cloudHasDemos = Array.isArray(cloudData?.demos) && cloudData.demos.length > 0;
+   904→   904→  const cloudHasSnapshots = Array.isArray(cloudData?.rankingSnapshots) && cloudData.rankingSnapshots.length > 0;
+   905→   905→  // ⚠️ CRITICAL FIX (data-loss bug 2026-06-22, post-login "no charts" v2):
+   906→   906→  // Mirror the fix in store.ts:loadFromCloud — ALWAYS run merge if cloud has
+   907→   907→  // ANY content, not just when local is empty. The merge function is content-
+   908→   908→  // aware (unions by id, preserves Beatport fields per-genre with local wins),
+   909→   909→  // so running it unconditionally only adds data, never removes it.
+   910→   910→  const cloudHasAnyContent = cloudHasLabels || cloudHasDemos || cloudHasSnapshots || cloudProfileHasData;
+   911→   911→  const cloudIsNewerByTimestamp = cloudLastSavedAt > localLastSavedAt;
+   912→   912→  const shouldApply =
+   913→   913→    cloudBringsNewProfile ||
+   914→   914→    cloudHasAnyContent ||
+   915→   915→    cloudIsNewerByTimestamp;
+   916→   916→
+   917→   917→  if (!shouldApply) {
+   918→   918→    return;
+   919→   919→  }
+   920→   920→
+   921→   921→  const merged: any = {};
+   922→   922→
+   923→   923→  // ⚠️ CRITICAL FIX (data-loss bug 2026-06-22):
+   924→   924→  // Mirror the fix in store.ts:mergeCloudData — do UNION BY ID instead of
+   925→   925→  // REPLACE for arrays. This is the realtime-update path; same protection.
+   926→   926→  // Lazy-import mergeSnapshots from store to avoid circular dep at module
+   927→   927→  // load time. (We already import mergeProfiles at top of file.)
+   928→   928→  let mergeSnapshotsFn: any = null;
+   929→   929→  try {
+   930→   930→    // Re-require lazily — store.ts imports from supabase.ts at top level
+   931→   931→    const storeMod = await import("./store");
+   932→   932→    mergeSnapshotsFn = (storeMod as any).mergeSnapshotsPublic || null;
+   933→   933→  } catch {
+   934→   934→    // fall through — we'll handle snapshots below
+   935→   935→  }
+   936→   936→
+   937→   937→  // ---------- LABELS: union by id, preserve user-edit fields from local ----------
+   938→   938→  const cloudLabels = Array.isArray(cloudData.labels) ? cloudData.labels : [];
+   939→   939→  const localLabels = Array.isArray(store.labels) ? store.labels : [];
+   940→   940→  const labelUserEditFields = [
+   941→   941→    "emails", "notes", "website", "demoLink", "socialLink",
+   942→   942→    "soundcloudLink", "status", "tier", "instagramLink", "facebookLink",
+   943→   943→    "bandcampLink", "beatstatsLink",
+   944→   944→  ];
+   945→   945→  const labelsById = new Map<string, any>();
+   946→   946→  const labelsByName = new Map<string, any>();
+   947→   947→  for (const cl of cloudLabels) {
+   948→   948→    if (!cl || typeof cl !== "object") continue;
+   949→   949→    labelsById.set(cl.id, { ...cl });
+   950→   950→    const nm = cl.name?.toLowerCase().trim();
+   951→   951→    if (nm) labelsByName.set(nm, cl);
+   952→   952→  }
+   953→   953→  for (const ll of localLabels) {
+   954→   954→    if (!ll || typeof ll !== "object") continue;
+   955→   955→    const nm = ll.name?.toLowerCase().trim();
+   956→   956→    const existing = labelsById.get(ll.id) || (nm ? labelsByName.get(nm) : undefined);
+   957→   957→    if (existing) {
+   958→   958→      for (const f of labelUserEditFields) {
+   959→   959→        const lv = (ll as any)[f];
+   960→   960→        if (Array.isArray(lv) ? lv.length > 0 : (lv && String(lv).trim() !== "")) {
+   961→   961→          (existing as any)[f] = lv;
+   962→   962→        }
+   963→   963→      }
+   964→   964→      // ⚠️ CRITICAL FIX (data-loss bug 2026-06-22, post-login "no charts"):
+   965→   965→      // Also preserve Beatport data fields (rankByGenre, pointsByGenre, etc.)
+   966→   966→      // from local. Without this, a realtime echo of a partial cloud row
+   967→   967→      // (e.g., one that lost rankByGenre during a previous bad sync) would
+   968→   968→      // wipe the user's just-restored scraped data.
+   969→   969→      // Same logic as mergeCloudData in store.ts:
+   970→   970→      //   - Object fields: union by genre key, local wins on conflict
+   971→   971→      //   - Array field (genres): union (dedupe)
+   972→   972→      //   - Boolean (trending): true wins
+   973→   973→      for (const f of ["rankByGenre", "pointsByGenre", "trendingRankByGenre", "trendingPointsByGenre", "prevRankByGenre"]) {
+   974→   974→        const lv = (ll as any)[f];
+   975→   975→        if (lv && typeof lv === "object" && !Array.isArray(lv)) {
+   976→   976→          const cv = (existing as any)[f];
+   977→   977→          const baseObj = (cv && typeof cv === "object" && !Array.isArray(cv)) ? cv : {};
+   978→   978→          (existing as any)[f] = { ...baseObj, ...lv };
+   979→   979→        }
+   980→   980→      }
+   981→   981→      if (Array.isArray(ll.genres) && ll.genres.length > 0) {
+   982→   982→        const cv = Array.isArray(existing.genres) ? existing.genres : [];
+   983→   983→        const seen = new Set(cv.map((g: any) => String(g).toLowerCase().trim()));
+   984→   984→        const mergedGenres = [...cv];
+   985→   985→        for (const g of ll.genres) {
+   986→   986→          const key = String(g).toLowerCase().trim();
+   987→   987→          if (key && !seen.has(key)) {
+   988→   988→            seen.add(key);
+   989→   989→            mergedGenres.push(g);
+   990→   990→          }
+   991→   991→        }
+   992→   992→        existing.genres = mergedGenres;
+   993→   993→      }
+   994→   994→      if (ll.trending === true) {
+   995→   995→        existing.trending = true;
+   996→   996→      }
+   997→   997→    } else {
+   998→   998→      labelsById.set(ll.id, { ...ll });
+   999→   999→      if (nm) labelsByName.set(nm, ll);
+  1000→  1000→    }
+  1001→  1001→  }
+  1002→  1002→  if (labelsById.size > 0) {
+  1003→  1003→    merged.labels = Array.from(labelsById.values());
+  1004→  1004→  }
+  1005→  1005→
+  1006→  1006→  // ---------- DEMOS: union by id, prefer newest createdAt ----------
+  1007→  1007→  const cloudDemos = Array.isArray(cloudData.demos) ? cloudData.demos : [];
+  1008→  1008→  const localDemos = Array.isArray(store.demos) ? store.demos : [];
+  1009→  1009→  const demosById = new Map<string, any>();
+  1010→  1010→  for (const d of cloudDemos) {
+  1011→  1011→    if (!d || typeof d !== "object" || !d.id) continue;
+  1012→  1012→    demosById.set(d.id, d);
+  1013→  1013→  }
+  1014→  1014→  for (const d of localDemos) {
+  1015→  1015→    if (!d || typeof d !== "object" || !d.id) continue;
+  1016→  1016→    const existing = demosById.get(d.id);
+  1017→  1017→    if (!existing) {
+  1018→  1018→      demosById.set(d.id, d);
+  1019→  1019→    } else {
+  1020→  1020→      const exTs = new Date(existing.createdAt || 0).getTime();
+  1021→  1021→      const loTs = new Date(d.createdAt || 0).getTime();
+  1022→  1022→      if (loTs > exTs) {
+  1023→  1023→        demosById.set(d.id, d);
+  1024→  1024→      } else if (loTs === exTs && ((d.notes && d.notes.trim()) || (d.pitchText && d.pitchText.trim()))) {
+  1025→  1025→        demosById.set(d.id, d);
+  1026→  1026→      }
+  1027→  1027→    }
+  1028→  1028→  }
+  1029→  1029→  merged.demos = Array.from(demosById.values());
+  1030→  1030→
+  1031→  1031→  if (cloudData.userProfile) {
+  1032→  1032→    // ⚠️ CRITICAL: Use mergeProfiles so that non-empty fields from BOTH
+  1033→  1033→    // local and cloud win. Previously this was a spread that OVERWROTE
+  1034→  1034→    // local with cloud — so if cloud had artistName="" and local had
+  1035→  1035→    // artistName="Emmanuel Miro", the local data was silently lost.
+  1036→  1036→    // mergeProfiles ensures non-empty wins in both directions.
+  1037→  1037→    const mergedProfile = mergeProfiles(store.userProfile, cloudData.userProfile);
+  1038→  1038→    merged.userProfile = {
+  1039→  1039→      ...(mergedProfile || cloudData.userProfile),
+  1040→  1040→      // Preserve BYOK credentials — never overwrite with cloud versions
+  1041→  1041→      supabaseUrl: store.userProfile.supabaseUrl,
+  1042→  1042→      supabaseAnonKey: store.userProfile.supabaseAnonKey,
+  1043→  1043→      cyaniteApiToken: store.userProfile.cyaniteApiToken,
+  1044→  1044→    };
+  1045→  1045→  }
+  1046→  1046→  if (cloudData.gmailAuth) merged.gmailAuth = cloudData.gmailAuth;
+  1047→  1047→  if (cloudData.rankingsUpdatedAt !== undefined) {
+  1048→  1048→    merged.rankingsUpdatedAt = cloudData.rankingsUpdatedAt;
+  1049→  1049→  }
+  1050→  1050→  if (cloudData.lastSavedAt) merged.lastSavedAt = cloudData.lastSavedAt;
+  1051→  1051→
+  1052→  1052→  // ---------- RANKING SNAPSHOTS: union by id via mergeSnapshots ----------
+  1053→  1053→  // mergeSnapshots is defined in store.ts. We try to use the lazy-loaded
+  1054→  1054→  // copy; if that fails (e.g., circular dep issue), fall back to local
+  1055→  1055→  // snapshots so we don't lose data.
+  1056→  1056→  const cloudSnaps = Array.isArray(cloudData.rankingSnapshots) ? cloudData.rankingSnapshots : [];
+  1057→  1057→  const localSnaps = Array.isArray(store.rankingSnapshots) ? store.rankingSnapshots : [];
+  1058→  1058→  if (mergeSnapshotsFn && typeof mergeSnapshotsFn === "function") {
+  1059→  1059→    merged.rankingSnapshots = mergeSnapshotsFn(localSnaps, cloudSnaps);
+  1060→  1060→  } else {
+  1061→  1061→    // Manual union by id as fallback
+  1062→  1062→    const seen = new Set<string>();
+  1063→  1063→    const out: any[] = [];
+  1064→  1064→    for (const s of [...localSnaps, ...cloudSnaps]) {
+  1065→  1065→      if (!s || typeof s !== "object") continue;
+  1066→  1066→      const key = s.id || `${s.timestamp}|${s.source}`;
+  1067→  1067→      if (seen.has(key)) continue;
+  1068→  1068→      seen.add(key);
+  1069→  1069→      out.push(s);
+  1070→  1070→    }
+  1071→  1071→    out.sort(
+  1072→  1072→      (x, y) =>
+  1073→  1073→        new Date(x.timestamp || 0).getTime() - new Date(y.timestamp || 0).getTime()
+  1074→  1074→    );
+  1075→  1075→    merged.rankingSnapshots = out;
+  1076→  1076→  }
+  1077→  1077→  if (cloudData.locale) merged.locale = cloudData.locale;
+  1078→  1078→
+  1079→  1079→  useAppStore.setState(merged);
+  1080→  1080→
+  1081→  1081→  // ⚠️ CRITICAL FIX (post-login "no profile / no charts" bug 2026-06-22):
+  1082→  1082→  // After applying the remote data, immediately re-restore profile and
+  1083→  1083→  // snapshots from sidecar backups if the live store is now empty. The
+  1084→  1084→  // merge above should preserve local data, but in edge cases (partial
+  1085→  1085→  // cloud row, schema drift, an older app version) the merged result can
+  1086→  1086→  // still be missing data the user definitely had. The sidecar backups
+  1087→  1087→  // are the safety net — splice them back in. Runs on next tick so
+  1088→  1088→  // setState has committed first.
+  1089→  1089→  setTimeout(() => {
+  1090→  1090→    try {
+  1091→  1091→      // Lazy import to avoid circular dep at module load
+  1092→  1092→      import("./store").then((storeMod: any) => {
+  1093→  1093→        const profileRestored = storeMod.restoreProfileFromSidecar?.();
+  1094→  1094→        const snapsRestored = storeMod.restoreSnapshotsFromSidecar?.();
+  1095→  1095→        if (profileRestored || snapsRestored > 0) {
+  1096→  1096→          console.info(
+  1097→  1097→            `[LabelPulse Cloud] Post-realtime sidecar restore: profile=${profileRestored ? "OK" : "niente"}, snaps=${snapsRestored} recuperati.`
+  1098→  1098→          );
+  1099→  1099→        }
+  1100→  1100→      });
+  1101→  1101→    } catch (e) {
+  1102→  1102→      console.warn("[LabelPulse Cloud] Post-realtime sidecar restore failed:", e);
+  1103→  1103→    }
+  1104→  1104→  }, 0);
+  1105→  1105→}
+  1106→  1106→
+  1107→  1107→// ==================== ARTISTS CLOUD SYNC (separate row) ====================
+  1108→  1108→// Artists live in their own cloud row (id = "<email>_artists") to keep the
+  1109→  1109→// main app_state row lightweight. See getArtistsCloudRowId() for rationale.
+  1110→  1110→
+  1111→  1111→/**
+  1112→  1112→ * Save artists array to cloud (separate row).
+  1113→  1113→ * Called when artists are imported (scrape) or updated.
+  1114→  1114→ * Uses upsert with onConflict:"id" so it replaces the previous artists row.
+  1115→  1115→ *
+  1116→  1116→ * NOTE: artists array can be large (~9MB for 3400 artists). The Supabase
+  1117→  1117→ * JSONB column supports up to 1GB, so this is fine size-wise. The main
+  1118→  1118→ * concern is upload time on slow connections — we don't block UI on this.
+  1119→  1119→ */
+  1120→  1120→export async function saveArtistsToCloud(artists: any[]): Promise<boolean> {
+  1121→  1121→  const supabase = getSupabase();
+  1122→  1122→  if (!supabase) return false;
+  1123→  1123→  if (!Array.isArray(artists) || artists.length === 0) {
+  1124→  1124→    // Don't upload empty arrays — would wipe cloud's good data
+  1125→  1125→    return false;
+  1126→  1126→  }
+  1127→  1127→
+  1128→  1128→  try {
+  1129→  1129→    const { error } = await supabase.from(CLOUD_TABLE).upsert(
+  1130→  1130→      {
+  1131→  1131→        id: getArtistsCloudRowId(),
+  1132→  1132→        data: { artists, savedAt: new Date().toISOString() },
+  1133→  1133→        updated_at: new Date().toISOString(),
+  1134→  1134→      },
+  1135→  1135→      { onConflict: "id" }
+  1136→  1136→    );
+  1137→  1137→
+  1138→  1138→    if (error) {
+  1139→  1139→      console.error("[LabelPulse Cloud] Artists save error:", error.message);
+  1140→  1140→      return false;
+  1141→  1141→    }
+  1142→  1142→
+  1143→  1143→    console.info(
+  1144→  1144→      `[LabelPulse Cloud] Artists saved to cloud: ${artists.length} artists`
+  1145→  1145→    );
+  1146→  1146→    return true;
+  1147→  1147→  } catch (err) {
+  1148→  1148→    console.error("[LabelPulse Cloud] Artists save exception:", err);
+  1149→  1149→    return false;
+  1150→  1150→  }
+  1151→  1151→}
+  1152→  1152→
+  1153→  1153→/**
+  1154→  1154→ * Load artists array from cloud (separate row).
+  1155→  1155→ * Returns [] if no artists in cloud or if not configured.
+  1156→  1156→ *
+  1157→  1157→ * Called on boot after the main cloud sync — artists are pulled separately
+  1158→  1158→ * so they don't block the initial UI render (labels/profile/snapshots come
+  1159→  1159→ * first, artists come second).
+  1160→  1160→ */
+  1161→  1161→export async function loadArtistsFromCloud(): Promise<any[]> {
+  1162→  1162→  const supabase = getSupabase();
+  1163→  1163→  if (!supabase) return [];
+  1164→  1164→
+  1165→  1165→  try {
+  1166→  1166→    // CLOUD-FIRST SPLIT: artists always come from the GLOBAL row, regardless
+  1167→  1167→    // of who is logged in. Admin pushes there via saveArtistsToCloud; users
+  1168→  1168→    // just read. This way every user sees the same Beatport artists that
+  1169→  1169→    // admin last scraped.
+  1170→  1170→    const { data, error } = await supabase
+  1171→  1171→      .from(CLOUD_TABLE)
+  1172→  1172→      .select("data, updated_at")
+  1173→  1173→      .eq("id", getGlobalArtistsCloudRowId())
+  1174→  1174→      .single();
+  1175→  1175→
+  1176→  1176→    if (error) {
+  1177→  1177→      if (error.code === "PGRST116") {
+  1178→  1178→        // No rows — admin hasn't pushed artists yet (or this is a fresh install)
+  1179→  1179→        return [];
+  1180→  1180→      }
+  1181→  1181→      console.error("[LabelPulse Cloud] Artists load error:", error.message);
+  1182→  1182→      return [];
+  1183→  1183→    }
+  1184→  1184→
+  1185→  1185→    const artists = (data?.data as any)?.artists;
+  1186→  1186→    if (!Array.isArray(artists) || artists.length === 0) return [];
+  1187→  1187→
+  1188→  1188→    console.info(
+  1189→  1189→      `[LabelPulse Cloud] Artists loaded from GLOBAL cloud row: ${artists.length} artists (saved at ${data?.data?.savedAt || "unknown"})`
+  1190→  1190→    );
+  1191→  1191→    return artists;
+  1192→  1192→  } catch (err) {
+  1193→  1193→    console.error("[LabelPulse Cloud] Artists load exception:", err);
+  1194→  1194→    return [];
+  1195→  1195→  }
+  1196→  1196→}
+  1197→  1197→
+  1198→  1198→/**
+  1199→  1199→ * Merge two artist arrays by id (union). When the same id appears in both,
+  1200→  1200→ * keep the version with the most-recent `scrapedAt` (or the local one on tie).
+  1201→  1201→ * This is the artist equivalent of mergeCloudData: safe, additive, never
+  1202→  1202→ * removes data.
+  1203→  1203→ *
+  1204→  1204→ * Used by:
+  1205→  1205→ *  - loadArtistsOnBoot (when both IDB and cloud have artists)
+  1206→  1206→ *  - explicitMergeArtistsCloud (user-triggered from CloudRecovery panel)
+  1207→  1207→ */
+  1208→  1208→export function mergeArtistsArrays(local: any[], cloud: any[]): any[] {
+  1209→  1209→  const a = Array.isArray(local) ? local : [];
+  1210→  1210→  const b = Array.isArray(cloud) ? cloud : [];
+  1211→  1211→  const byId = new Map<string, any>();
+  1212→  1212→  const byName = new Map<string, any>();
+  1213→  1213→
+  1214→  1214→  // Insert cloud first (so local can override on conflict below)
+  1215→  1215→  for (const c of b) {
+  1216→  1216→    if (!c || typeof c !== "object") continue;
+  1217→  1217→    const id = c.id || c.artistId || `_${c.name?.toLowerCase?.() || ""}`;
+  1218→  1218→    byId.set(id, { ...c });
+  1219→  1219→    const nm = (c.name || c.artistName || "").toString().toLowerCase().trim();
+  1220→  1220→    if (nm) byName.set(nm, { ...c });
+  1221→  1221→  }
+  1222→  1222→
+  1223→  1223→  for (const l of a) {
+  1224→  1224→    if (!l || typeof l !== "object") continue;
+  1225→  1225→    const id = l.id || l.artistId || `_${(l.name || l.artistName || "").toLowerCase()}`;
+  1226→  1226→    const nm = (l.name || l.artistName || "").toString().toLowerCase().trim();
+  1227→  1227→    const existing = byId.get(id) || (nm ? byName.get(nm) : undefined);
+  1228→  1228→
+  1229→  1229→    if (!existing) {
+  1230→  1230→      byId.set(id, { ...l });
+  1231→  1231→      if (nm) byName.set(nm, { ...l });
+  1232→  1232→      continue;
+  1233→  1233→    }
+  1234→  1234→
+  1235→  1235→    // Both have this artist — keep the one with most tracks / most recent scrape
+  1236→  1236→    const exTracks = Array.isArray(existing.tracksByGenre)
+  1237→  1237→      ? Object.values(existing.tracksByGenre).flat().length
+  1238→  1238→      : (Array.isArray(existing.tracks) ? existing.tracks.length : 0);
+  1239→  1239→    const loTracks = Array.isArray(l.tracksByGenre)
+  1240→  1240→      ? Object.values(l.tracksByGenre).flat().length
+  1241→  1241→      : (Array.isArray(l.tracks) ? l.tracks.length : 0);
+  1242→  1242→
+  1243→  1243→    const exTs = new Date(existing.scrapedAt || existing.updatedAt || 0).getTime();
+  1244→  1244→    const loTs = new Date(l.scrapedAt || l.updatedAt || 0).getTime();
+  1245→  1245→
+  1246→  1246→    // Local wins if it has more tracks OR more recent scrape OR has bio when existing doesn't
+  1247→  1247→    const localHasBio = !!((l as any).bio || (l as any).bioSummary);
+  1248→  1248→    const exHasBio = !!((existing as any).bio || (existing as any).bioSummary);
+  1249→  1249→
+  1250→  1250→    let pickLocal = false;
+  1251→  1251→    if (loTracks > exTracks) pickLocal = true;
+  1252→  1252→    else if (loTracks === exTracks && loTs > exTs) pickLocal = true;
+  1253→  1253→    else if (localHasBio && !exHasBio) pickLocal = true;
+  1254→  1254→
+  1255→  1255→    if (pickLocal) {
+  1256→  1256→      const merged = { ...existing, ...l };
+  1257→  1257→      // Preserve any extra fields from cloud that local doesn't have
+  1258→  1258→      for (const k of Object.keys(existing)) {
+  1259→  1259→        if (!(k in l) && merged[k] === undefined) merged[k] = existing[k];
+  1260→  1260→      }
+  1261→  1261→      byId.set(id, merged);
+  1262→  1262→      if (nm) byName.set(nm, merged);
+  1263→  1263→    } else {
+  1264→  1264→      // Keep cloud's version but ensure local-only fields are preserved
+  1265→  1265→      const merged = { ...l, ...existing };
+  1266→  1266→      for (const k of Object.keys(l)) {
+  1267→  1267→        if (!(k in existing) && merged[k] === undefined) merged[k] = l[k];
+  1268→  1268→      }
+  1269→  1269→      byId.set(id, merged);
+  1270→  1270→      if (nm) byName.set(nm, merged);
+  1271→  1271→    }
+  1272→  1272→  }
+  1273→  1273→
+  1274→  1274→  return Array.from(byId.values());
+  1275→  1275→}
+  1276→  1276→
+  1277→  1277→/**
+  1278→  1278→ * Force-push the current local artists to cloud (REPLACING cloud's artists).
+  1279→  1279→ * Used by:
+  1280→  1280→ *  - CloudRecovery panel ("Sovrascrivi cloud con locale")
+  1281→  1281→ *  - loadArtistsOnBoot when local has artists and cloud is empty/has fewer
+  1282→  1282→ *
+  1283→  1283→ * Returns true on success.
+  1284→  1284→ */
+  1285→  1285→export async function forcePushArtistsToCloud(artists: any[]): Promise<boolean> {
+  1286→  1286→  const supabase = getSupabase();
+  1287→  1287→  if (!supabase) return false;
+  1288→  1288→  if (!Array.isArray(artists) || artists.length === 0) return false;
+  1289→  1289→
+  1290→  1290→  try {
+  1291→  1291→    const { error } = await supabase.from(CLOUD_TABLE).upsert(
+  1292→  1292→      {
+  1293→  1293→        id: getArtistsCloudRowId(),
+  1294→  1294→        data: { artists, savedAt: new Date().toISOString() },
+  1295→  1295→        updated_at: new Date().toISOString(),
+  1296→  1296→      },
+  1297→  1297→      { onConflict: "id" }
+  1298→  1298→    );
+  1299→  1299→
+  1300→  1300→    if (error) {
+  1301→  1301→      console.error("[LabelPulse Cloud] Force-push artists error:", error.message);
+  1302→  1302→      return false;
+  1303→  1303→    }
+  1304→  1304→
+  1305→  1305→    console.info(
+  1306→  1306→      `[LabelPulse Cloud] Force-push artists: ${artists.length} → cloud (overwrite).`
+  1307→  1307→    );
+  1308→  1308→    return true;
+  1309→  1309→  } catch (err) {
+  1310→  1310→    console.error("[LabelPulse Cloud] Force-push artists exception:", err);
+  1311→  1311→    return false;
+  1312→  1312→  }
+  1313→  1313→}
+  1314→  1314→
+  1315→  1315→/**
+  1316→  1316→ * Explicit merge of local + cloud artists. Pulls cloud, runs mergeArtistsArrays,
+  1317→  1317→ * pushes the merged result back to cloud. Used by the CloudRecovery panel
+  1318→  1318→ * (button "Unisci cloud + locale" — extended to cover artists too).
+  1319→  1319→ *
+  1320→  1320→ * Returns a summary for the UI to display.
+  1321→  1321→ */
+  1322→  1322→export async function explicitMergeArtistsCloud(): Promise<{
+  1323→  1323→  ok: boolean;
+  1324→  1324→  summary: string;
+  1325→  1325→}> {
+  1326→  1326→  const cloudArtists = await loadArtistsFromCloud();
+  1327→  1327→  const localState = useAppStore.getState();
+  1328→  1328→  const localArtists = Array.isArray(localState.artists) ? localState.artists : [];
+  1329→  1329→
+  1330→  1330→  if (localArtists.length === 0 && cloudArtists.length === 0) {
+  1331→  1331→    return { ok: false, summary: "Nessun artista né in locale né nel cloud." };
+  1332→  1332→  }
+  1333→  1333→
+  1334→  1334→  const merged = mergeArtistsArrays(localArtists, cloudArtists);
+  1335→  1335→
+  1336→  1336→  // Update local store
+  1337→  1337→  useAppStore.setState({ artists: merged });
+  1338→  1338→
+  1339→  1339→  // Lazy import to avoid circular dep
+  1340→  1340→  try {
+  1341→  1341→    const storeMod = await import("./store");
+  1342→  1342→    if (typeof (storeMod as any).saveArtistsToIDB === "function") {
+  1343→  1343→      // Save to IDB too so future boots are instant
+  1344→  1344→      const { saveArtistsToIDB } = await import("./artists-idb");
+  1345→  1345→      await saveArtistsToIDB(merged);
+  1346→  1346→    }
+  1347→  1347→  } catch {}
+  1348→  1348→
+  1349→  1349→  // Push merged to cloud (overwrite cloud's artists row)
+  1350→  1350→  const pushed = await forcePushArtistsToCloud(merged);
+  1351→  1351→
+  1352→  1352→  return {
+  1353→  1353→    ok: pushed,
+  1354→  1354→    summary:
+  1355→  1355→      `Artisti merge: locale=${localArtists.length} + cloud=${cloudArtists.length} → ${merged.length} mergiati. ` +
+  1356→  1356→      (pushed ? "Risultato spinto al cloud." : "Push al cloud fallito."),
+  1357→  1357→  };
+  1358→  1358→}
+  1359→  1359→
+  1360→  1360→/**
+  1361→  1361→ * Returns the timestamp of the last artists cloud sync, or null if never synced.
+  1362→  1362→ * Useful for the diagnostic UI to show "artists last synced: X ago".
+  1363→  1363→ */
+  1364→  1364→export async function getArtistsCloudSyncInfo(): Promise<{ count: number; savedAt: string | null } | null> {
+  1365→  1365→  const supabase = getSupabase();
+  1366→  1366→  if (!supabase) return null;
+  1367→  1367→
+  1368→  1368→  try {
+  1369→  1369→    const { data, error } = await supabase
+  1370→  1370→      .from(CLOUD_TABLE)
+  1371→  1371→      .select("data, updated_at")
+  1372→  1372→      .eq("id", getArtistsCloudRowId())
+  1373→  1373→      .single();
+  1374→  1374→
+  1375→  1375→    if (error) {
+  1376→  1376→      if (error.code === "PGRST116") return { count: 0, savedAt: null };
+  1377→  1377→      return null;
+  1378→  1378→    }
+  1379→  1379→
+  1380→  1380→    const artists = (data?.data as any)?.artists;
+  1381→  1381→    return {
+  1382→  1382→      count: Array.isArray(artists) ? artists.length : 0,
+  1383→  1383→      savedAt: (data?.data as any)?.savedAt || data?.updated_at || null,
+  1384→  1384→    };
+  1385→  1385→  } catch {
+  1386→  1386→    return null;
+  1387→  1387→  }
+  1388→  1388→}
+  1389→  1389→
+  1390→  1390→/**
+  1391→  1391→ * Returns the count of labels in the main cloud row + lastSavedAt timestamp.
+  1392→  1392→ * Used by the diagnostic UI to show "cloud has X labels, last synced Y ago".
+  1393→  1393→ */
+  1394→  1394→export async function getMainCloudSyncInfo(): Promise<{
+  1395→  1395→  labels: number;
+  1396→  1396→  labelsWithRankings: number;
+  1397→  1397→  snapshots: number;
+  1398→  1398→  demos: number;
+  1399→  1399→  profileHasData: boolean;
+  1400→  1400→  lastSavedAt: string | null;
+  1401→  1401→} | null> {
+  1402→  1402→  const supabase = getSupabase();
+  1403→  1403→  if (!supabase) return null;
+  1404→  1404→
+  1405→  1405→  try {
+  1406→  1406→    const { data, error } = await supabase
+  1407→  1407→      .from(CLOUD_TABLE)
+  1408→  1408→      .select("data, updated_at")
+  1409→  1409→      .eq("id", getCloudRowId())
+  1410→  1410→      .single();
+  1411→  1411→
+  1412→  1412→    if (error) {
+  1413→  1413→      if (error.code === "PGRST116") {
+  1414→  1414→        return { labels: 0, labelsWithRankings: 0, snapshots: 0, demos: 0, profileHasData: false, lastSavedAt: null };
+  1415→  1415→      }
+  1416→  1416→      return null;
+  1417→  1417→    }
+  1418→  1418→
+  1419→  1419→    const d = (data?.data as any) || {};
+  1420→  1420→    const labels = Array.isArray(d.labels) ? d.labels : [];
+  1421→  1421→    const labelsWithRankings = labels.filter(
+  1422→  1422→      (l: any) => l && typeof l.rankByGenre === "object" && Object.keys(l.rankByGenre || {}).length > 0
+  1423→  1423→    ).length;
+  1424→  1424→    const profile = d.userProfile || {};
+  1425→  1425→    const profileHasData =
+  1426→  1426→      !!profile.artistName || !!profile.bio || !!profile.email ||
+  1427→  1427→      !!profile.scLink || !!profile.photoUrl ||
+  1428→  1428→      (Array.isArray(profile.links) && profile.links.length > 0);
+  1429→  1429→
+  1430→  1430→    return {
+  1431→  1431→      labels: labels.length,
+  1432→  1432→      labelsWithRankings,
+  1433→  1433→      snapshots: Array.isArray(d.rankingSnapshots) ? d.rankingSnapshots.length : 0,
+  1434→  1434→      demos: Array.isArray(d.demos) ? d.demos.length : 0,
+  1435→  1435→      profileHasData,
+  1436→  1436→      lastSavedAt: d.lastSavedAt || data?.updated_at || null,
+  1437→  1437→    };
+  1438→  1438→  } catch {
+  1439→  1439→    return null;
+  1440→  1440→  }
+  1441→  1441→}
+  1442→  1442→
+  1443→  1443→/**
+  1444→  1444→ * Force-push the current local state to cloud, REPLACING the cloud row entirely.
+  1445→  1445→ * DANGEROUS: only use when the user explicitly clicks "Sovrascrivi cloud con locale".
+  1446→  1446→ * Used by the diagnostic UI as a recovery action.
+  1447→  1447→ *
+  1448→  1448→ * Returns true on success, false on failure.
+  1449→  1449→ */
+  1450→  1450→export async function forcePushLocalToCloud(): Promise<boolean> {
+  1451→  1451→  const supabase = getSupabase();
+  1452→  1452→  if (!supabase) return false;
+  1453→  1453→
+  1454→  1454→  const store = useAppStore.getState();
+  1455→  1455→  const lastSavedAt = new Date().toISOString();
+  1456→  1456→  const dataToSync = {
+  1457→  1457→    labels: store.labels,
+  1458→  1458→    demos: store.demos,
+  1459→  1459→    activeTab: store.activeTab,
+  1460→  1460→    locale: store.locale,
+  1461→  1461→    userProfile: store.userProfile,
+  1462→  1462→    gmailAuth: store.gmailAuth,
+  1463→  1463→    rankingsUpdatedAt: store.rankingsUpdatedAt,
+  1464→  1464→    lastSavedAt,
+  1465→  1465→    rankingSnapshots: store.rankingSnapshots,
+  1466→  1466→  };
+  1467→  1467→
+  1468→  1468→  try {
+  1469→  1469→    const { error } = await supabase.from(CLOUD_TABLE).upsert(
+  1470→  1470→      {
+  1471→  1471→        id: getCloudRowId(),
+  1472→  1472→        data: dataToSync,
+  1473→  1473→        updated_at: new Date().toISOString(),
+  1474→  1474→      },
+  1475→  1475→      { onConflict: "id" }
+  1476→  1476→    );
+  1477→  1477→    if (error) {
+  1478→  1478→      console.error("[LabelPulse Cloud] Force-push error:", error.message);
+  1479→  1479→      return false;
+  1480→  1480→    }
+  1481→  1481→    console.info("[LabelPulse Cloud] Force-push: local → cloud (overwrite).");
+  1482→  1482→    setStatus("synced");
+  1483→  1483→    return true;
+  1484→  1484→  } catch (err) {
+  1485→  1485→    console.error("[LabelPulse Cloud] Force-push exception:", err);
+  1486→  1486→    return false;
+  1487→  1487→  }
+  1488→  1488→}
+  1489→  1489→
+  1490→  1490→/**
+  1491→  1491→ * Force-pull cloud state into local store, REPLACING local entirely.
+  1492→  1492→ * DANGEROUS: only use when the user explicitly clicks "Sovrascrivi locale con cloud".
+  1493→  1493→ * Used by the diagnostic UI as a recovery action.
+  1494→  1494→ *
+  1495→  1495→ * Returns true on success, false on failure.
+  1496→  1496→ */
+  1497→  1497→export async function forcePullCloudToLocal(): Promise<boolean> {
+  1498→  1498→  const cloudData = await loadStateFromCloud();
+  1499→  1499→  if (!cloudData) {
+  1500→  1500→    console.warn("[LabelPulse Cloud] Force-pull: cloud has no data.");
+  1501→  1501→    return false;
+  1502→  1502→  }
+  1503→  1503→
+  1504→  1504→  const cloud = cloudData as any;
+  1505→  1505→  // Replace local with cloud entirely (no merge)
+  1506→  1506→  useAppStore.setState({
+  1507→  1507→    labels: Array.isArray(cloud.labels) ? cloud.labels : [],
+  1508→  1508→    demos: Array.isArray(cloud.demos) ? cloud.demos : [],
+  1509→  1509→    activeTab: cloud.activeTab || "dashboard",
+  1510→  1510→    locale: cloud.locale || "it",
+  1511→  1511→    userProfile: cloud.userProfile || {},
+  1512→  1512→    gmailAuth: cloud.gmailAuth || null,
+  1513→  1513→    rankingsUpdatedAt: cloud.rankingsUpdatedAt || null,
+  1514→  1514→    lastSavedAt: cloud.lastSavedAt || null,
+  1515→  1515→    rankingSnapshots: Array.isArray(cloud.rankingSnapshots) ? cloud.rankingSnapshots : [],
+  1516→  1516→    hasCloudSynced: true,
+  1517→  1517→  });
+  1518→  1518→
+  1519→  1519→  console.info("[LabelPulse Cloud] Force-pull: cloud → local (overwrite).");
+  1520→  1520→  return true;
+  1521→  1521→}
+  1522→  1522→
+  1523→  1523→/**
+  1524→  1524→ * Explicit merge: pull cloud, run mergeCloudData, push merged back.
+  1525→  1525→ * This is what loadFromCloud SHOULD do, but as a user-triggered action
+  1526→  1526→ * so the user can see the result and confirm data is recovered.
+  1527→  1527→ *
+  1528→  1528→ * Returns a summary of what happened, for the diagnostic UI to display.
+  1529→  1529→ */
+  1530→  1530→export async function explicitMergeLocalAndCloud(): Promise<{
+  1531→  1531→  ok: boolean;
+  1532→  1532→  summary: string;
+  1533→  1533→}> {
+  1534→  1534→  const cloudData = await loadStateFromCloud();
+  1535→  1535→  if (!cloudData) {
+  1536→  1536→    return {
+  1537→  1537→      ok: false,
+  1538→  1538→      summary: "Cloud non ha dati. Impossibile mergiare.",
+  1539→  1539→    };
+  1540→  1540→  }
+  1541→  1541→
+  1542→  1542→  // Lazy import to avoid circular dep
+  1543→  1543→  const storeMod = await import("./store");
+  1544→  1544→  const mergeCloudDataFn = (storeMod as any).mergeCloudDataPublic;
+  1545→  1545→  if (!mergeCloudDataFn) {
+  1546→  1546→    return { ok: false, summary: "mergeCloudData non disponibile." };
+  1547→  1547→  }
+  1548→  1548→
+  1549→  1549→  const localState = useAppStore.getState();
+  1550→  1550→  const merged = mergeCloudDataFn(cloudData, localState);
+  1551→  1551→  useAppStore.setState({ ...merged, hasCloudSynced: true });
+  1552→  1552→
+  1553→  1553→  // Push merged back to cloud so other devices get it too
+  1554→  1554→  await forcePushLocalToCloud();
+  1555→  1555→
+  1556→  1556→  const beforeLabels = localState.labels?.length || 0;
+  1557→  1557→  const afterLabels = (merged as any).labels?.length || 0;
+  1558→  1558→  const beforeSnaps = localState.rankingSnapshots?.length || 0;
+  1559→  1559→  const afterSnaps = (merged as any).rankingSnapshots?.length || 0;
+  1560→  1560→
+  1561→  1561→  return {
+  1562→  1562→    ok: true,
+  1563→  1563→    summary:
+  1564→  1564→      `Merge completato. ` +
+  1565→  1565→      `Label: ${beforeLabels} → ${afterLabels}. ` +
+  1566→  1566→      `Snapshot: ${beforeSnaps} → ${afterSnaps}. ` +
+  1567→  1567→      `Risultato spinto al cloud.`,
+  1568→  1568→  };
+  1569→  1569→}
+  1570→  1570→
+  1571→  1571→// Build trigger: 2026-06-22T19:38:57Z - force Vercel redeploy with cloud-first code
+  1572→  1572→
