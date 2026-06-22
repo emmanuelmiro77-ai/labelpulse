@@ -673,3 +673,28 @@ Stage Summary:
 - Vantaggio chiave: anche i dati GIÀ corrotti nel cloud vengono ripristinati trasparentemente al prossimo caricamento, perché la UI legge dagli snapshot (immutabili) e non più da prevRankByGenre (corrompibile)
 - L'utente vedrà di nuovo i riquadri "Label in ascesa" dopo il deploy Vercel, sia per il global Spotlight che per il genre-filtered
 - Non richiede re-import da parte dell'utente: basta ricaricare la pagina dopo il deploy
+
+---
+Task ID: clickable-movement-stats-filter
+Agent: main (Super Z)
+Task: Rendere cliccabili le stats movement (25 salite / 33 scese / 27 nuove) per filtrare la classifica
+
+Work Log:
+- Identificata la stats bar in rankings-page.tsx (righe 924-953): era composta da <span> statici
+- Identificato il filtro movement esistente nello state (movementFilter, MovementFilter type) e la logica di filtro in filteredList (righe 487-521) — già implementato, mancava solo il binding UI
+- Sostituiti i 4 <span> con <button> cliccabili:
+  - "Tutte le label" (Eye icon) → reset a "all"
+  - "X salite" (TrendingUp, emerald) → toggle "rising" / "all"
+  - "X scese" (TrendingDown, red) → toggle "falling" / "all"
+  - "X nuove entrate" (ArrowUpRight, cyan) → toggle "new" / "all"
+- Aggiunto feedback visivo: button attivo ha bg + border colorato; inattivo ha hover; disabilitato (count = 0) ha opacity 40% e cursor not-allowed
+- Aggiunto banner "Filtro attivo: X salite/scese/nuove su Y" sopra la tabella quando un filtro è attivo, con pulsante "Mostra tutte" per reset rapido
+- Verificato che le icone Filter e RotateCcw sono già importate dall'lucide-react (righe 19, 28)
+- Build Next.js OK
+- Commit 7a2e8ba, push su GitHub → trigger deploy Vercel
+
+Stage Summary:
+- Feature completa: le stats diventano bottoni cliccabili con toggle on/off
+- L'utente vede subito cosa sta guardando grazie al banner con il count filtrato e il pulsante reset
+- Coerenza visiva: colori coerenti con il movimento (emerald salite, red scese, cyan nuove)
+- Accessibilità: title attributes IT/EN su ogni bottone, disabled state quando count = 0
