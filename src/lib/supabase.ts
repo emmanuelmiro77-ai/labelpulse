@@ -34,6 +34,7 @@ let _status: CloudSyncStatus = "unconfigured";
 let _lastSyncAt: string | null = null;
 let _lastError: string | null = null;
 let _realtimeChannel: any = null;
+let _realtimeGlobalChannel: any = null; // GLOBAL row realtime subscription (admin updates)
 let _isApplyingRemoteUpdate: boolean = false; // evita loop di sync
 
 type Listener = () => void;
@@ -285,21 +286,6 @@ const CLOUD_TABLE = "app_state";
 // account maps to its own isolated row in app_state (multi-profile support).
 const DEFAULT_CLOUD_ROW_ID = "default";
 
-// ⚠️ Artists are stored in a SEPARATE cloud row (suffixed "_artists") because:
-// 1. A full Beatport scrape produces ~3400 artists / ~3000 tracks totaling ~9MB.
-//    Putting it in the main app_state row alongside labels/demos/profile would
-//    risk hitting Supabase's JSONB column size limit and slow down EVERY sync
-//    (even tiny profile updates would re-upload 9MB).
-// 2. Artists change infrequently (only when user re-scrapes), while labels/
-//    profile change often (notes, tier, status). Splitting them keeps the
-//    frequent-sync path lightweight.
-// 3. On a new device, the user gets labels/profile/snapshots from the main
-//    row, then this function pulls artists separately. Without this, a user
-//    logging in on a new phone would see 0 artists even with perfect cloud sync.
-function getArtistsCloudRowId(): string {
-  return `${getCloudRowId()}_artists`;
-}
-
 // Module-level holder for the current user's email. Populated by
 // useAuthEffect() (see use-auth.ts) — must be set BEFORE any cloud sync
 // operation, otherwise we'd fall back to "default" and mix profiles.
@@ -328,9 +314,295 @@ function getCloudRowId(): string {
   return _currentUserEmail || DEFAULT_CLOUD_ROW_ID;
 }
 
+// ==================== ADMIN / GLOBAL DATA ====================
+// Only admin emails can push Beatport scrape data (labels rankings, artists,
+// snapshots) to the GLOBAL cloud row. Regular users can ONLY read it —
+// their personal row holds profile, demos, and per-label personalizations
+// (emails, notes, status) but never Beatport ranking data.
+//
+// To add another admin, append their lowercase email here.
+const ADMIN_EMAILS = new Set<string>([
+  "emmanuel.miro77@gmail.com",
+]);
+
+/**
+ * Returns true if the given email is an admin (can push to global rankings).
+ * Case-insensitive, trims whitespace. Returns false for null/undefined/empty.
+ */
+export function isAdminEmail(email: string | null | undefined): boolean {
+  if (!email) return false;
+  return ADMIN_EMAILS.has(email.trim().toLowerCase());
+}
+
+/**
+ * Returns true if the currently logged-in user (set via setCurrentUserEmail)
+ * is an admin. Convenience wrapper used by saveStateToCloud and the UI to
+ * decide whether to write to the global row.
+ */
+function isCurrentUserAdmin(): boolean {
+  return isAdminEmail(_currentUserEmail);
+}
+
+// The id of the GLOBAL cloud row that holds the shared Beatport data
+// (labels with rank/points/genres, artists, rankingSnapshots, rankingsUpdatedAt).
+// Read by everyone, written only by admin. Lives in the same app_state table
+// — no SQL migration needed.
+const GLOBAL_CLOUD_ROW_ID = "global";
+
+/**
+ * Returns the row id for the GLOBAL shared data (Beatport rankings, artists,
+ * snapshots). Same for all users — they all read the same global row.
+ */
+function getGlobalCloudRowId(): string {
+  return GLOBAL_CLOUD_ROW_ID;
+}
+
+/**
+ * Returns the row id for the per-user artists (suffixed "_artists").
+ * Admin's artists row is suffixed "_artists_global" so it is shared with
+ * all users — admin's scrape updates the global artists, and users see it.
+ */
+function getArtistsCloudRowId(): string {
+  // Admin's artists are GLOBAL — every user reads the same.
+  if (isCurrentUserAdmin()) {
+    return `${GLOBAL_CLOUD_ROW_ID}_artists`;
+  }
+  return `${getCloudRowId()}_artists`;
+}
+
+/**
+ * Returns the row id for the GLOBAL artists (read by everyone, written by
+ * admin only). Used by loadArtistsFromCloud to always pull from global,
+ * regardless of who's logged in.
+ */
+function getGlobalArtistsCloudRowId(): string {
+  return `${GLOBAL_CLOUD_ROW_ID}_artists`;
+}
+
+/**
+ * SPLIT STRATEGY — what goes where:
+ *
+ * GLOBAL ROW (id='global', written only by admin):
+ *   - labels[*].id, name, genres, rankByGenre, pointsByGenre, trending,
+ *     trendingRankByGenre, trendingPointsByGenre, beatportLink, isCustom(false)
+ *   - rankingSnapshots
+ *   - rankingsUpdatedAt
+ *   - (artists saved separately via saveArtistsToCloud → global_artists row)
+ *
+ * PERSONAL ROW (id=email, written by each user):
+ *   - userProfile (artist name, email, bio, links, photo, etc.)
+ *   - demos (the user's pitch submissions)
+ *   - labels[*].PERSONAL fields: emails, contactInfo, website, demoLink,
+ *     socialLink, soundcloudLink, customLinks, notes, status, submissionType,
+ *     genre (user-set), createdAt
+ *   - labels[*] with isCustom=true (user-added labels not from Beatport)
+ *   - gmailAuth, locale, lastSavedAt
+ *
+ * Merge at load time:
+ *   - Start from global labels (Beatport truth)
+ *   - For each, look up the personal entry by id (or by name fallback)
+ *     and splice in user-edit fields if present
+ *   - Append personal-only custom labels
+ *   - artists: load from global_artists row
+ *   - snapshots: from global
+ *   - rankingsUpdatedAt: from global
+ *   - userProfile, demos, gmailAuth, locale, lastSavedAt: from personal
+ */
+const LABEL_BEATPORT_FIELDS = [
+  "id", "name",
+  "genres", "rankByGenre", "pointsByGenre",
+  "trending", "trendingRankByGenre", "trendingPointsByGenre",
+  "beatportLink", "isCustom",
+] as const;
+
+const LABEL_PERSONAL_FIELDS = [
+  "emails", "contactInfo", "website", "demoLink", "socialLink",
+  "soundcloudLink", "customLinks", "notes", "status",
+  "submissionType", "genre", "createdAt",
+] as const;
+
+/**
+ * Build the GLOBAL payload (what admin pushes to id='global').
+ * Only Beatport-sourced labels (isCustom !== true) are included; user's
+ * custom labels stay in their personal row.
+ */
+function buildGlobalPayload(state: any): object {
+  const labels = Array.isArray(state?.labels) ? state.labels : [];
+  const globalLabels = labels
+    .filter((l: any) => l && typeof l === "object" && !l.isCustom)
+    .map((l: any) => {
+      const out: Record<string, any> = {};
+      for (const f of LABEL_BEATPORT_FIELDS) {
+        if (l[f] !== undefined) out[f] = l[f];
+      }
+      return out;
+    });
+
+  return {
+    labels: globalLabels,
+    rankingSnapshots: Array.isArray(state?.rankingSnapshots) ? state.rankingSnapshots : [],
+    rankingsUpdatedAt: state?.rankingsUpdatedAt || null,
+    lastGlobalUpdate: new Date().toISOString(),
+  };
+}
+
+/**
+ * Build the PERSONAL payload (what each user pushes to id=email).
+ * Includes profile, demos, and per-label personal fields. Custom labels
+ * (isCustom=true) are included in full.
+ */
+function buildPersonalPayload(state: any): object {
+  const labels = Array.isArray(state?.labels) ? state.labels : [];
+  const personalLabels = labels
+    .filter((l: any) => l && typeof l === "object")
+    .map((l: any) => {
+      if (l.isCustom) {
+        // Custom (user-added) labels go in full — they have no Beatport side.
+        return { ...l };
+      }
+      // Beatport labels: only the personal fields. We include id+name so we
+      // can match them against the global labels at merge time.
+      const out: Record<string, any> = { id: l.id, name: l.name };
+      for (const f of LABEL_PERSONAL_FIELDS) {
+        // Only include non-empty personal fields to keep the row small.
+        const v = l[f];
+        if (v === undefined || v === null) continue;
+        if (Array.isArray(v) ? v.length > 0 : (String(v).trim() !== "")) {
+          out[f] = v;
+        }
+      }
+      return out;
+    })
+    .filter((l: any) => {
+      // Drop labels that have NO personal data and aren't custom — they'd
+      // just bloat the personal row for no reason.
+      if (l.isCustom) return true;
+      const keys = Object.keys(l).filter((k) => k !== "id" && k !== "name");
+      return keys.length > 0;
+    });
+
+  return {
+    labels: personalLabels,
+    demos: Array.isArray(state?.demos) ? state.demos : [],
+    userProfile: state?.userProfile || {},
+    gmailAuth: state?.gmailAuth || null,
+    locale: state?.locale || null,
+    lastSavedAt: state?.lastSavedAt || new Date().toISOString(),
+  };
+}
+
+/**
+ * Merge a global Beatport label with its personal overlay.
+ * Personal fields overwrite global ones (user-edited notes/emails/status win).
+ */
+function mergeGlobalAndPersonalLabel(global: any, personal: any): any {
+  const merged: Record<string, any> = { ...global };
+  for (const f of LABEL_PERSONAL_FIELDS) {
+    const v = personal?.[f];
+    if (v === undefined || v === null) continue;
+    if (Array.isArray(v) ? v.length > 0 : (String(v).trim() !== "")) {
+      merged[f] = v;
+    }
+  }
+  return merged;
+}
+
+/**
+ * Merge the global cloud data with the personal cloud data, producing the
+ * final state to hydrate the store with.
+ *
+ * Strategy:
+ * - labels: start from global (Beatport truth), splice in personal fields.
+ *           Append personal-only custom labels (isCustom=true).
+ * - rankingSnapshots, rankingsUpdatedAt: from global.
+ * - userProfile, demos, gmailAuth, locale, lastSavedAt: from personal.
+ *
+ * Falls back gracefully if either side is missing (e.g., new user with no
+ * personal row yet, or admin who hasn't pushed global yet).
+ */
+export function mergeGlobalAndPersonalCloud(global: any, personal: any): any {
+  const globalLabels = Array.isArray(global?.labels) ? global.labels : [];
+  const personalLabels = Array.isArray(personal?.labels) ? personal.labels : [];
+
+  const personalById = new Map<string, any>();
+  const personalByName = new Map<string, any>();
+  for (const pl of personalLabels) {
+    if (!pl || typeof pl !== "object") continue;
+    if (pl.id) personalById.set(pl.id, pl);
+    const nm = pl.name?.toLowerCase().trim();
+    if (nm) personalByName.set(nm, pl);
+  }
+
+  // Track which personal labels got merged into a global one
+  const consumedPersonalIds = new Set<string>();
+  const consumedPersonalNames = new Set<string>();
+
+  const mergedLabels: any[] = [];
+  for (const gl of globalLabels) {
+    if (!gl || typeof gl !== "object") continue;
+    const personalMatch = (gl.id && personalById.get(gl.id)) ||
+      (gl.name && personalByName.get(gl.name.toLowerCase().trim()));
+    if (personalMatch) {
+      if (personalMatch.id) consumedPersonalIds.add(personalMatch.id);
+      const nm = personalMatch.name?.toLowerCase().trim();
+      if (nm) consumedPersonalNames.add(nm);
+      mergedLabels.push(mergeGlobalAndPersonalLabel(gl, personalMatch));
+    } else {
+      // No personal overlay — use global as-is, fill defaults for personal fields
+      mergedLabels.push({
+        emails: [],
+        contactInfo: "",
+        website: "",
+        demoLink: "",
+        socialLink: "",
+        soundcloudLink: "",
+        customLinks: [],
+        notes: "",
+        status: "open",
+        submissionType: "email",
+        genre: "",
+        createdAt: new Date().toISOString(),
+        ...gl,
+      });
+    }
+  }
+
+  // Append personal-only labels (custom labels not in global)
+  for (const pl of personalLabels) {
+    if (!pl || typeof pl !== "object") continue;
+    const idConsumed = pl.id && consumedPersonalIds.has(pl.id);
+    const nameConsumed = pl.name && consumedPersonalNames.has(pl.name.toLowerCase().trim());
+    if (idConsumed || nameConsumed) continue;
+    // This is a custom label (or one the user added manually) — include in full
+    mergedLabels.push({ ...pl });
+  }
+
+  return {
+    labels: mergedLabels,
+    demos: personal?.demos || [],
+    userProfile: personal?.userProfile || {},
+    gmailAuth: personal?.gmailAuth || null,
+    locale: personal?.locale || null,
+    rankingSnapshots: global?.rankingSnapshots || [],
+    rankingsUpdatedAt: global?.rankingsUpdatedAt || null,
+    lastSavedAt: personal?.lastSavedAt || new Date().toISOString(),
+  };
+}
+
 /**
  * Salva lo stato completo dell'app su Supabase.
  * Usa upsert per creare o aggiornare il record.
+ *
+ * CLOUD-FIRST SPLIT (2026-06-23): this function now writes to TWO rows:
+ *   1. id='global' — Beatport rankings, snapshots, rankingsUpdatedAt
+ *      (only admin can write here; non-admin saves are silently skipped
+ *      for the global row to prevent users from clobbering shared data)
+ *   2. id=email — profile, demos, per-label personal fields
+ *      (every user writes here)
+ *
+ * Artists are saved separately via saveArtistsToCloud (id='global_artists'
+ * for admin, id='<email>_artists' for users — but loadArtistsFromCloud
+ * always reads from global_artists).
  */
 export async function saveStateToCloud(data: object): Promise<boolean> {
   const supabase = getSupabase();
@@ -338,20 +610,46 @@ export async function saveStateToCloud(data: object): Promise<boolean> {
 
   setStatus("syncing");
 
+  const now = new Date().toISOString();
+  const personalPayload = buildPersonalPayload(data);
+  const adminUser = isCurrentUserAdmin();
+
   try {
-    const { error } = await supabase.from(CLOUD_TABLE).upsert(
+    // Step 1: always write the personal row (every user has one)
+    const personalResult = await supabase.from(CLOUD_TABLE).upsert(
       {
         id: getCloudRowId(),
-        data: data,
-        updated_at: new Date().toISOString(),
+        data: personalPayload,
+        updated_at: now,
       },
       { onConflict: "id" }
     );
-
-    if (error) {
-      console.error("[LabelPulse Cloud] Save error:", error.message);
-      setStatus("error", humanizeCloudError(error));
+    if (personalResult.error) {
+      console.error("[LabelPulse Cloud] Personal save error:", personalResult.error.message);
+      setStatus("error", humanizeCloudError(personalResult.error));
       return false;
+    }
+
+    // Step 2: if admin, ALSO write the global row (Beatport truth)
+    if (adminUser) {
+      const globalPayload = buildGlobalPayload(data);
+      const globalResult = await supabase.from(CLOUD_TABLE).upsert(
+        {
+          id: getGlobalCloudRowId(),
+          data: globalPayload,
+          updated_at: now,
+        },
+        { onConflict: "id" }
+      );
+      if (globalResult.error) {
+        console.error("[LabelPulse Cloud] Global save error:", globalResult.error.message);
+        // Don't fail the whole save — personal data was saved successfully
+        console.warn("[LabelPulse Cloud] Continuing despite global save error (personal save succeeded)");
+      } else {
+        console.info("[LabelPulse Cloud] Admin global row updated: labels=" +
+          (globalPayload as any).labels?.length + ", snapshots=" +
+          (globalPayload as any).rankingSnapshots?.length);
+      }
     }
 
     setStatus("synced");
@@ -365,35 +663,58 @@ export async function saveStateToCloud(data: object): Promise<boolean> {
 
 /**
  * Carica lo stato completo dell'app da Supabase.
- * Ritorna null se non ci sono dati o se Supabase non è configurato.
+ *
+ * CLOUD-FIRST SPLIT (2026-06-23): reads from BOTH rows and merges:
+ *   - id='global' → Beatport rankings, snapshots, rankingsUpdatedAt
+ *   - id=email → profile, demos, per-label personal fields
+ *
+ * Returns null if BOTH rows are empty (first-time user with no data).
  */
 export async function loadStateFromCloud(): Promise<object | null> {
   const supabase = getSupabase();
   if (!supabase) return null;
 
   try {
-    const { data, error } = await supabase
-      .from(CLOUD_TABLE)
-      .select("data, updated_at")
-      .eq("id", getCloudRowId())
-      .single();
+    // Fetch both rows in parallel — they're independent.
+    const [personalRes, globalRes] = await Promise.all([
+      supabase
+        .from(CLOUD_TABLE)
+        .select("data, updated_at")
+        .eq("id", getCloudRowId())
+        .single(),
+      supabase
+        .from(CLOUD_TABLE)
+        .select("data, updated_at")
+        .eq("id", getGlobalCloudRowId())
+        .single(),
+    ]);
 
-    if (error) {
-      if (error.code === "PGRST116") {
-        // No rows returned — first time, no data in cloud yet
-        return null;
-      }
-      console.error("[LabelPulse Cloud] Load error:", error.message);
-      setStatus("error", humanizeCloudError(error));
+    // Personal row: error other than "no rows" is a real failure
+    if (personalRes.error && personalRes.error.code !== "PGRST116") {
+      console.error("[LabelPulse Cloud] Personal load error:", personalRes.error.message);
+      setStatus("error", humanizeCloudError(personalRes.error));
       return null;
     }
 
-    if (!data?.data || Object.keys(data.data).length === 0) {
+    // Global row: error other than "no rows" is a real failure
+    if (globalRes.error && globalRes.error.code !== "PGRST116") {
+      console.error("[LabelPulse Cloud] Global load error:", globalRes.error.message);
+      setStatus("error", humanizeCloudError(globalRes.error));
       return null;
     }
+
+    const personalData = personalRes.data?.data || null;
+    const globalData = globalRes.data?.data || null;
+
+    if (!personalData && !globalData) {
+      // First-time user: no data anywhere
+      return null;
+    }
+
+    const merged = mergeGlobalAndPersonalCloud(globalData, personalData);
 
     setStatus("synced");
-    return data.data as object;
+    return merged;
   } catch (err) {
     console.error("[LabelPulse Cloud] Load exception:", err);
     setStatus("error", humanizeCloudError(err));
@@ -407,10 +728,14 @@ export async function loadStateFromCloud(): Promise<object | null> {
  * Subscribe to changes on the app_state row so that updates from
  * other devices (PC ↔ phone) are reflected in near-real-time.
  *
- * When a remote UPDATE arrives, we:
+ * CLOUD-FIRST SPLIT (2026-06-23): sets up TWO subscriptions:
+ *   1. PERSONAL row (id=email) — profile/demos/per-label personal fields
+ *   2. GLOBAL row (id='global') — admin's Beatport rankings/snapshots/artists
+ *
+ * When a remote UPDATE arrives:
  *   1. set _isApplyingRemoteUpdate = true (so we don't bounce the change back)
- *   2. fetch the latest data from cloud
- *   3. merge it into the local store
+ *   2. fetch the latest data from BOTH cloud rows
+ *   3. merge it into the local store via applyRemoteData
  *   4. set _isApplyingRemoteUpdate = false
  */
 export function setupRealtimeSubscription(): () => void {
@@ -421,8 +746,9 @@ export function setupRealtimeSubscription(): () => void {
   teardownRealtime();
 
   try {
-    const channel = supabase
-      .channel("app_state_changes")
+    // ---- PERSONAL channel: own row updates (profile edits from other devices) ----
+    const personalChannel = supabase
+      .channel("app_state_personal")
       .on(
         "postgres_changes",
         {
@@ -432,22 +758,17 @@ export function setupRealtimeSubscription(): () => void {
           filter: `id=eq.${getCloudRowId()}`,
         },
         async (payload: any) => {
-          // Skip our own updates to avoid feedback loops
           if (_isApplyingRemoteUpdate) return;
-
           const newData = payload?.new?.data;
-          const newUpdatedAt = payload?.new?.updated_at;
           if (!newData) return;
-
-          console.log(
-            "[LabelPulse Cloud] Realtime update received, updated_at:",
-            newUpdatedAt
-          );
-
-          // Apply the remote data to the local store
+          console.log("[LabelPulse Cloud] Realtime PERSONAL update, applying personal overlay...");
           _isApplyingRemoteUpdate = true;
           try {
-            await applyRemoteData(newData);
+            // Personal update: only the personal overlay changed. We need to
+            // re-merge with the global row to produce the final state.
+            // Easiest: just reload both from cloud.
+            const fresh = await loadStateFromCloud();
+            if (fresh) await applyRemoteData(fresh);
             setStatus("synced");
           } finally {
             _isApplyingRemoteUpdate = false;
@@ -456,13 +777,51 @@ export function setupRealtimeSubscription(): () => void {
       )
       .subscribe((status: string) => {
         if (status === "SUBSCRIBED") {
-          console.log("[LabelPulse Cloud] Realtime subscription active");
+          console.log("[LabelPulse Cloud] Realtime PERSONAL subscription active");
         } else if (status === "CHANNEL_ERROR" || status === "TIMED_OUT") {
-          console.warn("[LabelPulse Cloud] Realtime subscription issue:", status);
+          console.warn("[LabelPulse Cloud] Personal subscription issue:", status);
         }
       });
 
-    _realtimeChannel = channel;
+    // ---- GLOBAL channel: admin pushed a new scrape — refresh rankings ----
+    const globalChannel = supabase
+      .channel("app_state_global")
+      .on(
+        "postgres_changes",
+        {
+          event: "UPDATE",
+          schema: "public",
+          table: CLOUD_TABLE,
+          filter: `id=eq.${getGlobalCloudRowId()}`,
+        },
+        async (payload: any) => {
+          if (_isApplyingRemoteUpdate) return;
+          const newData = payload?.new?.data;
+          if (!newData) return;
+          console.log("[LabelPulse Cloud] Realtime GLOBAL update (admin pushed new rankings), refreshing...");
+          _isApplyingRemoteUpdate = true;
+          try {
+            // Global update: admin pushed new Beatport data. Reload both rows
+            // and re-merge so the user sees the new rankings immediately.
+            const fresh = await loadStateFromCloud();
+            if (fresh) await applyRemoteData(fresh);
+            setStatus("synced");
+          } finally {
+            _isApplyingRemoteUpdate = false;
+          }
+        }
+      )
+      .subscribe((status: string) => {
+        if (status === "SUBSCRIBED") {
+          console.log("[LabelPulse Cloud] Realtime GLOBAL subscription active");
+        } else if (status === "CHANNEL_ERROR" || status === "TIMED_OUT") {
+          console.warn("[LabelPulse Cloud] Global subscription issue:", status);
+        }
+      });
+
+    // Track both channels for teardown
+    _realtimeChannel = personalChannel;
+    _realtimeGlobalChannel = globalChannel;
     return teardownRealtime;
   } catch (err) {
     console.warn("[LabelPulse Cloud] Realtime setup failed:", err);
@@ -471,16 +830,22 @@ export function setupRealtimeSubscription(): () => void {
 }
 
 function teardownRealtime() {
+  const supabase = _supabase;
   if (_realtimeChannel) {
     try {
-      const supabase = _supabase;
-      if (supabase) {
-        supabase.removeChannel(_realtimeChannel);
-      }
+      if (supabase) supabase.removeChannel(_realtimeChannel);
     } catch {
       // ignore
     }
     _realtimeChannel = null;
+  }
+  if (_realtimeGlobalChannel) {
+    try {
+      if (supabase) supabase.removeChannel(_realtimeGlobalChannel);
+    } catch {
+      // ignore
+    }
+    _realtimeGlobalChannel = null;
   }
 }
 
@@ -798,15 +1163,19 @@ export async function loadArtistsFromCloud(): Promise<any[]> {
   if (!supabase) return [];
 
   try {
+    // CLOUD-FIRST SPLIT: artists always come from the GLOBAL row, regardless
+    // of who is logged in. Admin pushes there via saveArtistsToCloud; users
+    // just read. This way every user sees the same Beatport artists that
+    // admin last scraped.
     const { data, error } = await supabase
       .from(CLOUD_TABLE)
       .select("data, updated_at")
-      .eq("id", getArtistsCloudRowId())
+      .eq("id", getGlobalArtistsCloudRowId())
       .single();
 
     if (error) {
       if (error.code === "PGRST116") {
-        // No rows — first time, no artists in cloud yet
+        // No rows — admin hasn't pushed artists yet (or this is a fresh install)
         return [];
       }
       console.error("[LabelPulse Cloud] Artists load error:", error.message);
@@ -817,7 +1186,7 @@ export async function loadArtistsFromCloud(): Promise<any[]> {
     if (!Array.isArray(artists) || artists.length === 0) return [];
 
     console.info(
-      `[LabelPulse Cloud] Artists loaded from cloud: ${artists.length} artists (saved at ${data?.data?.savedAt || "unknown"})`
+      `[LabelPulse Cloud] Artists loaded from GLOBAL cloud row: ${artists.length} artists (saved at ${data?.data?.savedAt || "unknown"})`
     );
     return artists;
   } catch (err) {

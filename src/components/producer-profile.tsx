@@ -35,19 +35,7 @@ import {
 import { Label as UILabel } from "@/components/ui/label";
 import { Textarea } from "@/components/ui/textarea";
 import { Avatar, AvatarImage, AvatarFallback } from "@/components/ui/avatar";
-
-// ==================== ADMIN EMAILS ====================
-// Only these emails see the BYOK (Bring Your Own Key) Supabase config UI.
-// Regular users get a friendly "Cloud sync is automatic" message instead —
-// they should never have to configure Supabase credentials themselves.
-const ADMIN_EMAILS = new Set<string>([
-  "emmanuel.miro77@gmail.com",
-]);
-
-function isAdminEmail(email: string | null | undefined): boolean {
-  if (!email) return false;
-  return ADMIN_EMAILS.has(email.toLowerCase().trim());
-}
+import { isAdminEmail } from "@/lib/supabase";
 
 // ==================== LINK TYPES ====================
 
@@ -278,7 +266,7 @@ export function ProducerProfile() {
       setPhotoUploading(true);
 
       try {
-        const dataUrl = await compressImageToDataUrl(file, 256, 256, 0.85);
+        const dataUrl = await compressImageToDataUrl(file, 256, 0.85);
         setUserProfile({ photoUrl: dataUrl });
         setPhotoUrlDraft(dataUrl);
         triggerSaved();
