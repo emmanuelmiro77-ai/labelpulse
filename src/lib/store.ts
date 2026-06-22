@@ -291,6 +291,13 @@ function mergeSnapshots(
 export const mergeSnapshotsPublic = mergeSnapshots;
 
 /**
+ * Public alias for mergeCloudData, exported so supabase.ts can use it via
+ * lazy import (to avoid circular deps at module load time). Used by the
+ * explicitMergeLocalAndCloud recovery action.
+ */
+export const mergeCloudDataPublic = mergeCloudData;
+
+/**
  * Check if persisted data has user edits (emails, notes, links, etc.)
  * This helps us detect if the store was accidentally reset to seed data.
  */
@@ -1150,6 +1157,12 @@ export const useAppStore = create<AppState>()(
           saveArtistsToIDB(artists).catch((e) =>
             console.warn("[LabelPulse] Failed to persist artists to IndexedDB:", e)
           );
+          // ⚠️ Also push to cloud (separate row "<email>_artists") for cross-device sync
+          import("./supabase").then(({ saveArtistsToCloud }) => {
+            saveArtistsToCloud(artists).catch((e) =>
+              console.warn("[LabelPulse] Failed to sync artists to cloud:", e)
+            );
+          }).catch(() => {});
         }
       },
       setLocale: (locale) => { set({ locale }); syncToCloud(); },
@@ -1472,6 +1485,13 @@ export const useAppStore = create<AppState>()(
             saveArtistsToIDB(mergedArtists).catch((e) =>
               console.warn("[LabelPulse Import] Failed to persist artists to IndexedDB:", e)
             );
+            // ⚠️ Also push artists to cloud (separate row "<email>_artists")
+            // so the user can access them on other devices. Non-blocking.
+            import("./supabase").then(({ saveArtistsToCloud }) => {
+              saveArtistsToCloud(mergedArtists!).catch((e) =>
+                console.warn("[LabelPulse Import] Failed to sync artists to cloud:", e)
+              );
+            }).catch(() => {});
           }
 
           return true;
@@ -1833,19 +1853,30 @@ export async function loadFromCloud(): Promise<void> {
     const localHasSnapshots = (localState.rankingSnapshots?.length ?? 0) > 0;
     const localHasDemos = (localState.demos?.length ?? 0) > 0;
 
-    // Force merge if cloud has profile data local doesn't have
+    // ⚠️ CRITICAL FIX (data-loss bug 2026-06-22, post-login "no charts" v2):
+    // PREVIOUSLY: only merged when cloud brought data the local didn't have
+    // AT THE COUNT LEVEL (e.g., cloudBringsNewLabels = cloudHasLabels && !localHasLabels).
+    // This was BRITTLE: if local had 1192 seed labels (with EMPTY rankByGenre)
+    // and cloud had 100 labels (with POPULATED rankByGenre), localHasLabels=true,
+    // cloudBringsNewLabels=false → NO MERGE → user sees "no charts" because
+    // none of their labels have rankByGenre populated.
+    //
+    // FIX: ALWAYS run the content-aware merge if cloud has any data at all.
+    // The mergeCloudData function is designed to be safe — it unions arrays
+    // by id and per-genre merges Beatport data fields (local wins on conflict,
+    // cloud's data preserved for genres local doesn't have). So running it
+    // unconditionally is the correct behavior: it can only ADD data, never
+    // remove it.
+    //
+    // The only time we SKIP the merge is when cloud has literally nothing
+    // useful to contribute (no profile, no labels, no snapshots, no demos,
+    // and not newer by timestamp) — in that case local stays as-is.
     const cloudBringsNewProfile = cloudProfileHasData && !localProfileHasData;
-    // Force merge if cloud has labels/snapshots/demos that local doesn't have
-    const cloudBringsNewLabels = cloudHasLabels && !localHasLabels;
-    const cloudBringsNewSnapshots = cloudHasSnapshots && !localHasSnapshots;
-    const cloudBringsNewDemos = cloudHasDemos && !localHasDemos;
-
+    const cloudHasAnyContent = cloudHasLabels || cloudHasSnapshots || cloudHasDemos || cloudProfileHasData;
     const cloudIsNewerByTimestamp = cloudSavedAt > localSavedAt;
     const shouldMergeFromCloud =
       cloudBringsNewProfile ||
-      cloudBringsNewLabels ||
-      cloudBringsNewSnapshots ||
-      cloudBringsNewDemos ||
+      cloudHasAnyContent ||
       cloudIsNewerByTimestamp;
 
     if (shouldMergeFromCloud) {
@@ -1853,11 +1884,11 @@ export async function loadFromCloud(): Promise<void> {
       console.log(
         `[LabelPulse Cloud] Merging from cloud. Reasons: ` +
         `cloudBringsNewProfile=${cloudBringsNewProfile}, ` +
-        `cloudBringsNewLabels=${cloudBringsNewLabels}, ` +
-        `cloudBringsNewSnapshots=${cloudBringsNewSnapshots}, ` +
-        `cloudBringsNewDemos=${cloudBringsNewDemos}, ` +
+        `cloudHasAnyContent=${cloudHasAnyContent}, ` +
         `cloudIsNewerByTimestamp=${cloudIsNewerByTimestamp} ` +
-        `(cloud: ${cloud.lastSavedAt}, local: ${localState.lastSavedAt}).`
+        `(cloud: ${cloud.lastSavedAt}, local: ${localState.lastSavedAt}). ` +
+        `cloud: labels=${cloud.labels?.length || 0}, snaps=${cloud.rankingSnapshots?.length || 0}, demos=${cloud.demos?.length || 0}. ` +
+        `local: labels=${localState.labels?.length || 0}, snaps=${localState.rankingSnapshots?.length || 0}, demos=${localState.demos?.length || 0}.`
       );
 
       // SAFETY CHECK: se il cloud è "più recente" ma ha array vuoti dove
@@ -1869,13 +1900,12 @@ export async function loadFromCloud(): Promise<void> {
         (localHasDemos && !cloudHasDemos)
       ) {
         console.warn(
-          "[LabelPulse Cloud] CLOUD DATA LOSS DETECTED — cloud is newer but has empty arrays where local has data. Skipping merge to preserve local data. Run a manual sync to upload local to cloud."
+          "[LabelPulse Cloud] CLOUD DATA LOSS DETECTED — cloud has empty arrays where local has data. Still running merge (safe: mergeCloudData unions by id, never replaces), but local data will dominate. Will also push merged result back to cloud."
         );
-        useAppStore.setState({ hasCloudSynced: true });
-        // Trigger upload of local data so cloud gets repopulated
-        setTimeout(() => forceCloudSync(), 500);
-        setupRealtimeSubscriptionSafe();
-        return;
+        // Note: we no longer skip the merge. The merge function is content-aware
+        // (unions by id, local wins on conflict), so it's safe to run even when
+        // cloud has empty arrays. We then push the merged result (which has
+        // local's data) back to cloud to repopulate it.
       }
 
       // Usa la stessa logica di merge della reidratazione
@@ -2145,16 +2175,44 @@ function mergeCloudData(cloudData: any, localState: any): Partial<AppState> {
 // Called once on app boot (after Zustand rehydration) to load artists
 // from IndexedDB into the in-memory store. Non-blocking — UI renders
 // immediately with artists:[] and populates when IDB returns.
+//
+// ⚠️ CROSS-DEVICE SYNC: if IDB is empty (first login on a new device),
+// falls back to loading artists from cloud (separate row "<email>_artists").
+// This is the only way artists survive a device switch — they're too large
+// for the main app_state row, so they live in their own row.
 // ===================================================================
 export async function loadArtistsOnBoot(): Promise<void> {
   if (typeof window === "undefined") return;
   try {
-    const artists = await loadArtistsFromIDB();
+    let artists = await loadArtistsFromIDB();
     if (artists.length > 0) {
       useAppStore.setState({ artists });
       console.info(`[LabelPulse] Loaded ${artists.length} artists from IndexedDB`);
+      // Also push to cloud if cloud doesn't have them yet (non-blocking)
+      // — this ensures the cloud row stays in sync with what's in IDB.
+      import("./supabase").then(({ saveArtistsToCloud, getArtistsCloudSyncInfo }) => {
+        getArtistsCloudSyncInfo().then((info) => {
+          if (info && (info.count === 0 || info.count < artists.length)) {
+            console.info(`[LabelPulse] Cloud has ${info.count} artists, local has ${artists.length}. Pushing local to cloud.`);
+            saveArtistsToCloud(artists).catch(() => {});
+          }
+        }).catch(() => {});
+      }).catch(() => {});
+    } else {
+      // IDB is empty — try cloud (first login on new device, or after clearing browser data)
+      console.info("[LabelPulse] IndexedDB has 0 artists. Trying cloud...");
+      const { loadArtistsFromCloud } = await import("./supabase");
+      const cloudArtists = await loadArtistsFromCloud();
+      if (cloudArtists.length > 0) {
+        useAppStore.setState({ artists: cloudArtists });
+        // Also persist to IDB so future loads are fast (no network round-trip)
+        await saveArtistsToIDB(cloudArtists);
+        console.info(`[LabelPulse] Loaded ${cloudArtists.length} artists from cloud → IDB`);
+      } else {
+        console.info("[LabelPulse] No artists in cloud either. User has not imported a scrape yet.");
+      }
     }
   } catch (e) {
-    console.warn("[LabelPulse] Failed to load artists from IndexedDB:", e);
+    console.warn("[LabelPulse] Failed to load artists on boot:", e);
   }
 }

@@ -287,6 +287,21 @@ const CLOUD_TABLE = "app_state";
 // account maps to its own isolated row in app_state (multi-profile support).
 const DEFAULT_CLOUD_ROW_ID = "default";
 
+// ⚠️ Artists are stored in a SEPARATE cloud row (suffixed "_artists") because:
+// 1. A full Beatport scrape produces ~3400 artists / ~3000 tracks totaling ~9MB.
+//    Putting it in the main app_state row alongside labels/demos/profile would
+//    risk hitting Supabase's JSONB column size limit and slow down EVERY sync
+//    (even tiny profile updates would re-upload 9MB).
+// 2. Artists change infrequently (only when user re-scrapes), while labels/
+//    profile change often (notes, tier, status). Splitting them keeps the
+//    frequent-sync path lightweight.
+// 3. On a new device, the user gets labels/profile/snapshots from the main
+//    row, then this function pulls artists separately. Without this, a user
+//    logging in on a new phone would see 0 artists even with perfect cloud sync.
+function getArtistsCloudRowId(): string {
+  return `${getCloudRowId()}_artists`;
+}
+
 // Module-level holder for the current user's email. Populated by
 // useAuthEffect() (see use-auth.ts) — must be set BEFORE any cloud sync
 // operation, otherwise we'd fall back to "default" and mix profiles.
@@ -524,16 +539,16 @@ async function applyRemoteData(cloudData: any): Promise<void> {
   const cloudHasLabels = Array.isArray(cloudData?.labels) && cloudData.labels.length > 0;
   const cloudHasDemos = Array.isArray(cloudData?.demos) && cloudData.demos.length > 0;
   const cloudHasSnapshots = Array.isArray(cloudData?.rankingSnapshots) && cloudData.rankingSnapshots.length > 0;
-  const cloudBringsNewLabels = cloudHasLabels && (store.labels?.length ?? 0) === 0;
-  const cloudBringsNewDemos = cloudHasDemos && (store.demos?.length ?? 0) === 0;
-  const cloudBringsNewSnapshots = cloudHasSnapshots && (store.rankingSnapshots?.length ?? 0) === 0;
-
+  // ⚠️ CRITICAL FIX (data-loss bug 2026-06-22, post-login "no charts" v2):
+  // Mirror the fix in store.ts:loadFromCloud — ALWAYS run merge if cloud has
+  // ANY content, not just when local is empty. The merge function is content-
+  // aware (unions by id, preserves Beatport fields per-genre with local wins),
+  // so running it unconditionally only adds data, never removes it.
+  const cloudHasAnyContent = cloudHasLabels || cloudHasDemos || cloudHasSnapshots || cloudProfileHasData;
   const cloudIsNewerByTimestamp = cloudLastSavedAt > localLastSavedAt;
   const shouldApply =
     cloudBringsNewProfile ||
-    cloudBringsNewLabels ||
-    cloudBringsNewDemos ||
-    cloudBringsNewSnapshots ||
+    cloudHasAnyContent ||
     cloudIsNewerByTimestamp;
 
   if (!shouldApply) {
@@ -724,4 +739,302 @@ async function applyRemoteData(cloudData: any): Promise<void> {
       console.warn("[LabelPulse Cloud] Post-realtime sidecar restore failed:", e);
     }
   }, 0);
+}
+
+// ==================== ARTISTS CLOUD SYNC (separate row) ====================
+// Artists live in their own cloud row (id = "<email>_artists") to keep the
+// main app_state row lightweight. See getArtistsCloudRowId() for rationale.
+
+/**
+ * Save artists array to cloud (separate row).
+ * Called when artists are imported (scrape) or updated.
+ * Uses upsert with onConflict:"id" so it replaces the previous artists row.
+ *
+ * NOTE: artists array can be large (~9MB for 3400 artists). The Supabase
+ * JSONB column supports up to 1GB, so this is fine size-wise. The main
+ * concern is upload time on slow connections — we don't block UI on this.
+ */
+export async function saveArtistsToCloud(artists: any[]): Promise<boolean> {
+  const supabase = getSupabase();
+  if (!supabase) return false;
+  if (!Array.isArray(artists) || artists.length === 0) {
+    // Don't upload empty arrays — would wipe cloud's good data
+    return false;
+  }
+
+  try {
+    const { error } = await supabase.from(CLOUD_TABLE).upsert(
+      {
+        id: getArtistsCloudRowId(),
+        data: { artists, savedAt: new Date().toISOString() },
+        updated_at: new Date().toISOString(),
+      },
+      { onConflict: "id" }
+    );
+
+    if (error) {
+      console.error("[LabelPulse Cloud] Artists save error:", error.message);
+      return false;
+    }
+
+    console.info(
+      `[LabelPulse Cloud] Artists saved to cloud: ${artists.length} artists`
+    );
+    return true;
+  } catch (err) {
+    console.error("[LabelPulse Cloud] Artists save exception:", err);
+    return false;
+  }
+}
+
+/**
+ * Load artists array from cloud (separate row).
+ * Returns [] if no artists in cloud or if not configured.
+ *
+ * Called on boot after the main cloud sync — artists are pulled separately
+ * so they don't block the initial UI render (labels/profile/snapshots come
+ * first, artists come second).
+ */
+export async function loadArtistsFromCloud(): Promise<any[]> {
+  const supabase = getSupabase();
+  if (!supabase) return [];
+
+  try {
+    const { data, error } = await supabase
+      .from(CLOUD_TABLE)
+      .select("data, updated_at")
+      .eq("id", getArtistsCloudRowId())
+      .single();
+
+    if (error) {
+      if (error.code === "PGRST116") {
+        // No rows — first time, no artists in cloud yet
+        return [];
+      }
+      console.error("[LabelPulse Cloud] Artists load error:", error.message);
+      return [];
+    }
+
+    const artists = (data?.data as any)?.artists;
+    if (!Array.isArray(artists) || artists.length === 0) return [];
+
+    console.info(
+      `[LabelPulse Cloud] Artists loaded from cloud: ${artists.length} artists (saved at ${data?.data?.savedAt || "unknown"})`
+    );
+    return artists;
+  } catch (err) {
+    console.error("[LabelPulse Cloud] Artists load exception:", err);
+    return [];
+  }
+}
+
+/**
+ * Returns the timestamp of the last artists cloud sync, or null if never synced.
+ * Useful for the diagnostic UI to show "artists last synced: X ago".
+ */
+export async function getArtistsCloudSyncInfo(): Promise<{ count: number; savedAt: string | null } | null> {
+  const supabase = getSupabase();
+  if (!supabase) return null;
+
+  try {
+    const { data, error } = await supabase
+      .from(CLOUD_TABLE)
+      .select("data, updated_at")
+      .eq("id", getArtistsCloudRowId())
+      .single();
+
+    if (error) {
+      if (error.code === "PGRST116") return { count: 0, savedAt: null };
+      return null;
+    }
+
+    const artists = (data?.data as any)?.artists;
+    return {
+      count: Array.isArray(artists) ? artists.length : 0,
+      savedAt: (data?.data as any)?.savedAt || data?.updated_at || null,
+    };
+  } catch {
+    return null;
+  }
+}
+
+/**
+ * Returns the count of labels in the main cloud row + lastSavedAt timestamp.
+ * Used by the diagnostic UI to show "cloud has X labels, last synced Y ago".
+ */
+export async function getMainCloudSyncInfo(): Promise<{
+  labels: number;
+  labelsWithRankings: number;
+  snapshots: number;
+  demos: number;
+  profileHasData: boolean;
+  lastSavedAt: string | null;
+} | null> {
+  const supabase = getSupabase();
+  if (!supabase) return null;
+
+  try {
+    const { data, error } = await supabase
+      .from(CLOUD_TABLE)
+      .select("data, updated_at")
+      .eq("id", getCloudRowId())
+      .single();
+
+    if (error) {
+      if (error.code === "PGRST116") {
+        return { labels: 0, labelsWithRankings: 0, snapshots: 0, demos: 0, profileHasData: false, lastSavedAt: null };
+      }
+      return null;
+    }
+
+    const d = (data?.data as any) || {};
+    const labels = Array.isArray(d.labels) ? d.labels : [];
+    const labelsWithRankings = labels.filter(
+      (l: any) => l && typeof l.rankByGenre === "object" && Object.keys(l.rankByGenre || {}).length > 0
+    ).length;
+    const profile = d.userProfile || {};
+    const profileHasData =
+      !!profile.artistName || !!profile.bio || !!profile.email ||
+      !!profile.scLink || !!profile.photoUrl ||
+      (Array.isArray(profile.links) && profile.links.length > 0);
+
+    return {
+      labels: labels.length,
+      labelsWithRankings,
+      snapshots: Array.isArray(d.rankingSnapshots) ? d.rankingSnapshots.length : 0,
+      demos: Array.isArray(d.demos) ? d.demos.length : 0,
+      profileHasData,
+      lastSavedAt: d.lastSavedAt || data?.updated_at || null,
+    };
+  } catch {
+    return null;
+  }
+}
+
+/**
+ * Force-push the current local state to cloud, REPLACING the cloud row entirely.
+ * DANGEROUS: only use when the user explicitly clicks "Sovrascrivi cloud con locale".
+ * Used by the diagnostic UI as a recovery action.
+ *
+ * Returns true on success, false on failure.
+ */
+export async function forcePushLocalToCloud(): Promise<boolean> {
+  const supabase = getSupabase();
+  if (!supabase) return false;
+
+  const store = useAppStore.getState();
+  const lastSavedAt = new Date().toISOString();
+  const dataToSync = {
+    labels: store.labels,
+    demos: store.demos,
+    activeTab: store.activeTab,
+    locale: store.locale,
+    userProfile: store.userProfile,
+    gmailAuth: store.gmailAuth,
+    rankingsUpdatedAt: store.rankingsUpdatedAt,
+    lastSavedAt,
+    rankingSnapshots: store.rankingSnapshots,
+  };
+
+  try {
+    const { error } = await supabase.from(CLOUD_TABLE).upsert(
+      {
+        id: getCloudRowId(),
+        data: dataToSync,
+        updated_at: new Date().toISOString(),
+      },
+      { onConflict: "id" }
+    );
+    if (error) {
+      console.error("[LabelPulse Cloud] Force-push error:", error.message);
+      return false;
+    }
+    console.info("[LabelPulse Cloud] Force-push: local → cloud (overwrite).");
+    setStatus("synced");
+    return true;
+  } catch (err) {
+    console.error("[LabelPulse Cloud] Force-push exception:", err);
+    return false;
+  }
+}
+
+/**
+ * Force-pull cloud state into local store, REPLACING local entirely.
+ * DANGEROUS: only use when the user explicitly clicks "Sovrascrivi locale con cloud".
+ * Used by the diagnostic UI as a recovery action.
+ *
+ * Returns true on success, false on failure.
+ */
+export async function forcePullCloudToLocal(): Promise<boolean> {
+  const cloudData = await loadStateFromCloud();
+  if (!cloudData) {
+    console.warn("[LabelPulse Cloud] Force-pull: cloud has no data.");
+    return false;
+  }
+
+  const cloud = cloudData as any;
+  // Replace local with cloud entirely (no merge)
+  useAppStore.setState({
+    labels: Array.isArray(cloud.labels) ? cloud.labels : [],
+    demos: Array.isArray(cloud.demos) ? cloud.demos : [],
+    activeTab: cloud.activeTab || "dashboard",
+    locale: cloud.locale || "it",
+    userProfile: cloud.userProfile || {},
+    gmailAuth: cloud.gmailAuth || null,
+    rankingsUpdatedAt: cloud.rankingsUpdatedAt || null,
+    lastSavedAt: cloud.lastSavedAt || null,
+    rankingSnapshots: Array.isArray(cloud.rankingSnapshots) ? cloud.rankingSnapshots : [],
+    hasCloudSynced: true,
+  });
+
+  console.info("[LabelPulse Cloud] Force-pull: cloud → local (overwrite).");
+  return true;
+}
+
+/**
+ * Explicit merge: pull cloud, run mergeCloudData, push merged back.
+ * This is what loadFromCloud SHOULD do, but as a user-triggered action
+ * so the user can see the result and confirm data is recovered.
+ *
+ * Returns a summary of what happened, for the diagnostic UI to display.
+ */
+export async function explicitMergeLocalAndCloud(): Promise<{
+  ok: boolean;
+  summary: string;
+}> {
+  const cloudData = await loadStateFromCloud();
+  if (!cloudData) {
+    return {
+      ok: false,
+      summary: "Cloud non ha dati. Impossibile mergiare.",
+    };
+  }
+
+  // Lazy import to avoid circular dep
+  const storeMod = await import("./store");
+  const mergeCloudDataFn = (storeMod as any).mergeCloudDataPublic;
+  if (!mergeCloudDataFn) {
+    return { ok: false, summary: "mergeCloudData non disponibile." };
+  }
+
+  const localState = useAppStore.getState();
+  const merged = mergeCloudDataFn(cloudData, localState);
+  useAppStore.setState({ ...merged, hasCloudSynced: true });
+
+  // Push merged back to cloud so other devices get it too
+  await forcePushLocalToCloud();
+
+  const beforeLabels = localState.labels?.length || 0;
+  const afterLabels = (merged as any).labels?.length || 0;
+  const beforeSnaps = localState.rankingSnapshots?.length || 0;
+  const afterSnaps = (merged as any).rankingSnapshots?.length || 0;
+
+  return {
+    ok: true,
+    summary:
+      `Merge completato. ` +
+      `Label: ${beforeLabels} → ${afterLabels}. ` +
+      `Snapshot: ${beforeSnaps} → ${afterSnaps}. ` +
+      `Risultato spinto al cloud.`,
+  };
 }

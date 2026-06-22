@@ -18,6 +18,7 @@ import {
   Camera,
   Cloud,
 } from "lucide-react";
+import { CloudRecovery } from "@/components/cloud-recovery";
 import { Input } from "@/components/ui/input";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent } from "@/components/ui/card";
@@ -736,6 +737,11 @@ export function ProducerProfile() {
           )}
         </CardContent>
       </Card>
+
+      {/* ==================== CLOUD RECOVERY (diagnostica & ripristino) ====================
+          Mostra lo stato reale di locale/cloud/sidecar e dà bottoni di
+          ripristino per risolvere "post login non vedo niente". */}
+      <CloudRecovery />
     </div>
   );
 }
