@@ -920,23 +920,68 @@ export function RankingsPage() {
           </div>
         )}
 
-        {/* Stats bar */}
+        {/* Stats bar — click numbers to filter the list by movement */}
         {selectedGenre && stats.total > 0 && (
-          <div className="flex flex-wrap gap-3 text-xs">
-            <span className="flex items-center gap-1 text-muted-foreground">
+          <div className="flex flex-wrap gap-2 text-xs">
+            <button
+              type="button"
+              onClick={() => setMovementFilter("all")}
+              className={`flex items-center gap-1 px-2 py-1 rounded-md transition-colors ${
+                movementFilter === "all"
+                  ? "bg-cyan-500/20 text-cyan-300 border border-cyan-500/40"
+                  : "text-muted-foreground hover:bg-muted/40 hover:text-foreground border border-transparent"
+              }`}
+              title={locale === "it" ? "Mostra tutte" : "Show all"}
+            >
               <Eye className="h-3 w-3" /> {stats.total} {t(locale, "rankings.labels")}
-            </span>
+            </button>
             {timePeriod === "current" && (
               <>
-                <span className="flex items-center gap-1 text-emerald-400">
+                <button
+                  type="button"
+                  onClick={() => setMovementFilter(movementFilter === "rising" ? "all" : "rising")}
+                  disabled={stats.rising === 0}
+                  className={`flex items-center gap-1 px-2 py-1 rounded-md transition-colors ${
+                    movementFilter === "rising"
+                      ? "bg-emerald-500/20 text-emerald-300 border border-emerald-500/40"
+                      : stats.rising === 0
+                        ? "text-muted-foreground/40 border border-transparent cursor-not-allowed"
+                        : "text-emerald-400 hover:bg-emerald-500/15 border border-transparent"
+                  }`}
+                  title={locale === "it" ? "Mostra solo le label salite" : "Show only rising labels"}
+                >
                   <TrendingUp className="h-3 w-3" /> {stats.rising} {t(locale, "rankings.rising")}
-                </span>
-                <span className="flex items-center gap-1 text-red-400">
+                </button>
+                <button
+                  type="button"
+                  onClick={() => setMovementFilter(movementFilter === "falling" ? "all" : "falling")}
+                  disabled={stats.falling === 0}
+                  className={`flex items-center gap-1 px-2 py-1 rounded-md transition-colors ${
+                    movementFilter === "falling"
+                      ? "bg-red-500/20 text-red-300 border border-red-500/40"
+                      : stats.falling === 0
+                        ? "text-muted-foreground/40 border border-transparent cursor-not-allowed"
+                        : "text-red-400 hover:bg-red-500/15 border border-transparent"
+                  }`}
+                  title={locale === "it" ? "Mostra solo le label scese" : "Show only falling labels"}
+                >
                   <TrendingDown className="h-3 w-3" /> {stats.falling} {t(locale, "rankings.falling")}
-                </span>
-                <span className="flex items-center gap-1 text-cyan-400">
+                </button>
+                <button
+                  type="button"
+                  onClick={() => setMovementFilter(movementFilter === "new" ? "all" : "new")}
+                  disabled={stats.newEntries === 0}
+                  className={`flex items-center gap-1 px-2 py-1 rounded-md transition-colors ${
+                    movementFilter === "new"
+                      ? "bg-cyan-500/20 text-cyan-300 border border-cyan-500/40"
+                      : stats.newEntries === 0
+                        ? "text-muted-foreground/40 border border-transparent cursor-not-allowed"
+                        : "text-cyan-400 hover:bg-cyan-500/15 border border-transparent"
+                  }`}
+                  title={locale === "it" ? "Mostra solo le nuove entrate" : "Show only new entries"}
+                >
                   <ArrowUpRight className="h-3 w-3" /> {stats.newEntries} {t(locale, "rankings.newEntries")}
-                </span>
+                </button>
               </>
             )}
             {timePeriod !== "current" && (
@@ -949,6 +994,27 @@ export function RankingsPage() {
                 {t(locale, "rankings.lastUpdate")}: {new Date(rankingsUpdatedAt).toLocaleDateString(locale === "it" ? "it-IT" : "en-US")}
               </span>
             )}
+          </div>
+        )}
+
+        {/* Active filter banner — appears when a movement filter is set */}
+        {selectedGenre && movementFilter !== "all" && filteredList.length > 0 && (
+          <div className="flex items-center justify-between gap-3 px-3 py-2 rounded-md bg-cyan-500/10 border border-cyan-500/30 text-xs">
+            <span className="flex items-center gap-2 text-cyan-300">
+              <Filter className="h-3.5 w-3.5" />
+              {locale === "it"
+                ? `Filtro attivo: ${filteredList.length} ${movementFilter === "rising" ? "salite" : movementFilter === "falling" ? "scese" : "nuove entrate"} su ${stats.total}`
+                : `Filter active: ${filteredList.length} ${movementFilter === "rising" ? "rising" : movementFilter === "falling" ? "falling" : "new entries"} of ${stats.total}`}
+            </span>
+            <button
+              type="button"
+              onClick={() => setMovementFilter("all")}
+              className="flex items-center gap-1 text-cyan-300 hover:text-cyan-200 hover:underline"
+              title={locale === "it" ? "Rimuovi filtro" : "Clear filter"}
+            >
+              <RotateCcw className="h-3 w-3" />
+              {locale === "it" ? "Mostra tutte" : "Show all"}
+            </button>
           </div>
         )}
 
