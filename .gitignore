@@ -8,3 +8,6 @@ out/
 .next/
 .next/
 upload/
+
+# Vercel auto-deploy credentials
+.env.deploy
