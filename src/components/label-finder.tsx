@@ -71,6 +71,7 @@ import {
   generatePitchBody,
   generateMailtoLink,
   generateGmailLink,
+  parsePitchText,
   PITCH_LANGUAGES,
   type PitchTone,
   type PitchLanguage,
@@ -109,33 +110,6 @@ function formatTime(seconds: number): string {
   const m = Math.floor(seconds / 60);
   const s = Math.floor(seconds % 60);
   return `${m}:${s.toString().padStart(2, "0")}`;
-}
-
-// Parse an edited pitch text (which may include "Subject:", "To:", "CC:" header
-// lines followed by a blank line and the body) back into { subject, body } so the
-// user's manual edits can flow through to mailto:, Gmail web, and Gmail API.
-// If the text doesn't follow the canonical format, subject falls back to "" and
-// body becomes the entire text — that's still safe to send.
-function parsePitchText(text: string): { subject: string; body: string } {
-  if (!text) return { subject: "", body: "" };
-  const lines = text.split("\n");
-  let subject = "";
-  let i = 0;
-  // Optional Subject: line
-  if (i < lines.length && lines[i].startsWith("Subject:")) {
-    subject = lines[i].slice("Subject:".length).trim();
-    i++;
-  }
-  // Skip optional To: / CC: header lines
-  while (i < lines.length && (lines[i].startsWith("To:") || lines[i].startsWith("CC:"))) {
-    i++;
-  }
-  // Skip exactly one blank line that separates headers from body
-  if (i < lines.length && lines[i].trim() === "") {
-    i++;
-  }
-  const body = lines.slice(i).join("\n").trim();
-  return { subject, body };
 }
 
 // Smart URL builder for each link type

@@ -2,7 +2,7 @@
 
 import { useAppStore, type Demo, type DemoStatus, type Label } from "@/lib/store";
 import { t, type Locale } from "@/lib/i18n";
-import { useState, useMemo, useCallback } from "react";
+import { useState, useMemo, useCallback, useEffect } from "react";
 import {
   Plus,
   Pencil,
@@ -65,7 +65,20 @@ import {
   CommandGroup,
   CommandItem,
 } from "@/components/ui/command";
-import { Check, ChevronsUpDown, Filter, AlertCircle } from "lucide-react";
+import { Check, ChevronsUpDown, Filter, AlertCircle, Sparkles, Copy, Languages, MailOpen, SendHorizonal, RotateCcw } from "lucide-react";
+import {
+  generatePitch,
+  generateSubject,
+  generatePitchBody,
+  generateMailtoLink,
+  generateGmailLink,
+  parsePitchText,
+  PITCH_LANGUAGES,
+  type PitchTone,
+  type PitchLanguage,
+} from "@/lib/pitch-utils";
+import { useToast } from "@/hooks/use-toast";
+import { sendEmail, ensureValidToken } from "@/lib/gmail";
 
 const STATUS_KEYS: DemoStatus[] = [
   "ready",
@@ -110,7 +123,7 @@ const STATUS_TKEYS: Record<DemoStatus, "demos.ready" | "demos.sent" | "demos.rev
 };
 
 export function DemoTracker() {
-  const { labels, demos, addDemo, updateDemo, deleteDemo, advanceDemoStatus, locale: _locale, getGenres, userProfile, artists, setActiveTab, setSelectedLabelId, setSelectedArtistId } =
+  const { labels, demos, addDemo, updateDemo, deleteDemo, advanceDemoStatus, locale: _locale, getGenres, userProfile, artists, setActiveTab, setSelectedLabelId, setSelectedArtistId, gmailAuth, setGmailAuth } =
     useAppStore();
   const locale = _locale as Locale;
   const genres = getGenres();
@@ -477,7 +490,7 @@ export function DemoTracker() {
         )}
 
         {/* Detail Dialog (reused) */}
-        <DemoDetailDialog demo={detailDemo} onClose={() => setDetailDemo(null)} locale={locale} getLabelName={getLabelName} />
+        <DemoDetailDialog demo={detailDemo} onClose={() => setDetailDemo(null)} locale={locale} getLabelName={getLabelName} labels={labels} updateDemo={updateDemo} userProfile={userProfile} gmailAuth={gmailAuth} setGmailAuth={setGmailAuth} />
       </div>
     );
   }
@@ -699,7 +712,7 @@ export function DemoTracker() {
       )}
 
       {/* Detail Dialog */}
-      <DemoDetailDialog demo={detailDemo} onClose={() => setDetailDemo(null)} locale={locale} getLabelName={getLabelName} />
+      <DemoDetailDialog demo={detailDemo} onClose={() => setDetailDemo(null)} locale={locale} getLabelName={getLabelName} labels={labels} updateDemo={updateDemo} userProfile={userProfile} gmailAuth={gmailAuth} setGmailAuth={setGmailAuth} />
 
       {/* Add/Edit Dialog */}
       <Dialog open={showAddDialog} onOpenChange={setShowAddDialog}>
@@ -1198,23 +1211,229 @@ export function DemoTracker() {
 }
 
 // ==================== DETAIL DIALOG COMPONENT ====================
+//
+// Demo detail dialog — shows the demo's metadata (label, status, sentDate,
+// link, notes) AND a full Pitch section where the user can:
+//   1. Generate a pitch from scratch using the label's emails, the demo's
+//      track name + artist name + SoundCloud link, plus tone + language
+//      selectors.
+//   2. Edit the generated pitch inline (the preview is a textarea, not a
+//      read-only <pre>).
+//   3. Copy the pitch, open it in Gmail, open it in the email client
+//      (mailto:), or send it directly via the Gmail API if connected.
+//   4. Save the (possibly edited) pitch back to the demo record.
+//
+// If the demo already has a pitchText saved (e.g. it was generated from
+// the Label Finder dialog), the textarea is pre-filled with that text so
+// the user can keep editing it.
 
 function DemoDetailDialog({
   demo,
   onClose,
   locale,
   getLabelName,
+  labels,
+  updateDemo,
+  userProfile,
+  gmailAuth,
+  setGmailAuth,
 }: {
   demo: Demo | null;
   onClose: () => void;
   locale: string;
   getLabelName: (id: string) => string;
+  labels: Label[];
+  updateDemo: (id: string, data: Partial<Demo>) => void;
+  userProfile: { artistName: string; scLink: string };
+  gmailAuth: any;
+  setGmailAuth: (auth: any) => void;
 }) {
+  // Pitch generator state — kept inside the dialog component so it persists
+  // across re-renders while the dialog is open, and resets when the dialog
+  // closes (because the component unmounts when demo === null).
+  const [pitchTone, setPitchTone] = useState<PitchTone>("professional");
+  const [pitchLanguage, setPitchLanguage] = useState<PitchLanguage>("en");
+  const [pitchNote, setPitchNote] = useState("");
+  // Manual edits to the pitch preview — when non-null, the user has typed
+  // into the textarea and we use their text instead of the auto-generated
+  // pitchText. Initialized from demo.pitchText if present (so an existing
+  // pitch is editable, not regenerated from scratch).
+  const [pitchEditedText, setPitchEditedText] = useState<string | null>(null);
+  const [pitchCopied, setPitchCopied] = useState(false);
+  const [sendingEmail, setSendingEmail] = useState(false);
+  const [emailSent, setEmailSent] = useState(false);
+  const [pitchSaved, setPitchSaved] = useState(false);
+  const { toast } = useToast();
+
+  // Resolve the full Label object for this demo — we need its emails,
+  // submissionType, and name to generate the pitch and the mailto/gmail links.
+  const label = useMemo(
+    () => (demo ? labels.find((l) => l.id === demo.labelId) : undefined),
+    [demo, labels]
+  );
+
+  // Reset pitch state when switching demos (defensive — the dialog also
+  // unmounts when demo becomes null, but if the user clicks between demos
+  // without closing, we want a fresh state).
+  useEffect(() => {
+    if (!demo) {
+      setPitchTone("professional");
+      setPitchLanguage("en");
+      setPitchNote("");
+      setPitchEditedText(null);
+      setPitchCopied(false);
+      setSendingEmail(false);
+      setEmailSent(false);
+      setPitchSaved(false);
+    }
+  }, [demo]);
+
+  // Generated pitch text (the "suggested" version). We recompute it whenever
+  // the demo, label, tone, note, or language changes. If the user has
+  // edited the text, displayPitchText (below) overrides this.
+  const generatedPitchText = useMemo(() => {
+    if (!demo || !label || !demo.trackName.trim()) return "";
+    return generatePitch(
+      label.name,
+      demo.trackName.trim(),
+      demo.artistName || userProfile.artistName || "",
+      demo.link || userProfile.scLink || "",
+      pitchTone,
+      pitchNote,
+      label.emails || [],
+      label.submissionType || "email",
+      pitchLanguage
+    );
+  }, [demo, label, pitchTone, pitchNote, pitchLanguage, userProfile]);
+
+  // Effective pitch text — what's actually shown in the textarea and used
+  // by all actions (copy, send, save). Falls back to:
+  //   1. pitchEditedText (user has typed) → highest priority
+  //   2. demo.pitchText (existing pitch saved on the demo)
+  //   3. generatedPitchText (fresh from the generator)
+  const displayPitchText = pitchEditedText
+    ?? demo?.pitchText
+    ?? generatedPitchText
+    ?? "";
+
+  // Parse subject + body from the (possibly edited) pitch text. Used by
+  // mailto:, Gmail web link, and Gmail API direct send.
+  const effectivePitchSubject = useMemo(() => {
+    // If user hasn't edited, prefer the canonical generated subject (cleaner
+    // than parsing it back out of the full text).
+    if (pitchEditedText === null) {
+      return generateSubject(
+        demo?.trackName?.trim() || "",
+        demo?.artistName || userProfile.artistName || "",
+        pitchLanguage
+      );
+    }
+    return parsePitchText(displayPitchText).subject;
+  }, [pitchEditedText, displayPitchText, demo, userProfile, pitchLanguage]);
+
+  const effectivePitchBody = useMemo(() => {
+    if (pitchEditedText === null) {
+      if (!demo || !label) return "";
+      return generatePitchBody(
+        label.name,
+        demo.trackName.trim(),
+        demo.artistName || userProfile.artistName || "",
+        demo.link || userProfile.scLink || "",
+        pitchTone,
+        pitchNote,
+        pitchLanguage
+      );
+    }
+    return parsePitchText(displayPitchText).body;
+  }, [pitchEditedText, displayPitchText, demo, label, userProfile, pitchTone, pitchNote, pitchLanguage]);
+
+  const effectiveMailtoLink = useMemo(() => {
+    if (!label || !label.emails?.length) return "";
+    return generateMailtoLink(label.emails, effectivePitchSubject, effectivePitchBody);
+  }, [label, effectivePitchSubject, effectivePitchBody]);
+
+  const effectiveGmailLink = useMemo(() => {
+    if (!label) return "";
+    return generateGmailLink(label.emails || [], effectivePitchSubject, effectivePitchBody);
+  }, [label, effectivePitchSubject, effectivePitchBody]);
+
+  // Actions
+  const handlePitchCopy = useCallback(async () => {
+    try {
+      await navigator.clipboard.writeText(displayPitchText);
+      setPitchCopied(true);
+      setTimeout(() => setPitchCopied(false), 2000);
+    } catch {
+      const textarea = document.createElement("textarea");
+      textarea.value = displayPitchText;
+      document.body.appendChild(textarea);
+      textarea.select();
+      document.execCommand("copy");
+      document.body.removeChild(textarea);
+      setPitchCopied(true);
+      setTimeout(() => setPitchCopied(false), 2000);
+    }
+  }, [displayPitchText]);
+
+  const handleSavePitch = useCallback(() => {
+    if (!demo) return;
+    updateDemo(demo.id, { pitchText: displayPitchText });
+    setPitchSaved(true);
+    setTimeout(() => setPitchSaved(false), 2000);
+  }, [demo, displayPitchText, updateDemo]);
+
+  const handleOpenGmail = useCallback(() => {
+    window.open(effectiveGmailLink, "_blank");
+  }, [effectiveGmailLink]);
+
+  const handleSendAndTrack = useCallback(() => {
+    if (effectiveMailtoLink) {
+      window.open(effectiveMailtoLink, "_blank");
+    }
+    handleSavePitch();
+  }, [effectiveMailtoLink, handleSavePitch]);
+
+  const handleDirectSend = useCallback(async () => {
+    if (!demo || !gmailAuth?.isConnected) return;
+    setSendingEmail(true);
+    setEmailSent(false);
+    try {
+      const validAuth = await ensureValidToken(gmailAuth);
+      if (!validAuth) {
+        toast({ title: "Sessione Gmail scaduta", description: "Riconnetti il tuo account Gmail", variant: "destructive" });
+        setSendingEmail(false);
+        return;
+      }
+      if (validAuth.accessToken !== gmailAuth.accessToken) {
+        setGmailAuth(validAuth);
+      }
+      const result = await sendEmail(validAuth.accessToken, label?.emails || [], effectivePitchSubject, effectivePitchBody);
+      if (result.success) {
+        setEmailSent(true);
+        toast({ title: "Email inviata!", description: `Demo inviato a ${label?.name || ""}` });
+        // Save the pitch text + update status to "sent" + record sentDate
+        updateDemo(demo.id, {
+          pitchText: displayPitchText,
+          status: "sent",
+          sentDate: new Date().toISOString().split("T")[0],
+        });
+        setTimeout(() => setEmailSent(false), 4000);
+      } else {
+        toast({ title: "Errore invio", description: result.error || "Errore sconosciuto", variant: "destructive" });
+      }
+    } catch (err: any) {
+      toast({ title: "Errore invio", description: err.message || "Errore di connessione", variant: "destructive" });
+    } finally {
+      setSendingEmail(false);
+    }
+  }, [demo, gmailAuth, label, effectivePitchSubject, effectivePitchBody, displayPitchText, updateDemo, setGmailAuth, toast]);
+
   if (!demo) return null;
 
   const config = STATUS_COLORS[demo.status];
   const daysSince = getDaysSince(demo.sentDate);
   const labelName = getLabelName(demo.labelId);
+  const hasEmails = !!(label?.emails?.length);
 
   return (
     <Dialog open={!!demo} onOpenChange={(open) => { if (!open) onClose(); }}>
@@ -1276,19 +1495,165 @@ function DemoDetailDialog({
             </div>
           )}
 
-          {/* Pitch text (the email that was sent) */}
-          {demo.pitchText && (
-            <div className="space-y-2 border-t border-border/30 pt-3">
-              <UILabel className="text-xs font-mono uppercase text-muted-foreground flex items-center gap-1">
-                <FileText className="h-3 w-3" /> {t(locale, "demos.pitchSent")}
-              </UILabel>
-              <Card className="bg-card/80 border-border/30">
-                <CardContent className="p-4 max-h-[350px] overflow-y-auto">
-                  <pre className="text-[11px] leading-relaxed whitespace-pre-wrap font-mono text-foreground/80">{demo.pitchText}</pre>
-                </CardContent>
-              </Card>
+          {/* ===================== PITCH SECTION ===================== */}
+          {/* Full pitch generator + editor — mirrors the Label Finder dialog.
+              Lets the user generate, edit, copy, send, and save a pitch
+              directly from the demo detail. */}
+          <div className="space-y-3 border-t border-border/30 pt-3">
+            <div className="flex items-center gap-2">
+              <Sparkles className="h-4 w-4 text-primary" />
+              <span className="text-[10px] text-muted-foreground uppercase tracking-wider font-medium">
+                {t(locale, "pitch.preview")}
+              </span>
             </div>
-          )}
+
+            {/* Tone + Language selectors + Note */}
+            <div className="grid grid-cols-2 gap-2">
+              <div className="space-y-1.5">
+                <UILabel className="text-[10px] font-mono uppercase text-muted-foreground flex items-center gap-1">
+                  <Mail className="h-3 w-3" /> {t(locale, "pitch.tone")}
+                </UILabel>
+                <Select value={pitchTone} onValueChange={(v) => setPitchTone(v as PitchTone)}>
+                  <SelectTrigger className="bg-secondary/50 text-sm h-8"><SelectValue /></SelectTrigger>
+                  <SelectContent>
+                    <SelectItem value="professional">{t(locale, "pitch.toneProfessional")}</SelectItem>
+                    <SelectItem value="confident">{t(locale, "pitch.toneConfident")}</SelectItem>
+                    <SelectItem value="friendly">{t(locale, "pitch.toneFriendly")}</SelectItem>
+                    <SelectItem value="storytelling">{t(locale, "pitch.toneStorytelling")}</SelectItem>
+                  </SelectContent>
+                </Select>
+              </div>
+              <div className="space-y-1.5">
+                <UILabel className="text-[10px] font-mono uppercase text-muted-foreground flex items-center gap-1">
+                  <Languages className="h-3 w-3" /> {t(locale, "pitch.emailLanguage")}
+                </UILabel>
+                <Select value={pitchLanguage} onValueChange={(v) => setPitchLanguage(v as PitchLanguage)}>
+                  <SelectTrigger className="bg-secondary/50 text-sm h-8"><SelectValue /></SelectTrigger>
+                  <SelectContent>
+                    {(Object.keys(PITCH_LANGUAGES) as PitchLanguage[]).map((lang) => (
+                      <SelectItem key={lang} value={lang}>{PITCH_LANGUAGES[lang]}</SelectItem>
+                    ))}
+                  </SelectContent>
+                </Select>
+              </div>
+            </div>
+            <div className="space-y-1.5">
+              <UILabel className="text-[10px] font-mono uppercase text-muted-foreground">{t(locale, "pitch.additionalNote")}</UILabel>
+              <Input value={pitchNote} onChange={(e) => setPitchNote(e.target.value)} placeholder="Optional note..." className="bg-secondary/50 text-sm h-8" />
+            </div>
+
+            {/* Pitch preview — editable textarea */}
+            {displayPitchText && (
+              <div className="space-y-2">
+                <div className="flex items-center justify-between gap-2">
+                  <span className="text-[10px] text-muted-foreground uppercase tracking-wider flex items-center gap-1 flex-wrap">
+                    {pitchEditedText !== null && (
+                      <Badge variant="outline" className="text-[9px] py-0 px-1.5 h-4 border-amber-500/40 text-amber-500">
+                        {t(locale, "pitch.edited")}
+                      </Badge>
+                    )}
+                    {demo.pitchText && pitchEditedText === null && (
+                      <Badge variant="outline" className="text-[9px] py-0 px-1.5 h-4 border-primary/30 text-primary">
+                        {locale === "it" ? "Salvato" : "Saved"}
+                      </Badge>
+                    )}
+                  </span>
+                  <div className="flex items-center gap-1.5 shrink-0">
+                    {pitchEditedText !== null && (
+                      <Button
+                        onClick={() => setPitchEditedText(null)}
+                        size="sm"
+                        variant="ghost"
+                        className="h-7 text-xs text-muted-foreground hover:text-foreground"
+                        title={t(locale, "pitch.resetToSuggested")}
+                      >
+                        <RotateCcw className="h-3 w-3 mr-1" />
+                        {t(locale, "pitch.resetToSuggested")}
+                      </Button>
+                    )}
+                    <Button onClick={handlePitchCopy} size="sm" className="h-7 text-xs border-border/50" variant="outline">
+                      {pitchCopied ? <><Check className="h-3 w-3 mr-1" />{t(locale, "pitch.copied")}</> : <><Copy className="h-3 w-3 mr-1" />{t(locale, "pitch.copyToClipboard")}</>}
+                    </Button>
+                  </div>
+                </div>
+                <Card className="bg-card/80 border-border/30">
+                  <CardContent className="p-3">
+                    <textarea
+                      value={displayPitchText}
+                      onChange={(e) => setPitchEditedText(e.target.value)}
+                      spellCheck={false}
+                      className="w-full text-[11px] leading-relaxed font-mono text-foreground/80 bg-transparent resize-y min-h-[180px] max-h-[320px] outline-none border-0 focus:ring-0 p-0"
+                      aria-label={t(locale, "pitch.preview")}
+                    />
+                  </CardContent>
+                </Card>
+
+                {/* Action buttons */}
+                <div className="flex flex-col gap-2">
+                  {/* Direct Gmail send — PRIMARY if connected */}
+                  {gmailAuth?.isConnected ? (
+                    <Button
+                      onClick={handleDirectSend}
+                      className="w-full text-sm bg-emerald-600 hover:bg-emerald-500 text-white"
+                      disabled={sendingEmail}
+                    >
+                      {emailSent ? (
+                        <><CheckCircle2 className="h-3.5 w-3.5 mr-1.5" />Email inviata!</>
+                      ) : sendingEmail ? (
+                        <><Loader2 className="h-3.5 w-3.5 mr-1.5 animate-spin" />Invio in corso...</>
+                      ) : (
+                        <><SendHorizonal className="h-3.5 w-3.5 mr-1.5" />Invia direttamente da Gmail</>
+                      )}
+                    </Button>
+                  ) : (
+                    <Button
+                      onClick={handleOpenGmail}
+                      className="w-full glow-purple text-sm"
+                    >
+                      <MailOpen className="h-3.5 w-3.5 mr-1.5" />
+                      {hasEmails ? t(locale, "pitch.openGmail") : t(locale, "pitch.openGmailNoEmail")}
+                    </Button>
+                  )}
+
+                  {/* Secondary actions row */}
+                  <div className="flex flex-col sm:flex-row gap-2">
+                    {/* mailto: link — only when label has email */}
+                    {hasEmails && (
+                      <Button
+                        onClick={handleSendAndTrack}
+                        variant="outline"
+                        className="flex-1 text-sm border-primary/20"
+                      >
+                        <Send className="h-3.5 w-3.5 mr-1.5" />
+                        {t(locale, "pitch.openEmailClient")}
+                      </Button>
+                    )}
+                    {/* Save pitch to demo */}
+                    <Button
+                      variant="outline"
+                      className="flex-1 text-sm border-border/50"
+                      onClick={handleSavePitch}
+                    >
+                      {pitchSaved ? (
+                        <><Check className="h-3.5 w-3.5 mr-1.5" />Salvato</>
+                      ) : (
+                        <><FileText className="h-3.5 w-3.5 mr-1.5" />Salva Pitch nella Demo</>
+                      )}
+                    </Button>
+                  </div>
+                </div>
+              </div>
+            )}
+
+            {/* If no pitch yet and no label/trackname, show hint */}
+            {!displayPitchText && (
+              <p className="text-xs text-muted-foreground italic">
+                {locale === "it"
+                  ? "Imposta una label target e un nome traccia per generare il pitch."
+                  : "Set a target label and track name to generate a pitch."}
+              </p>
+            )}
+          </div>
 
           {/* Creation date */}
           <div className="text-[10px] text-muted-foreground/40 font-mono pt-1">
