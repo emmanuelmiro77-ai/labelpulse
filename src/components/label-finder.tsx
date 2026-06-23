@@ -531,31 +531,69 @@ export function LabelFinder() {
     });
     setPlayingTrackId(track.id);
     // Reset progress for the new track. The actual currentTime/duration
-    // will be filled in by the timeupdate + loadedmetadata listeners.
+    // will be filled in by the timeupdate + progress listeners.
     setAudioProgress({ current: 0, duration: 0 });
   }, [playingTrackId]);
 
+  // Resolve the effective duration for the currently-playing track.
+  // We try, in order:
+  //   1. audio.duration — works if the server sends Content-Length
+  //   2. audio.seekable.end(last) — works as soon as the browser has
+  //      buffered enough to know the end of the stream, even for chunked
+  //      transfer encoding where duration stays Infinity
+  // Returns 0 if neither is available yet (UI shows "loading" state).
+  const computeEffectiveDuration = useCallback((audio: HTMLAudioElement): number => {
+    const d = audio.duration;
+    if (Number.isFinite(d) && d > 0) return d;
+    // seekable is a TimeRanges object; if it has at least one range, the
+    // end of the last range is the furthest point the browser knows about.
+    // For chunked audio with no Content-Length, this becomes accurate as
+    // soon as the first chunk downloads (often < 500ms after play()).
+    try {
+      const seekable = audio.seekable;
+      if (seekable && seekable.length > 0) {
+        const end = seekable.end(seekable.length - 1);
+        if (Number.isFinite(end) && end > 0) return end;
+      }
+    } catch {
+      /* seekable can throw if not yet ready */
+    }
+    return 0;
+  }, []);
+
   // Seek handler — called when the user clicks/drags the progress bar.
-  // Computes the new time from the click X position relative to the bar
-  // width, then sets audio.currentTime directly. Works for both mouse and
-  // touch events.
-  //
-  // Guard: if duration is missing/Infinity/NaN, the seek is a no-op. This
-  // happens with chunked-transfer audio (no Content-Length) before the
-  // Infinity-duration workaround in onLoadedMetadata kicks in. We expose a
-  // `durationReady` flag so the UI can show a "loading" state instead of
-  // letting the user click a dead bar.
+  // Uses computeEffectiveDuration() at call-time instead of relying on
+  // audioProgress.duration, so the seek works even before the React state
+  // has been updated by the progress event. This is important because
+  // there's a small window between "browser knows the duration" and
+  // "React state has been updated" where the user might click.
   const seekToClientX = useCallback((clientX: number, barEl: HTMLElement) => {
     const audio = audioRef.current;
     if (!audio) return;
-    const dur = audioProgress.duration;
-    if (!Number.isFinite(dur) || dur <= 0) return;
+    const dur = computeEffectiveDuration(audio);
+    if (dur <= 0) return;
     const rect = barEl.getBoundingClientRect();
     const ratio = Math.max(0, Math.min(1, (clientX - rect.left) / rect.width));
     const newTime = ratio * dur;
+    // Clamp to seekable range to avoid InvalidStateError on chunked audio
+    // where the very end of the stream might not yet be buffered.
+    try {
+      const seekable = audio.seekable;
+      if (seekable && seekable.length > 0) {
+        const maxSeek = seekable.end(seekable.length - 1);
+        if (Number.isFinite(maxSeek) && newTime > maxSeek) {
+          // Seek to the furthest available position instead.
+          audio.currentTime = Math.max(0, maxSeek - 0.05);
+          setAudioProgress((p) => ({ ...p, current: audio.currentTime, duration: dur }));
+          return;
+        }
+      }
+    } catch {
+      /* ignore */
+    }
     audio.currentTime = newTime;
-    setAudioProgress((p) => ({ ...p, current: newTime }));
-  }, [audioProgress.duration]);
+    setAudioProgress((p) => ({ ...p, current: newTime, duration: dur }));
+  }, [computeEffectiveDuration]);
 
   // Pointer-based drag scrubbing. onPointerDown starts a drag capture, then
   // we listen on window for pointermove (to update position live) and
@@ -592,8 +630,8 @@ export function LabelFinder() {
   const handleSeekKeyDown = useCallback((e: React.KeyboardEvent<HTMLDivElement>) => {
     const audio = audioRef.current;
     if (!audio) return;
-    const dur = audioProgress.duration;
-    if (!Number.isFinite(dur) || dur <= 0) return;
+    const dur = computeEffectiveDuration(audio);
+    if (dur <= 0) return;
     let newTime: number | null = null;
     switch (e.key) {
       case "ArrowLeft":
@@ -613,8 +651,8 @@ export function LabelFinder() {
     }
     e.preventDefault();
     audio.currentTime = newTime;
-    setAudioProgress((p) => ({ ...p, current: newTime }));
-  }, [audioProgress.duration]);
+    setAudioProgress((p) => ({ ...p, current: newTime, duration: dur }));
+  }, [computeEffectiveDuration]);
 
   // Reset audio state when dialog closes
   useEffect(() => {
@@ -626,65 +664,81 @@ export function LabelFinder() {
     }
   }, [detailLabel]);
 
-  // Attach timeupdate + loadedmetadata listeners to the audio element.
-  // These keep the progress bar in sync with playback.
+  // Attach listeners to the audio element. These keep the progress bar in
+  // sync with playback and resolve the duration for chunked-transfer audio
+  // (Beatport CDN serves samples without Content-Length, so audio.duration
+  // returns Infinity — we use audio.seekable.end() as a fallback).
   //
-  // Infinity-duration workaround: when audio is served with chunked transfer
-  // encoding (no Content-Length), HTMLAudioElement.duration returns Infinity
-  // until the entire file is downloaded. We force the browser to compute the
-  // real duration by seeking to a huge value (1e101 seconds), which makes the
-  // browser calculate the actual end position. After the durationchange event
-  // fires with a finite value, we reset currentTime to 0 and the bar is
-  // usable. This is the standard workaround used by media players (e.g. how
-  // Plyr, video.js handle the same bug).
+  // Events we listen to:
+  //  - timeupdate: fires ~4x/sec during playback, gives us currentTime
+  //  - loadedmetadata: fires once when headers are parsed (duration may
+  //    still be Infinity for chunked audio)
+  //  - progress: fires whenever the browser downloads more audio data.
+  //    This is the key event for chunked audio — once the first chunk is
+  //    in, audio.seekable has a range and we can read seekable.end(0).
+  //  - durationchange: fires when audio.duration changes (e.g. browser
+  //    finally computes it after buffering the whole file)
+  //  - canplay: fires when the browser can start playing. Sometimes the
+  //    seekable range becomes available here even if progress didn't fire.
+  //  - ended: reset state for the next track
   useEffect(() => {
     const audio = audioRef.current;
     if (!audio) return;
+
+    const updateDurationFromAudio = () => {
+      const dur = computeEffectiveDuration(audio);
+      setAudioProgress((p) => {
+        // Only update if we discovered a real duration (don't overwrite
+        // a known good value with 0).
+        if (dur > 0 && p.duration !== dur) {
+          return { ...p, duration: dur };
+        }
+        return p;
+      });
+    };
+
     const onTimeUpdate = () => {
       setAudioProgress((p) => ({ ...p, current: audio.currentTime || 0 }));
+      // Also opportunistically refresh duration — sometimes seekable
+      // becomes available mid-playback and we want to pick it up.
+      if (!Number.isFinite(audio.duration) || audio.duration <= 0) {
+        updateDurationFromAudio();
+      }
     };
     const onLoadedMetadata = () => {
-      let dur = audio.duration;
-      if (!Number.isFinite(dur) || dur <= 0) {
-        // Force the browser to compute the real duration by seeking past the
-        // end. The durationchange event will fire with the correct value,
-        // which we pick up in the listener below.
-        try {
-          audio.currentTime = 1e101;
-        } catch {
-          /* some browsers throw if not yet seekable */
-        }
-        return;
-      }
-      setAudioProgress((p) => ({ ...p, duration: dur }));
+      updateDurationFromAudio();
+    };
+    const onProgress = () => {
+      // progress fires when new bytes are downloaded. For chunked audio
+      // this is when seekable.end(0) becomes meaningful.
+      updateDurationFromAudio();
     };
     const onDurationChange = () => {
-      const dur = audio.duration;
-      if (Number.isFinite(dur) && dur > 0) {
-        setAudioProgress((p) => ({ ...p, duration: dur }));
-        // If we just seeked to 1e101 to force duration computation, snap back
-        // to the start so playback resumes from 0 (or wherever it was).
-        if (audio.currentTime > dur) {
-          audio.currentTime = 0;
-          setAudioProgress((p) => ({ ...p, current: 0 }));
-        }
-      }
+      updateDurationFromAudio();
+    };
+    const onCanPlay = () => {
+      updateDurationFromAudio();
     };
     const onEnded = () => {
       setPlayingTrackId(null);
       setAudioProgress({ current: 0, duration: 0 });
     };
+
     audio.addEventListener("timeupdate", onTimeUpdate);
     audio.addEventListener("loadedmetadata", onLoadedMetadata);
+    audio.addEventListener("progress", onProgress);
     audio.addEventListener("durationchange", onDurationChange);
+    audio.addEventListener("canplay", onCanPlay);
     audio.addEventListener("ended", onEnded);
     return () => {
       audio.removeEventListener("timeupdate", onTimeUpdate);
       audio.removeEventListener("loadedmetadata", onLoadedMetadata);
+      audio.removeEventListener("progress", onProgress);
       audio.removeEventListener("durationchange", onDurationChange);
+      audio.removeEventListener("canplay", onCanPlay);
       audio.removeEventListener("ended", onEnded);
     };
-  }, []);
+  }, [computeEffectiveDuration]);
 
   // Pitch inline state
   const [showPitch, setShowPitch] = useState(false);
@@ -1604,11 +1658,29 @@ export function LabelFinder() {
                           {/* Seekable progress bar — only shown for the currently-playing track */}
                           {isPlaying && (
                             (() => {
-                              // durationReady — true only when we have a finite, positive
-                              // duration. While false (audio still loading or Infinity
-                              // duration bug not yet resolved), the bar renders but is
-                              // marked as "loading" and pointer/keyboard seeks are no-ops.
-                              const durationReady = Number.isFinite(audioProgress.duration) && audioProgress.duration > 0;
+                              // durationReady — true when EITHER:
+                              //   1. We have a finite, positive duration in React state (the
+                              //      common case after progress event fires), OR
+                              //   2. The underlying audio element has a seekable range right
+                              //      now (checked live so the UI unlocks the instant the
+                              //      browser has buffered the first chunk, even before React
+                              //      state has updated).
+                              // This double-check is important because there's a small async
+                              // gap between "browser knows the duration" and "React state
+                              // has re-rendered with the new duration" where the user might
+                              // try to click the bar.
+                              let durationReady = Number.isFinite(audioProgress.duration) && audioProgress.duration > 0;
+                              if (!durationReady && audioRef.current) {
+                                try {
+                                  const seekable = audioRef.current.seekable;
+                                  if (seekable && seekable.length > 0) {
+                                    const end = seekable.end(seekable.length - 1);
+                                    if (Number.isFinite(end) && end > 0) {
+                                      durationReady = true;
+                                    }
+                                  }
+                                } catch { /* ignore */ }
+                              }
                               return (
                             <div className="mt-1.5 flex items-center gap-2">
                               <span className="text-[9px] text-muted-foreground font-mono tabular-nums w-9 text-right shrink-0">
