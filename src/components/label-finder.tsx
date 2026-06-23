@@ -521,6 +521,10 @@ export function LabelFinder() {
       return;
     }
     audioRef.current.src = track.sampleUrl;
+    // Force the browser to start loading the audio so loadedmetadata fires
+    // ASAP. Without this, preload="none" delays metadata loading and the
+    // seek bar stays inert for the first second of playback.
+    audioRef.current.load();
     audioRef.current.play().catch(() => {
       // CORS or network failure — silently ignore, the play button just
       // won't toggle. The Beatport sample URL is meant to be hot-linkable.
@@ -533,15 +537,82 @@ export function LabelFinder() {
 
   // Seek handler — called when the user clicks/drags the progress bar.
   // Computes the new time from the click X position relative to the bar
-  // width, then sets audio.currentTime directly.
-  const handleAudioSeek = useCallback((e: React.MouseEvent<HTMLDivElement> | React.TouchEvent<HTMLDivElement>) => {
-    if (!audioRef.current || !audioProgress.duration) return;
-    const bar = e.currentTarget;
-    const rect = bar.getBoundingClientRect();
-    const clientX = "touches" in e ? e.touches[0]?.clientX ?? 0 : e.clientX;
+  // width, then sets audio.currentTime directly. Works for both mouse and
+  // touch events.
+  //
+  // Guard: if duration is missing/Infinity/NaN, the seek is a no-op. This
+  // happens with chunked-transfer audio (no Content-Length) before the
+  // Infinity-duration workaround in onLoadedMetadata kicks in. We expose a
+  // `durationReady` flag so the UI can show a "loading" state instead of
+  // letting the user click a dead bar.
+  const seekToClientX = useCallback((clientX: number, barEl: HTMLElement) => {
+    const audio = audioRef.current;
+    if (!audio) return;
+    const dur = audioProgress.duration;
+    if (!Number.isFinite(dur) || dur <= 0) return;
+    const rect = barEl.getBoundingClientRect();
     const ratio = Math.max(0, Math.min(1, (clientX - rect.left) / rect.width));
-    const newTime = ratio * audioProgress.duration;
-    audioRef.current.currentTime = newTime;
+    const newTime = ratio * dur;
+    audio.currentTime = newTime;
+    setAudioProgress((p) => ({ ...p, current: newTime }));
+  }, [audioProgress.duration]);
+
+  // Pointer-based drag scrubbing. onPointerDown starts a drag capture, then
+  // we listen on window for pointermove (to update position live) and
+  // pointerup (to release). This makes the bar feel like a real audio scrubber
+  // instead of a single-shot click.
+  const dragStateRef = useRef<{ bar: HTMLDivElement | null; } | null>(null);
+  const handleSeekPointerDown = useCallback((e: React.PointerEvent<HTMLDivElement>) => {
+    const bar = e.currentTarget;
+    dragStateRef.current = { bar };
+    // Seek immediately to the clicked position (so a single click works even
+    // without a drag).
+    seekToClientX(e.clientX, bar);
+    // Capture pointer so we keep receiving move events even if the cursor
+    // leaves the bar.
+    try { bar.setPointerCapture(e.pointerId); } catch { /* ignore */ }
+
+    const onMove = (ev: PointerEvent) => {
+      if (!dragStateRef.current?.bar) return;
+      seekToClientX(ev.clientX, dragStateRef.current.bar);
+    };
+    const onUp = (ev: PointerEvent) => {
+      window.removeEventListener("pointermove", onMove);
+      window.removeEventListener("pointerup", onUp);
+      try { bar.releasePointerCapture(ev.pointerId); } catch { /* ignore */ }
+      dragStateRef.current = null;
+    };
+    window.addEventListener("pointermove", onMove);
+    window.addEventListener("pointerup", onUp);
+  }, [seekToClientX]);
+
+  // Keyboard seeking — when the slider has focus, ArrowLeft/ArrowRight seek
+  // by 5 seconds, Home/End jump to start/end. Required for accessibility
+  // and a nice power-user shortcut.
+  const handleSeekKeyDown = useCallback((e: React.KeyboardEvent<HTMLDivElement>) => {
+    const audio = audioRef.current;
+    if (!audio) return;
+    const dur = audioProgress.duration;
+    if (!Number.isFinite(dur) || dur <= 0) return;
+    let newTime: number | null = null;
+    switch (e.key) {
+      case "ArrowLeft":
+        newTime = Math.max(0, audio.currentTime - 5);
+        break;
+      case "ArrowRight":
+        newTime = Math.min(dur, audio.currentTime + 5);
+        break;
+      case "Home":
+        newTime = 0;
+        break;
+      case "End":
+        newTime = dur;
+        break;
+      default:
+        return;
+    }
+    e.preventDefault();
+    audio.currentTime = newTime;
     setAudioProgress((p) => ({ ...p, current: newTime }));
   }, [audioProgress.duration]);
 
@@ -557,6 +628,15 @@ export function LabelFinder() {
 
   // Attach timeupdate + loadedmetadata listeners to the audio element.
   // These keep the progress bar in sync with playback.
+  //
+  // Infinity-duration workaround: when audio is served with chunked transfer
+  // encoding (no Content-Length), HTMLAudioElement.duration returns Infinity
+  // until the entire file is downloaded. We force the browser to compute the
+  // real duration by seeking to a huge value (1e101 seconds), which makes the
+  // browser calculate the actual end position. After the durationchange event
+  // fires with a finite value, we reset currentTime to 0 and the bar is
+  // usable. This is the standard workaround used by media players (e.g. how
+  // Plyr, video.js handle the same bug).
   useEffect(() => {
     const audio = audioRef.current;
     if (!audio) return;
@@ -564,7 +644,31 @@ export function LabelFinder() {
       setAudioProgress((p) => ({ ...p, current: audio.currentTime || 0 }));
     };
     const onLoadedMetadata = () => {
-      setAudioProgress((p) => ({ ...p, duration: audio.duration || 0 }));
+      let dur = audio.duration;
+      if (!Number.isFinite(dur) || dur <= 0) {
+        // Force the browser to compute the real duration by seeking past the
+        // end. The durationchange event will fire with the correct value,
+        // which we pick up in the listener below.
+        try {
+          audio.currentTime = 1e101;
+        } catch {
+          /* some browsers throw if not yet seekable */
+        }
+        return;
+      }
+      setAudioProgress((p) => ({ ...p, duration: dur }));
+    };
+    const onDurationChange = () => {
+      const dur = audio.duration;
+      if (Number.isFinite(dur) && dur > 0) {
+        setAudioProgress((p) => ({ ...p, duration: dur }));
+        // If we just seeked to 1e101 to force duration computation, snap back
+        // to the start so playback resumes from 0 (or wherever it was).
+        if (audio.currentTime > dur) {
+          audio.currentTime = 0;
+          setAudioProgress((p) => ({ ...p, current: 0 }));
+        }
+      }
     };
     const onEnded = () => {
       setPlayingTrackId(null);
@@ -572,10 +676,12 @@ export function LabelFinder() {
     };
     audio.addEventListener("timeupdate", onTimeUpdate);
     audio.addEventListener("loadedmetadata", onLoadedMetadata);
+    audio.addEventListener("durationchange", onDurationChange);
     audio.addEventListener("ended", onEnded);
     return () => {
       audio.removeEventListener("timeupdate", onTimeUpdate);
       audio.removeEventListener("loadedmetadata", onLoadedMetadata);
+      audio.removeEventListener("durationchange", onDurationChange);
       audio.removeEventListener("ended", onEnded);
     };
   }, []);
@@ -1497,6 +1603,13 @@ export function LabelFinder() {
                           </div>
                           {/* Seekable progress bar — only shown for the currently-playing track */}
                           {isPlaying && (
+                            (() => {
+                              // durationReady — true only when we have a finite, positive
+                              // duration. While false (audio still loading or Infinity
+                              // duration bug not yet resolved), the bar renders but is
+                              // marked as "loading" and pointer/keyboard seeks are no-ops.
+                              const durationReady = Number.isFinite(audioProgress.duration) && audioProgress.duration > 0;
+                              return (
                             <div className="mt-1.5 flex items-center gap-2">
                               <span className="text-[9px] text-muted-foreground font-mono tabular-nums w-9 text-right shrink-0">
                                 {formatTime(audioProgress.current)}
@@ -1507,28 +1620,50 @@ export function LabelFinder() {
                                 aria-valuenow={Math.round(progressPct)}
                                 aria-valuemin={0}
                                 aria-valuemax={100}
+                                aria-disabled={durationReady ? undefined : true}
                                 tabIndex={0}
-                                onClick={handleAudioSeek}
-                                className="group relative flex-1 h-3 cursor-pointer flex items-center"
-                                title={locale === "it" ? "Clicca per spostarti" : "Click to seek"}
+                                onPointerDown={handleSeekPointerDown}
+                                onKeyDown={handleSeekKeyDown}
+                                className={`group relative flex-1 h-3 flex items-center touch-none select-none ${
+                                  durationReady ? "cursor-pointer" : "cursor-wait"
+                                }`}
+                                title={
+                                  durationReady
+                                    ? (locale === "it" ? "Trascina o clicca per spostarti · frecce ←/→ per 5s" : "Drag or click to seek · ←/→ arrows for 5s")
+                                    : (locale === "it" ? "Caricamento durata in corso…" : "Loading duration…")
+                                }
                               >
                                 {/* Track background */}
                                 <div className="absolute inset-x-0 h-1 rounded-full bg-border/60" />
                                 {/* Filled portion */}
                                 <div
-                                  className="absolute h-1 rounded-full bg-primary group-hover:bg-primary/80 transition-colors"
+                                  className={`absolute h-1 rounded-full transition-colors ${
+                                    durationReady ? "bg-primary group-hover:bg-primary/80" : "bg-muted-foreground/40"
+                                  }`}
                                   style={{ width: `${progressPct}%` }}
                                 />
-                                {/* Drag handle (visible on hover) */}
-                                <div
-                                  className="absolute h-2.5 w-2.5 rounded-full bg-primary shadow-sm opacity-0 group-hover:opacity-100 transition-opacity -translate-x-1/2"
-                                  style={{ left: `${progressPct}%` }}
-                                />
+                                {/* Drag handle (visible on hover, only when ready) */}
+                                {durationReady && (
+                                  <div
+                                    className="absolute h-2.5 w-2.5 rounded-full bg-primary shadow-sm opacity-0 group-hover:opacity-100 group-focus-within:opacity-100 transition-opacity -translate-x-1/2 pointer-events-none"
+                                    style={{ left: `${progressPct}%` }}
+                                  />
+                                )}
+                                {/* Pulsing dot when duration isn't ready yet — visual cue that
+                                    we're still figuring out how long the track is. */}
+                                {!durationReady && (
+                                  <div
+                                    className="absolute h-1.5 w-1.5 rounded-full bg-muted-foreground/60 animate-pulse"
+                                    style={{ left: `${Math.min(95, Math.max(2, progressPct))}%`, transform: "translateX(-50%)" }}
+                                  />
+                                )}
                               </div>
                               <span className="text-[9px] text-muted-foreground font-mono tabular-nums w-9 shrink-0">
-                                {formatTime(audioProgress.duration)}
+                                {durationReady ? formatTime(audioProgress.duration) : "—:—"}
                               </span>
                             </div>
+                              );
+                            })()
                           )}
                         </div>
                         );
