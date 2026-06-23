@@ -13,7 +13,7 @@
  */
 
 import { useEffect, useState, useCallback } from "react";
-import { Bug, RefreshCw, ExternalLink, CheckCircle2, AlertCircle, Inbox } from "lucide-react";
+import { Bug, RefreshCw, ExternalLink, CheckCircle2, AlertCircle, AlertTriangle, Inbox } from "lucide-react";
 
 type Feedback = {
   id: number;
@@ -133,66 +133,66 @@ export function FeedbackInbox() {
   const newCount = feedbacks.length;
 
   return (
-    <div className="space-y-2">
+    <div className="space-y-2.5">
       <div className="flex items-center justify-between">
-        <div className="flex items-center gap-1.5">
-          <Bug className="h-3.5 w-3.5 text-amber-400" />
-          <p className="text-xs font-medium text-foreground">
+        <div className="flex items-center gap-2">
+          <Bug className="h-4 w-4 text-amber-400" />
+          <p className="text-sm font-medium text-foreground">
             Feedback Beta
           </p>
           {newCount > 0 && (
-            <span className="inline-flex items-center justify-center min-w-[16px] h-4 px-1 rounded-full text-[9px] font-bold bg-amber-500 text-black">
+            <span className="inline-flex items-center justify-center min-w-[20px] h-5 px-1.5 rounded-full text-xs font-bold bg-amber-500 text-black">
               {newCount}
             </span>
           )}
         </div>
-        <div className="flex items-center gap-1">
+        <div className="flex items-center gap-1.5">
           <button
             type="button"
             onClick={fetchFeedbacks}
             disabled={loading || !token}
-            className="flex items-center gap-1 px-1.5 py-0.5 rounded text-[10px] font-medium bg-secondary/50 hover:bg-secondary border border-border/40 text-muted-foreground hover:text-foreground transition-colors disabled:opacity-60"
+            className="flex items-center gap-1 px-2 py-1 rounded text-xs font-medium bg-secondary/50 hover:bg-secondary border border-border/40 text-muted-foreground hover:text-foreground transition-colors disabled:opacity-60"
             title="Aggiorna"
           >
-            <RefreshCw className={`h-2.5 w-2.5 ${loading ? "animate-spin" : ""}`} />
+            <RefreshCw className={`h-3.5 w-3.5 ${loading ? "animate-spin" : ""}`} />
             ↻
           </button>
           <a
             href="/admin/feedback"
             target="_blank"
             rel="noopener noreferrer"
-            className="flex items-center gap-1 px-1.5 py-0.5 rounded text-[10px] font-medium bg-secondary/50 hover:bg-secondary border border-border/40 text-muted-foreground hover:text-foreground transition-colors"
+            className="flex items-center gap-1 px-2 py-1 rounded text-xs font-medium bg-secondary/50 hover:bg-secondary border border-border/40 text-muted-foreground hover:text-foreground transition-colors"
             title="Apri pagina completa"
           >
-            <ExternalLink className="h-2.5 w-2.5" />
+            <ExternalLink className="h-3.5 w-3.5" />
           </a>
         </div>
       </div>
 
       {/* Token setup */}
       {showTokenInput && (
-        <div className="rounded-md border border-amber-500/30 bg-amber-500/5 p-2 space-y-1.5">
-          <div className="flex items-center gap-1.5">
-            <AlertCircle className="h-3 w-3 text-amber-400 shrink-0" />
-            <p className="text-[10px] text-amber-400 font-medium">
+        <div className="rounded-md border border-amber-500/30 bg-amber-500/5 p-3 space-y-2">
+          <div className="flex items-center gap-2">
+            <AlertCircle className="h-4 w-4 text-amber-400 shrink-0" />
+            <p className="text-xs text-amber-400 font-medium">
               Configura il token admin
             </p>
           </div>
-          <p className="text-[9px] text-muted-foreground leading-snug">
-            Lo stesso <code className="bg-secondary/50 px-0.5 rounded">BETA_ADMIN_TOKEN</code> delle env vars Vercel.
+          <p className="text-[11px] text-muted-foreground leading-snug">
+            Lo stesso <code className="bg-secondary/50 px-1 py-0.5 rounded text-[11px]">BETA_ADMIN_TOKEN</code> delle env vars Vercel.
           </p>
-          <div className="flex gap-1">
+          <div className="flex gap-1.5">
             <input
               type="password"
               value={tokenInput}
               onChange={(e) => setTokenInput(e.target.value)}
               placeholder="token"
               onKeyDown={(e) => e.key === "Enter" && saveToken()}
-              className="flex-1 min-w-0 text-[10px] px-1.5 py-1 rounded bg-background border border-border/40 text-foreground"
+              className="flex-1 min-w-0 text-xs px-2 py-1.5 rounded bg-background border border-border/40 text-foreground"
             />
             <button
               onClick={saveToken}
-              className="px-2 py-1 rounded text-[10px] font-medium bg-primary text-primary-foreground hover:bg-primary/90"
+              className="px-3 py-1.5 rounded text-xs font-medium bg-primary text-primary-foreground hover:bg-primary/90"
             >
               OK
             </button>
@@ -202,74 +202,74 @@ export function FeedbackInbox() {
 
       {/* Error */}
       {error && !showTokenInput && (
-        <div className="flex items-start gap-1.5 p-2 rounded-md bg-red-500/10 border border-red-500/30">
-          <AlertTriangle className="h-3 w-3 text-red-400 shrink-0 mt-0.5" />
-          <p className="text-[10px] text-red-400 leading-snug">{error}</p>
+        <div className="flex items-start gap-2 p-2.5 rounded-md bg-red-500/10 border border-red-500/30">
+          <AlertTriangle className="h-4 w-4 text-red-400 shrink-0 mt-0.5" />
+          <p className="text-xs text-red-400 leading-snug">{error}</p>
         </div>
       )}
 
       {/* Feedback list */}
       {!showTokenInput && !error && newCount === 0 && !loading && (
-        <div className="flex items-center gap-1.5 p-2 rounded-md bg-secondary/20 border border-border/40">
-          <Inbox className="h-3 w-3 text-muted-foreground shrink-0" />
-          <p className="text-[10px] text-muted-foreground">
+        <div className="flex items-center gap-2 p-2.5 rounded-md bg-secondary/20 border border-border/40">
+          <Inbox className="h-4 w-4 text-muted-foreground shrink-0" />
+          <p className="text-xs text-muted-foreground">
             Nessun feedback nuovo. Tutti letti ✅
           </p>
         </div>
       )}
 
       {!showTokenInput && newCount > 0 && (
-        <div className="space-y-1.5 max-h-64 overflow-y-auto pr-1">
+        <div className="space-y-2 max-h-[28rem] overflow-y-auto pr-1">
           {feedbacks.map((f) => (
             <div
               key={f.id}
-              className="rounded-md border border-border/40 bg-card/50 p-2 space-y-1"
+              className="rounded-md border border-border/40 bg-card/50 p-2.5 space-y-1.5"
             >
-              <div className="flex items-center gap-1 flex-wrap">
-                <span className={`text-[8px] uppercase px-1 py-0.5 rounded border ${CATEGORY_COLOR[f.category]}`}>
+              <div className="flex items-center gap-1.5 flex-wrap">
+                <span className={`text-[10px] uppercase px-1.5 py-0.5 rounded border ${CATEGORY_COLOR[f.category]}`}>
                   {f.category}
                 </span>
-                <span className={`text-[8px] uppercase px-1 py-0.5 rounded border ${STATUS_COLOR[f.status]}`}>
+                <span className={`text-[10px] uppercase px-1.5 py-0.5 rounded border ${STATUS_COLOR[f.status]}`}>
                   {f.status}
                 </span>
-                <span className="text-[9px] text-muted-foreground ml-auto">
+                <span className="text-[11px] text-muted-foreground ml-auto">
                   {formatRelative(f.created_at)}
                 </span>
               </div>
               {f.subject && (
-                <p className="text-[11px] font-medium text-foreground line-clamp-1">
+                <p className="text-sm font-medium text-foreground line-clamp-1">
                   {f.subject}
                 </p>
               )}
-              <p className="text-[10px] text-muted-foreground leading-snug line-clamp-3">
+              <p className="text-xs text-muted-foreground leading-snug line-clamp-3">
                 {f.message}
               </p>
-              <div className="flex items-center justify-between pt-0.5">
-                <p className="text-[9px] text-muted-foreground/70 font-mono truncate">
+              <div className="flex items-center justify-between pt-1">
+                <p className="text-[11px] text-muted-foreground/70 font-mono truncate">
                   {f.email}
                 </p>
-                <div className="flex items-center gap-1 shrink-0">
+                <div className="flex items-center gap-1.5 shrink-0">
                   <button
                     onClick={() => setExpanded(expanded === f.id ? null : f.id)}
-                    className="text-[9px] px-1.5 py-0.5 rounded bg-secondary/50 hover:bg-secondary text-muted-foreground hover:text-foreground"
+                    className="text-[11px] px-2 py-1 rounded bg-secondary/50 hover:bg-secondary text-muted-foreground hover:text-foreground"
                   >
                     {expanded === f.id ? "Chiudi" : "Dettagli"}
                   </button>
                   <button
                     onClick={() => markAsRead(f.id)}
                     title="Segna come letto"
-                    className="text-[9px] px-1.5 py-0.5 rounded bg-secondary/50 hover:bg-secondary text-muted-foreground hover:text-foreground flex items-center gap-0.5"
+                    className="text-[11px] px-2 py-1 rounded bg-secondary/50 hover:bg-secondary text-muted-foreground hover:text-foreground flex items-center gap-1"
                   >
-                    <CheckCircle2 className="h-2.5 w-2.5" />
+                    <CheckCircle2 className="h-3.5 w-3.5" />
                   </button>
                 </div>
               </div>
               {expanded === f.id && (
-                <div className="pt-1.5 mt-1 border-t border-border/30 space-y-1 text-[9px] text-muted-foreground/80">
-                  <p className="whitespace-pre-wrap text-foreground/90 text-[10px] leading-relaxed">
+                <div className="pt-2 mt-1.5 border-t border-border/30 space-y-1.5 text-[11px] text-muted-foreground/80">
+                  <p className="whitespace-pre-wrap text-foreground/90 text-xs leading-relaxed">
                     {f.message}
                   </p>
-                  <div className="grid grid-cols-2 gap-x-2 gap-y-0.5 pt-1">
+                  <div className="grid grid-cols-2 gap-x-3 gap-y-1 pt-1.5">
                     <div><span className="opacity-60">App ver:</span> {f.app_version || "—"}</div>
                     <div><span className="opacity-60">Lang:</span> {(f.locale || "—").toUpperCase()}</div>
                     <div><span className="opacity-60">Labels:</span> {f.label_count}</div>
@@ -284,7 +284,7 @@ export function FeedbackInbox() {
 
       {/* Help */}
       {!showTokenInput && (
-        <p className="text-[9px] text-muted-foreground/60 leading-snug pt-1 border-t border-border/30">
+        <p className="text-[11px] text-muted-foreground/60 leading-snug pt-1.5 border-t border-border/30">
           Mostra gli ultimi 10 feedback non letti. Per la lista completa con filtri,
           usa l'icona ↗ in alto.
         </p>

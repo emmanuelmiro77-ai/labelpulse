@@ -314,3 +314,43 @@ Stage Summary:
   audio analysis — they should now see a real Camelot code (e.g. 8A for A minor)
   instead of "8B + Sconosciuta", and Energy/Dance values in the 60-90% range
   instead of always 100%
+
+---
+Task ID: 14
+Agent: Main Agent
+Task: Enlarge DataBackup popover + CloudDiagnostic + FeedbackInbox text/icons (user said too small to read)
+
+Work Log:
+- Widened DataBackup popover from w-80 (320px) to w-[440px] with max-w calc for mobile
+- Increased all text sizes in data-backup.tsx:
+  * Title: text-sm → text-base
+  * Section headers: text-xs → text-sm
+  * Body text: text-[10px]/text-[11px] → text-xs
+  * Lock icons: h-3 → h-4
+  * Padding on info cards: p-2 → p-3
+- Increased all text sizes in cloud-diagnostic.tsx:
+  * Row card padding: p-2.5 → p-3.5
+  * Title: text-[11px] → text-sm
+  * Status badges: text-[9px] → text-xs
+  * Row id: text-[10px] → text-xs
+  * Metrics grid: text-[10px] → text-xs with bigger icons (h-2.5 → h-3.5)
+  * Timestamps: text-[10px] → text-xs with vertical space-y-1
+  * Refresh button: h-2.5 icon → h-3.5
+- Increased all text sizes in feedback-inbox.tsx:
+  * Header: text-xs → text-sm, icon h-3.5 → h-4
+  * Counter badge: text-[9px] h-4 → text-xs h-5
+  * Token input panel: text-[10px] → text-xs / text-[11px]
+  * Feedback item cards: padding p-2 → p-2.5, space-y-1 → space-y-1.5
+  * Category/status badges: text-[8px] → text-[10px]
+  * Subject: text-[11px] → text-sm
+  * Message preview: text-[10px] → text-xs
+  * Email + buttons: text-[9px] → text-[11px]
+  * Max-height for scroll list: max-h-64 → max-h-[28rem] (more vertical room)
+- Added missing AlertTriangle import to feedback-inbox.tsx
+- Build successful (Next.js 16.2.9 Turbopack, 6.3s compile, 18 static pages)
+
+Stage Summary:
+- DataBackup popover now 440px wide with readable text-base/sm/xs sizes throughout
+- CloudDiagnostic cards have proper visual hierarchy with comfortable spacing
+- FeedbackInbox items are readable at a glance, with bigger tap targets
+- Ready to push + tag as v2.1.2 for Vercel deploy
