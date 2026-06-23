@@ -102,6 +102,14 @@ interface DetailLink {
   value: string;
 }
 
+// Format seconds as M:SS (e.g. 73 -> "1:13"). Used by the audio seek bar.
+function formatTime(seconds: number): string {
+  if (!seconds || !isFinite(seconds) || seconds < 0) return "0:00";
+  const m = Math.floor(seconds / 60);
+  const s = Math.floor(seconds % 60);
+  return `${m}:${s.toString().padStart(2, "0")}`;
+}
+
 // Smart URL builder for each link type
 function toClickableUrl(value: string, linkType: string): string | null {
   if (!value || !value.trim()) return null;
@@ -309,7 +317,7 @@ function LabelDiscoveryIcons({
 }
 
 export function LabelFinder() {
-  const { labels, demos, addLabel, updateLabel, deleteLabel, addDemo, locale, getGenres, setActiveTab, userProfile, setUserProfile, gmailAuth, setGmailAuth, selectedLabelId, setSelectedLabelId, selectedArtistId, setSelectedArtistId, artists } =
+  const { labels, demos, addLabel, updateLabel, deleteLabel, addDemo, locale, getGenres, setActiveTab, userProfile, setUserProfile, gmailAuth, setGmailAuth, selectedLabelId, setSelectedLabelId, selectedArtistId, setSelectedArtistId, setNavigationReturnTo, artists } =
     useAppStore();
   const genres = getGenres();
   const { toast } = useToast();
@@ -339,6 +347,9 @@ export function LabelFinder() {
   // label detail dialog. We only play one sample at a time; clicking play
   // on another track stops the previous one.
   const [playingTrackId, setPlayingTrackId] = useState<number | null>(null);
+  // Seek bar state — currentTime and duration for the currently-playing track.
+  // Updated via the <audio> timeupdate event listener; reset on track change.
+  const [audioProgress, setAudioProgress] = useState<{ current: number; duration: number }>({ current: 0, duration: 0 });
   const audioRef = useRef<HTMLAudioElement | null>(null);
 
   // Derive the label's Top 10 tracks from the scraped artist data. Each
@@ -452,8 +463,17 @@ export function LabelFinder() {
 
   // Navigate to the Artist Explorer detail page for the given artist id.
   // Closes the label dialog first so the artist page is fully visible.
+  // ALSO records a navigation return-to so the user can come back to this
+  // exact label via the Artist Explorer's Back button.
   const handleOpenArtist = useCallback(
     (artistId: string) => {
+      // Record where we came from so Artist Explorer's Back can return here.
+      // We use the label's id (preferred) or name as fallback. The LabelFinder
+      // dialog re-opens via the `selectedLabelId` mechanism.
+      if (detailLabel) {
+        const labelId = detailLabel.id || detailLabel.name;
+        setNavigationReturnTo?.({ kind: "label", labelId, labelName: detailLabel.name });
+      }
       setDetailLabel(null);
       setSelectedArtistId?.(artistId);
       setActiveTab("artists");
@@ -462,7 +482,7 @@ export function LabelFinder() {
         window.scrollTo({ top: 0, behavior: "smooth" });
       }
     },
-    [setActiveTab, setSelectedArtistId]
+    [setActiveTab, setSelectedArtistId, setNavigationReturnTo, detailLabel]
   );
 
   const togglePlayTrack = useCallback((track: ArtistTrack) => {
@@ -478,7 +498,24 @@ export function LabelFinder() {
       // won't toggle. The Beatport sample URL is meant to be hot-linkable.
     });
     setPlayingTrackId(track.id);
+    // Reset progress for the new track. The actual currentTime/duration
+    // will be filled in by the timeupdate + loadedmetadata listeners.
+    setAudioProgress({ current: 0, duration: 0 });
   }, [playingTrackId]);
+
+  // Seek handler — called when the user clicks/drags the progress bar.
+  // Computes the new time from the click X position relative to the bar
+  // width, then sets audio.currentTime directly.
+  const handleAudioSeek = useCallback((e: React.MouseEvent<HTMLDivElement> | React.TouchEvent<HTMLDivElement>) => {
+    if (!audioRef.current || !audioProgress.duration) return;
+    const bar = e.currentTarget;
+    const rect = bar.getBoundingClientRect();
+    const clientX = "touches" in e ? e.touches[0]?.clientX ?? 0 : e.clientX;
+    const ratio = Math.max(0, Math.min(1, (clientX - rect.left) / rect.width));
+    const newTime = ratio * audioProgress.duration;
+    audioRef.current.currentTime = newTime;
+    setAudioProgress((p) => ({ ...p, current: newTime }));
+  }, [audioProgress.duration]);
 
   // Reset audio state when dialog closes
   useEffect(() => {
@@ -486,8 +523,34 @@ export function LabelFinder() {
       audioRef.current.pause();
       audioRef.current.src = "";
       setPlayingTrackId(null);
+      setAudioProgress({ current: 0, duration: 0 });
     }
   }, [detailLabel]);
+
+  // Attach timeupdate + loadedmetadata listeners to the audio element.
+  // These keep the progress bar in sync with playback.
+  useEffect(() => {
+    const audio = audioRef.current;
+    if (!audio) return;
+    const onTimeUpdate = () => {
+      setAudioProgress((p) => ({ ...p, current: audio.currentTime || 0 }));
+    };
+    const onLoadedMetadata = () => {
+      setAudioProgress((p) => ({ ...p, duration: audio.duration || 0 }));
+    };
+    const onEnded = () => {
+      setPlayingTrackId(null);
+      setAudioProgress({ current: 0, duration: 0 });
+    };
+    audio.addEventListener("timeupdate", onTimeUpdate);
+    audio.addEventListener("loadedmetadata", onLoadedMetadata);
+    audio.addEventListener("ended", onEnded);
+    return () => {
+      audio.removeEventListener("timeupdate", onTimeUpdate);
+      audio.removeEventListener("loadedmetadata", onLoadedMetadata);
+      audio.removeEventListener("ended", onEnded);
+    };
+  }, []);
 
   // Pitch inline state
   const [showPitch, setShowPitch] = useState(false);
@@ -1289,20 +1352,28 @@ export function LabelFinder() {
                         : "Audio previews from scraped data. Click play to listen."}
                     </p>
                     <div className="space-y-1.5 max-h-72 overflow-y-auto pr-1">
-                      {labelTopTracks.map((track, idx) => (
+                      {labelTopTracks.map((track, idx) => {
+                        const isPlaying = playingTrackId === track.id;
+                        const progressPct = isPlaying && audioProgress.duration > 0
+                          ? Math.min(100, (audioProgress.current / audioProgress.duration) * 100)
+                          : 0;
+                        return (
                         <div
                           key={track.id}
-                          className="flex items-center gap-2 rounded-md border border-border/30 bg-secondary/20 p-2 hover:bg-secondary/40 transition-colors"
+                          className={`rounded-md border bg-secondary/20 p-2 transition-colors ${
+                            isPlaying ? "border-primary/40 bg-primary/5" : "border-border/30 hover:bg-secondary/40"
+                          }`}
                         >
+                          <div className="flex items-center gap-2">
                           <button
                             type="button"
                             onClick={() => togglePlayTrack(track)}
                             className="flex h-7 w-7 shrink-0 items-center justify-center rounded-full bg-primary/15 text-primary hover:bg-primary/25 transition-colors"
-                            title={playingTrackId === track.id
+                            title={isPlaying
                               ? (locale === "it" ? "Pausa" : "Pause")
                               : (locale === "it" ? "Riproduci anteprima" : "Play preview")}
                           >
-                            {playingTrackId === track.id
+                            {isPlaying
                               ? <Pause className="h-3 w-3" />
                               : <Play className="h-3 w-3 ml-0.5" />}
                           </button>
@@ -1340,8 +1411,45 @@ export function LabelFinder() {
                               )}
                             </div>
                           </div>
+                          </div>
+                          {/* Seekable progress bar — only shown for the currently-playing track */}
+                          {isPlaying && (
+                            <div className="mt-1.5 flex items-center gap-2">
+                              <span className="text-[9px] text-muted-foreground font-mono tabular-nums w-9 text-right shrink-0">
+                                {formatTime(audioProgress.current)}
+                              </span>
+                              <div
+                                role="slider"
+                                aria-label={locale === "it" ? "Posizione traccia" : "Track position"}
+                                aria-valuenow={Math.round(progressPct)}
+                                aria-valuemin={0}
+                                aria-valuemax={100}
+                                tabIndex={0}
+                                onClick={handleAudioSeek}
+                                className="group relative flex-1 h-3 cursor-pointer flex items-center"
+                                title={locale === "it" ? "Clicca per spostarti" : "Click to seek"}
+                              >
+                                {/* Track background */}
+                                <div className="absolute inset-x-0 h-1 rounded-full bg-border/60" />
+                                {/* Filled portion */}
+                                <div
+                                  className="absolute h-1 rounded-full bg-primary group-hover:bg-primary/80 transition-colors"
+                                  style={{ width: `${progressPct}%` }}
+                                />
+                                {/* Drag handle (visible on hover) */}
+                                <div
+                                  className="absolute h-2.5 w-2.5 rounded-full bg-primary shadow-sm opacity-0 group-hover:opacity-100 transition-opacity -translate-x-1/2"
+                                  style={{ left: `${progressPct}%` }}
+                                />
+                              </div>
+                              <span className="text-[9px] text-muted-foreground font-mono tabular-nums w-9 shrink-0">
+                                {formatTime(audioProgress.duration)}
+                              </span>
+                            </div>
+                          )}
                         </div>
-                      ))}
+                        );
+                      })}
                     </div>
                   </div>
                 )}

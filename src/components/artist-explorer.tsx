@@ -466,12 +466,16 @@ function ArtistDetail({
   labels,
   onBack,
   onLabelClick,
+  onBackToLabel,
+  returnToLabelName,
 }: {
   artist: Artist;
   locale: Locale;
   labels: { id: string; name: string; beatportLink?: string }[] | undefined;
   onBack: () => void;
   onLabelClick: (labelName: string) => void;
+  onBackToLabel?: () => void;
+  returnToLabelName?: string;
 }) {
   // ----- Audio playback (single shared <audio> element) -----
   const audioRef = useRef<HTMLAudioElement | null>(null);
@@ -570,7 +574,7 @@ function ArtistDetail({
       <audio ref={audioRef} preload="none" className="hidden" />
 
       {/* Top bar */}
-      <div className="flex items-center gap-3">
+      <div className="flex items-center gap-2 flex-wrap">
         <Button
           variant="ghost"
           size="sm"
@@ -580,6 +584,20 @@ function ArtistDetail({
           <ArrowLeft className="h-4 w-4" />
           {it(locale, "Indietro", "Back")}
         </Button>
+        {onBackToLabel && (
+          <Button
+            variant="ghost"
+            size="sm"
+            onClick={onBackToLabel}
+            className="gap-1.5 text-primary hover:text-primary/80 border border-primary/30 hover:border-primary/50 bg-primary/5"
+            title={it(locale, `Torna alla label ${returnToLabelName ?? ""}`.trim(), `Back to label ${returnToLabelName ?? ""}`.trim())}
+          >
+            <Building2 className="h-3.5 w-3.5" />
+            <span className="truncate max-w-[200px]">
+              {it(locale, "Torna a", "Back to")} <span className="font-medium">{returnToLabelName}</span>
+            </span>
+          </Button>
+        )}
       </div>
 
       {/* Hero */}
@@ -1161,6 +1179,8 @@ export default function ArtistExplorer() {
     setSelectedArtistId?: (id: string | null) => void;
     selectedLabelId?: string | null;
     setSelectedLabelId?: (id: string | null) => void;
+    navigationReturnTo?: { kind: "label"; labelId: string; labelName?: string } | null;
+    setNavigationReturnTo?: (target: { kind: "label"; labelId: string; labelName?: string } | null) => void;
   };
 
   const { locale, labels, setActiveTab } = store;
@@ -1168,6 +1188,8 @@ export default function ArtistExplorer() {
   const selectedArtistId = store.selectedArtistId ?? null;
   const setSelectedArtistId = store.setSelectedArtistId;
   const setSelectedLabelId = store.setSelectedLabelId;
+  const navigationReturnTo = store.navigationReturnTo ?? null;
+  const setNavigationReturnTo = store.setNavigationReturnTo;
 
   // Defensive: guard against undefined arrays.
   const safeArtists = useMemo(
@@ -1197,6 +1219,27 @@ export default function ArtistExplorer() {
   const handleBack = useCallback(() => {
     setSelectedArtistId?.(null);
   }, [setSelectedArtistId]);
+
+  // Back to the label the user was viewing before navigating to this artist.
+  // Triggered by the dedicated "Back to label" button — only shown when
+  // navigationReturnTo is set. Switches to Labels tab and sets selectedLabelId
+  // so LabelFinder's useEffect re-opens the detail dialog automatically.
+  const handleBackToLabel = useCallback(() => {
+    if (!navigationReturnTo || navigationReturnTo.kind !== "label") return;
+    const target = navigationReturnTo;
+    // Clear return-to FIRST so the button disappears and we don't loop.
+    setNavigationReturnTo?.(null);
+    // Clear the artist selection
+    setSelectedArtistId?.(null);
+    // Set the label id so LabelFinder re-opens the dialog. Pass the id
+    // directly; LabelFinder falls back to name matching if id doesn't match.
+    setSelectedLabelId?.(target.labelId);
+    setActiveTab("labels");
+    // Scroll to top in case the dialog needs to be in view.
+    if (typeof window !== "undefined") {
+      window.scrollTo({ top: 0, behavior: "smooth" });
+    }
+  }, [navigationReturnTo, setNavigationReturnTo, setSelectedArtistId, setSelectedLabelId, setActiveTab]);
 
   const handleLabelClick = useCallback(
     (labelName: string) => {
@@ -1243,6 +1286,8 @@ export default function ArtistExplorer() {
         labels={labels}
         onBack={handleBack}
         onLabelClick={handleLabelClick}
+        onBackToLabel={navigationReturnTo ? handleBackToLabel : undefined}
+        returnToLabelName={navigationReturnTo?.labelName}
       />
     );
   }

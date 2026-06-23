@@ -819,6 +819,16 @@ interface AppState {
   artists: Artist[]; // persisted in IndexedDB, loaded asynchronously on boot
   selectedArtistId: string | null; // for Artist Explorer detail view
   selectedLabelId: string | null; // cross-tab navigation: clicking a label name from Artist Explorer sets this, then LabelFinder opens the detail dialog
+  /**
+   * Navigation return-to state. When the user navigates from Label detail →
+   * Artist detail (via handleOpenArtist), we stash `{ kind: 'label', labelId }`
+   * here. The Artist Explorer's "Back" button checks this first: if set, it
+   * returns to the Labels tab and re-opens that label's detail dialog
+   * (preserving scroll position would be a bonus, but re-opening the dialog
+   * is the minimum viable UX). If null/empty, Back falls back to the artist
+   * list (existing behavior).
+   */
+  navigationReturnTo: { kind: "label"; labelId: string; labelName?: string } | null;
   activeTab: "dashboard" | "labels" | "artists" | "rankings" | "demos" | "pitch" | "profile";
   locale: Locale;
   userProfile: UserProfile;
@@ -849,6 +859,10 @@ interface AppState {
 
   // Cross-tab label focus (Phase 2 — used by Artist Explorer → Label Finder)
   setSelectedLabelId: (id: string | null) => void;
+
+  // Navigation return-to (used by Artist Explorer Back button to return
+  // to the label detail dialog the user was viewing before)
+  setNavigationReturnTo: (target: { kind: "label"; labelId: string; labelName?: string } | null) => void;
 
   // Language
   setLocale: (locale: Locale) => void;
@@ -1144,6 +1158,7 @@ export const useAppStore = create<AppState>()(
       artists: [] as Artist[], // populated from IndexedDB on boot (see loadArtistsFromIDB)
       selectedArtistId: null as string | null,
       selectedLabelId: null as string | null,
+      navigationReturnTo: null as { kind: "label"; labelId: string; labelName?: string } | null,
       activeTab: "dashboard" as const,
       locale: "it" as Locale,
       userProfile: { artistName: "", scLink: "", bio: "", email: "", photoUrl: "", links: [], cyaniteApiToken: "", supabaseUrl: "", supabaseAnonKey: "" } as UserProfile,
@@ -1264,6 +1279,7 @@ export const useAppStore = create<AppState>()(
       setSelectedArtistId: (id) => set({ selectedArtistId: id }),
 
       setSelectedLabelId: (id) => set({ selectedLabelId: id }),
+      setNavigationReturnTo: (target) => set({ navigationReturnTo: target }),
 
       setArtists: (artists) => {
         set({ artists });
