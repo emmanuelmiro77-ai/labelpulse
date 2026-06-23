@@ -854,3 +854,62 @@ Stage Summary:
   the new gmail.readonly scope (Google will show a consent prompt because
   a new scope was added). After re-auth, the "Scansiona risposte" button
   will work end-to-end.
+
+---
+Task ID: in-app-reply-and-materials
+Agent: Main Agent
+Task: In-app reply composer + material submission form + status rename
+
+Work Log:
+- Renamed "In Ascolto" → "In attesa di risposta" in i18n (IT + EN)
+  Reason: we can't know if the label is actually listening — we only know
+  we're waiting for a reply. The new name is honest.
+- Extended Demo type with 4 new fields:
+  * gmailThreadId (for in-thread replies via Gmail API)
+  * gmailReplyMessageId (for In-Reply-To header)
+  * materialSentDate (when materials were last sent to the label)
+  * materialSentLinks (list of URLs sent)
+- Updated migration v12 to initialize these new fields on existing demos
+- Updated store.scanGmailReplies to save threadId + messageId from
+  detected replies, so the user can later reply in the same thread
+- Added sendReplyInThread() to src/lib/gmail.ts:
+  * Builds RFC 2822 message with In-Reply-To + References headers
+  * Includes threadId in payload so Gmail groups the message in the
+    original conversation
+  * Returns threadId in SendEmailResult
+- Created LabelReplyComposer component:
+  * Shows inline when replyStatus !== "none" AND Gmail is connected
+  * 5 templates (one per ReplyStatus) with IT/EN bodies and placeholders
+    for {trackName}, {sentDate}, {artistName}, {senderName}
+  * Reply target auto-parsed from demo.replySender (preferred) or label.emails
+  * Subject = "Re: <original subject>" (extracted from pitchText)
+  * Sends via sendReplyInThread — same Gmail thread as label's reply
+- Created MaterialSubmissionForm component:
+  * Shows when replyStatus === "positive" OR materialSentDate is set
+  * Producer info auto-filled from userProfile (artistName, email, SC, bio)
+  * Track dropdown: ALL demos in database (defaults to current demo)
+  * Material links pre-populated from selected demo's links[] array
+  * Link types: SoundCloud / WAV / Stems / WeTransfer / Dropbox / GDrive
+  * Generates formatted email with producer + track + links blocks
+  * Sends via sendReplyInThread (in original Gmail thread)
+  * Records materialSentDate + materialSentLinks on the demo
+  * Already-sent state: green confirmation + list of sent links +
+    "Send more materials" button
+- Both new components wired into DemoDetailDialog right after
+  ReplyTrackerSection
+- Passed `demos` prop to DemoDetailDialog so MaterialSubmissionForm can
+  populate the track dropdown
+- Fixed duplicate lucide-react import (icons were in both the existing
+  block at line 6-37 and my new line 72)
+- Verified no new TS errors in my files
+- Committed + pushed, deployed via scripts/deploy.sh — READY in ~30s
+- Production verified 200 OK
+
+Stage Summary:
+- "In Ascolto" → "In attesa di risposta" (honest naming)
+- User can now reply to label from inside the app (no Gmail switch)
+- User can send materials (WAV/stems/producer info) with one click when
+  label shows interest
+- Material links pre-populated from existing demos in database
+- All replies sent in same Gmail thread (conversation stays grouped)
+- Production live at https://labelpulse-emmanuel-betquant.vercel.app
