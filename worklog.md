@@ -788,3 +788,69 @@ Stage Summary:
 - Le personalizzazioni utente persistono tra i tuoi aggiornamenti (grazie al merge by id)
 - NO migrazione SQL richiesta: la row 'global' viene creata automaticamente al primo push dell'admin
 - L'admin deve fare un nuovo import (o modificare qualcosa che triggera syncToCloud) per popolare la row 'global' la prima volta
+
+---
+Task ID: gmail-readonly-scan
+Agent: Main Agent
+Task: Gmail readonly integration — auto-detect label replies in-app
+
+Work Log:
+- Read existing src/lib/gmail.ts (had gmail.send + gmail.compose scopes via GIS)
+- Read existing gmail-settings.tsx (only had connect/disconnect UI)
+- Created src/lib/reply-classifier.ts:
+  - Multi-language (EN/IT/DE/FR/ES) pattern catalogue
+  - Tiered scoring: ack / info / positive / rejected categories
+  - Each pattern has weight 1-3 and a human-readable label
+  - Returns { category, confidence, matchedPatterns, detectedLanguage }
+  - Requires minimum 2 points to commit (avoid false positives)
+- Extended src/lib/gmail.ts:
+  - Added gmail.readonly scope to GMAIL_SCOPES
+  - parseMessagePayload: recursively walks multipart MIME, prefers text/plain,
+    falls back to text/html with tag stripping
+  - decodeBase64Url: handles Gmail's base64url encoding with UTF-8
+  - listMessages + getMessage: thin wrappers around Gmail REST API
+  - findReplyForDemo: builds query `from:{labelEmail} after:{sentDate}`,
+    fetches up to 5 matches, returns the most recent readable one
+  - scanRepliesForDemos: batched scan with 80ms rate limiting between demos
+- Extended src/lib/store.ts:
+  - Added lastReplyScanAt: string | null and newRepliesCount: number to AppState
+  - Added scanGmailReplies async action:
+    1. Ensures token validity (silent refresh via GIS)
+    2. Filters eligible demos (sent/reviewing/accepted/rejected, has sentDate,
+       no positive/rejected reply unless review is older than 24h)
+    3. Builds scan inputs with label emails + original subject fallback
+    4. Calls scanRepliesForDemos
+    5. For each found reply: classifies, updates demo (replyStatus, replyText,
+       replyDate, replySender, followUpDueDate), auto-advances status
+       (positive -> reviewing, rejected -> rejected)
+    6. Sets followUpDueDate to 28 days after info/positive replies
+  - Added migration v12 for new fields + reply field defaults on demos
+  - Updated partialize and cloud sync blocks to include new fields
+  - Updated mergeCloudAndLocal to copy new fields
+- Updated src/components/gmail-settings.tsx:
+  - Added "Scansiona risposte ora" button with scanning state + progress
+  - Shows last scan timestamp (relative format: "2 min fa")
+  - Shows count of eligible demos (sent + no positive/rejected reply)
+  - Shows newRepliesCount badge with cyan notification dot
+  - Lists up to 4 most recent detected replies with category color
+  - Connect button now mentions both send AND receive in description
+- Updated src/components/demo-tracker.tsx:
+  - Added "Scansiona risposte" button in toolbar (with badge + spinner)
+  - Added handleScanReplies callback with toast notifications
+  - Button disabled when Gmail not connected (shows "Gmail offline")
+- Fixed TS error in gmail-settings.tsx:264 (comparison after type narrowing)
+- Verified no new TS errors introduced in my files
+- Committed + pushed to main, deployed via scripts/deploy.sh
+- Deploy reached READY in ~30 seconds, production verified 200 OK
+
+Stage Summary:
+- Gmail readonly scope added (alongside existing send/compose)
+- Reply classifier covers 5 languages with ~80 patterns
+- Scan runs client-side using existing GIS token (no new OAuth flow needed)
+- Auto-classification + auto-status-advance means user sees results without
+  manual data entry
+- Production live at https://labelpulse.vercel.app
+- NEXT STEP (user action required): re-authorize Gmail in the app to grant
+  the new gmail.readonly scope (Google will show a consent prompt because
+  a new scope was added). After re-auth, the "Scansiona risposte" button
+  will work end-to-end.
