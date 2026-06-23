@@ -65,6 +65,10 @@ export function NotificationSettings() {
   const [permission, setPermission] = useState<NotificationPermission | "unsupported">("default");
   const [subscribing, setSubscribing] = useState(false);
   const [testing, setTesting] = useState(false);
+  // Whether the browser currently holds an active PushSubscription.
+  // This is the SOURCE OF TRUTH for UI state — NOT userProfile.notifications.master,
+  // because cloud sync / sidecar restore can wipe that field via shallow merge.
+  const [hasSubscription, setHasSubscription] = useState(false);
 
   const email = session?.user?.email;
   const notifications = userProfile.notifications || {
@@ -74,12 +78,28 @@ export function NotificationSettings() {
     weeklyRecap: true,
   };
 
+  // Check actual push subscription state on mount + whenever permission changes
+  const refreshSubscriptionState = async () => {
+    if (typeof navigator === "undefined" || !("serviceWorker" in navigator) || !("PushManager" in window)) {
+      setHasSubscription(false);
+      return;
+    }
+    try {
+      const reg = await navigator.serviceWorker.ready;
+      const sub = await reg.pushManager.getSubscription();
+      setHasSubscription(!!sub);
+    } catch {
+      setHasSubscription(false);
+    }
+  };
+
   useEffect(() => {
     if (typeof Notification === "undefined") {
       setPermission("unsupported");
       return;
     }
     setPermission(Notification.permission);
+    refreshSubscriptionState();
   }, []);
 
   // Don't render for unauthenticated users
@@ -177,6 +197,7 @@ export function NotificationSettings() {
 
       // 4. Update local state
       updateLocalPrefs("master", true);
+      await refreshSubscriptionState();
       toast({
         title: isItalian ? "Notifiche attivate! 🔔" : "Notifications enabled! 🔔",
         description: isItalian
@@ -208,6 +229,7 @@ export function NotificationSettings() {
         });
       }
       updateLocalPrefs("master", false);
+      await refreshSubscriptionState();
       toast({
         title: isItalian ? "Notifiche disattivate" : "Notifications disabled",
       });
@@ -274,7 +296,10 @@ export function NotificationSettings() {
     }
   };
 
-  const isEnabled = notifications.master && permission === "granted";
+  // Source of truth: actual browser PushSubscription + granted permission.
+  // Falls back to userProfile.notifications.master only if the SW check
+  // hasn't completed yet (hasSubscription starts false on first render).
+  const isEnabled = permission === "granted" && (hasSubscription || notifications.master);
 
   return (
     <div className="rounded-lg border border-border/40 bg-card/30 p-4 space-y-3">
