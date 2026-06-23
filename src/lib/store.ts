@@ -139,6 +139,14 @@ export interface Demo {
     cyaniteMoods?: string[];
     cyaniteInstruments?: string[];
   };
+  // Reply tracking — when a label responds (auto-detected via Gmail API or
+  // entered manually by the user). Allows the tracker to show "Ricevuto ACK",
+  // "Risposta positiva", etc. without the user having to remember.
+  replyStatus?: "none" | "ack" | "info" | "positive" | "rejected";
+  replyText?: string;       // full text of the label's reply email
+  replyDate?: string | null; // ISO date when the reply was received
+  replySender?: string;     // who replied (e.g. "Patrick Scuro, Animarum")
+  followUpDueDate?: string | null; // ISO date after which a follow-up is suggested
 }
 
 // ==================== HELPERS ====================

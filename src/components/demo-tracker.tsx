@@ -30,6 +30,10 @@ import {
   Loader2,
   X,
   Upload,
+  Copy as CopyIcon,
+  Lock,
+  Reply,
+  MessageSquare,
 } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Badge } from "@/components/ui/badge";
@@ -122,10 +126,72 @@ const STATUS_TKEYS: Record<DemoStatus, "demos.ready" | "demos.sent" | "demos.rev
   rejected: "demos.rejected",
 };
 
+// ==================== REPLY STATUS HELPERS ====================
+// These power the "label ha risposto?" feature. For now the user enters
+// replies manually via the demo detail dialog; later Gmail API will
+// auto-populate these fields.
+
+export type ReplyStatus = "none" | "ack" | "info" | "positive" | "rejected";
+
+const REPLY_STATUS_CONFIG: Record<
+  ReplyStatus,
+  { labelIt: string; labelEn: string; color: string; bgColor: string; borderColor: string; icon: "inbox" | "ear" | "thumbs-up" | "thumbs-down" }
+> = {
+  none:      { labelIt: "Nessuna risposta",   labelEn: "No reply",          color: "text-muted-foreground",    bgColor: "bg-secondary/30",      borderColor: "border-border/30",      icon: "inbox" },
+  ack:       { labelIt: "ACK ricevuto",       labelEn: "Ack received",      color: "text-blue-400",            bgColor: "bg-blue-500/10",       borderColor: "border-blue-500/30",    icon: "inbox" },
+  info:      { labelIt: "Richiesta info",     labelEn: "Info requested",    color: "text-amber-400",           bgColor: "bg-amber-500/10",      borderColor: "border-amber-500/30",   icon: "ear" },
+  positive:  { labelIt: "Risposta positiva",  labelEn: "Positive reply",    color: "text-emerald-400",         bgColor: "bg-emerald-500/10",    borderColor: "border-emerald-500/30", icon: "thumbs-up" },
+  rejected:  { labelIt: "Rifiutata",          labelEn: "Rejected",          color: "text-red-400",             bgColor: "bg-red-500/10",        borderColor: "border-red-500/30",     icon: "thumbs-down" },
+};
+
+function getReplyStatus(demo: Demo): ReplyStatus {
+  return (demo.replyStatus as ReplyStatus) || "none";
+}
+
+// Compute follow-up suggestion: if status is "sent" or "reviewing", the
+// label hasn't replied (or only ACK), and the due date has passed.
+function getFollowUpStatus(demo: Demo): { isDue: boolean; dueDate: string | null; daysOverdue: number } {
+  if (demo.status !== "sent" && demo.status !== "reviewing") {
+    return { isDue: false, dueDate: null, daysOverdue: 0 };
+  }
+  const reply = getReplyStatus(demo);
+  // If we already have a positive or rejected reply, no need to follow up
+  if (reply === "positive" || reply === "rejected") {
+    return { isDue: false, dueDate: null, daysOverdue: 0 };
+  }
+  if (!demo.sentDate) {
+    return { isDue: false, dueDate: null, daysOverdue: 0 };
+  }
+  // Default follow-up window: 28 days from sentDate (typical label SLA)
+  // If a followUpDueDate is explicitly set on the demo, use that instead.
+  const due = demo.followUpDueDate
+    ? new Date(demo.followUpDueDate)
+    : new Date(new Date(demo.sentDate).getTime() + 28 * 86400000);
+  const dueStr = due.toISOString().split("T")[0];
+  const daysOverdue = Math.floor((Date.now() - due.getTime()) / 86400000);
+  return { isDue: daysOverdue > 0, dueDate: dueStr, daysOverdue: Math.max(0, daysOverdue) };
+}
+
+// ==================== LOCK HELPERS ====================
+// Once a demo is sent, certain fields become read-only to prevent the user
+// from accidentally changing the label/track/link after the email has gone
+// out (which would make the saved pitch + sent history inconsistent).
+// The user can still edit notes, pitch text, status, and add replies.
+
+function isDemoLocked(demo: Demo | null): boolean {
+  if (!demo) return false;
+  // Lock applies once the demo has been sent (or moved past "ready")
+  return demo.status !== "ready";
+}
+
+// When opening the edit dialog on a locked demo, show a lock badge instead
+// of just silently disabling fields — the user needs to know why.
+
 export function DemoTracker() {
   const { labels, demos, addDemo, updateDemo, deleteDemo, advanceDemoStatus, locale: _locale, getGenres, userProfile, artists, setActiveTab, setSelectedLabelId, setSelectedArtistId, gmailAuth, setGmailAuth } =
     useAppStore();
   const locale = _locale as Locale;
+  const { toast } = useToast();
   const genres = getGenres();
   const [viewMode, setViewMode] = useState<"kanban" | "table">("kanban");
   const [search, setSearch] = useState("");
@@ -513,6 +579,36 @@ export function DemoTracker() {
 
   const canAdvance = (status: DemoStatus) => STATUS_FLOW.indexOf(status) < STATUS_FLOW.length - 1;
 
+  // Clone a demo for sending to a different label. Creates a new demo with
+  // the same trackName, link, audio analysis, BPM, key, genre — but with an
+  // empty labelId and status="ready" so the user picks a new target and
+  // drafts a new pitch. This is the "riuso la stessa demo per altra label"
+  // workflow the user asked for.
+  const handleCloneDemo = useCallback((demo: Demo) => {
+    addDemo({
+      trackName: demo.trackName,
+      labelId: "", // new target — user picks via the label combobox
+      status: "ready",
+      sentDate: null,
+      link: demo.link,
+      links: demo.links || [],
+      notes: demo.notes,
+      pitchText: "", // fresh pitch for the new label
+      artistName: demo.artistName || userProfile.artistName || "",
+      genre: demo.genre || "",
+      bpm: demo.bpm || "",
+      key: demo.key || "",
+      analysis: demo.analysis,
+      // No reply status — fresh demo
+      replyStatus: "none",
+      replyText: undefined,
+      replyDate: null,
+      replySender: undefined,
+      followUpDueDate: null,
+    });
+    toast({ title: locale === "it" ? "Demo clonata" : "Demo cloned", description: locale === "it" ? "Nuova demo creata in 'Pronta per Invio' — scegli una nuova label target" : "New demo created in 'Ready to Send' — pick a new target label" });
+  }, [addDemo, userProfile.artistName, locale, toast]);
+
   // Cross-tab navigation from SimilarSuggestions panel inside the add/edit
   // dialog. Clicking a label name closes this dialog and opens the label
   // detail dialog in the Labels tab; clicking an artist name closes this
@@ -720,6 +816,19 @@ export function DemoTracker() {
                                 <ChevronRight className="h-3 w-3" />
                               </Button>
                             )}
+                            {/* Clone button — visible only on sent/post-sent demos.
+                                Lets the user reuse the same track for a different label. */}
+                            {demo.status !== "ready" && (
+                              <Button
+                                variant="ghost"
+                                size="icon"
+                                className="h-6 w-6"
+                                onClick={(e) => { e.stopPropagation(); handleCloneDemo(demo); }}
+                                title={locale === "it" ? "Clona per altra label" : "Clone for another label"}
+                              >
+                                <CopyIcon className="h-3 w-3" />
+                              </Button>
+                            )}
                             <Button variant="ghost" size="icon" className="h-6 w-6" onClick={(e) => { e.stopPropagation(); openEdit(demo); }}>
                               <Pencil className="h-3 w-3" />
                             </Button>
@@ -745,6 +854,39 @@ export function DemoTracker() {
                             <FileText className="h-2.5 w-2.5" /> {t(locale, "demos.hasPitch")}
                           </div>
                         )}
+                        {/* Reply badge — shows whether the label has replied.
+                            'ack' = automatic confirmation, 'info' = asked for more,
+                            'positive' / 'rejected' = final decision. */}
+                        {(() => {
+                          const reply = getReplyStatus(demo);
+                          if (reply === "none") return null;
+                          const cfg = REPLY_STATUS_CONFIG[reply];
+                          return (
+                            <div className={`flex items-center gap-1 text-[10px] ${cfg.color} font-medium`}>
+                              <MessageSquare className="h-2.5 w-2.5" />
+                              <span>{locale === "it" ? cfg.labelIt : cfg.labelEn}</span>
+                              {demo.replyDate && (
+                                <span className="text-muted-foreground/60 ml-0.5">· {demo.replyDate}</span>
+                              )}
+                            </div>
+                          );
+                        })()}
+                        {/* Follow-up suggestion — if no reply (or only ACK) and
+                            28 days have passed since sentDate, show a nudge. */}
+                        {(() => {
+                          const fu = getFollowUpStatus(demo);
+                          if (!fu.isDue) return null;
+                          return (
+                            <div className="flex items-center gap-1 text-[10px] text-amber-400 font-medium">
+                              <AlertTriangle className="h-2.5 w-2.5" />
+                              <span>
+                                {locale === "it"
+                                  ? `Follow-up suggerito (${fu.daysOverdue}gg fa)`
+                                  : `Follow-up suggested (${fu.daysOverdue}d ago)`}
+                              </span>
+                            </div>
+                          );
+                        })()}
                         {demo.analysis && (
                           <div className="flex items-center gap-1.5 text-[10px] text-muted-foreground pt-0.5">
                             <Activity className={`h-2.5 w-2.5 ${demo.analysis.analysisSource === "cyanite" ? "text-primary" : "text-emerald-400"}`} />
@@ -865,12 +1007,38 @@ export function DemoTracker() {
       <Dialog open={showAddDialog} onOpenChange={setShowAddDialog}>
         <DialogContent className="sm:max-w-2xl bg-card border-border/50 max-h-[90vh] overflow-y-auto">
           <DialogHeader>
-            <DialogTitle>{editingDemo ? t(locale, "demos.editDemo") : t(locale, "demos.addDemo")}</DialogTitle>
+            <DialogTitle className="flex items-center gap-2 flex-wrap">
+              {editingDemo ? t(locale, "demos.editDemo") : t(locale, "demos.addDemo")}
+              {/* Lock badge — shown when the demo is locked (status !== ready).
+                  Explains why some fields are read-only. */}
+              {isDemoLocked(editingDemo) && (
+                <Badge variant="outline" className="text-[10px] py-0 px-1.5 h-5 border-amber-500/40 text-amber-400">
+                  <Lock className="h-2.5 w-2.5 mr-1" />
+                  {locale === "it" ? "Inviata — campi bloccati" : "Sent — fields locked"}
+                </Badge>
+              )}
+            </DialogTitle>
+            {isDemoLocked(editingDemo) && (
+              <p className="text-[11px] text-muted-foreground/80 mt-1 leading-snug">
+                {locale === "it"
+                  ? "Una demo inviata non può modificare label, traccia o link — usano \"Clona per altra label\" per inviarla a una label diversa. Puoi ancora modificare note, pitch, stato e registrare risposte."
+                  : "A sent demo can't change label, track, or link — use \"Clone for another label\" to send it elsewhere. You can still edit notes, pitch, status, and register replies."}
+              </p>
+            )}
           </DialogHeader>
           <div className="space-y-4 py-2">
             <div className="space-y-1.5">
-              <UILabel className="text-xs font-mono uppercase text-muted-foreground">{t(locale, "demos.trackName")}</UILabel>
-              <Input value={formTrackName} onChange={(e) => setFormTrackName(e.target.value)} placeholder="e.g. Midnight Drive" className="bg-secondary/50" />
+              <UILabel className="text-xs font-mono uppercase text-muted-foreground">
+                {t(locale, "demos.trackName")}
+                {isDemoLocked(editingDemo) && <Lock className="inline-block h-3 w-3 ml-1 text-muted-foreground/50" />}
+              </UILabel>
+              <Input
+                value={formTrackName}
+                onChange={(e) => setFormTrackName(e.target.value)}
+                placeholder="e.g. Midnight Drive"
+                className="bg-secondary/50"
+                disabled={isDemoLocked(editingDemo)}
+              />
             </div>
             <div className="grid grid-cols-2 gap-3">
               <div className="space-y-1.5">
@@ -899,6 +1067,7 @@ export function DemoTracker() {
                       role="combobox"
                       aria-expanded={labelComboboxOpen}
                       className="w-full justify-between bg-secondary/50 font-normal h-9"
+                      disabled={isDemoLocked(editingDemo)}
                     >
                       <span className="truncate text-left">
                         {formLabelId
@@ -1022,8 +1191,17 @@ export function DemoTracker() {
               </div>
             </div>
             <div className="space-y-1.5">
-              <UILabel className="text-xs font-mono uppercase text-muted-foreground">{t(locale, "demos.scLink")}</UILabel>
-              <Input value={formLink} onChange={(e) => setFormLink(e.target.value)} placeholder="https://soundcloud.com/..." className="bg-secondary/50" />
+              <UILabel className="text-xs font-mono uppercase text-muted-foreground">
+                {t(locale, "demos.scLink")}
+                {isDemoLocked(editingDemo) && <Lock className="inline-block h-3 w-3 ml-1 text-muted-foreground/50" />}
+              </UILabel>
+              <Input
+                value={formLink}
+                onChange={(e) => setFormLink(e.target.value)}
+                placeholder="https://soundcloud.com/..."
+                className="bg-secondary/50"
+                disabled={isDemoLocked(editingDemo)}
+              />
             </div>
             {/* Additional demo links */}
             {formLinks.map((fl, idx) => (
@@ -1520,6 +1698,246 @@ export function DemoTracker() {
 // the Label Finder dialog), the textarea is pre-filled with that text so
 // the user can keep editing it.
 
+// ==================== REPLY TRACKER SECTION COMPONENT ====================
+//
+// Sub-component of DemoDetailDialog. Shows the current reply status (badge
+// + reply text + date + sender) and lets the user record/edit a reply from
+// the label. Until Gmail API auto-detection lands, this is manual entry.
+//
+// Status transitions:
+//   none      → user clicks "Registra risposta" → opens editor
+//   ack       → user picks "ACK automatico" in the type select
+//   info      → user picks "Richiesta info"
+//   positive  → user picks "Risposta positiva" → also advances demo status
+//               to "reviewing" if it was "sent"
+//   rejected  → user picks "Rifiutata" → also advances demo status to
+//               "rejected"
+//
+// The follow-up due date is auto-computed (28 days from sentDate) unless
+// the user overrides it. When the follow-up is overdue AND no positive/
+// rejected reply has been recorded, a warning is shown at the top.
+
+function ReplyTrackerSection({
+  demo,
+  updateDemo,
+  locale,
+}: {
+  demo: Demo;
+  updateDemo: (id: string, updates: Partial<Demo>) => void;
+  locale: string;
+}) {
+  const [isEditing, setIsEditing] = useState(false);
+  const [editStatus, setEditStatus] = useState<ReplyStatus>(getReplyStatus(demo));
+  const [editText, setEditText] = useState(demo.replyText || "");
+  const [editDate, setEditDate] = useState(demo.replyDate || new Date().toISOString().split("T")[0]);
+  const [editSender, setEditSender] = useState(demo.replySender || "");
+
+  // Reset local state when switching demos
+  useEffect(() => {
+    setEditStatus(getReplyStatus(demo));
+    setEditText(demo.replyText || "");
+    setEditDate(demo.replyDate || new Date().toISOString().split("T")[0]);
+    setEditSender(demo.replySender || "");
+    setIsEditing(false);
+  }, [demo.id]); // eslint-disable-line react-hooks/exhaustive-deps
+
+  const handleSave = useCallback(() => {
+    // Auto-advance status based on reply type:
+    //   positive → "reviewing" (label is interested)
+    //   rejected → "rejected"
+    //   ack/info → no status change (let the user decide)
+    const statusUpdates: Partial<Demo> = {};
+    if (editStatus === "positive" && demo.status === "sent") {
+      statusUpdates.status = "reviewing";
+    } else if (editStatus === "rejected") {
+      statusUpdates.status = "rejected";
+    }
+
+    updateDemo(demo.id, {
+      replyStatus: editStatus,
+      replyText: editText.trim() || undefined,
+      replyDate: editStatus === "none" ? null : editDate,
+      replySender: editSender.trim() || undefined,
+      ...statusUpdates,
+    });
+    setIsEditing(false);
+  }, [demo.id, demo.status, editStatus, editText, editDate, editSender, updateDemo]);
+
+  const handleClear = useCallback(() => {
+    updateDemo(demo.id, {
+      replyStatus: "none",
+      replyText: undefined,
+      replyDate: null,
+      replySender: undefined,
+    });
+    setEditStatus("none");
+    setEditText("");
+    setEditSender("");
+    setIsEditing(false);
+  }, [demo.id, updateDemo]);
+
+  const currentReply = getReplyStatus(demo);
+  const cfg = REPLY_STATUS_CONFIG[currentReply];
+  const fu = getFollowUpStatus(demo);
+
+  return (
+    <div className="space-y-3 border-t border-border/30 pt-3">
+      <div className="flex items-center justify-between gap-2 flex-wrap">
+        <div className="flex items-center gap-2">
+          <Reply className="h-4 w-4 text-primary" />
+          <span className="text-[10px] text-muted-foreground uppercase tracking-wider font-medium">
+            {locale === "it" ? "Risposta della Label" : "Label Reply"}
+          </span>
+        </div>
+        {currentReply !== "none" && !isEditing && (
+          <Badge variant="outline" className={`text-[10px] py-0 px-1.5 h-5 ${cfg.bgColor} ${cfg.color} ${cfg.borderColor}`}>
+            {locale === "it" ? cfg.labelIt : cfg.labelEn}
+            {demo.replyDate && <span className="ml-1 text-muted-foreground/60">· {demo.replyDate}</span>}
+          </Badge>
+        )}
+      </div>
+
+      {/* Follow-up warning */}
+      {fu.isDue && (
+        <div className="flex items-start gap-2 text-[11px] text-amber-400 bg-amber-500/10 border border-amber-500/30 rounded-md p-2">
+          <AlertTriangle className="h-3.5 w-3.5 mt-0.5 shrink-0" />
+          <div>
+            <p className="font-medium">
+              {locale === "it"
+                ? `Follow-up suggerito — ${fu.daysOverdue} giorni oltre la finestra tipica (28gg)`
+                : `Follow-up suggested — ${fu.daysOverdue} days past the typical window (28d)`}
+            </p>
+            <p className="text-amber-400/70 mt-0.5">
+              {locale === "it"
+                ? `Data prevista risposta: ${fu.dueDate}. Puoi inviare un'email di cortesia usando il pulsante "Apri in Gmail" qui sotto.`
+                : `Expected reply date: ${fu.dueDate}. You can send a polite nudge using the "Open in Gmail" button below.`}
+            </p>
+          </div>
+        </div>
+      )}
+
+      {/* Existing reply display (read mode) */}
+      {currentReply !== "none" && !isEditing && (
+        <div className="space-y-2">
+          {demo.replySender && (
+            <p className="text-[11px] text-muted-foreground">
+              {locale === "it" ? "Da" : "From"}: <span className="text-foreground/80">{demo.replySender}</span>
+            </p>
+          )}
+          {demo.replyText && (
+            <Card className="bg-card/80 border-border/30">
+              <CardContent className="p-3">
+                <pre className="text-[11px] leading-relaxed font-mono text-foreground/70 whitespace-pre-wrap break-words m-0">
+                  {demo.replyText}
+                </pre>
+              </CardContent>
+            </Card>
+          )}
+          <div className="flex items-center gap-2">
+            <Button size="sm" variant="outline" className="h-7 text-xs" onClick={() => setIsEditing(true)}>
+              <Pencil className="h-3 w-3 mr-1" />
+              {locale === "it" ? "Modifica risposta" : "Edit reply"}
+            </Button>
+            <Button size="sm" variant="ghost" className="h-7 text-xs text-muted-foreground hover:text-destructive" onClick={handleClear}>
+              <X className="h-3 w-3 mr-1" />
+              {locale === "it" ? "Rimuovi" : "Remove"}
+            </Button>
+          </div>
+        </div>
+      )}
+
+      {/* Edit mode */}
+      {(isEditing || currentReply === "none") && (
+        <div className="space-y-2 rounded-md border border-primary/20 bg-primary/5 p-3">
+          <div className="grid grid-cols-2 gap-2">
+            <div className="space-y-1">
+              <UILabel className="text-[10px] font-mono uppercase text-muted-foreground">
+                {locale === "it" ? "Tipo risposta" : "Reply type"}
+              </UILabel>
+              <Select value={editStatus} onValueChange={(v) => setEditStatus(v as ReplyStatus)}>
+                <SelectTrigger className="bg-secondary/50 text-sm h-8"><SelectValue /></SelectTrigger>
+                <SelectContent>
+                  <SelectItem value="none">{locale === "it" ? "Nessuna (annulla)" : "None (cancel)"}</SelectItem>
+                  <SelectItem value="ack">{locale === "it" ? "ACK automatico (conferma ricezione)" : "Auto-ack (receipt confirmation)"}</SelectItem>
+                  <SelectItem value="info">{locale === "it" ? "Richiesta info (vogliono sapere di più)" : "Info requested (want to know more)"}</SelectItem>
+                  <SelectItem value="positive">{locale === "it" ? "Risposta positiva (interessati!)" : "Positive reply (interested!)"}</SelectItem>
+                  <SelectItem value="rejected">{locale === "it" ? "Rifiutata" : "Rejected"}</SelectItem>
+                </SelectContent>
+              </Select>
+            </div>
+            <div className="space-y-1">
+              <UILabel className="text-[10px] font-mono uppercase text-muted-foreground">
+                {locale === "it" ? "Data risposta" : "Reply date"}
+              </UILabel>
+              <Input
+                type="date"
+                value={editDate}
+                onChange={(e) => setEditDate(e.target.value)}
+                className="bg-secondary/50 text-sm h-8"
+                disabled={editStatus === "none"}
+              />
+            </div>
+          </div>
+          <div className="space-y-1">
+            <UILabel className="text-[10px] font-mono uppercase text-muted-foreground">
+              {locale === "it" ? "Mittente (opzionale)" : "Sender (optional)"}
+            </UILabel>
+            <Input
+              value={editSender}
+              onChange={(e) => setEditSender(e.target.value)}
+              placeholder={locale === "it" ? "Es. Patrick Scuro, Animarum" : "E.g. Patrick Scuro, Animarum"}
+              className="bg-secondary/50 text-sm h-8"
+              disabled={editStatus === "none"}
+            />
+          </div>
+          <div className="space-y-1">
+            <UILabel className="text-[10px] font-mono uppercase text-muted-foreground">
+              {locale === "it" ? "Testo della risposta" : "Reply text"}
+            </UILabel>
+            <Textarea
+              value={editText}
+              onChange={(e) => setEditText(e.target.value)}
+              placeholder={locale === "it" ? "Incolla qui il testo della email di risposta della label…" : "Paste the label's reply email text here…"}
+              rows={5}
+              className="bg-secondary/50 text-[11px] font-mono resize-y min-h-[100px]"
+              disabled={editStatus === "none"}
+            />
+          </div>
+          <div className="flex items-center gap-2">
+            <Button size="sm" onClick={handleSave} disabled={editStatus === "none" && !editText.trim()}>
+              {locale === "it" ? "Salva risposta" : "Save reply"}
+            </Button>
+            {isEditing && (
+              <Button size="sm" variant="ghost" onClick={() => setIsEditing(false)}>
+                {t(locale as Locale, "labels.cancel")}
+              </Button>
+            )}
+            {editStatus === "positive" && (
+              <p className="text-[10px] text-emerald-400/70">
+                {locale === "it" ? "ℹ Stato passerà a 'In Ascolto'" : "ℹ Status will move to 'Reviewing'"}
+              </p>
+            )}
+            {editStatus === "rejected" && (
+              <p className="text-[10px] text-red-400/70">
+                {locale === "it" ? "ℹ Stato passerà a 'Rifiutata'" : "ℹ Status will move to 'Rejected'"}
+              </p>
+            )}
+          </div>
+        </div>
+      )}
+
+      {/* Hint about future Gmail integration */}
+      {currentReply === "none" && !isEditing && (
+        <p className="text-[10px] text-muted-foreground/60 leading-tight">
+          {locale === "it"
+            ? "💡 Quando una label risponde, registra qui la risposta per tenere traccia dello stato. Prossimamente: rilevamento automatico via Gmail."
+            : "💡 When a label replies, record it here to track status. Coming soon: automatic detection via Gmail."}
+        </p>
+      )}
+    </div>
+  );
+}
+
 function DemoDetailDialog({
   demo,
   onClose,
@@ -1787,6 +2205,12 @@ function DemoDetailDialog({
               <p className="text-sm text-foreground/80">{demo.notes}</p>
             </div>
           )}
+
+          {/* ===================== REPLY TRACKER SECTION ===================== */}
+          {/* Lets the user record when a label replies, with the reply text.
+              For now this is manual entry; later Gmail API will auto-populate
+              these fields by reading the user's inbox. */}
+          <ReplyTrackerSection demo={demo} updateDemo={updateDemo} locale={locale} />
 
           {/* ===================== PITCH SECTION ===================== */}
           {/* Full pitch generator + editor — mirrors the Label Finder dialog.
