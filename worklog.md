@@ -354,3 +354,33 @@ Stage Summary:
 - CloudDiagnostic cards have proper visual hierarchy with comfortable spacing
 - FeedbackInbox items are readable at a glance, with bigger tap targets
 - Ready to push + tag as v2.1.2 for Vercel deploy
+
+---
+Task ID: 15
+Agent: Main Agent
+Task: Write email to beta tester + enrich WelcomeOnboarding with privacy/limits/feedback info
+
+Work Log:
+- Wrote full beta tester invitation email in chat reply (URL, Gmail login flow, iOS PWA instructions, app purpose, what user CAN/CANNOT do, bug reporting, support)
+- Enriched welcome-onboarding.tsx with 3 new informational blocks:
+  1. Upgraded "Your data is safe" → "Your data is safe AND private" with explicit INDIPENDENTI/private wording (notes, demos, emails, profile)
+  2. New "Cosa puoi fare / Cosa non puoi fare" block with green checkmark + amber lock icon
+     - CAN: explore labels, send demos, generate pitches, write notes, see rankings, report bugs
+     - CANNOT (admin-only): update Beatport rankings, import data, see other users' feedback
+  3. New amber-tinted "Found a bug or have an idea?" block pointing to the Feedback button
+- Enriched existing section descriptions:
+  - Rankings: added "Le vedi aggiornate in tempo reale, non devi fare nulla"
+  - Demos: added "Solo tu vedi i tuoi demo"
+  - Profile: added "Compilalo per primo"
+- Added max-h-[60vh] overflow-y-auto to body so it scrolls on small screens
+- Bumped ONBOARDED_KEY v1 → v2 for consistency
+- Added Lock + MessageSquareHeart to lucide-react imports
+- Build successful (18 static pages)
+
+Stage Summary:
+- Beta tester email is in the chat reply (copy-paste ready)
+- WelcomeOnboarding modal now explicitly informs new users about:
+  * Privacy + data independence (their stuff is theirs alone)
+  * What they can do vs what's admin-only (no scraping, no rankings updates)
+  * How to report bugs/ideas via the in-app Feedback button
+- Ready to push + tag as v2.1.3

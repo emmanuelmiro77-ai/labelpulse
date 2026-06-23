@@ -22,9 +22,11 @@ import {
   ArrowRight,
   Cloud,
   ShieldCheck,
+  Lock,
+  MessageSquareHeart,
 } from "lucide-react";
 
-const ONBOARDED_KEY = "labelpulse-onboarded-v1";
+const ONBOARDED_KEY = "labelpulse-onboarded-v2";
 
 /**
  * Welcome Onboarding Modal
@@ -151,16 +153,16 @@ export function WelcomeOnboarding() {
       icon: BarChart3,
       title: isItalian ? "Classifiche" : "Rankings",
       desc: isItalian
-        ? "Classifiche label curate dal team LabelPulse. Aggiornate periodicamente con dati Beatport."
-        : "Label rankings curated by the LabelPulse team. Updated periodically with Beatport data.",
+        ? "Classifiche label curate dal team LabelPulse. Aggiornate periodicamente con dati Beatport. Le vedi aggiornate in tempo reale, non devi fare nulla."
+        : "Label rankings curated by the LabelPulse team. Updated periodically with Beatport data. You see updates in real time, nothing to do.",
       color: "text-amber-400",
     },
     {
       icon: Send,
       title: isItalian ? "Demo" : "Demos",
       desc: isItalian
-        ? "Traccia ogni demo inviato. Stato: inviato, ascoltato, firmato, rifiutato."
-        : "Track every demo sent. Status: sent, listened, signed, rejected.",
+        ? "Traccia ogni demo inviato. Stato: inviato, ascoltato, firmato, rifiutato. Solo tu vedi i tuoi demo."
+        : "Track every demo sent. Status: sent, listened, signed, rejected. Only you see your demos.",
       color: "text-emerald-400",
     },
     {
@@ -175,8 +177,8 @@ export function WelcomeOnboarding() {
       icon: User,
       title: isItalian ? "Profilo" : "Profile",
       desc: isItalian
-        ? "Il tuo nome artista, bio, link. Servono per generare le email pitch."
-        : "Your artist name, bio, links. Required to generate pitch emails.",
+        ? "Il tuo nome artista, bio, link. Servono per generare le email pitch. Compilalo per primo."
+        : "Your artist name, bio, links. Required to generate pitch emails. Fill it in first.",
       color: "text-pink-400",
     },
   ];
@@ -196,18 +198,18 @@ export function WelcomeOnboarding() {
           </DialogDescription>
         </DialogHeader>
 
-        <div className="space-y-3 py-2">
+        <div className="space-y-3 py-2 max-h-[60vh] overflow-y-auto pr-1">
           {/* Data safety reassurance */}
           <div className="rounded-lg bg-emerald-500/10 border border-emerald-500/30 p-3 flex items-start gap-3">
             <ShieldCheck className="h-5 w-5 text-emerald-400 shrink-0 mt-0.5" />
             <div className="text-sm">
               <p className="font-medium text-foreground">
-                {isItalian ? "I tuoi dati sono al sicuro" : "Your data is safe"}
+                {isItalian ? "I tuoi dati sono al sicuro e privati" : "Your data is safe and private"}
               </p>
               <p className="text-xs text-muted-foreground mt-0.5">
                 {isItalian
-                  ? "Ogni modifica viene salvata automaticamente sul cloud e sincronizzata su tutti i tuoi dispositivi. Se chiudi il browser o cambi telefono, ritrovi tutto."
-                  : "Every change is automatically saved to the cloud and synced across all your devices. Close the browser or switch phones — your data is there."}
+                  ? "Ogni modifica viene salvata automaticamente sul cloud e sincronizzata su tutti i tuoi dispositivi. I tuoi dati (note, demo, email, profilo) sono INDIPENDENTI e privati: nessun altro utente può vederli. Se chiudi il browser o cambi telefono, ritrovi tutto."
+                  : "Every change is automatically saved to the cloud and synced across all your devices. Your data (notes, demos, emails, profile) is INDEPENDENT and private: no other user can see it. Close the browser or switch phones — your data is there."}
               </p>
             </div>
           </div>
@@ -229,6 +231,51 @@ export function WelcomeOnboarding() {
                 </div>
               );
             })}
+          </div>
+
+          {/* What you CAN and CANNOT do */}
+          <div className="rounded-lg bg-secondary/30 border border-border/30 p-3 space-y-2">
+            <div className="flex items-start gap-3">
+              <ShieldCheck className="h-4 w-4 text-emerald-400 shrink-0 mt-0.5" />
+              <div className="text-xs">
+                <p className="font-medium text-foreground">
+                  {isItalian ? "Cosa puoi fare" : "What you can do"}
+                </p>
+                <p className="text-muted-foreground mt-0.5">
+                  {isItalian
+                    ? "Esplorare label, inviare demo, generare pitch, scrivere note, vedere classifiche aggiornate, segnalare bug."
+                    : "Explore labels, send demos, generate pitches, write notes, see updated rankings, report bugs."}
+                </p>
+              </div>
+            </div>
+            <div className="flex items-start gap-3">
+              <Lock className="h-4 w-4 text-amber-400 shrink-0 mt-0.5" />
+              <div className="text-xs">
+                <p className="font-medium text-foreground">
+                  {isItalian ? "Cosa non puoi fare (riservato all'admin)" : "What you can't do (admin-only)"}
+                </p>
+                <p className="text-muted-foreground mt-0.5">
+                  {isItalian
+                    ? "Aggiornare le classifiche Beatport, importare dati, vedere i feedback degli altri utenti. Le classifiche le vedi già aggiornate automaticamente."
+                    : "Update Beatport rankings, import data, see other users' feedback. Rankings are already updated for you automatically."}
+                </p>
+              </div>
+            </div>
+          </div>
+
+          {/* Feedback channel */}
+          <div className="rounded-lg bg-amber-500/10 border border-amber-500/30 p-3 flex items-start gap-3">
+            <MessageSquareHeart className="h-4 w-4 text-amber-400 shrink-0 mt-0.5" />
+            <div className="text-xs">
+              <p className="font-medium text-foreground">
+                {isItalian ? "Hai trovato un bug o hai un'idea?" : "Found a bug or have an idea?"}
+              </p>
+              <p className="text-muted-foreground mt-0.5">
+                {isItalian
+                  ? "Usa il pulsante \"Feedback\" nel menu in alto a destra. Scegli la categoria (bug / funzionalità / altro), descrivi cosa è successo e invia. Mi arriva direttamente."
+                  : "Use the \"Feedback\" button in the top-right menu. Pick a category (bug / feature / other), describe what happened and submit. It reaches me directly."}
+              </p>
+            </div>
           </div>
 
           {/* Cloud sync note */}
