@@ -103,9 +103,39 @@ export interface RankingSnapshot {
   // genre -> labelName -> {rank, points}
 }
 
+/**
+ * A Release is a logical grouping of one or more Demos — used for EPs
+ * (2+ tracks) and conceptually also for singles (1 track). The `type`
+ * field discriminates. Single-track Demos do NOT require a Release — they
+ * are standalone (parentReleaseId === null). For EPs, the Release owns a
+ * list of trackIds and the matching Demos have parentReleaseId set.
+ */
+export interface Release {
+  id: string;
+  type: "single" | "ep";
+  title: string; // EP title ("Night Shift EP"); for singles = trackName
+  artists: string[]; // primary + collaborators (e.g. ["Emmanuel Miro", "DJ X"])
+  trackIds: string[]; // Demo ids belonging to this release
+  genre: string; // overall release genre
+  notes: string;
+  createdAt: string;
+}
+
 export interface Demo {
   id: string;
   trackName: string;
+  /**
+   * Artists credited on this track. The first is the primary producer
+   * (typically the user, from userProfile.artistName). Additional entries
+   * are collaborators (featuring / co-producer / remix). When omitted
+   * (older demos pre-v13), fall back to [artistName].
+   */
+  artists?: string[];
+  /**
+   * If this demo belongs to a Release (EP), the release id. Null/undefined
+   * for standalone singles.
+   */
+  parentReleaseId?: string | null;
   labelId: string;
   status: DemoStatus;
   sentDate: string | null;
@@ -114,7 +144,7 @@ export interface Demo {
   notes: string;
   createdAt: string;
   pitchText: string;
-  artistName: string;
+  artistName: string; // LEGACY — kept for backward compat; use artists[] in new code
   genre: string; // demo genre
   bpm: string;
   key: string;
@@ -880,6 +910,12 @@ interface AppState {
   deleteDemo: (id: string) => void;
   advanceDemoStatus: (id: string) => void;
 
+  // Release (EP / single grouping) actions
+  releases: Release[];
+  addRelease: (release: Omit<Release, "id" | "createdAt">) => string; // returns new id
+  updateRelease: (id: string, updates: Partial<Release>) => void;
+  deleteRelease: (id: string) => void;
+
   // Navigation
   setActiveTab: (tab: "dashboard" | "labels" | "artists" | "rankings" | "demos" | "pitch" | "profile") => void;
 
@@ -1215,6 +1251,7 @@ export const useAppStore = create<AppState>()(
       locale: "it" as Locale,
       userProfile: { artistName: "", scLink: "", bio: "", email: "", photoUrl: "", links: [], cyaniteApiToken: "", supabaseUrl: "", supabaseAnonKey: "" } as UserProfile,
       gmailAuth: { isConnected: false, email: "", accessToken: "", expiresAt: 0 } as GmailAuth,
+      releases: [] as Release[],
       lastReplyScanAt: null,
       newRepliesCount: 0,
       rankingsUpdatedAt: null as string | null,
@@ -1297,6 +1334,39 @@ export const useAppStore = create<AppState>()(
       deleteDemo: (id) => {
         set((state) => ({
           demos: state.demos.filter((d) => d.id !== id),
+          lastSavedAt: new Date().toISOString(),
+        }));
+        syncToCloud();
+      },
+
+      addRelease: (release) => {
+        const id = genId();
+        set((state) => ({
+          releases: [
+            ...state.releases,
+            { ...release, id, createdAt: new Date().toISOString() },
+          ],
+          lastSavedAt: new Date().toISOString(),
+        }));
+        syncToCloud();
+        return id;
+      },
+      updateRelease: (id, updates) => {
+        set((state) => ({
+          releases: state.releases.map((r) =>
+            r.id === id ? { ...r, ...updates } : r
+          ),
+          lastSavedAt: new Date().toISOString(),
+        }));
+        syncToCloud();
+      },
+      deleteRelease: (id) => {
+        // Detach all demos from this release, then remove the release itself
+        set((state) => ({
+          releases: state.releases.filter((r) => r.id !== id),
+          demos: state.demos.map((d) =>
+            d.parentReleaseId === id ? { ...d, parentReleaseId: null } : d
+          ),
           lastSavedAt: new Date().toISOString(),
         }));
         syncToCloud();
@@ -1885,7 +1955,7 @@ export const useAppStore = create<AppState>()(
     }),
     {
       name: PRIMARY_KEY,
-      version: 12,
+      version: 13,
       storage: createJSONStorage(() => robustStorage),
       migrate: (persisted: any, version: number) => {
         if (version < 5) {
@@ -2007,11 +2077,28 @@ export const useAppStore = create<AppState>()(
             }));
           }
         }
+        if (version < 13) {
+          // Releases (EP/single grouping) + Demo.artists / parentReleaseId
+          if (!Array.isArray(persisted.releases)) {
+            persisted.releases = [];
+          }
+          // Backfill artists[] from legacy artistName on existing demos
+          if (Array.isArray(persisted.demos)) {
+            persisted.demos = persisted.demos.map((d: any) => ({
+              ...d,
+              artists: Array.isArray(d.artists) && d.artists.length > 0
+                ? d.artists
+                : (d.artistName ? [d.artistName] : []),
+              parentReleaseId: d.parentReleaseId ?? null,
+            }));
+          }
+        }
         return persisted;
       },
       partialize: (state) => ({
         labels: state.labels,
         demos: state.demos,
+        releases: state.releases,
         activeTab: state.activeTab,
         locale: state.locale,
         userProfile: state.userProfile,
@@ -2135,6 +2222,7 @@ export function syncToCloud(): void {
     const dataToSync = {
       labels: state.labels,
       demos: state.demos,
+      releases: state.releases,
       activeTab: state.activeTab,
       locale: state.locale,
       userProfile: state.userProfile,
@@ -2168,6 +2256,7 @@ export async function forceCloudSync(): Promise<void> {
   const dataToSync = {
     labels: state.labels,
     demos: state.demos,
+    releases: state.releases,
     activeTab: state.activeTab,
     locale: state.locale,
     userProfile: state.userProfile,
@@ -2556,6 +2645,31 @@ function mergeCloudData(cloudData: any, localState: any): Partial<AppState> {
     }
   }
   merged.demos = Array.from(demosById.values());
+
+  // ---------- RELEASES ----------
+  // Union by id. If a release id exists in both, prefer the one with the
+  // newest createdAt (or the one with more trackIds if equal).
+  const cloudReleases = Array.isArray(cloudData.releases) ? cloudData.releases : [];
+  const localReleases = Array.isArray(localState.releases) ? localState.releases : [];
+  const releasesById = new Map<string, Release>();
+  for (const r of cloudReleases) {
+    if (!r || typeof r !== "object" || !r.id) continue;
+    releasesById.set(r.id, r);
+  }
+  for (const r of localReleases) {
+    if (!r || typeof r !== "object" || !r.id) continue;
+    const existing = releasesById.get(r.id);
+    if (!existing) {
+      releasesById.set(r.id, r);
+    } else {
+      const exTs = new Date(existing.createdAt || 0).getTime();
+      const loTs = new Date(r.createdAt || 0).getTime();
+      if (loTs > exTs || (loTs === exTs && (r.trackIds?.length || 0) > (existing.trackIds?.length || 0))) {
+        releasesById.set(r.id, r);
+      }
+    }
+  }
+  merged.releases = Array.from(releasesById.values());
 
   // ---------- RANKING SNAPSHOTS ----------
   // Union by id (and by timestamp|source as fallback). mergeSnapshots

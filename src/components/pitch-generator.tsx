@@ -377,6 +377,91 @@ export function PitchGenerator() {
             </h3>
           </div>
 
+          {/* Demo picker — lets the user recall a saved demo (or EP track)
+              from their archive instead of retyping everything. When a demo
+              is picked, we auto-fill trackName, artistName, scLink, genre,
+              BPM, key. The user can still edit anything afterwards. */}
+          {demos.length > 0 && (
+            <div className="space-y-1.5 mb-3 rounded-md border border-primary/20 bg-primary/5 p-3">
+              <UILabel className="text-xs font-mono uppercase text-primary flex items-center gap-1.5">
+                <Sparkles className="h-3 w-3" />
+                {locale === "it" ? "Scegli demo salvata" : "Pick a saved demo"}
+                <span className="ml-1 text-[10px] text-muted-foreground/60 normal-case font-sans">
+                  {locale === "it"
+                    ? "(precompila i campi — modificabili dopo)"
+                    : "(auto-fills the form — editable afterwards)"}
+                </span>
+              </UILabel>
+              <div className="flex flex-wrap gap-1.5">
+                {demos
+                  .slice()
+                  .sort((a, b) => new Date(b.createdAt).getTime() - new Date(a.createdAt).getTime())
+                  .slice(0, 50)
+                  .map((d) => {
+                    const isActive = trackName === d.trackName && (d.artists?.[0] || d.artistName) === artistName;
+                    const otherArtists = (d.artists && d.artists.length > 1)
+                      ? ` × ${d.artists.slice(1).join(", ")}`
+                      : "";
+                    return (
+                      <button
+                        key={d.id}
+                        type="button"
+                        onClick={() => {
+                          setTrackName(d.trackName);
+                          const primaryArtist = d.artists?.[0] || d.artistName || "";
+                          if (primaryArtist) setArtistName(primaryArtist);
+                          if (d.link) setScLink(d.link);
+                          else if (d.links?.find(l => l.type === "soundcloud")) {
+                            setScLink(d.links.find(l => l.type === "soundcloud")!.value);
+                          }
+                          if (d.genre) setSelectedGenre(d.genre);
+                          if (d.bpm) setTrackBpm(d.bpm);
+                          if (d.key) setTrackKey(d.key);
+                          if (d.analysis) {
+                            setTrackAnalysis({
+                              bpm: d.analysis.bpm,
+                              bpmConfidence: d.analysis.bpmConfidence,
+                              key: {
+                                camelot: d.analysis.key.camelot,
+                                confidence: d.analysis.key.confidence,
+                              },
+                            });
+                          } else {
+                            setTrackAnalysis(null);
+                          }
+                          toast({
+                            title: locale === "it" ? "Demo caricata" : "Demo loaded",
+                            description: `"${d.trackName}"${otherArtists}`,
+                          });
+                        }}
+                        className={`inline-flex items-center gap-1.5 rounded-md border px-2 py-1 text-[11px] font-medium transition-colors ${
+                          isActive
+                            ? "bg-primary text-primary-foreground border-primary"
+                            : "bg-secondary/50 text-foreground border-border/50 hover:border-primary/30 hover:bg-primary/10"
+                        }`}
+                      >
+                        <Music2 className="h-3 w-3" />
+                        {d.trackName}
+                        {otherArtists && (
+                          <span className="text-[9px] opacity-70 truncate max-w-[120px]">{otherArtists}</span>
+                        )}
+                        {d.parentReleaseId && (
+                          <span className="text-[9px] opacity-60 border border-current/30 rounded px-0.5">EP</span>
+                        )}
+                      </button>
+                    );
+                  })}
+                {demos.length > 50 && (
+                  <span className="text-[10px] text-muted-foreground/60 self-center">
+                    {locale === "it"
+                      ? `+${demos.length - 50} altre demo…`
+                      : `+${demos.length - 50} more demos…`}
+                  </span>
+                )}
+              </div>
+            </div>
+          )}
+
           <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
             <div className="space-y-1.5">
               <UILabel className="text-xs font-mono uppercase text-muted-foreground">{t(locale, "pitch.trackName")}</UILabel>

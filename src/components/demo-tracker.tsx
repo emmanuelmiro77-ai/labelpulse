@@ -1,6 +1,6 @@
 "use client";
 
-import { useAppStore, type Demo, type DemoStatus, type Label } from "@/lib/store";
+import { useAppStore, type Demo, type DemoStatus, type Label, type Release } from "@/lib/store";
 import { t, type Locale } from "@/lib/i18n";
 import { useState, useMemo, useCallback, useEffect } from "react";
 import {
@@ -188,7 +188,7 @@ function isDemoLocked(demo: Demo | null): boolean {
 // of just silently disabling fields — the user needs to know why.
 
 export function DemoTracker() {
-  const { labels, demos, addDemo, updateDemo, deleteDemo, advanceDemoStatus, locale: _locale, getGenres, userProfile, artists, setActiveTab, setSelectedLabelId, setSelectedArtistId, gmailAuth, setGmailAuth, scanGmailReplies, lastReplyScanAt, newRepliesCount } =
+  const { labels, demos, releases, addDemo, updateDemo, deleteDemo, advanceDemoStatus, addRelease, updateRelease, deleteRelease, locale: _locale, getGenres, userProfile, artists, setActiveTab, setSelectedLabelId, setSelectedArtistId, gmailAuth, setGmailAuth, scanGmailReplies, lastReplyScanAt, newRepliesCount } =
     useAppStore();
   const locale = _locale as Locale;
   const { toast } = useToast();
@@ -198,6 +198,17 @@ export function DemoTracker() {
   const [statusFilter, setStatusFilter] = useState("all");
   const [showAddDialog, setShowAddDialog] = useState(false);
   const [editingDemo, setEditingDemo] = useState<Demo | null>(null);
+  // "all" | "singles" (no parentReleaseId) | "ep" (has parentReleaseId)
+  const [releaseFilter, setReleaseFilter] = useState<"all" | "singles" | "ep">("all");
+  // EP dialog state
+  const [showEpDialog, setShowEpDialog] = useState(false);
+  const [epTitle, setEpTitle] = useState("");
+  const [epArtists, setEpArtists] = useState<string[]>([]);
+  const [epArtistInput, setEpArtistInput] = useState("");
+  const [epGenre, setEpGenre] = useState("");
+  const [epNotes, setEpNotes] = useState("");
+  const [epSelectedTrackIds, setEpSelectedTrackIds] = useState<Set<string>>(new Set());
+  const [editingReleaseId, setEditingReleaseId] = useState<string | null>(null);
   const [deleteConfirmId, setDeleteConfirmId] = useState<string | null>(null);
   const [scanningReplies, setScanningReplies] = useState(false);
 
@@ -252,6 +263,8 @@ export function DemoTracker() {
   const [labelHistoryId, setLabelHistoryId] = useState<string | null>(null);
 
   const [formTrackName, setFormTrackName] = useState("");
+  const [formArtists, setFormArtists] = useState<string[]>([]);
+  const [formArtistInput, setFormArtistInput] = useState("");
   const [formLabelId, setFormLabelId] = useState("");
   const [formStatus, setFormStatus] = useState<DemoStatus>("ready");
   const [formSentDate, setFormSentDate] = useState("");
@@ -398,11 +411,16 @@ export function DemoTracker() {
       const matchSearch =
         !search ||
         d.trackName.toLowerCase().includes(search.toLowerCase()) ||
-        d.notes.toLowerCase().includes(search.toLowerCase());
+        d.notes.toLowerCase().includes(search.toLowerCase()) ||
+        (d.artists || []).some(a => a.toLowerCase().includes(search.toLowerCase()));
       const matchStatus = statusFilter === "all" || d.status === statusFilter;
-      return matchSearch && matchStatus;
+      const matchRelease =
+        releaseFilter === "all" ? true :
+        releaseFilter === "singles" ? !d.parentReleaseId :
+        releaseFilter === "ep" ? !!d.parentReleaseId : true;
+      return matchSearch && matchStatus && matchRelease;
     });
-  }, [demos, search, statusFilter]);
+  }, [demos, search, statusFilter, releaseFilter]);
 
   // Label history: all demos for a specific label
   const labelHistoryDemos = useMemo(() => {
@@ -424,6 +442,8 @@ export function DemoTracker() {
 
   const resetForm = () => {
     setFormTrackName("");
+    setFormArtists([]);
+    setFormArtistInput("");
     setFormLabelId("");
     setFormStatus("ready");
     setFormSentDate("");
@@ -449,10 +469,26 @@ export function DemoTracker() {
     setPitchCopied(false);
   };
 
-  const openAdd = () => { resetForm(); setEditingDemo(null); setShowAddDialog(true); };
+  const openAdd = () => {
+    resetForm();
+    // Pre-seed artists with the user's own artistName so they don't have to
+    // type it every time. If userProfile.artistName is empty, leave empty
+    // (the user will type it manually).
+    if (userProfile.artistName?.trim()) {
+      setFormArtists([userProfile.artistName.trim()]);
+    }
+    setEditingDemo(null);
+    setShowAddDialog(true);
+  };
 
   const openEdit = (demo: Demo) => {
     setFormTrackName(demo.trackName);
+    setFormArtists(
+      Array.isArray(demo.artists) && demo.artists.length > 0
+        ? demo.artists
+        : (demo.artistName ? [demo.artistName] : [])
+    );
+    setFormArtistInput("");
     setFormLabelId(demo.labelId);
     setFormStatus(demo.status);
     setFormSentDate(demo.sentDate ?? "");
@@ -483,6 +519,7 @@ export function DemoTracker() {
     if (!formTrackName.trim()) return;
     // Compute the pitch text to persist — same fallback chain as the
     // textarea: user edits > existing demo's pitchText > freshly generated.
+    const primaryArtist = formArtists[0] || editingDemo?.artistName || userProfile.artistName || "";
     const pitchToSave =
       pitchEditedText
       ?? editingDemo?.pitchText
@@ -490,7 +527,7 @@ export function DemoTracker() {
           ? generatePitch(
               labels.find((l) => l.id === formLabelId)?.name || "",
               formTrackName.trim(),
-              editingDemo?.artistName || userProfile.artistName || "",
+              primaryArtist,
               formLink.trim() || userProfile.scLink || "",
               pitchTone,
               pitchNote,
@@ -501,6 +538,7 @@ export function DemoTracker() {
           : "");
     const data = {
       trackName: formTrackName.trim(),
+      artists: formArtists.length > 0 ? formArtists : (primaryArtist ? [primaryArtist] : []),
       labelId: formLabelId || "",
       status: formStatus,
       sentDate: formSentDate || null,
@@ -508,7 +546,7 @@ export function DemoTracker() {
       links: formLinks.filter(l => l.value.trim()),
       notes: formNotes.trim(),
       pitchText: pitchToSave,
-      artistName: editingDemo?.artistName || userProfile.artistName || "",
+      artistName: primaryArtist,
       genre: formGenre.trim(),
       bpm: formBpm.trim(),
       key: formKey.trim(),
@@ -519,6 +557,116 @@ export function DemoTracker() {
     setShowAddDialog(false);
     resetForm();
   };
+
+  // ---------- EP dialog handlers ----------
+  const openAddEp = () => {
+    setEpTitle("");
+    setEpArtists(userProfile.artistName?.trim() ? [userProfile.artistName.trim()] : []);
+    setEpArtistInput("");
+    setEpGenre("");
+    setEpNotes("");
+    setEpSelectedTrackIds(new Set());
+    setEditingReleaseId(null);
+    setShowEpDialog(true);
+  };
+
+  const openEditEp = (release: Release) => {
+    setEpTitle(release.title);
+    setEpArtists(release.artists || []);
+    setEpArtistInput("");
+    setEpGenre(release.genre || "");
+    setEpNotes(release.notes || "");
+    setEpSelectedTrackIds(new Set(release.trackIds || []));
+    setEditingReleaseId(release.id);
+    setShowEpDialog(true);
+  };
+
+  const handleSaveEp = () => {
+    if (!epTitle.trim()) {
+      toast({
+        title: locale === "it" ? "Titolo obbligatorio" : "Title required",
+        description: locale === "it" ? "Inserisci un titolo per l'EP." : "Enter a title for the EP.",
+        variant: "destructive",
+      });
+      return;
+    }
+    if (epSelectedTrackIds.size < 2) {
+      toast({
+        title: locale === "it" ? "Servono almeno 2 tracce" : "At least 2 tracks required",
+        description: locale === "it"
+          ? "Un EP deve contenere almeno 2 tracce. Seleziona altre demo dal database."
+          : "An EP must contain at least 2 tracks. Select more demos from your database.",
+        variant: "destructive",
+      });
+      return;
+    }
+    const trackIds = Array.from(epSelectedTrackIds);
+    const releaseData = {
+      type: "ep" as const,
+      title: epTitle.trim(),
+      artists: epArtists.length > 0 ? epArtists : (userProfile.artistName?.trim() ? [userProfile.artistName.trim()] : []),
+      trackIds,
+      genre: epGenre.trim(),
+      notes: epNotes.trim(),
+    };
+    if (editingReleaseId) {
+      // Update existing release: first detach all demos that were previously
+      // attached but are no longer in the new trackIds list, then attach the
+      // new ones, then update the release itself.
+      const prevRelease = releases.find(r => r.id === editingReleaseId);
+      const prevTrackIds = new Set(prevRelease?.trackIds || []);
+      for (const oldId of Array.from(prevTrackIds)) {
+        if (!epSelectedTrackIds.has(oldId)) {
+          updateDemo(oldId, { parentReleaseId: null });
+        }
+      }
+      for (const newId of trackIds) {
+        updateDemo(newId, { parentReleaseId: editingReleaseId });
+      }
+      updateRelease(editingReleaseId, releaseData);
+    } else {
+      const newId = addRelease(releaseData);
+      for (const tid of trackIds) {
+        updateDemo(tid, { parentReleaseId: newId });
+      }
+    }
+    setShowEpDialog(false);
+    toast({
+      title: editingReleaseId
+        ? (locale === "it" ? "EP aggiornato" : "EP updated")
+        : (locale === "it" ? "EP creato" : "EP created"),
+      description: locale === "it"
+        ? `"${epTitle.trim()}" con ${trackIds.length} tracce.`
+        : `"${epTitle.trim()}" with ${trackIds.length} tracks.`,
+    });
+  };
+
+  const handleDeleteEp = (releaseId: string) => {
+    const r = releases.find(rel => rel.id === releaseId);
+    if (!r) return;
+    if (!confirm(
+      locale === "it"
+        ? `Eliminare l'EP "${r.title}"? Le tracce non verranno eliminate, solo scollegate dall'EP.`
+        : `Delete EP "${r.title}"? Tracks won't be deleted, only detached from the EP.`
+    )) return;
+    deleteRelease(releaseId);
+    toast({
+      title: locale === "it" ? "EP eliminato" : "EP deleted",
+      description: locale === "it"
+        ? `"${r.title}" scollegato. Le tracce restano nel tuo archivio.`
+        : `"${r.title}" detached. Tracks remain in your archive.`,
+    });
+  };
+
+  const toggleEpTrack = (demoId: string) => {
+    setEpSelectedTrackIds(prev => {
+      const next = new Set(prev);
+      if (next.has(demoId)) next.delete(demoId);
+      else next.add(demoId);
+      return next;
+    });
+  };
+  // ---------- end EP dialog handlers ----------
 
   const handleAnalyze = async () => {
     const audioSourceUrl = formLink.trim() || (formLinks.find(l => l.type === "soundcloud" || l.type === "audio")?.value?.trim() ?? "");
@@ -847,7 +995,61 @@ export function DemoTracker() {
           <Plus className="h-4 w-4 mr-1.5" />
           {t(locale, "demos.addDemo")}
         </Button>
+        <Button onClick={openAddEp} variant="outline" className="shrink-0 border-primary/30 text-primary hover:bg-primary/10">
+          <Disc3 className="h-4 w-4 mr-1.5" />
+          {locale === "it" ? "Crea EP" : "Create EP"}
+        </Button>
       </div>
+
+      {/* Release filter tabs + existing EP list */}
+      {(releases.length > 0 || releaseFilter !== "all") && (
+        <div className="flex flex-wrap items-center gap-2">
+          <div className="flex items-center gap-0.5 rounded-md bg-secondary/50 p-0.5 border border-border/50">
+            {(["all", "singles", "ep"] as const).map((tab) => {
+              const count =
+                tab === "all" ? demos.length :
+                tab === "singles" ? demos.filter(d => !d.parentReleaseId).length :
+                demos.filter(d => !!d.parentReleaseId).length;
+              const label =
+                tab === "all" ? (locale === "it" ? "Tutte" : "All") :
+                tab === "singles" ? (locale === "it" ? "Singoli" : "Singles") :
+                (locale === "it" ? "EP" : "EPs");
+              return (
+                <button
+                  key={tab}
+                  type="button"
+                  onClick={() => setReleaseFilter(tab)}
+                  className={`px-2.5 py-1 rounded text-[11px] font-medium transition-colors ${
+                    releaseFilter === tab
+                      ? "bg-primary text-primary-foreground"
+                      : "text-muted-foreground hover:text-foreground hover:bg-secondary"
+                  }`}
+                >
+                  {label}
+                  <span className="ml-1.5 text-[9px] opacity-70">{count}</span>
+                </button>
+              );
+            })}
+          </div>
+          {releases.length > 0 && (
+            <div className="flex flex-wrap items-center gap-1.5">
+              {releases.map((r) => (
+                <button
+                  key={r.id}
+                  type="button"
+                  onClick={() => openEditEp(r)}
+                  title={locale === "it" ? "Modifica EP" : "Edit EP"}
+                  className="inline-flex items-center gap-1.5 rounded-full border border-primary/30 bg-primary/5 hover:bg-primary/10 px-2 py-1 text-[10px] font-medium text-primary"
+                >
+                  <Disc3 className="h-3 w-3" />
+                  {r.title}
+                  <span className="text-[9px] opacity-70">{r.trackIds.length}tracce</span>
+                </button>
+              ))}
+            </div>
+          )}
+        </div>
+      )}
 
       {/* Kanban View */}
       {viewMode === "kanban" && (
@@ -877,7 +1079,47 @@ export function DemoTracker() {
                     >
                       <CardContent className="p-3 space-y-1.5">
                         <div className="flex items-start justify-between gap-1">
-                          <h4 className="text-sm font-semibold text-foreground leading-tight">{demo.trackName}</h4>
+                          <div className="flex-1 min-w-0">
+                            <div className="flex items-center gap-1.5 flex-wrap">
+                              <h4 className="text-sm font-semibold text-foreground leading-tight">{demo.trackName}</h4>
+                              {demo.parentReleaseId && (() => {
+                                const r = releases.find(rel => rel.id === demo.parentReleaseId);
+                                if (!r) return null;
+                                return (
+                                  <button
+                                    onClick={(e) => { e.stopPropagation(); openEditEp(r); }}
+                                    className="inline-flex items-center gap-0.5 text-[9px] font-medium text-primary border border-primary/30 bg-primary/5 hover:bg-primary/10 rounded-full px-1.5 py-0.5"
+                                    title={locale === "it" ? `Fa parte dell'EP: ${r.title} — clic per modificare` : `Part of EP: ${r.title} — click to edit`}
+                                  >
+                                    <Disc3 className="h-2.5 w-2.5" />
+                                    {r.title}
+                                  </button>
+                                );
+                              })()}
+                            </div>
+                            {/* Artists line — primary + collaborators */}
+                            {(() => {
+                              const dArtists = demo.artists && demo.artists.length > 0
+                                ? demo.artists
+                                : (demo.artistName ? [demo.artistName] : []);
+                              if (dArtists.length === 0) return null;
+                              return (
+                                <p className="text-[10px] text-muted-foreground/80 mt-0.5 leading-tight truncate">
+                                  {dArtists.map((a, i) => (
+                                    <span key={i}>
+                                      {i === 0 ? null : <span className="text-muted-foreground/50 mx-0.5">×</span>}
+                                      <span className={i === 0 ? "font-medium text-foreground/80" : ""}>{a}</span>
+                                    </span>
+                                  ))}
+                                  {dArtists.length > 1 && (
+                                    <span className="ml-1 text-[9px] text-primary/60 uppercase tracking-wide">
+                                      {locale === "it" ? "collab" : "collab"}
+                                    </span>
+                                  )}
+                                </p>
+                              );
+                            })()}
+                          </div>
                           <div className="flex items-center gap-0.5 opacity-0 group-hover:opacity-100 transition-opacity shrink-0">
                             <Button variant="ghost" size="icon" className="h-6 w-6" onClick={(e) => { e.stopPropagation(); setDetailDemo(demo); }} title={t(locale, "demos.viewDetail")}>
                               <Eye className="h-3 w-3" />
@@ -1111,6 +1353,86 @@ export function DemoTracker() {
                 disabled={isDemoLocked(editingDemo)}
               />
             </div>
+
+            {/* Artists — tag input.
+                First tag is the primary producer (auto-filled from userProfile.artistName
+                when adding a new demo). Additional tags are collaborators.
+                Press Enter or comma to add; click × on a tag to remove. */}
+            <div className="space-y-1.5">
+              <UILabel className="text-xs font-mono uppercase text-muted-foreground">
+                {locale === "it" ? "Artisti" : "Artists"}
+                <span className="ml-1 text-[10px] text-muted-foreground/60 normal-case font-sans">
+                  {locale === "it"
+                    ? "(tu + collaboratori, premere Invio per aggiungere)"
+                    : "(you + collaborators, press Enter to add)"}
+                </span>
+              </UILabel>
+              <div className="flex flex-wrap items-center gap-1.5 rounded-md border border-input bg-secondary/50 px-2 py-1.5 min-h-[40px] focus-within:ring-1 focus-within:ring-ring">
+                {formArtists.map((artist, idx) => (
+                  <span
+                    key={`${artist}-${idx}`}
+                    className={`inline-flex items-center gap-1 rounded-full px-2 py-0.5 text-[11px] font-medium ${
+                      idx === 0
+                        ? "bg-primary/15 text-primary border border-primary/30"
+                        : "bg-secondary text-foreground border border-border"
+                    }`}
+                  >
+                    {idx === 0 && (
+                      <span className="text-[9px] uppercase tracking-wide text-primary/70" title={locale === "it" ? "Primario (te)" : "Primary (you)"}>
+                        {locale === "it" ? "tu" : "you"}
+                      </span>
+                    )}
+                    {artist}
+                    <button
+                      type="button"
+                      onClick={() => setFormArtists(formArtists.filter((_, i) => i !== idx))}
+                      className="text-muted-foreground hover:text-destructive ml-0.5"
+                      aria-label={locale === "it" ? "Rimuovi artista" : "Remove artist"}
+                    >
+                      <X className="h-3 w-3" />
+                    </button>
+                  </span>
+                ))}
+                <input
+                  type="text"
+                  value={formArtistInput}
+                  onChange={(e) => setFormArtistInput(e.target.value)}
+                  onKeyDown={(e) => {
+                    if (e.key === "Enter" || e.key === ",") {
+                      e.preventDefault();
+                      const v = formArtistInput.trim();
+                      if (v && !formArtists.includes(v)) {
+                        setFormArtists([...formArtists, v]);
+                      }
+                      setFormArtistInput("");
+                    } else if (e.key === "Backspace" && formArtistInput === "" && formArtists.length > 0) {
+                      // Backspace on empty input removes the last artist
+                      setFormArtists(formArtists.slice(0, -1));
+                    }
+                  }}
+                  onBlur={() => {
+                    // Add on blur if there's pending text
+                    const v = formArtistInput.trim();
+                    if (v && !formArtists.includes(v)) {
+                      setFormArtists([...formArtists, v]);
+                    }
+                    setFormArtistInput("");
+                  }}
+                  placeholder={formArtists.length === 0
+                    ? (locale === "it" ? "Inserisci il tuo nome d'arte…" : "Enter your artist name…")
+                    : (locale === "it" ? "+ collaboratore" : "+ collaborator")}
+                  className="flex-1 min-w-[140px] bg-transparent text-[12px] outline-none placeholder:text-muted-foreground/50"
+                />
+              </div>
+              {formArtists.length > 1 && (
+                <p className="text-[10px] text-muted-foreground/60 leading-tight">
+                  {locale === "it"
+                    ? `Collaborazione: ${formArtists.join(" × ")}`
+                    : `Collaboration: ${formArtists.join(" × ")}`}
+                </p>
+              )}
+            </div>
+
             <div className="grid grid-cols-2 gap-3">
               <div className="space-y-1.5">
                 <div className="flex items-center justify-between">
@@ -1744,6 +2066,248 @@ export function DemoTracker() {
             <Button variant="ghost" onClick={() => setDeleteConfirmId(null)}>{t(locale, "labels.cancel")}</Button>
             <Button variant="destructive" onClick={() => { if (deleteConfirmId) { deleteDemo(deleteConfirmId); setDeleteConfirmId(null); } }}>
               {t(locale, "labels.delete")}
+            </Button>
+          </DialogFooter>
+        </DialogContent>
+      </Dialog>
+
+      {/* Create/Edit EP Dialog */}
+      <Dialog open={showEpDialog} onOpenChange={setShowEpDialog}>
+        <DialogContent className="sm:max-w-2xl bg-card border-border/50 max-h-[90vh] overflow-y-auto">
+          <DialogHeader>
+            <DialogTitle className="flex items-center gap-2">
+              <Disc3 className="h-4 w-4 text-primary" />
+              {editingReleaseId
+                ? (locale === "it" ? "Modifica EP" : "Edit EP")
+                : (locale === "it" ? "Crea EP" : "Create EP")}
+            </DialogTitle>
+            <p className="text-[11px] text-muted-foreground/80 leading-snug">
+              {locale === "it"
+                ? "Raggruppa 2 o più tracce già salvate nel tuo archivio per inviarle insieme come EP a una label. Le tracce restano disponibili anche singolarmente."
+                : "Group 2+ tracks from your archive to send together as an EP to a label. Tracks remain available individually too."}
+            </p>
+          </DialogHeader>
+          <div className="space-y-4 py-2">
+            {/* EP title */}
+            <div className="space-y-1.5">
+              <UILabel className="text-xs font-mono uppercase text-muted-foreground">
+                {locale === "it" ? "Titolo EP" : "EP title"}
+              </UILabel>
+              <Input
+                value={epTitle}
+                onChange={(e) => setEpTitle(e.target.value)}
+                placeholder={locale === "it" ? "es. Night Shift EP" : "e.g. Night Shift EP"}
+                className="bg-secondary/50"
+              />
+            </div>
+
+            {/* EP artists — same tag input as the demo form */}
+            <div className="space-y-1.5">
+              <UILabel className="text-xs font-mono uppercase text-muted-foreground">
+                {locale === "it" ? "Artisti" : "Artists"}
+                <span className="ml-1 text-[10px] text-muted-foreground/60 normal-case font-sans">
+                  {locale === "it"
+                    ? "(tu + collaboratori, premere Invio)"
+                    : "(you + collaborators, press Enter)"}
+                </span>
+              </UILabel>
+              <div className="flex flex-wrap items-center gap-1.5 rounded-md border border-input bg-secondary/50 px-2 py-1.5 min-h-[40px] focus-within:ring-1 focus-within:ring-ring">
+                {epArtists.map((artist, idx) => (
+                  <span
+                    key={`ep-${artist}-${idx}`}
+                    className={`inline-flex items-center gap-1 rounded-full px-2 py-0.5 text-[11px] font-medium ${
+                      idx === 0
+                        ? "bg-primary/15 text-primary border border-primary/30"
+                        : "bg-secondary text-foreground border border-border"
+                    }`}
+                  >
+                    {idx === 0 && (
+                      <span className="text-[9px] uppercase tracking-wide text-primary/70">
+                        {locale === "it" ? "tu" : "you"}
+                      </span>
+                    )}
+                    {artist}
+                    <button
+                      type="button"
+                      onClick={() => setEpArtists(epArtists.filter((_, i) => i !== idx))}
+                      className="text-muted-foreground hover:text-destructive ml-0.5"
+                    >
+                      <X className="h-3 w-3" />
+                    </button>
+                  </span>
+                ))}
+                <input
+                  type="text"
+                  value={epArtistInput}
+                  onChange={(e) => setEpArtistInput(e.target.value)}
+                  onKeyDown={(e) => {
+                    if (e.key === "Enter" || e.key === ",") {
+                      e.preventDefault();
+                      const v = epArtistInput.trim();
+                      if (v && !epArtists.includes(v)) {
+                        setEpArtists([...epArtists, v]);
+                      }
+                      setEpArtistInput("");
+                    } else if (e.key === "Backspace" && epArtistInput === "" && epArtists.length > 0) {
+                      setEpArtists(epArtists.slice(0, -1));
+                    }
+                  }}
+                  onBlur={() => {
+                    const v = epArtistInput.trim();
+                    if (v && !epArtists.includes(v)) setEpArtists([...epArtists, v]);
+                    setEpArtistInput("");
+                  }}
+                  placeholder={epArtists.length === 0
+                    ? (locale === "it" ? "Inserisci il tuo nome d'arte…" : "Enter your artist name…")
+                    : (locale === "it" ? "+ collaboratore" : "+ collaborator")}
+                  className="flex-1 min-w-[140px] bg-transparent text-[12px] outline-none placeholder:text-muted-foreground/50"
+                />
+              </div>
+            </div>
+
+            {/* EP genre */}
+            <div className="space-y-1.5">
+              <UILabel className="text-xs font-mono uppercase text-muted-foreground">
+                {locale === "it" ? "Genere EP" : "EP genre"}
+                <span className="ml-1 text-[10px] text-muted-foreground/60 normal-case font-sans">
+                  ({locale === "it" ? "opzionale" : "optional"})
+                </span>
+              </UILabel>
+              <Input
+                value={epGenre}
+                onChange={(e) => setEpGenre(e.target.value)}
+                placeholder={locale === "it" ? "es. Melodic House & Techno" : "e.g. Melodic House & Techno"}
+                className="bg-secondary/50"
+              />
+            </div>
+
+            {/* Track selection from existing demos */}
+            <div className="space-y-1.5">
+              <div className="flex items-center justify-between">
+                <UILabel className="text-xs font-mono uppercase text-muted-foreground">
+                  {locale === "it" ? "Tracce dell'EP" : "EP tracks"}
+                  <span className="ml-1 text-[10px] text-muted-foreground/60 normal-case font-sans">
+                    {locale === "it"
+                      ? `(selezionate ${epSelectedTrackIds.size} / min 2)`
+                      : `(${epSelectedTrackIds.size} selected / min 2)`}
+                  </span>
+                </UILabel>
+                {epSelectedTrackIds.size > 0 && (
+                  <button
+                    type="button"
+                    onClick={() => setEpSelectedTrackIds(new Set())}
+                    className="text-[10px] text-muted-foreground hover:text-destructive"
+                  >
+                    {locale === "it" ? "Deseleziona tutte" : "Clear all"}
+                  </button>
+                )}
+              </div>
+              <div className="max-h-[280px] overflow-y-auto rounded-md border border-border/50 bg-secondary/30 divide-y divide-border/30">
+                {demos.length === 0 ? (
+                  <div className="p-4 text-center text-[11px] text-muted-foreground">
+                    {locale === "it"
+                      ? "Nessuna demo nel database. Crea prima delle tracce con \"Aggiungi Demo\"."
+                      : "No demos in your database. Create tracks first with \"Add Demo\"."}
+                  </div>
+                ) : (
+                  demos.map((d) => {
+                    const isSel = epSelectedTrackIds.has(d.id);
+                    const otherRelease = !isSel && d.parentReleaseId
+                      ? releases.find(r => r.id === d.parentReleaseId)
+                      : null;
+                    return (
+                      <button
+                        type="button"
+                        key={d.id}
+                        onClick={() => toggleEpTrack(d.id)}
+                        className={`w-full text-left px-3 py-2 flex items-center gap-2 transition-colors ${
+                          isSel ? "bg-primary/10" : "hover:bg-secondary/60"
+                        }`}
+                      >
+                        <div className={`flex-shrink-0 h-4 w-4 rounded border flex items-center justify-center ${
+                          isSel ? "bg-primary border-primary text-primary-foreground" : "border-border"
+                        }`}>
+                          {isSel && <Check className="h-3 w-3" />}
+                        </div>
+                        <div className="flex-1 min-w-0">
+                          <div className="text-[12px] font-medium truncate">{d.trackName}</div>
+                          <div className="text-[10px] text-muted-foreground/70 flex items-center gap-1.5">
+                            <span>{(d.artists && d.artists.length > 0 ? d.artists : (d.artistName ? [d.artistName] : [])).join(" × ") || "—"}</span>
+                            {d.genre && <span className="opacity-50">·</span>}
+                            {d.genre && <span>{d.genre}</span>}
+                            {d.bpm && <span className="opacity-50">·</span>}
+                            {d.bpm && <span>{d.bpm} BPM</span>}
+                          </div>
+                        </div>
+                        {otherRelease && (
+                          <span className="text-[9px] text-amber-400/80 border border-amber-500/30 rounded px-1 py-0.5">
+                            {locale === "it" ? `in ${otherRelease.title}` : `in ${otherRelease.title}`}
+                          </span>
+                        )}
+                        {isSel && (
+                          <span className="text-[9px] text-primary border border-primary/30 rounded px-1 py-0.5">
+                            {locale === "it" ? "nell'EP" : "in EP"}
+                          </span>
+                        )}
+                      </button>
+                    );
+                  })
+                )}
+              </div>
+              {epSelectedTrackIds.size > 0 && (
+                <p className="text-[10px] text-muted-foreground/60 leading-tight">
+                  {locale === "it"
+                    ? `Selezionate ${epSelectedTrackIds.size} tracce. L'ordine di invio seguirà l'ordine della lista.`
+                    : `${epSelectedTrackIds.size} tracks selected. Send order follows list order.`}
+                </p>
+              )}
+            </div>
+
+            {/* EP notes */}
+            <div className="space-y-1.5">
+              <UILabel className="text-xs font-mono uppercase text-muted-foreground">
+                {locale === "it" ? "Note EP" : "EP notes"}
+                <span className="ml-1 text-[10px] text-muted-foreground/60 normal-case font-sans">
+                  ({locale === "it" ? "opzionale" : "optional"})
+                </span>
+              </UILabel>
+              <Textarea
+                value={epNotes}
+                onChange={(e) => setEpNotes(e.target.value)}
+                placeholder={locale === "it"
+                  ? "Concept, ordine tracce, note per l'invio…"
+                  : "Concept, track order, send notes…"}
+                rows={2}
+                className="bg-secondary/50 text-[12px] resize-y"
+              />
+            </div>
+          </div>
+
+          <DialogFooter className="gap-2">
+            {editingReleaseId && (
+              <Button
+                variant="ghost"
+                className="mr-auto text-destructive hover:text-destructive hover:bg-destructive/10"
+                onClick={() => {
+                  if (editingReleaseId) handleDeleteEp(editingReleaseId);
+                  setShowEpDialog(false);
+                }}
+              >
+                {locale === "it" ? "Elimina EP" : "Delete EP"}
+              </Button>
+            )}
+            <Button variant="ghost" onClick={() => setShowEpDialog(false)}>
+              {t(locale, "labels.cancel")}
+            </Button>
+            <Button
+              onClick={handleSaveEp}
+              disabled={!epTitle.trim() || epSelectedTrackIds.size < 2}
+              className="bg-primary hover:bg-primary/90"
+            >
+              <Disc3 className="h-3.5 w-3.5 mr-1.5" />
+              {editingReleaseId
+                ? (locale === "it" ? "Salva EP" : "Save EP")
+                : (locale === "it" ? "Crea EP" : "Create EP")}
             </Button>
           </DialogFooter>
         </DialogContent>
