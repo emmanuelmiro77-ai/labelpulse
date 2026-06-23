@@ -40,6 +40,7 @@ import {
   Headphones,
   BarChart3,
   Users,
+  RotateCcw,
 } from "lucide-react";
 import { useToast } from "@/hooks/use-toast";
 import { Input } from "@/components/ui/input";
@@ -108,6 +109,33 @@ function formatTime(seconds: number): string {
   const m = Math.floor(seconds / 60);
   const s = Math.floor(seconds % 60);
   return `${m}:${s.toString().padStart(2, "0")}`;
+}
+
+// Parse an edited pitch text (which may include "Subject:", "To:", "CC:" header
+// lines followed by a blank line and the body) back into { subject, body } so the
+// user's manual edits can flow through to mailto:, Gmail web, and Gmail API.
+// If the text doesn't follow the canonical format, subject falls back to "" and
+// body becomes the entire text — that's still safe to send.
+function parsePitchText(text: string): { subject: string; body: string } {
+  if (!text) return { subject: "", body: "" };
+  const lines = text.split("\n");
+  let subject = "";
+  let i = 0;
+  // Optional Subject: line
+  if (i < lines.length && lines[i].startsWith("Subject:")) {
+    subject = lines[i].slice("Subject:".length).trim();
+    i++;
+  }
+  // Skip optional To: / CC: header lines
+  while (i < lines.length && (lines[i].startsWith("To:") || lines[i].startsWith("CC:"))) {
+    i++;
+  }
+  // Skip exactly one blank line that separates headers from body
+  if (i < lines.length && lines[i].trim() === "") {
+    i++;
+  }
+  const body = lines.slice(i).join("\n").trim();
+  return { subject, body };
 }
 
 // Smart URL builder for each link type
@@ -562,6 +590,10 @@ export function LabelFinder() {
   const [pitchNote, setPitchNote] = useState("");
   const [pitchCopied, setPitchCopied] = useState(false);
   const [pitchDemoCreated, setPitchDemoCreated] = useState(false);
+  // Manual edits to the pitch preview — when non-null, the user has typed into
+  // the preview textarea and we use their text instead of the auto-generated
+  // pitchText. Reset to null when the dialog switches to a different label.
+  const [pitchEditedText, setPitchEditedText] = useState<string | null>(null);
 
   // Add label form state
   const [formName, setFormName] = useState("");
@@ -655,6 +687,9 @@ export function LabelFinder() {
     setPitchNote("");
     setPitchCopied(false);
     setPitchDemoCreated(false);
+    // Reset any manual edits from a previously-opened label so the user
+    // starts fresh with the auto-generated pitch text for the new label.
+    setPitchEditedText(null);
   }, [userProfile]);
 
   // Cross-tab navigation: if another tab (e.g. Artist Explorer) sets
@@ -852,6 +887,56 @@ export function LabelFinder() {
     return generateGmailLink(detailEmails, subject, body);
   }, [detailLabel, pitchTrackName, pitchArtistName, pitchScLink, pitchTone, pitchNote, detailEmails, pitchLanguage]);
 
+  // Effective pitch text — what the user actually sees, copies, and sends.
+  // If the user has manually edited the preview, use their version; otherwise
+  // fall back to the generated pitchText. This is the single source of truth
+  // for the textarea value, the Copy button, the Save-to-Tracker action, and
+  // the pitchText that gets stored on the Demo record.
+  const displayPitchText = pitchEditedText ?? pitchText;
+
+  // Effective subject + body for sending. When the user has edited the text,
+  // we parse the subject and body out of their edited version. Otherwise we
+  // use the generated subject/body as before. Used by mailto:, Gmail web link,
+  // and Gmail API direct send.
+  const effectivePitchSubject = useMemo(() => {
+    if (pitchEditedText !== null) {
+      return parsePitchText(displayPitchText).subject;
+    }
+    return generateSubject(pitchTrackName.trim(), pitchArtistName, pitchLanguage);
+  }, [pitchEditedText, displayPitchText, pitchTrackName, pitchArtistName, pitchLanguage]);
+
+  const effectivePitchBody = useMemo(() => {
+    if (pitchEditedText !== null) {
+      return parsePitchText(displayPitchText).body;
+    }
+    if (!detailLabel) return "";
+    return generatePitchBody(
+      detailLabel.name,
+      pitchTrackName.trim(),
+      pitchArtistName,
+      pitchScLink,
+      pitchTone,
+      pitchNote,
+      pitchLanguage
+    );
+  }, [pitchEditedText, displayPitchText, detailLabel, pitchTrackName, pitchArtistName, pitchScLink, pitchTone, pitchNote, pitchLanguage]);
+
+  // Effective mailto: link — uses edited subject/body when the user has typed
+  // into the preview; otherwise the generated one. Falls back to "" if no email
+  // is set on the label (mailto: requires a recipient).
+  const effectiveMailtoLink = useMemo(() => {
+    if (!detailLabel || !pitchTrackName.trim() || !detailEmails.length) return "";
+    return generateMailtoLink(detailEmails, effectivePitchSubject, effectivePitchBody);
+  }, [detailLabel, pitchTrackName, detailEmails, effectivePitchSubject, effectivePitchBody]);
+
+  // Effective Gmail web link — uses edited subject/body when available.
+  // Doesn't require an email address (Gmail compose can be opened with just
+  // subject+body, the user fills in the recipient).
+  const effectiveGmailLink = useMemo(() => {
+    if (!detailLabel || !pitchTrackName.trim()) return "";
+    return generateGmailLink(detailEmails, effectivePitchSubject, effectivePitchBody);
+  }, [detailLabel, pitchTrackName, detailEmails, effectivePitchSubject, effectivePitchBody]);
+
   // Check if a demo already exists for this label + track
   const demoAlreadyExists = useMemo(() => {
     if (!detailLabel || !pitchTrackName.trim()) return false;
@@ -873,10 +958,12 @@ export function LabelFinder() {
     }
   }, [pitchScLink, userProfile.scLink, setUserProfile]);
 
-  // Open Gmail and auto-create demo
+  // Open Gmail and auto-create demo. Uses the effective Gmail link +
+  // displayPitchText so manual edits flow through to both the email
+  // compose window and the stored demo record.
   const handleOpenGmail = useCallback(() => {
     if (!detailLabel || !pitchTrackName.trim()) return;
-    window.open(pitchGmailLink, "_blank");
+    window.open(effectiveGmailLink, "_blank");
     if (!demoAlreadyExists) {
       addDemo({
         trackName: pitchTrackName.trim(),
@@ -886,7 +973,7 @@ export function LabelFinder() {
         link: pitchScLink.trim(),
         links: [],
         notes: pitchNote.trim(),
-        pitchText: pitchText,
+        pitchText: displayPitchText,
         artistName: pitchArtistName.trim(),
         genre: "",
         bpm: "",
@@ -894,13 +981,14 @@ export function LabelFinder() {
       });
       setPitchDemoCreated(true);
     }
-  }, [detailLabel, pitchTrackName, pitchScLink, pitchNote, pitchGmailLink, demoAlreadyExists, addDemo, pitchText, pitchArtistName]);
+  }, [detailLabel, pitchTrackName, pitchScLink, pitchNote, effectiveGmailLink, demoAlreadyExists, addDemo, displayPitchText, pitchArtistName]);
 
-  // Open email client (mailto:) and auto-create demo
+  // Open email client (mailto:) and auto-create demo. Uses the effective
+  // mailto link so the user's manual edits to subject/body are reflected.
   const handleSendAndTrack = useCallback(() => {
     if (!detailLabel || !pitchTrackName.trim()) return;
-    if (pitchMailtoLink) {
-      window.open(pitchMailtoLink, "_blank");
+    if (effectiveMailtoLink) {
+      window.open(effectiveMailtoLink, "_blank");
     }
     if (!demoAlreadyExists) {
       addDemo({
@@ -911,7 +999,7 @@ export function LabelFinder() {
         link: pitchScLink.trim(),
         links: [],
         notes: pitchNote.trim(),
-        pitchText: pitchText,
+        pitchText: displayPitchText,
         artistName: pitchArtistName.trim(),
         genre: "",
         bpm: "",
@@ -919,9 +1007,10 @@ export function LabelFinder() {
       });
       setPitchDemoCreated(true);
     }
-  }, [detailLabel, pitchTrackName, pitchScLink, pitchNote, pitchMailtoLink, demoAlreadyExists, addDemo, pitchText, pitchArtistName]);
+  }, [detailLabel, pitchTrackName, pitchScLink, pitchNote, effectiveMailtoLink, demoAlreadyExists, addDemo, displayPitchText, pitchArtistName]);
 
-  // Send email directly via Gmail API (no browser open needed!)
+  // Send email directly via Gmail API. Uses the effective subject + body so
+  // manual edits to the preview are honored when sending through the API.
   const handleDirectSend = useCallback(async () => {
     if (!detailLabel || !pitchTrackName.trim() || !gmailAuth.isConnected) return;
 
@@ -941,16 +1030,10 @@ export function LabelFinder() {
         setGmailAuth(validAuth);
       }
 
-      const subject = generateSubject(pitchTrackName.trim(), pitchArtistName, pitchLanguage);
-      const body = generatePitchBody(
-        detailLabel.name,
-        pitchTrackName.trim(),
-        pitchArtistName,
-        pitchScLink,
-        pitchTone,
-        pitchNote,
-        pitchLanguage
-      );
+      // Use effective subject + body so manual edits to the preview textarea
+      // are honored when sending via the Gmail API.
+      const subject = effectivePitchSubject;
+      const body = effectivePitchBody;
 
       const result = await sendEmail(
         validAuth.accessToken,
@@ -972,7 +1055,7 @@ export function LabelFinder() {
             link: pitchScLink.trim(),
             links: [],
             notes: pitchNote.trim(),
-            pitchText: pitchText,
+            pitchText: displayPitchText,
             artistName: pitchArtistName.trim(),
             genre: "",
             bpm: "",
@@ -989,16 +1072,16 @@ export function LabelFinder() {
     } finally {
       setSendingEmail(false);
     }
-  }, [detailLabel, pitchTrackName, pitchArtistName, pitchScLink, pitchTone, pitchNote, pitchLanguage, detailEmails, gmailAuth, demoAlreadyExists, addDemo, pitchText, setGmailAuth, toast]);
+  }, [detailLabel, pitchTrackName, pitchScLink, pitchTone, pitchNote, pitchLanguage, detailEmails, gmailAuth, demoAlreadyExists, addDemo, displayPitchText, effectivePitchSubject, effectivePitchBody, setGmailAuth, toast]);
 
   const handlePitchCopy = async () => {
     try {
-      await navigator.clipboard.writeText(pitchText);
+      await navigator.clipboard.writeText(displayPitchText);
       setPitchCopied(true);
       setTimeout(() => setPitchCopied(false), 2000);
     } catch {
       const textarea = document.createElement("textarea");
-      textarea.value = pitchText;
+      textarea.value = displayPitchText;
       document.body.appendChild(textarea);
       textarea.select();
       document.execCommand("copy");
@@ -1760,19 +1843,42 @@ export function LabelFinder() {
                       {/* Pitch preview */}
                       {pitchText && (
                         <div className="space-y-2">
-                          <div className="flex items-center justify-between">
-                            <span className="text-[10px] text-muted-foreground uppercase tracking-wider flex items-center gap-1">
+                          <div className="flex items-center justify-between gap-2">
+                            <span className="text-[10px] text-muted-foreground uppercase tracking-wider flex items-center gap-1 flex-wrap">
                               <Sparkles className="h-3 w-3 text-primary" /> {t(locale, "pitch.preview")}
+                              {pitchEditedText !== null && (
+                                <Badge variant="outline" className="ml-1 text-[9px] py-0 px-1.5 h-4 border-amber-500/40 text-amber-500">
+                                  {t(locale, "pitch.edited")}
+                                </Badge>
+                              )}
                             </span>
-                            <div className="flex items-center gap-1.5">
+                            <div className="flex items-center gap-1.5 shrink-0">
+                              {pitchEditedText !== null && (
+                                <Button
+                                  onClick={() => setPitchEditedText(null)}
+                                  size="sm"
+                                  variant="ghost"
+                                  className="h-7 text-xs text-muted-foreground hover:text-foreground"
+                                  title={t(locale, "pitch.resetToSuggested")}
+                                >
+                                  <RotateCcw className="h-3 w-3 mr-1" />
+                                  {t(locale, "pitch.resetToSuggested")}
+                                </Button>
+                              )}
                               <Button onClick={handlePitchCopy} size="sm" className="h-7 text-xs border-border/50" variant="outline">
                                 {pitchCopied ? <><Check className="h-3 w-3 mr-1" />{t(locale, "pitch.copied")}</> : <><Copy className="h-3 w-3 mr-1" />{t(locale, "pitch.copyToClipboard")}</>}
                               </Button>
                             </div>
                           </div>
                           <Card className="bg-card/80 border-border/30">
-                            <CardContent className="p-3 max-h-[220px] overflow-y-auto">
-                              <pre className="text-[11px] leading-relaxed whitespace-pre-wrap font-mono text-foreground/80">{pitchText}</pre>
+                            <CardContent className="p-3">
+                              <textarea
+                                value={displayPitchText}
+                                onChange={(e) => setPitchEditedText(e.target.value)}
+                                spellCheck={false}
+                                className="w-full text-[11px] leading-relaxed font-mono text-foreground/80 bg-transparent resize-y min-h-[180px] max-h-[320px] outline-none border-0 focus:ring-0 p-0"
+                                aria-label={t(locale, "pitch.preview")}
+                              />
                             </CardContent>
                           </Card>
 
@@ -1842,7 +1948,7 @@ export function LabelFinder() {
                                       link: pitchScLink.trim(),
                                       links: [],
                                       notes: pitchNote.trim(),
-                                      pitchText: pitchText,
+                                      pitchText: displayPitchText,
                                       artistName: pitchArtistName.trim(),
                                       genre: "",
                                       bpm: "",

@@ -191,6 +191,8 @@ type TranslationKeys = {
   "pitch.openGmailNoEmail": string;
   "pitch.openEmailClient": string;
   "pitch.profileHint": string;
+  "pitch.edited": string;
+  "pitch.resetToSuggested": string;
 
   // Help
   "help.title": string;
@@ -586,6 +588,8 @@ const translations: Record<Locale, TranslationKeys> = {
     "pitch.openGmailNoEmail": "Apri in Gmail (senza destinatario)",
     "pitch.openEmailClient": "Client Email",
     "pitch.profileHint": "Il tuo nome e link SoundCloud vengono salvati automaticamente",
+    "pitch.edited": "Modificato",
+    "pitch.resetToSuggested": "Ripristina testo consigliato",
     "help.title": "Guida all'uso di LabelPulse",
     "help.close": "Chiudi",
     "help.intro": "LabelPulse è il tuo strumento per gestire l'invio di demo alle label discografiche. Ecco come usarlo al meglio:",
@@ -954,6 +958,8 @@ const translations: Record<Locale, TranslationKeys> = {
     "pitch.openGmailNoEmail": "Open in Gmail (no recipient)",
     "pitch.openEmailClient": "Email Client",
     "pitch.profileHint": "Your name and SoundCloud link are saved automatically",
+    "pitch.edited": "Edited",
+    "pitch.resetToSuggested": "Reset to suggested text",
     "help.title": "LabelPulse User Guide",
     "help.close": "Close",
     "help.intro": "LabelPulse is your tool for managing demo submissions to record labels. Here's how to use it effectively:",
@@ -1322,6 +1328,8 @@ const translations: Record<Locale, TranslationKeys> = {
     "pitch.openGmailNoEmail": "Abrir en Gmail (sin destinatario)",
     "pitch.openEmailClient": "Cliente de Email",
     "pitch.profileHint": "Tu nombre y enlace de SoundCloud se guardan automáticamente",
+    "pitch.edited": "Editado",
+    "pitch.resetToSuggested": "Restablecer texto sugerido",
     "help.title": "Guía de uso de LabelPulse",
     "help.close": "Cerrar",
     "help.intro": "LabelPulse es tu herramienta para gestionar el envío de demos a labels discográficas. Así se usa:",
@@ -1690,6 +1698,8 @@ const translations: Record<Locale, TranslationKeys> = {
     "pitch.openGmailNoEmail": "Ouvrir dans Gmail (sans destinataire)",
     "pitch.openEmailClient": "Client Email",
     "pitch.profileHint": "Votre nom et lien SoundCloud sont sauvegardés automatiquement",
+    "pitch.edited": "Modifié",
+    "pitch.resetToSuggested": "Réinitialiser le texte suggéré",
     "help.title": "Guide d'utilisation de LabelPulse",
     "help.close": "Fermer",
     "help.intro": "LabelPulse est votre outil pour gérer l'envoi de démos aux labels discographiques. Voici comment l'utiliser :",
@@ -2058,6 +2068,8 @@ const translations: Record<Locale, TranslationKeys> = {
     "pitch.openGmailNoEmail": "In Gmail öffnen (ohne Empfänger)",
     "pitch.openEmailClient": "E-Mail-Programm",
     "pitch.profileHint": "Dein Name und SoundCloud-Link werden automatisch gespeichert",
+    "pitch.edited": "Bearbeitet",
+    "pitch.resetToSuggested": "Vorgeschlagenen Text zurücksetzen",
     "help.title": "LabelPulse Benutzerhandbuch",
     "help.close": "Schließen",
     "help.intro": "LabelPulse ist dein Tool zur Verwaltung von Demo-Einreichungen bei Plattenlabels. So nutzt du es:",
@@ -2426,6 +2438,8 @@ const translations: Record<Locale, TranslationKeys> = {
     "pitch.openGmailNoEmail": "Abrir no Gmail (sem destinatário)",
     "pitch.openEmailClient": "Cliente de Email",
     "pitch.profileHint": "Seu nome e link do SoundCloud são salvos automaticamente",
+    "pitch.edited": "Editado",
+    "pitch.resetToSuggested": "Restaurar texto sugerido",
     "help.title": "Guia de Uso do LabelPulse",
     "help.close": "Fechar",
     "help.intro": "LabelPulse é sua ferramenta para gerenciar o envio de demos a gravadoras. Veja como usar:",
