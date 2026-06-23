@@ -96,47 +96,47 @@ function RowCard({ title, icon, accent, row, locale }: RowCardProps) {
   const accentBorder = accent === "cyan" ? "border-cyan-500/30" : "border-violet-500/30";
 
   return (
-    <div className={`rounded-md border ${accentBorder} ${accentBg} p-2.5 space-y-2`}>
+    <div className={`rounded-md border ${accentBorder} ${accentBg} p-3.5 space-y-2.5`}>
       {/* Header */}
       <div className="flex items-center justify-between">
-        <div className="flex items-center gap-1.5 min-w-0">
+        <div className="flex items-center gap-2 min-w-0">
           <span className={accentText}>{icon}</span>
-          <span className="text-[11px] font-semibold text-foreground uppercase tracking-wider">{title}</span>
+          <span className="text-sm font-semibold text-foreground uppercase tracking-wider">{title}</span>
         </div>
         {row.exists ? (
-          <span className="flex items-center gap-1 text-[9px] text-emerald-400 font-medium">
-            <CheckCircle2 className="h-3 w-3" /> OK
+          <span className="flex items-center gap-1 text-xs text-emerald-400 font-medium">
+            <CheckCircle2 className="h-4 w-4" /> OK
           </span>
         ) : (
-          <span className="flex items-center gap-1 text-[9px] text-amber-400 font-medium">
-            <AlertTriangle className="h-3 w-3" /> MANCANTE
+          <span className="flex items-center gap-1 text-xs text-amber-400 font-medium">
+            <AlertTriangle className="h-4 w-4" /> MANCANTE
           </span>
         )}
       </div>
 
       {/* Row id */}
-      <div className="text-[10px] text-muted-foreground/80 font-mono truncate" title={row.id}>
+      <div className="text-xs text-muted-foreground/80 font-mono truncate" title={row.id}>
         id: {row.id}
       </div>
 
       {/* Metrics grid */}
-      <div className="grid grid-cols-2 gap-1.5 text-[10px]">
-        <Metric icon={<DatabaseIcon className="h-2.5 w-2.5" />} label="Labels" value={row.exists ? String(row.labelsCount) : "—"} />
-        <Metric icon={<Clock className="h-2.5 w-2.5" />} label="Snapshots" value={row.exists ? String(row.snapshotsCount) : "—"} />
-        <Metric icon={<Tag className="h-2.5 w-2.5" />} label="Custom" value={row.exists ? String(row.customLabelsCount) : "—"} />
-        <Metric icon={<HardDrive className="h-2.5 w-2.5" />} label="Size" value={formatBytes(row.sizeBytes)} />
+      <div className="grid grid-cols-2 gap-2 text-xs">
+        <Metric icon={<DatabaseIcon className="h-3.5 w-3.5" />} label="Labels" value={row.exists ? String(row.labelsCount) : "—"} />
+        <Metric icon={<Clock className="h-3.5 w-3.5" />} label="Snapshots" value={row.exists ? String(row.snapshotsCount) : "—"} />
+        <Metric icon={<Tag className="h-3.5 w-3.5" />} label="Custom" value={row.exists ? String(row.customLabelsCount) : "—"} />
+        <Metric icon={<HardDrive className="h-3.5 w-3.5" />} label="Size" value={formatBytes(row.sizeBytes)} />
       </div>
 
       {/* Personal data row — only meaningful for personal row, but harmless on global */}
       {accent === "violet" && row.exists && (
-        <div className="text-[10px] text-muted-foreground/90 leading-snug pt-1 border-t border-border/30">
+        <div className="text-xs text-muted-foreground/90 leading-snug pt-1.5 border-t border-border/30">
           <span className="text-violet-300 font-medium">{row.beatportWithPersonalDataCount}</span> label con note/email/status compilati
         </div>
       )}
 
       {/* Timestamps */}
       {row.exists && (
-        <div className="text-[10px] text-muted-foreground/80 space-y-0.5 pt-1 border-t border-border/30">
+        <div className="text-xs text-muted-foreground/80 space-y-1 pt-1.5 border-t border-border/30">
           <div className="flex items-center justify-between gap-2">
             <span>Updated_at:</span>
             <span className="text-foreground/90 font-mono truncate" title={row.updatedAt || ""}>
@@ -167,7 +167,7 @@ function RowCard({ title, icon, accent, row, locale }: RowCardProps) {
 
 function Metric({ icon, label, value }: { icon: React.ReactNode; label: string; value: string }) {
   return (
-    <div className="flex items-center gap-1 text-muted-foreground">
+    <div className="flex items-center gap-1.5 text-muted-foreground">
       <span className="text-muted-foreground/60">{icon}</span>
       <span>{label}:</span>
       <span className="text-foreground font-mono font-medium ml-auto">{value}</span>
@@ -207,12 +207,12 @@ export function CloudDiagnostic() {
   }, [fetchDiagnostic]);
 
   return (
-    <div className="space-y-2">
+    <div className="space-y-2.5">
       {/* Header with refresh button */}
       <div className="flex items-center justify-between">
-        <div className="flex items-center gap-1.5">
-          <DatabaseIcon className="h-3.5 w-3.5 text-amber-400" />
-          <p className="text-xs font-medium text-foreground">
+        <div className="flex items-center gap-2">
+          <DatabaseIcon className="h-4 w-4 text-amber-400" />
+          <p className="text-sm font-medium text-foreground">
             {locale === "it" ? "Diagnostica Cloud" : "Cloud Diagnostic"}
           </p>
         </div>
@@ -220,21 +220,21 @@ export function CloudDiagnostic() {
           type="button"
           onClick={fetchDiagnostic}
           disabled={loading}
-          className="flex items-center gap-1 px-1.5 py-0.5 rounded text-[10px] font-medium bg-secondary/50 hover:bg-secondary border border-border/40 text-muted-foreground hover:text-foreground transition-colors disabled:opacity-60"
+          className="flex items-center gap-1 px-2 py-1 rounded text-xs font-medium bg-secondary/50 hover:bg-secondary border border-border/40 text-muted-foreground hover:text-foreground transition-colors disabled:opacity-60"
           title={locale === "it" ? "Aggiorna" : "Refresh"}
         >
-          <RefreshCw className={`h-2.5 w-2.5 ${loading ? "animate-spin" : ""}`} />
+          <RefreshCw className={`h-3.5 w-3.5 ${loading ? "animate-spin" : ""}`} />
           {loading ? "…" : "↻"}
         </button>
       </div>
 
       {/* Current user info */}
       {data && (
-        <div className="text-[10px] text-muted-foreground/80 leading-snug">
+        <div className="text-xs text-muted-foreground/80 leading-snug">
           {locale === "it" ? "Login:" : "Logged in as:"}{" "}
           <span className="text-foreground font-mono">{data.currentEmail || "—"}</span>
           {data.isAdmin && (
-            <span className="ml-1.5 inline-flex items-center gap-0.5 text-[9px] uppercase tracking-wider text-amber-400 bg-amber-500/10 border border-amber-500/30 rounded px-1 py-0.5 font-medium">
+            <span className="ml-1.5 inline-flex items-center gap-0.5 text-[10px] uppercase tracking-wider text-amber-400 bg-amber-500/10 border border-amber-500/30 rounded px-1.5 py-0.5 font-medium">
               admin
             </span>
           )}
@@ -243,25 +243,25 @@ export function CloudDiagnostic() {
 
       {/* Error state */}
       {error && (
-        <div className="flex items-start gap-1.5 p-2 rounded-md bg-red-500/10 border border-red-500/30">
-          <AlertTriangle className="h-3 w-3 text-red-400 shrink-0 mt-0.5" />
-          <p className="text-[10px] text-red-400 leading-snug">{error}</p>
+        <div className="flex items-start gap-2 p-2.5 rounded-md bg-red-500/10 border border-red-500/30">
+          <AlertTriangle className="h-4 w-4 text-red-400 shrink-0 mt-0.5" />
+          <p className="text-xs text-red-400 leading-snug">{error}</p>
         </div>
       )}
 
       {/* Row cards */}
       {data && (
-        <div className="space-y-2">
+        <div className="space-y-2.5">
           <RowCard
             title={locale === "it" ? "Riga Globale" : "Global Row"}
-            icon={<Globe2 className="h-3.5 w-3.5" />}
+            icon={<Globe2 className="h-4 w-4" />}
             accent="cyan"
             row={data.global}
             locale={locale}
           />
           <RowCard
             title={locale === "it" ? "Riga Personale" : "Personal Row"}
-            icon={<User2 className="h-3.5 w-3.5" />}
+            icon={<User2 className="h-4 w-4" />}
             accent="violet"
             row={data.personal}
             locale={locale}
@@ -271,7 +271,7 @@ export function CloudDiagnostic() {
 
       {/* Help hint */}
       {data && (
-        <p className="text-[9px] text-muted-foreground/60 leading-snug pt-1 border-t border-border/30">
+        <p className="text-[11px] text-muted-foreground/60 leading-snug pt-1.5 border-t border-border/30">
           {locale === "it"
             ? "La riga globale è letta da tutti gli utenti. La riga personale contiene solo le tue personalizzazioni (note, email, status)."
             : "The global row is read by all users. Your personal row holds only your customizations (notes, emails, status)."}
@@ -280,7 +280,7 @@ export function CloudDiagnostic() {
 
       {/* Fetched-at footer */}
       {data && (
-        <p className="text-[9px] text-muted-foreground/40 text-right">
+        <p className="text-[11px] text-muted-foreground/40 text-right">
           {locale === "it" ? "Aggiornato:" : "Fetched:"} {formatTimestamp(data.fetchedAt, locale)}
         </p>
       )}
