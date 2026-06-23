@@ -1,0 +1,2002 @@
+     1→"use client";
+     2→
+     3→import { create } from "zustand";
+     4→import { persist, createJSONStorage, StateStorage } from "zustand/middleware";
+     5→import type { Locale } from "./i18n";
+     6→import labelData from "./labels-data.json";
+     7→import { saveStateToCloud, loadStateFromCloud, isSupabaseConfigured, isApplyingRemoteUpdate } from "./supabase";
+     8→import { saveArtistsToIDB, loadArtistsFromIDB } from "./artists-idb";
+     9→
+    10→// ==================== TYPES ====================
+    11→
+    12→export type SubmissionType = "email" | "webform" | "platform";
+    13→export type LabelStatus = "open" | "closed";
+    14→export type DemoStatus =
+    15→  | "ready"
+    16→  | "sent"
+    17→  | "reviewing"
+    18→  | "accepted"
+    19→  | "rejected";
+    20→
+    21→export interface Label {
+    22→  id: string;
+    23→  name: string;
+    24→  genre: string; // primary genre for user-added
+    25→  submissionType: SubmissionType;
+    26→  contactInfo: string;
+    27→  status: LabelStatus;
+    28→  notes: string;
+    29→  createdAt: string;
+    30→  // User-enriched data (persistent)
+    31→  emails: string[];
+    32→  website: string;
+    33→  demoLink: string;
+    34→  socialLink: string;
+    35→  soundcloudLink: string;
+    36→  beatportLink: string;
+    37→  customLinks: { type: string; value: string }[];
+    38→  // Real Beatport data
+    39→  genres: string[];
+    40→  rankByGenre: Record<string, number>;
+    41→  pointsByGenre: Record<string, number>;
+    42→  trending: boolean;
+    43→  trendingRankByGenre: Record<string, number>;
+    44→  trendingPointsByGenre: Record<string, number>;
+    45→  isCustom?: boolean; // user-added label
+    46→  prevRankByGenre?: Record<string, number>; // Previous ranking snapshot (before last import)
+    47→}
+    48→
+    49→// ==================== ARTISTS & TRACKS (scraper v2) ====================
+    50→// Captured from Beatport Top-100 per genre. Each artist aggregates their
+    51→// tracks across all genres they appear in, plus all labels they've published on.
+    52→// Storage: persisted in IndexedDB (NOT localStorage — too large, 9MB+ for 3000+ artists).
+    53→
+    54→export interface ArtistTrack {
+    55→  id: number;
+    56→  name: string;
+    57→  mixName: string;
+    58→  position: number;
+    59→  points: number;
+    60→  label: string;
+    61→  labelId: number | null;
+    62→  labelSlug: string;
+    63→  releaseDate: string;
+    64→  bpm: number | null;
+    65→  keyCamelot: string;
+    66→  keyName: string;
+    67→  coverArt: string;
+    68→  sampleUrl: string;
+    69→  seenAt: string;
+    70→}
+    71→
+    72→export interface Artist {
+    73→  id: string; // 'bp_6824' (Beatport id) or 'nm_<UPPERCASE_NAME>' (name-only fallback)
+    74→  beatportId: number | null;
+    75→  name: string;
+    76→  slug: string;
+    77→  imageUrl: string;
+    78→  genres: string[];
+    79→  tracksByGenre: Record<string, ArtistTrack[]>;
+    80→  labelsPublishedOn: string[];
+    81→  totalPoints: number;
+    82→  bestPosition: number;
+    83→  isRemixerOnly: boolean;
+    84→  trending: boolean;
+    85→  trendingRankByGenre?: Record<string, number>;
+    86→  trendingPointsByGenre?: Record<string, number>;
+    87→  firstSeenAt?: string; // ISO timestamp of first scrape that included this artist
+    88→  lastSeenAt?: string; // ISO timestamp of most recent scrape that included this artist
+    89→}
+    90→
+    91→// ==================== RANKING SNAPSHOTS ====================
+    92→// Stores historical ranking data for time-period analysis (like Beatstats)
+    93→// Each snapshot captures all label rankings at the moment of import.
+    94→
+    95→export type RankingTimePeriod = "current" | "1m" | "3m" | "1y" | "all";
+    96→
+    97→export interface RankingSnapshot {
+    98→  id: string;
+    99→  timestamp: string; // ISO date when the snapshot was taken
+   100→  source: string; // 'beatport', 'beatstats', etc.
+   101→  // Per-genre, per-label ranking data
+   102→  genres: Record<string, Record<string, { rank: number; points: number }>>;
+   103→  // genre -> labelName -> {rank, points}
+   104→}
+   105→
+   106→export interface Demo {
+   107→  id: string;
+   108→  trackName: string;
+   109→  labelId: string;
+   110→  status: DemoStatus;
+   111→  sentDate: string | null;
+   112→  link: string; // primary SoundCloud link (legacy)
+   113→  links: { type: string; value: string }[]; // multiple demo links (SoundCloud, Dropbox, WeTransfer, etc.)
+   114→  notes: string;
+   115→  createdAt: string;
+   116→  pitchText: string;
+   117→  artistName: string;
+   118→  genre: string; // demo genre
+   119→  bpm: string;
+   120→  key: string;
+   121→  // Audio analysis (free in-browser or Cyanite BYOK)
+   122→  analysis?: {
+   123→    bpm: number;
+   124→    bpmConfidence: number;
+   125→    key: {
+   126→      pitchClass: number;
+   127→      mode: 0 | 1;
+   128→      camelot: string;
+   129→      name: string;
+   130→      confidence: number;
+   131→    };
+   132→    energy: number;
+   133→    danceability: number;
+   134→    loudness: number;
+   135→    duration: number;
+   136→    analysisSource: "essentia" | "cyanite";
+   137→    analysisDate: string;
+   138→    cyaniteGenre?: string;
+   139→    cyaniteMoods?: string[];
+   140→    cyaniteInstruments?: string[];
+   141→  };
+   142→  // Reply tracking — when a label responds (auto-detected via Gmail API or
+   143→  // entered manually by the user). Allows the tracker to show "Ricevuto ACK",
+   144→  // "Risposta positiva", etc. without the user having to remember.
+   145→  replyStatus?: "none" | "ack" | "info" | "positive" | "rejected";
+   146→  replyText?: string;       // full text of the label's reply email
+   147→  replyDate?: string | null; // ISO date when the reply was received
+   148→  replySender?: string;     // who replied (e.g. "Patrick Scuro, Animarum")
+   149→  followUpDueDate?: string | null; // ISO date after which a follow-up is suggested
+   150→}
+   151→
+   152→// ==================== HELPERS ====================
+   153→
+   154→const genId = () =>
+   155→  Date.now().toString(36) + Math.random().toString(36).slice(2, 7);
+   156→
+   157→// Convert imported data to Label objects
+   158→function buildLabelsFromData(): Label[] {
+   159→  return labelData.labels.map((l) => ({
+   160→    id: l.id,
+   161→    name: l.name,
+   162→    genre: l.genres[0] || "",
+   163→    submissionType: "email" as SubmissionType,
+   164→    contactInfo: "",
+   165→    status: "open" as LabelStatus,
+   166→    notes: "",
+   167→    createdAt: new Date().toISOString(),
+   168→    emails: [] as string[],
+   169→    website: "",
+   170→    demoLink: "",
+   171→    socialLink: "",
+   172→    soundcloudLink: "",
+   173→    beatportLink: "",
+   174→    customLinks: [] as { type: string; value: string }[],
+   175→    genres: l.genres,
+   176→    rankByGenre: (l.rankByGenre || {}) as Record<string, number>,
+   177→    pointsByGenre: (l.pointsByGenre || {}) as Record<string, number>,
+   178→    trending: l.trending || false,
+   179→    trendingRankByGenre: (l.trendingRankByGenre || {}) as Record<string, number>,
+   180→    trendingPointsByGenre: (l.trendingPointsByGenre || {}) as Record<string, number>,
+   181→    isCustom: false,
+   182→  }));
+   183→}
+   184→
+   185→// ==================== ROBUST STORAGE ====================
+   186→// Custom storage with data protection:
+   187→// 1. Primary localStorage key
+   188→// 2. Backup localStorage key (written IMMEDIATELY on every save — no debounce)
+   189→// 3. Data integrity check on load (auto-recover from backup if data loss detected)
+   190→// 4. Rehydration guard: blocks ALL writes until Zustand persist loads data
+   191→
+   192→const PRIMARY_KEY = "labelpulse-storage";
+   193→const BACKUP_KEY = "labelpulse-storage-backup";
+   194→// CRITICAL: dedicated, append-only backup slot for rankingSnapshots.
+   195→// This is the user's "storico caricamenti" — months of Beatport/Beatstats imports.
+   196→// We persist it SEPARATELY from the main store so that even if the main store
+   197→// (or its backup) gets wiped by a bad cloud sync, a rehydrate, a migration bug,
+   198→// or a localStorage quota error, the snapshots survive in their own slot.
+   199→const SNAPSHOTS_BACKUP_KEY = "labelpulse-snapshots-backup";
+   200→
+   201→// ==================== USER PROFILE BACKUP (SIDE CAR) ====================
+   202→// Like SNAPSHOTS_BACKUP_KEY but for the user profile (artistName, bio, email,
+   203→// scLink, photoUrl, links, cyaniteApiToken, supabaseUrl, supabaseAnonKey).
+   204→//
+   205→// This is the user's identity card. Even if cloud sync wipes the main store
+   206→// (rare but has happened), or the user logs in from a new device and the
+   207→// cloud has nothing yet, the user can still recover their profile from this
+   208→// sidecar slot.
+   209→//
+   210→// Strategy: write on every setItem (merged, never overwrite), never clear
+   211→// except via explicit reset.
+   212→const PROFILE_BACKUP_KEY = "labelpulse-profile-backup";
+   213→
+   214→const SEED_LABEL_COUNT = labelData.labels.length;
+   215→
+   216→// Rehydration guard: blocks ALL writes until Zustand persist has loaded data from localStorage.
+   217→// Before rehydration, the store contains seed data which would overwrite user data.
+   218→let _rehydrated = false;
+   219→
+   220→function safeJsonParse(str: string | null): any | null {
+   221→  if (!str) return null;
+   222→  try {
+   223→    return JSON.parse(str);
+   224→  } catch {
+   225→    return null;
+   226→  }
+   227→}
+   228→
+   229→function safeLocalStorageGet(key: string): string | null {
+   230→  try {
+   231→    return localStorage.getItem(key);
+   232→  } catch {
+   233→    return null;
+   234→  }
+   235→}
+   236→
+   237→function safeLocalStorageSet(key: string, value: string): boolean {
+   238→  try {
+   239→    localStorage.setItem(key, value);
+   240→    return true;
+   241→  } catch (e) {
+   242→    console.error(`[LabelPulse Storage] Failed to write ${key}:`, e);
+   243→    return false;
+   244→  }
+   245→}
+   246→
+   247→function safeLocalStorageRemove(key: string): void {
+   248→  try {
+   249→    localStorage.removeItem(key);
+   250→  } catch {
+   251→    // Ignore
+   252→  }
+   253→}
+   254→
+   255→/**
+   256→ * Extract rankingSnapshots array from a raw localStorage JSON string.
+   257→ * Returns [] if not found / invalid.
+   258→ */
+   259→function extractSnapshotsFromRaw(raw: string | null): RankingSnapshot[] {
+   260→  if (!raw) return [];
+   261→  const data = safeJsonParse(raw);
+   262→  if (!data) return [];
+   263→  const snaps = data.state?.rankingSnapshots ?? data.rankingSnapshots;
+   264→  return Array.isArray(snaps) ? snaps : [];
+   265→}
+   266→
+   267→/**
+   268→ * Merge two snapshot arrays, deduping by `id` first, then by `timestamp+source`.
+   269→ * Always returns ascending-by-timestamp order.
+   270→ * Used by: importData (backup file), robustStorage.getItem (safety-net restore),
+   271→ * and loadFromCloud (cloud merge).
+   272→ */
+   273→function mergeSnapshots(
+   274→  base: RankingSnapshot[] | null | undefined,
+   275→  incoming: RankingSnapshot[] | null | undefined
+   276→): RankingSnapshot[] {
+   277→  const a = Array.isArray(base) ? base : [];
+   278→  const b = Array.isArray(incoming) ? incoming : [];
+   279→  const seen = new Set<string>();
+   280→  const out: RankingSnapshot[] = [];
+   281→  for (const s of [...a, ...b]) {
+   282→    if (!s || typeof s !== "object") continue;
+   283→    const key = s.id || `${s.timestamp}|${s.source}`;
+   284→    if (seen.has(key)) continue;
+   285→    seen.add(key);
+   286→    out.push(s);
+   287→  }
+   288→  out.sort(
+   289→    (x, y) =>
+   290→      new Date(x.timestamp || 0).getTime() - new Date(y.timestamp || 0).getTime()
+   291→  );
+   292→  return out;
+   293→}
+   294→
+   295→/**
+   296→ * Public alias for mergeSnapshots, exported so supabase.ts can use it via
+   297→ * lazy import (to avoid circular deps at module load time).
+   298→ */
+   299→export const mergeSnapshotsPublic = mergeSnapshots;
+   300→
+   301→/**
+   302→ * Public alias for mergeCloudData, exported so supabase.ts can use it via
+   303→ * lazy import (to avoid circular deps at module load time). Used by the
+   304→ * explicitMergeLocalAndCloud recovery action.
+   305→ */
+   306→export const mergeCloudDataPublic = mergeCloudData;
+   307→
+   308→/**
+   309→ * Check if persisted data has user edits (emails, notes, links, etc.)
+   310→ * This helps us detect if the store was accidentally reset to seed data.
+   311→ */
+   312→function countUserEditedLabels(labels: any[]): number {
+   313→  if (!Array.isArray(labels)) return 0;
+   314→  return labels.filter((l) =>
+   315→    (l.emails && l.emails.length > 0) ||
+   316→    (l.notes && l.notes.trim() !== "") ||
+   317→    (l.website && l.website.trim() !== "") ||
+   318→    (l.demoLink && l.demoLink.trim() !== "") ||
+   319→    (l.socialLink && l.socialLink.trim() !== "") ||
+   320→    (l.soundcloudLink && l.soundcloudLink.trim() !== "") ||
+   321→    (l.contactInfo && l.contactInfo.trim() !== "") ||
+   322→    l.isCustom === true
+   323→  ).length;
+   324→}
+   325→
+   326→function getTotalLabelCount(data: any): number {
+   327→  if (!data) return 0;
+   328→  if (Array.isArray(data.labels)) return data.labels.length;
+   329→  if (data.state && Array.isArray(data.state.labels)) return data.state.labels.length;
+   330→  return 0;
+   331→}
+   332→
+   333→/**
+   334→ * Extract user-edited label count from raw localStorage string.
+   335→ * Used by the write guard to check if a write would cause data loss.
+   336→ */
+   337→function getUserEditCountFromRaw(raw: string | null): number {
+   338→  if (!raw) return 0;
+   339→  const data = safeJsonParse(raw);
+   340→  if (!data) return 0;
+   341→  const labels = data.state?.labels || data.labels || [];
+   342→  return countUserEditedLabels(labels);
+   343→}
+   344→
+   345→// (debounced backup removed — we now write backup IMMEDIATELY on every write for maximum data safety)
+   346→
+   347→const robustStorage: StateStorage = {
+   348→  getItem: (name: string): string | null => {
+   349→    const primaryRaw = safeLocalStorageGet(PRIMARY_KEY);
+   350→    const backupRaw = safeLocalStorageGet(BACKUP_KEY);
+   351→
+   352→    const primaryData = safeJsonParse(primaryRaw);
+   353→    const backupData = safeJsonParse(backupRaw);
+   354→
+   355→    let result: string | null = null;
+   356→    let usedSidecarSnapshots = false;
+   357→
+   358→    // If primary is missing/corrupt, try backup
+   359→    if (!primaryData) {
+   360→      if (backupData) {
+   361→        console.warn("[LabelPulse Storage] Primary data missing/corrupt, restoring from backup");
+   362→        if (backupRaw) safeLocalStorageSet(PRIMARY_KEY, backupRaw);
+   363→        result = backupRaw;
+   364→      }
+   365→      // Both empty — first visit, result stays null
+   366→    } else if (backupData) {
+   367→      // Both exist — check for data loss
+   368→      const primaryLabelCount = getTotalLabelCount(primaryData);
+   369→      const backupLabelCount = getTotalLabelCount(backupData);
+   370→      const primaryUserEdits = primaryData.state?.labels
+   371→        ? countUserEditedLabels(primaryData.state.labels)
+   372→        : countUserEditedLabels(primaryData.labels || []);
+   373→      const backupUserEdits = backupData.state?.labels
+   374→        ? countUserEditedLabels(backupData.state.labels)
+   375→        : countUserEditedLabels(backupData.labels || []);
+   376→
+   377→      // If primary has fewer labels than backup AND backup has more or equal user data
+   378→      if (backupLabelCount > primaryLabelCount && backupUserEdits >= primaryUserEdits) {
+   379→        console.warn(
+   380→          `[LabelPulse Storage] DATA LOSS DETECTED! Primary: ${primaryLabelCount} labels (${primaryUserEdits} edited), Backup: ${backupLabelCount} labels (${backupUserEdits} edited). Restoring from backup.`
+   381→        );
+   382→        if (backupRaw) safeLocalStorageSet(PRIMARY_KEY, backupRaw);
+   383→        result = backupRaw;
+   384→      } else if (backupUserEdits > primaryUserEdits && backupLabelCount >= primaryLabelCount) {
+   385→        // If primary has fewer user edits than backup, use backup
+   386→        console.warn(
+   387→          `[LabelPulse Storage] More user data in backup (${backupUserEdits} vs ${primaryUserEdits} edited labels). Restoring from backup.`
+   388→        );
+   389→        if (backupRaw) safeLocalStorageSet(PRIMARY_KEY, backupRaw);
+   390→        result = backupRaw;
+   391→      } else {
+   392→        result = primaryRaw;
+   393→      }
+   394→    } else {
+   395→      // Primary exists, no backup — normal case
+   396→      result = primaryRaw;
+   397→    }
+   398→
+   399→    // CRITICAL SAFETY NET for rankingSnapshots:
+   400→    // If the chosen result has 0 snapshots but the dedicated SNAPSHOTS_BACKUP_KEY
+   401→    // has snapshots, splice them in. This handles the scenario where the main
+   402→    // store got wiped (bad cloud sync, migration bug, partial overwrite) but the
+   403→    // snapshots sidecar survived. Without this, the user loses months of
+   404→    // "storico caricamenti" and the Classifiche page resets to "first time".
+   405→    try {
+   406→      const currentSnaps = extractSnapshotsFromRaw(result);
+   407→      const sidecarRaw = safeLocalStorageGet(SNAPSHOTS_BACKUP_KEY);
+   408→      const sidecarSnaps = extractSnapshotsFromRaw(sidecarRaw);
+   409→      if (sidecarSnaps.length > 0 && sidecarSnaps.length > currentSnaps.length) {
+   410→        console.warn(
+   411→          `[LabelPulse Storage] SNAPSHOTS RECOVERY: result has ${currentSnaps.length} snapshots, sidecar has ${sidecarSnaps.length}. Merging sidecar into result.`
+   412→        );
+   413→        const mergedSnaps = mergeSnapshots(currentSnaps, sidecarSnaps);
+   414→        const parsed = result ? safeJsonParse(result) : {};
+   415→        if (parsed && typeof parsed === "object") {
+   416→          if (parsed.state && typeof parsed.state === "object") {
+   417→            parsed.state.rankingSnapshots = mergedSnaps;
+   418→          } else {
+   419→            parsed.rankingSnapshots = mergedSnaps;
+   420→          }
+   421→          result = JSON.stringify(parsed);
+   422→          usedSidecarSnapshots = true;
+   423→        }
+   424→      }
+   425→    } catch (e) {
+   426→      console.warn("[LabelPulse Storage] Snapshots sidecar recovery failed:", e);
+   427→    }
+   428→
+   429→    // CRITICAL SAFETY NET for userProfile:
+   430→    // Same logic as snapshots. If the chosen result has an empty/seed profile
+   431→    // but PROFILE_BACKUP_KEY has real data, splice it in. This is the user's
+   432→    // identity card — losing artistName, bio, email, links is catastrophic.
+   433→    try {
+   434→      const currentProfile = extractProfileFromRaw(result);
+   435→      const sidecarProfile = extractProfileFromRaw(safeLocalStorageGet(PROFILE_BACKUP_KEY));
+   436→      if (sidecarProfile && !currentProfile) {
+   437→        console.warn(
+   438→          `[LabelPulse Storage] PROFILE RECOVERY: result has empty profile, sidecar has data (artistName=${!!sidecarProfile.artistName}, bio=${!!sidecarProfile.bio}). Merging sidecar into result.`
+   439→        );
+   440→        const parsed = result ? safeJsonParse(result) : {};
+   441→        if (parsed && typeof parsed === "object") {
+   442→          if (parsed.state && typeof parsed.state === "object") {
+   443→            parsed.state.userProfile = sidecarProfile;
+   444→          } else {
+   445→            parsed.userProfile = sidecarProfile;
+   446→          }
+   447→          result = JSON.stringify(parsed);
+   448→        }
+   449→      } else if (sidecarProfile && currentProfile) {
+   450→        // Both have data — merge (sidecar fills empty fields in current)
+   451→        const mergedProfile = mergeProfiles(sidecarProfile, currentProfile);
+   452→        const parsed = result ? safeJsonParse(result) : {};
+   453→        if (parsed && typeof parsed === "object" && mergedProfile) {
+   454→          if (parsed.state && typeof parsed.state === "object") {
+   455→            parsed.state.userProfile = mergedProfile;
+   456→          } else {
+   457→            parsed.userProfile = mergedProfile;
+   458→          }
+   459→          result = JSON.stringify(parsed);
+   460→        }
+   461→      }
+   462→    } catch (e) {
+   463→      console.warn("[LabelPulse Storage] Profile sidecar recovery failed:", e);
+   464→    }
+   465→
+   466→    // CRITICAL: Mark rehydrated BEFORE returning — Zustand will call setItem with
+   467→    // merged data immediately after this getItem returns, and we MUST allow that write.
+   468→    // This ensures seed data (initial state) writes are blocked, but merged data writes pass.
+   469→    _rehydrated = true;
+   470→
+   471→    if (usedSidecarSnapshots) {
+   472→      console.info("[LabelPulse Storage] rankingSnapshots restored from sidecar backup.");
+   473→    }
+   474→
+   475→    return result;
+   476→  },
+   477→
+   478→  setItem: (name: string, value: string): void => {
+   479→    // REHYDRATION GUARD: Block ALL writes before Zustand persist has loaded data.
+   480→    // Before rehydration, the store only has seed data — writing it would overwrite
+   481→    // any user data in localStorage. After rehydration, ALL writes are legitimate
+   482→    // (user actions, repairs, imports, etc.) and must ALWAYS be saved.
+   483→    if (!_rehydrated) {
+   484→      console.warn(
+   485→        `[LabelPulse Storage] BLOCKED pre-rehydration write — protecting user data in localStorage`
+   486→      );
+   487→      return;
+   488→    }
+   489→
+   490→    // Write to primary immediately
+   491→    const primaryOk = safeLocalStorageSet(PRIMARY_KEY, value);
+   492→
+   493→    // Write to backup IMMEDIATELY (no debounce) for maximum data safety.
+   494→    // Previous 60s debounce caused data loss if browser crashed before backup was written.
+   495→    safeLocalStorageSet(BACKUP_KEY, value);
+   496→
+   497→    // CRITICAL: also persist rankingSnapshots to a dedicated slot.
+   498→    // This is the user's "storico caricamenti" — months of imports that cannot
+   499→    // be regenerated. Keeping it in a separate key means even a catastrophic
+   500→    // main-store wipe (bad cloud sync, migration bug, quota error) leaves the
+   501→    // snapshots recoverable.
+   502→    try {
+   503→      const snaps = extractSnapshotsFromRaw(value);
+   504→      if (snaps.length > 0) {
+   505→        // Merge with whatever's already in the snapshots slot — NEVER overwrite
+   506→        // existing snapshots with fewer snapshots (would happen if the current
+   507→        // write had a partial/empty snapshot array due to some upstream bug).
+   508→        const existing = extractSnapshotsFromRaw(safeLocalStorageGet(SNAPSHOTS_BACKUP_KEY));
+   509→        const merged = mergeSnapshots(existing, snaps);
+   510→        safeLocalStorageSet(
+   511→          SNAPSHOTS_BACKUP_KEY,
+   512→          JSON.stringify(merged)
+   513→        );
+   514→      }
+   515→    } catch (e) {
+   516→      console.warn("[LabelPulse Storage] Snapshots-sidecar write failed:", e);
+   517→    }
+   518→
+   519→    // CRITICAL: also persist userProfile to a dedicated slot.
+   520→    // Same pattern as snapshots. The profile is the user's identity card —
+   521→    // artistName, bio, email, social links, photo. We can NEVER lose this,
+   522→    // even if cloud sync wipes the main store.
+   523→    try {
+   524→      const profile = extractProfileFromRaw(value);
+   525→      if (profile) {
+   526→        const existing = extractProfileFromRaw(safeLocalStorageGet(PROFILE_BACKUP_KEY));
+   527→        const merged = mergeProfiles(existing, profile);
+   528→        if (merged) {
+   529→          safeLocalStorageSet(
+   530→            PROFILE_BACKUP_KEY,
+   531→            JSON.stringify({ userProfile: merged })
+   532→          );
+   533→        }
+   534→      }
+   535→    } catch (e) {
+   536→      console.warn("[LabelPulse Storage] Profile-sidecar write failed:", e);
+   537→    }
+   538→
+   539→    if (!primaryOk) {
+   540→      console.error("[LabelPulse Storage] Primary write failed!");
+   541→    }
+   542→  },
+   543→
+   544→  removeItem: (name: string): void => {
+   545→    safeLocalStorageRemove(PRIMARY_KEY);
+   546→    safeLocalStorageRemove(BACKUP_KEY);
+   547→    // NOTE: do NOT remove SNAPSHOTS_BACKUP_KEY or PROFILE_BACKUP_KEY here.
+   548→    // These are the user's permanent records (months of ranking history +
+   549→    // artist identity) — clearing the main store should NEVER nuke them.
+   550→    // The only way to clear them is an explicit user action ("reset all data"
+   551→    // button) which calls safeLocalStorageRemove directly.
+   552→  },
+   553→};
+   554→
+   555→/**
+   556→ * Force-write a backup immediately (e.g., on visibility change or before unload).
+   557→ * Since backup is now written on every setItem, this is a safety net.
+   558→ */
+   559→export function forceBackupNow(): void {
+   560→  if (typeof window === "undefined") return;
+   561→  const primaryRaw = safeLocalStorageGet(PRIMARY_KEY);
+   562→  if (primaryRaw) {
+   563→    safeLocalStorageSet(BACKUP_KEY, primaryRaw);
+   564→  }
+   565→  // Also touch the snapshots sidecar so it stays warm.
+   566→  const snaps = extractSnapshotsFromRaw(primaryRaw);
+   567→  if (snaps.length > 0) {
+   568→    const existing = extractSnapshotsFromRaw(safeLocalStorageGet(SNAPSHOTS_BACKUP_KEY));
+   569→    const merged = mergeSnapshots(existing, snaps);
+   570→    safeLocalStorageSet(SNAPSHOTS_BACKUP_KEY, JSON.stringify(merged));
+   571→  }
+   572→}
+   573→
+   574→/**
+   575→ * Returns the current rankingSnapshots from the dedicated sidecar backup.
+   576→ * Used by the UI to offer "restore history from emergency backup" if the
+   577→ * main store ever shows 0 snapshots.
+   578→ */
+   579→export function readSnapshotsSidecar(): RankingSnapshot[] {
+   580→  if (typeof window === "undefined") return [];
+   581→  return extractSnapshotsFromRaw(safeLocalStorageGet(SNAPSHOTS_BACKUP_KEY));
+   582→}
+   583→
+   584→/**
+   585→ * Force-restore rankingSnapshots from the sidecar into the live store.
+   586→ * Returns the number of snapshots restored, or 0 if the sidecar was empty
+   587→ * / already in sync.
+   588→ */
+   589→export function restoreSnapshotsFromSidecar(): number {
+   590→  if (typeof window === "undefined") return 0;
+   591→  const sidecarSnaps = extractSnapshotsFromRaw(safeLocalStorageGet(SNAPSHOTS_BACKUP_KEY));
+   592→  if (sidecarSnaps.length === 0) return 0;
+   593→  const current = useAppStore.getState().rankingSnapshots || [];
+   594→  const merged = mergeSnapshots(current, sidecarSnaps);
+   595→  const added = merged.length - current.length;
+   596→  if (added > 0) {
+   597→    useAppStore.setState({ rankingSnapshots: merged });
+   598→    console.info(
+   599→      `[LabelPulse] Restored ${added} snapshot(s) from sidecar backup.`
+   600→    );
+   601→  }
+   602→  return Math.max(added, 0);
+   603→}
+   604→
+   605→// ==================== USER PROFILE BACKUP HELPERS ====================
+   606→
+   607→/**
+   608→ * Extract userProfile from a raw JSON string (main store JSON, backup JSON,
+   609→ * or sidecar JSON). Returns null if missing/invalid.
+   610→ */
+   611→function extractProfileFromRaw(raw: string | null): any | null {
+   612→  if (!raw) return null;
+   613→  try {
+   614→    const parsed = JSON.parse(raw);
+   615→    const profile = parsed?.state?.userProfile ?? parsed?.userProfile ?? null;
+   616→    if (profile && typeof profile === "object") {
+   617→      // Must have at least one non-empty field to be considered "real"
+   618→      const hasData =
+   619→        !!profile.artistName ||
+   620→        !!profile.bio ||
+   621→        !!profile.email ||
+   622→        !!profile.scLink ||
+   623→        !!profile.photoUrl ||
+   624→        (Array.isArray(profile.links) && profile.links.length > 0) ||
+   625→        !!profile.cyaniteApiToken ||
+   626→        !!profile.supabaseUrl;
+   627→      if (hasData) return profile;
+   628→    }
+   629→  } catch {
+   630→    /* ignore */
+   631→  }
+   632→  return null;
+   633→}
+   634→
+   635→/**
+   636→ * Merge two user profiles — non-empty fields win.
+   637→ * This is the safety net: if the cloud ever sends a profile with empty
+   638→ * artistName, but the sidecar has the real artistName, we keep the real one.
+   639→ */
+   640→export function mergeProfiles(base: any | null, incoming: any | null): any | null {
+   641→  if (!base && !incoming) return null;
+   642→  if (!base) return incoming;
+   643→  if (!incoming) return base;
+   644→  const merged: any = { ...base };
+   645→  for (const k of Object.keys(incoming)) {
+   646→    const v = incoming[k];
+   647→    if (k === "links") {
+   648→      // Merge link arrays (dedupe by type|value)
+   649→      const a = Array.isArray(base.links) ? base.links : [];
+   650→      const b = Array.isArray(v) ? v : [];
+   651→      const seen = new Set<string>();
+   652→      const out: { type: string; value: string }[] = [];
+   653→      for (const link of [...a, ...b]) {
+   654→        if (!link || typeof link !== "object") continue;
+   655→        const key = `${link.type}|${link.value}`;
+   656→        if (seen.has(key)) continue;
+   657→        seen.add(key);
+   658→        out.push(link);
+   659→      }
+   660→      merged.links = out;
+   661→    } else if (typeof v === "string") {
+   662→      // Non-empty string wins over empty
+   663→      if (v && !merged[k]) merged[k] = v;
+   664→    } else {
+   665→      // For any other type, prefer defined over undefined
+   666→      if (v !== undefined && v !== null && !merged[k]) merged[k] = v;
+   667→    }
+   668→  }
+   669→  return merged;
+   670→}
+   671→
+   672→/**
+   673→ * Returns the most recently saved userProfile from the sidecar backup.
+   674→ */
+   675→export function readProfileSidecar(): any | null {
+   676→  if (typeof window === "undefined") return null;
+   677→  return extractProfileFromRaw(safeLocalStorageGet(PROFILE_BACKUP_KEY));
+   678→}
+   679→
+   680→/**
+   681→ * Force-restore userProfile from the sidecar into the live store, IF the
+   682→ * current live profile is empty/seed AND the sidecar has real data.
+   683→ *
+   684→ * Returns true if a restore happened, false otherwise.
+   685→ */
+   686→export function restoreProfileFromSidecar(): boolean {
+   687→  if (typeof window === "undefined") return false;
+   688→  const sidecarProfile = extractProfileFromRaw(safeLocalStorageGet(PROFILE_BACKUP_KEY));
+   689→  if (!sidecarProfile) return false;
+   690→
+   691→  const current = useAppStore.getState().userProfile;
+   692→  const currentHasData =
+   693→    !!current.artistName ||
+   694→    !!current.bio ||
+   695→    !!current.email ||
+   696→    !!current.scLink ||
+   697→    !!current.photoUrl ||
+   698→    (Array.isArray(current.links) && current.links.length > 0) ||
+   699→    !!current.cyaniteApiToken ||
+   700→    !!current.supabaseUrl;
+   701→
+   702→  // If current profile has data, merge (sidecar can fill empty fields)
+   703→  // If current profile is empty, replace with sidecar
+   704→  const merged = currentHasData
+   705→    ? mergeProfiles(sidecarProfile, current)
+   706→    : sidecarProfile;
+   707→
+   708→  if (merged && merged !== current) {
+   709→    useAppStore.setState({ userProfile: merged });
+   710→    console.info(
+   711→      `[LabelPulse] Restored user profile from sidecar backup (had: ${currentHasData ? "partial" : "empty"}, now has: artistName=${!!merged.artistName}, bio=${!!merged.bio}, email=${!!merged.email}).`
+   712→    );
+   713→    return true;
+   714→  }
+   715→  return false;
+   716→}
+   717→
+   718→// ==================== ARTISTS SIDE CAR ====================
+   719→// Like PROFILE_BACKUP_KEY but for the artists array. A full Beatport scrape
+   720→// produces ~3400 artists / ~9MB. localStorage has a 5-10MB quota on most
+   721→// browsers, so we TRY to write artists here but FAIL GRACEFULLY if quota
+   722→// exceeded — the IndexedDB + cloud are the primary stores, this is just
+   723→// an emergency backup for when both fail.
+   724→//
+   725→// Strategy:
+   726→//  - writeArtistsSidecar: best-effort write, truncate if needed (keep first
+   727→//    N artists rather than fail entirely). Skip silently if quota exceeded.
+   728→//  - readArtistsSidecar: returns [] if missing/corrupt
+   729→//  - restoreArtistsFromSidecar: splice into live store if local is empty
+   730→const ARTISTS_SIDECAR_KEY = "labelpulse-artists-backup";
+   731→const ARTISTS_SIDECAR_MAX = 200; // cap to first 200 artists (~600KB) to fit quota
+   732→
+   733→export function writeArtistsSidecar(artists: any[]): void {
+   734→  if (typeof window === "undefined") return;
+   735→  if (!Array.isArray(artists) || artists.length === 0) return;
+   736→  try {
+   737→    // If small enough, write all. Otherwise, write first N + a marker.
+   738→    const capped = artists.length > ARTISTS_SIDECAR_MAX
+   739→      ? artists.slice(0, ARTISTS_SIDECAR_MAX)
+   740→      : artists;
+   741→    const payload = JSON.stringify({
+   742→      savedAt: new Date().toISOString(),
+   743→      count: artists.length,
+   744→      capped: artists.length > ARTISTS_SIDECAR_MAX,
+   745→      artists: capped,
+   746→    });
+   747→    safeLocalStorageSet(ARTISTS_SIDECAR_KEY, payload);
+   748→  } catch (e) {
+   749→    // Quota exceeded — try with even fewer artists
+   750→    try {
+   751→      const tiny = artists.slice(0, 50);
+   752→      const payload = JSON.stringify({
+   753→        savedAt: new Date().toISOString(),
+   754→        count: artists.length,
+   755→        capped: true,
+   756→        artists: tiny,
+   757→      });
+   758→      safeLocalStorageSet(ARTISTS_SIDECAR_KEY, payload);
+   759→    } catch {
+   760→      // Give up silently — IDB + cloud are the primary stores
+   761→    }
+   762→  }
+   763→}
+   764→
+   765→export function readArtistsSidecar(): any[] {
+   766→  if (typeof window === "undefined") return [];
+   767→  const raw = safeLocalStorageGet(ARTISTS_SIDECAR_KEY);
+   768→  if (!raw) return [];
+   769→  try {
+   770→    const parsed = JSON.parse(raw);
+   771→    const arr = parsed?.artists;
+   772→    return Array.isArray(arr) ? arr : [];
+   773→  } catch {
+   774→    return [];
+   775→  }
+   776→}
+   777→
+   778→/**
+   779→ * Restore artists from sidecar IF the live store has 0 artists.
+   780→ * Returns the number of artists restored (0 if nothing happened).
+   781→ * Does NOT replace live artists if live already has data — sidecar is
+   782→ * only an emergency recovery, not a primary source.
+   783→ */
+   784→export function restoreArtistsFromSidecar(): number {
+   785→  if (typeof window === "undefined") return 0;
+   786→  const sidecar = readArtistsSidecar();
+   787→  if (sidecar.length === 0) return 0;
+   788→
+   789→  const current = useAppStore.getState().artists || [];
+   790→  if (current.length > 0) return 0;
+   791→
+   792→  useAppStore.setState({ artists: sidecar });
+   793→  console.info(
+   794→    `[LabelPulse] Restored ${sidecar.length} artists from sidecar backup (live store was empty).`
+   795→  );
+   796→  // Also persist to IDB so future boots are fast
+   797→  saveArtistsToIDB(sidecar).catch(() => {});
+   798→  return sidecar.length;
+   799→}
+   800→
+   801→// ==================== NO SEED DEMOS ====================
+   802→
+   803→// ==================== STORE ====================
+   804→
+   805→interface UserProfile {
+   806→  artistName: string;
+   807→  scLink: string;
+   808→  bio: string;
+   809→  email: string;
+   810→  photoUrl: string;
+   811→  links: { type: string; value: string }[];
+   812→  cyaniteApiToken: string; // BYOK: user's Cyanite API token (optional)
+   813→  supabaseUrl: string;     // BYOK: user's Supabase project URL (optional, for cloud sync)
+   814→  supabaseAnonKey: string; // BYOK: user's Supabase anon key (optional, for cloud sync)
+   815→}
+   816→
+   817→interface GmailAuth {
+   818→  isConnected: boolean;
+   819→  email: string;
+   820→  accessToken: string;
+   821→  expiresAt: number;
+   822→}
+   823→
+   824→interface AppState {
+   825→  labels: Label[];
+   826→  demos: Demo[];
+   827→  artists: Artist[]; // persisted in IndexedDB, loaded asynchronously on boot
+   828→  selectedArtistId: string | null; // for Artist Explorer detail view
+   829→  selectedLabelId: string | null; // cross-tab navigation: clicking a label name from Artist Explorer sets this, then LabelFinder opens the detail dialog
+   830→  /**
+   831→   * Navigation return-to state. When the user navigates from Label detail →
+   832→   * Artist detail (via handleOpenArtist), we stash `{ kind: 'label', labelId }`
+   833→   * here. The Artist Explorer's "Back" button checks this first: if set, it
+   834→   * returns to the Labels tab and re-opens that label's detail dialog
+   835→   * (preserving scroll position would be a bonus, but re-opening the dialog
+   836→   * is the minimum viable UX). If null/empty, Back falls back to the artist
+   837→   * list (existing behavior).
+   838→   */
+   839→  navigationReturnTo: { kind: "label"; labelId: string; labelName?: string } | null;
+   840→  activeTab: "dashboard" | "labels" | "artists" | "rankings" | "demos" | "pitch" | "profile";
+   841→  locale: Locale;
+   842→  userProfile: UserProfile;
+   843→  gmailAuth: GmailAuth;
+   844→  rankingsUpdatedAt: string | null;
+   845→  lastSavedAt: string | null;
+   846→  hasRehydrated: boolean;
+   847→  hasCloudSynced: boolean;
+   848→  rankingSnapshots: RankingSnapshot[];
+   849→
+   850→  // Label actions
+   851→  addLabel: (label: Partial<Omit<Label, "id" | "createdAt">> & { name: string }) => void;
+   852→  updateLabel: (id: string, updates: Partial<Label>) => void;
+   853→  deleteLabel: (id: string) => void;
+   854→
+   855→  // Demo actions
+   856→  addDemo: (demo: Omit<Demo, "id" | "createdAt">) => void;
+   857→  updateDemo: (id: string, updates: Partial<Demo>) => void;
+   858→  deleteDemo: (id: string) => void;
+   859→  advanceDemoStatus: (id: string) => void;
+   860→
+   861→  // Navigation
+   862→  setActiveTab: (tab: "dashboard" | "labels" | "artists" | "rankings" | "demos" | "pitch" | "profile") => void;
+   863→
+   864→  // Artists (Phase 2 — Beatport scraper v2)
+   865→  setSelectedArtistId: (id: string | null) => void;
+   866→  setArtists: (artists: Artist[]) => void;
+   867→
+   868→  // Cross-tab label focus (Phase 2 — used by Artist Explorer → Label Finder)
+   869→  setSelectedLabelId: (id: string | null) => void;
+   870→
+   871→  // Navigation return-to (used by Artist Explorer Back button to return
+   872→  // to the label detail dialog the user was viewing before)
+   873→  setNavigationReturnTo: (target: { kind: "label"; labelId: string; labelName?: string } | null) => void;
+   874→
+   875→  // Language
+   876→  setLocale: (locale: Locale) => void;
+   877→
+   878→  // User Profile
+   879→  setUserProfile: (profile: Partial<UserProfile>) => void;
+   880→
+   881→  // Available genres
+   882→  getGenres: () => string[];
+   883→
+   884→  // Gmail
+   885→  setGmailAuth: (auth: GmailAuth) => void;
+   886→  clearGmailAuth: () => void;
+   887→
+   888→  // Rankings update tracking
+   889→  setRankingsUpdatedAt: (date: string) => void;
+   890→
+   891→  // Ranking snapshots
+   892→  addRankingSnapshot: (source: string) => void;
+   893→
+   894→  // Data backup
+   895→  exportData: () => string;
+   896→  importData: (jsonString: string) => boolean;
+   897→}
+   898→
+   899→/**
+   900→ * Merge incoming artists (from a fresh scrape) with existing artists
+   901→ * (already in the store from previous scrapes).
+   902→ *
+   903→ * Strategy:
+   904→ * - Key by artist.id (e.g. "bp_6824"). Same Beatport id = same artist.
+   905→ * - For each artist that exists: union genres, union labelsPublishedOn,
+   906→ *   MERGE tracksByGenre by track.id (preserve tracks from older scrapes,
+   907→ *   update with new position info), sum totalPoints, min bestPosition.
+   908→ * - firstSeenAt preserved from existing; lastSeenAt = now.
+   909→ * - Trending recomputed fresh from current data.
+   910→ * - New artists: appended with firstSeenAt = lastSeenAt = now.
+   911→ *
+   912→ * This is what makes historical data accumulate: each scrape adds new
+   913→ * tracks to artists' tracksByGenre without losing previously-seen tracks.
+   914→ */
+   915→function mergeArtists(existing: Artist[], incoming: Artist[], now: string): Artist[] {
+   916→  const map = new Map<string, Artist>();
+   917→
+   918→  // Seed with existing
+   919→  for (const a of existing) {
+   920→    map.set(a.id, { ...a });
+   921→  }
+   922→
+   923→  for (const inc of incoming) {
+   924→    const ex = map.get(inc.id);
+   925→    if (!ex) {
+   926→      // New artist — first time we see them
+   927→      map.set(inc.id, {
+   928→        ...inc,
+   929→        firstSeenAt: now,
+   930→        lastSeenAt: now,
+   931→      });
+   932→      continue;
+   933→    }
+   934→
+   935→    // Existing artist — merge fields
+   936→    // Union genres
+   937→    const genres = Array.from(new Set([...(ex.genres || []), ...(inc.genres || [])]));
+   938→
+   939→    // Union labelsPublishedOn
+   940→    const labelsPublishedOn = Array.from(
+   941→      new Set([...(ex.labelsPublishedOn || []), ...(inc.labelsPublishedOn || [])])
+   942→    );
+   943→
+   944→    // Merge tracksByGenre — preserve old tracks, add/update from incoming
+   945→    const tracksByGenre: Record<string, ArtistTrack[]> = { ...(ex.tracksByGenre || {}) };
+   946→    for (const genre of Object.keys(inc.tracksByGenre || {})) {
+   947→      const incTracks = inc.tracksByGenre[genre] || [];
+   948→      const exTracks = tracksByGenre[genre] || [];
+   949→      const byId = new Map<number, ArtistTrack>();
+   950→      // Seed with existing
+   951→      for (const t of exTracks) byId.set(t.id, t);
+   952→      // Update/add with incoming (incoming overrides — fresh positions)
+   953→      for (const t of incTracks) byId.set(t.id, t);
+   954→      tracksByGenre[genre] = Array.from(byId.values()).sort((a, b) => a.position - b.position);
+   955→    }
+   956→
+   957→    // Recompute totalPoints & bestPosition from current incoming data
+   958→    // (the existing totals were from older scrapes — we want the snapshot
+   959→    // from THIS import to drive the points, otherwise the totals just
+   960→    // accumulate forever and "points" loses meaning).
+   961→    // BUT: keep max totalPoints seen (artists who peaked before should
+   962→    // keep credit). Actually no — let's use the LATEST totalPoints,
+   963→    // since that's the current ranking signal. Old tracks are still in
+   964→    // tracksByGenre for browsing, but the points reflect "right now".
+   965→    const totalPoints = inc.totalPoints;
+   966→    const bestPosition = Math.min(ex.bestPosition, inc.bestPosition);
+   967→
+   968→    // Trending: use incoming (fresh computation)
+   969→    const trending = inc.trending;
+   970→    const trendingRankByGenre = inc.trendingRankByGenre;
+   971→    const trendingPointsByGenre = inc.trendingPointsByGenre;
+   972→
+   973→    // isRemixerOnly: false if EITHER snapshot has them as primary
+   974→    const isRemixerOnly = ex.isRemixerOnly && inc.isRemixerOnly;
+   975→
+   976→    map.set(inc.id, {
+   977→      ...ex,
+   978→      ...inc,
+   979→      genres,
+   980→      labelsPublishedOn,
+   981→      tracksByGenre,
+   982→      totalPoints,
+   983→      bestPosition,
+   984→      trending,
+   985→      trendingRankByGenre,
+   986→      trendingPointsByGenre,
+   987→      isRemixerOnly,
+   988→      firstSeenAt: ex.firstSeenAt || now,
+   989→      lastSeenAt: now,
+   990→    });
+   991→  }
+   992→
+   993→  return Array.from(map.values());
+   994→}
+   995→
+   996→/**
+   997→ * Merge helper: preserves ALL user-editable fields from existing label
+   998→ * when imported label has empty/default values for those fields.
+   999→ */
+  1000→function mergePreservingUserData(existing: Label, imported: Label): Partial<Label> {
+  1001→  // Before overwriting ranking data, save the current rank as "previous" snapshot.
+  1002→  // This allows the Rankings page to show movement arrows (↑↓) between imports.
+  1003→  //
+  1004→  // IDEMPOTENT IMPORT FIX: previously, every import — even an identical re-import —
+  1005→  // would clobber prevRankByGenre with a copy of the current rankByGenre. After
+  1006→  // an identical re-import, prevRank == currentRank for every genre, so all
+  1007→  // movements became 0 and Spotlight risers disappeared. This broke the UX:
+  1008→  // "if I re-import the same scrape, I should see what I saw before".
+  1009→  //
+  1010→  // The fix: only snapshot the existing rank as "previous" for genres where the
+  1011→  // rank has actually CHANGED. For genres where imported rank === existing rank,
+  1012→  // preserve the existing prevRankByGenre[genre] so users keep seeing the risers
+  1013→  // they had before the (identical) re-import.
+  1014→  const importedRank = imported.rankByGenre || {};
+  1015→  const existingRank = existing.rankByGenre || {};
+  1016→  const existingPrev = existing.prevRankByGenre || {};
+  1017→  const hasNewRankData = Object.keys(importedRank).length > 0;
+  1018→
+  1019→  let newPrevRankByGenre: Record<string, number>;
+  1020→  if (hasNewRankData) {
+  1021→    // Start from the existing prev snapshot — we only overwrite entries for
+  1022→    // genres where the rank actually changed.
+  1023→    newPrevRankByGenre = { ...existingPrev };
+  1024→    for (const [genre, newRank] of Object.entries(importedRank)) {
+  1025→      const oldRank = existingRank[genre];
+  1026→      if (oldRank !== undefined && oldRank !== newRank) {
+  1027→        // Rank changed for this genre → snapshot the old rank as "previous".
+  1028→        newPrevRankByGenre[genre] = oldRank;
+  1029→      }
+  1030→      // If oldRank === newRank → leave existing prevRankByGenre[genre] untouched
+  1031→      // (preserves the snapshot from the last actual change → risers persist).
+  1032→      // If oldRank is undefined (genre new for this label) → don't set prev
+  1033→      // (label is a new entry for this genre, no previous rank to compare to).
+  1034→    }
+  1035→  } else {
+  1036→    // No new rank data → keep existing prevRankByGenre unchanged.
+  1037→    newPrevRankByGenre = existingPrev;
+  1038→  }
+  1039→
+  1040→  return {
+  1041→    // User-editable data — ALWAYS prefer existing if it has real data
+  1042→    emails: imported.emails?.length ? imported.emails : existing.emails,
+  1043→    contactInfo: imported.contactInfo?.trim() || existing.contactInfo,
+  1044→    website: imported.website?.trim() || existing.website,
+  1045→    demoLink: imported.demoLink?.trim() || existing.demoLink,
+  1046→    socialLink: imported.socialLink?.trim() || existing.socialLink,
+  1047→    soundcloudLink: imported.soundcloudLink?.trim() || existing.soundcloudLink,
+  1048→    notes: imported.notes?.trim() || existing.notes,
+  1049→    status: (imported.status === "open" || imported.status === "closed") ? imported.status : (existing.status || "open"),
+  1050→
+  1051→    // Beatport/ranking data — prefer imported (it's the fresh data)
+  1052→    genres: imported.genres?.length ? imported.genres : existing.genres,
+  1053→    rankByGenre: Object.keys(imported.rankByGenre || {}).length ? imported.rankByGenre : existing.rankByGenre,
+  1054→    pointsByGenre: Object.keys(imported.pointsByGenre || {}).length ? imported.pointsByGenre : existing.pointsByGenre,
+  1055→    trending: imported.trending || existing.trending,
+  1056→    trendingRankByGenre: Object.keys(imported.trendingRankByGenre || {}).length ? imported.trendingRankByGenre : existing.trendingRankByGenre,
+  1057→    trendingPointsByGenre: Object.keys(imported.trendingPointsByGenre || {}).length ? imported.trendingPointsByGenre : existing.trendingPointsByGenre,
+  1058→
+  1059→    // Ranking history — idempotent: only update prev when rank actually changed
+  1060→    prevRankByGenre: newPrevRankByGenre,
+  1061→  };
+  1062→}
+  1063→
+  1064→/**
+  1065→ * Label defaults for safe field initialization.
+  1066→ */
+  1067→const LABEL_DEFAULTS = {
+  1068→  genres: [],
+  1069→  rankByGenre: {},
+  1070→  pointsByGenre: {},
+  1071→  trending: false,
+  1072→  trendingRankByGenre: {},
+  1073→  trendingPointsByGenre: {},
+  1074→  isCustom: false,
+  1075→  website: "",
+  1076→  demoLink: "",
+  1077→  socialLink: "",
+  1078→  soundcloudLink: "",
+  1079→  beatportLink: "",
+  1080→  customLinks: [],
+  1081→  emails: [],
+  1082→  notes: "",
+  1083→  contactInfo: "",
+  1084→  submissionType: "email" as SubmissionType,
+  1085→  status: "open" as LabelStatus,
+  1086→  genre: "",
+  1087→  prevRankByGenre: {},
+  1088→};
+  1089→
+  1090→/**
+  1091→ * Repair corrupted label data.
+  1092→ * Detects and fixes: same email appearing on too many labels (likely corruption).
+  1093→ */
+  1094→function repairLabelData(labels: Label[]): Label[] {
+  1095→  const emailLabelCount = new Map<string, number>();
+  1096→  for (const l of labels) {
+  1097→    if (l.emails && Array.isArray(l.emails)) {
+  1098→      for (const e of l.emails) {
+  1099→        if (e && e.trim()) {
+  1100→          const key = e.toLowerCase().trim();
+  1101→          emailLabelCount.set(key, (emailLabelCount.get(key) || 0) + 1);
+  1102→        }
+  1103→      }
+  1104→    }
+  1105→  }
+  1106→
+  1107→  const corruptedEmails = new Set<string>();
+  1108→  for (const [email, count] of emailLabelCount) {
+  1109→    if (count > 5) {
+  1110→      corruptedEmails.add(email);
+  1111→      console.warn(
+  1112→        `[LabelPulse Repair] Email "${email}" found on ${count} labels — likely corruption, will be removed from all but the owner.`
+  1113→      );
+  1114→    }
+  1115→  }
+  1116→
+  1117→  if (corruptedEmails.size === 0) {
+  1118→    return labels;
+  1119→  }
+  1120→
+  1121→  const emailOwner = new Map<string, string>();
+  1122→  for (const email of corruptedEmails) {
+  1123→    for (const l of labels) {
+  1124→      if (l.emails?.some(e => e.toLowerCase().trim() === email)) {
+  1125→        const domain = email.split("@")[1]?.split(".")[0]?.toLowerCase();
+  1126→        if (domain && l.name.toLowerCase().includes(domain)) {
+  1127→          emailOwner.set(email, l.id);
+  1128→          break;
+  1129→        }
+  1130→      }
+  1131→    }
+  1132→    if (!emailOwner.has(email)) {
+  1133→      for (const l of labels) {
+  1134→        if (l.emails?.some(e => e.toLowerCase().trim() === email)) {
+  1135→          emailOwner.set(email, l.id);
+  1136→          break;
+  1137→        }
+  1138→      }
+  1139→    }
+  1140→  }
+  1141→
+  1142→  return labels.map(l => {
+  1143→    if (!l.emails || !Array.isArray(l.emails)) return l;
+  1144→    const cleanedEmails = l.emails.filter(e => {
+  1145→      const key = e?.toLowerCase().trim();
+  1146→      if (!key) return false;
+  1147→      if (!corruptedEmails.has(key)) return true;
+  1148→      return emailOwner.get(key) === l.id;
+  1149→    });
+  1150→    const cleanedContactInfo = cleanedEmails[0] || "";
+  1151→    if (cleanedEmails.length !== l.emails.length || cleanedContactInfo !== l.contactInfo) {
+  1152→      console.log(
+  1153→        `[LabelPulse Repair] Cleaned label "${l.name}": removed ${l.emails.length - cleanedEmails.length} corrupted email(s)`
+  1154→      );
+  1155→      return { ...l, emails: cleanedEmails, contactInfo: cleanedContactInfo };
+  1156→    }
+  1157→    return l;
+  1158→  });
+  1159→}
+  1160→
+  1161→export const useAppStore = create<AppState>()(
+  1162→  persist(
+  1163→    (set, get) => ({
+  1164→      labels: buildLabelsFromData(),
+  1165→      demos: [] as Demo[],
+  1166→      artists: [] as Artist[], // populated from IndexedDB on boot (see loadArtistsFromIDB)
+  1167→      selectedArtistId: null as string | null,
+  1168→      selectedLabelId: null as string | null,
+  1169→      navigationReturnTo: null as { kind: "label"; labelId: string; labelName?: string } | null,
+  1170→      activeTab: "dashboard" as const,
+  1171→      locale: "it" as Locale,
+  1172→      userProfile: { artistName: "", scLink: "", bio: "", email: "", photoUrl: "", links: [], cyaniteApiToken: "", supabaseUrl: "", supabaseAnonKey: "" } as UserProfile,
+  1173→      gmailAuth: { isConnected: false, email: "", accessToken: "", expiresAt: 0 } as GmailAuth,
+  1174→      rankingsUpdatedAt: null as string | null,
+  1175→      lastSavedAt: null as string | null,
+  1176→      hasRehydrated: false as boolean,
+  1177→      hasCloudSynced: false as boolean,
+  1178→      rankingSnapshots: [] as RankingSnapshot[],
+  1179→
+  1180→      addLabel: (label) => {
+  1181→        set((state) => ({
+  1182→          labels: [
+  1183→            ...state.labels,
+  1184→            {
+  1185→              ...label,
+  1186→              id: genId(),
+  1187→              createdAt: new Date().toISOString(),
+  1188→              isCustom: true,
+  1189→              genre: label.genre || "",
+  1190→              contactInfo: label.contactInfo || "",
+  1191→              status: label.status || "open",
+  1192→              notes: label.notes || "",
+  1193→              submissionType: label.submissionType || "email",
+  1194→              genres: label.genres || (label.genre ? [label.genre] : []),
+  1195→              rankByGenre: label.rankByGenre || {},
+  1196→              pointsByGenre: label.pointsByGenre || {},
+  1197→              trending: label.trending || false,
+  1198→              trendingRankByGenre: label.trendingRankByGenre || {},
+  1199→              trendingPointsByGenre: label.trendingPointsByGenre || {},
+  1200→              website: label.website || "",
+  1201→              demoLink: label.demoLink || "",
+  1202→              socialLink: label.socialLink || "",
+  1203→              soundcloudLink: label.soundcloudLink || "",
+  1204→              emails: label.emails || [],
+  1205→            },
+  1206→          ],
+  1207→          lastSavedAt: new Date().toISOString(),
+  1208→        }));
+  1209→        syncToCloud();
+  1210→      },
+  1211→
+  1212→      updateLabel: (id, updates) => {
+  1213→        set((state) => ({
+  1214→          labels: state.labels.map((l) =>
+  1215→            l.id === id ? { ...l, ...updates } : l
+  1216→          ),
+  1217→          lastSavedAt: new Date().toISOString(),
+  1218→        }));
+  1219→        syncToCloud();
+  1220→      },
+  1221→
+  1222→      deleteLabel: (id) => {
+  1223→        set((state) => ({
+  1224→          labels: state.labels.filter((l) => l.id !== id),
+  1225→          lastSavedAt: new Date().toISOString(),
+  1226→        }));
+  1227→        syncToCloud();
+  1228→      },
+  1229→
+  1230→      addDemo: (demo) => {
+  1231→        set((state) => ({
+  1232→          demos: [
+  1233→            ...state.demos,
+  1234→            { ...demo, id: genId(), createdAt: new Date().toISOString() },
+  1235→          ],
+  1236→          lastSavedAt: new Date().toISOString(),
+  1237→        }));
+  1238→        syncToCloud();
+  1239→      },
+  1240→
+  1241→      updateDemo: (id, updates) => {
+  1242→        set((state) => ({
+  1243→          demos: state.demos.map((d) =>
+  1244→            d.id === id ? { ...d, ...updates } : d
+  1245→          ),
+  1246→          lastSavedAt: new Date().toISOString(),
+  1247→        }));
+  1248→        syncToCloud();
+  1249→      },
+  1250→
+  1251→      deleteDemo: (id) => {
+  1252→        set((state) => ({
+  1253→          demos: state.demos.filter((d) => d.id !== id),
+  1254→          lastSavedAt: new Date().toISOString(),
+  1255→        }));
+  1256→        syncToCloud();
+  1257→      },
+  1258→
+  1259→      advanceDemoStatus: (id) => {
+  1260→        const flow: DemoStatus[] = [
+  1261→          "ready",
+  1262→          "sent",
+  1263→          "reviewing",
+  1264→          "accepted",
+  1265→        ];
+  1266→        const demo = get().demos.find((d) => d.id === id);
+  1267→        if (!demo) return;
+  1268→        const idx = flow.indexOf(demo.status);
+  1269→        if (idx < flow.length - 1) {
+  1270→          const nextStatus = flow[idx + 1];
+  1271→          const updates: Partial<Demo> = { status: nextStatus };
+  1272→          if (nextStatus === "sent" && !demo.sentDate) {
+  1273→            updates.sentDate = new Date().toISOString().split("T")[0];
+  1274→          }
+  1275→          set((state) => ({
+  1276→            demos: state.demos.map((d) =>
+  1277→              d.id === id ? { ...d, ...updates } : d
+  1278→            ),
+  1279→            lastSavedAt: new Date().toISOString(),
+  1280→          }));
+  1281→          syncToCloud();
+  1282→        }
+  1283→      },
+  1284→
+  1285→      setActiveTab: (tab) => set({ activeTab: tab }),
+  1286→
+  1287→      setSelectedArtistId: (id) => set({ selectedArtistId: id }),
+  1288→
+  1289→      setSelectedLabelId: (id) => set({ selectedLabelId: id }),
+  1290→      setNavigationReturnTo: (target) => set({ navigationReturnTo: target }),
+  1291→
+  1292→      setArtists: (artists) => {
+  1293→        set({ artists });
+  1294→        // Persist to IndexedDB (fire-and-forget; non-blocking)
+  1295→        if (typeof window !== "undefined") {
+  1296→          saveArtistsToIDB(artists).catch((e) =>
+  1297→            console.warn("[LabelPulse] Failed to persist artists to IndexedDB:", e)
+  1298→          );
+  1299→          // ⚠️ Also write to sidecar backup (labelpulse-artists-backup) for
+  1300→          // emergency recovery. Best-effort — fails silently if quota exceeded.
+  1301→          writeArtistsSidecar(artists);
+  1302→          // ⚠️ Also push to cloud (separate row "<email>_artists") for cross-device sync
+  1303→          import("./supabase").then(({ saveArtistsToCloud }) => {
+  1304→            saveArtistsToCloud(artists).catch((e) =>
+  1305→              console.warn("[LabelPulse] Failed to sync artists to cloud:", e)
+  1306→            );
+  1307→          }).catch(() => {});
+  1308→        }
+  1309→      },
+  1310→      setLocale: (locale) => { set({ locale }); syncToCloud(); },
+  1311→      setUserProfile: (profile) => {
+  1312→        set((state) => ({ userProfile: { ...state.userProfile, ...profile }, lastSavedAt: new Date().toISOString() }));
+  1313→        syncToCloud();
+  1314→        // ⚠️ CRITICAL: also trigger an IMMEDIATE (non-debounced) cloud sync.
+  1315→        // syncToCloud is debounced 3 seconds — if the user saves and closes
+  1316→        // the window within 3s, the cloud sync never fires and the profile
+  1317→        // is lost. forceCloudSync uploads right now so the cloud always has
+  1318→        // the latest profile, even if the user closes immediately after.
+  1319→        // Use a tiny timeout (0ms) to let the state settle before reading.
+  1320→        setTimeout(() => {
+  1321→          try {
+  1322→            forceCloudSync();
+  1323→          } catch (e) {
+  1324→            console.warn("[LabelPulse] Immediate profile sync failed:", e);
+  1325→          }
+  1326→        }, 0);
+  1327→      },
+  1328→
+  1329→      getGenres: () => labelData.genres,
+  1330→
+  1331→      setGmailAuth: (auth) => { set({ gmailAuth: auth }); syncToCloud(); },
+  1332→      clearGmailAuth: () => { set({ gmailAuth: { isConnected: false, email: "", accessToken: "", expiresAt: 0 } }); syncToCloud(); },
+  1333→
+  1334→      setRankingsUpdatedAt: (date) => { set({ rankingsUpdatedAt: date }); syncToCloud(); },
+  1335→
+  1336→      addRankingSnapshot: (source) => {
+  1337→        const state = get();
+  1338→        const snapshotId = genId();
+  1339→        const timestamp = new Date().toISOString();
+  1340→
+  1341→        // Build snapshot: genre -> labelName -> {rank, points}
+  1342→        const genres: RankingSnapshot["genres"] = {};
+  1343→        for (const label of state.labels) {
+  1344→          if (!label.rankByGenre || Object.keys(label.rankByGenre).length === 0) continue;
+  1345→          for (const genre of Object.keys(label.rankByGenre)) {
+  1346→            if (!genres[genre]) genres[genre] = {};
+  1347→            genres[genre][label.name] = {
+  1348→              rank: label.rankByGenre[genre],
+  1349→              points: label.pointsByGenre?.[genre] ?? 0,
+  1350→            };
+  1351→          }
+  1352→        }
+  1353→
+  1354→        const snapshot: RankingSnapshot = {
+  1355→          id: snapshotId,
+  1356→          timestamp,
+  1357→          source,
+  1358→          genres,
+  1359→        };
+  1360→
+  1361→        set((state) => ({
+  1362→          rankingSnapshots: [...state.rankingSnapshots, snapshot],
+  1363→          lastSavedAt: new Date().toISOString(),
+  1364→        }));
+  1365→        syncToCloud();
+  1366→      },
+  1367→
+  1368→      exportData: () => {
+  1369→        const state = get();
+  1370→        // CRITICAL: include rankingSnapshots in the backup. Without this, the
+  1371→        // user's "storico caricamenti" (months of Beatport/Beatstats imports)
+  1372→        // is lost when they restore from backup — Classifiche page resets to
+  1373→        // "first time" and historical chart movement is gone forever.
+  1374→        // Also include the sidecar snapshots so a backup taken after a partial
+  1375→        // loss still captures whatever survived in the sidecar.
+  1376→        const sidecarSnaps =
+  1377→          typeof window !== "undefined"
+  1378→            ? extractSnapshotsFromRaw(safeLocalStorageGet(SNAPSHOTS_BACKUP_KEY))
+  1379→            : [];
+  1380→        const rankingSnapshots = mergeSnapshots(state.rankingSnapshots, sidecarSnaps);
+  1381→        const exportObj = {
+  1382→          version: 2,
+  1383→          app: "labelpulse",
+  1384→          exportedAt: new Date().toISOString(),
+  1385→          data: {
+  1386→            labels: state.labels,
+  1387→            demos: state.demos,
+  1388→            userProfile: state.userProfile,
+  1389→            locale: state.locale,
+  1390→            rankingSnapshots,
+  1391→            rankingsUpdatedAt: state.rankingsUpdatedAt,
+  1392→            lastSavedAt: state.lastSavedAt,
+  1393→          }
+  1394→        };
+  1395→        return JSON.stringify(exportObj, null, 2);
+  1396→      },
+  1397→
+  1398→      importData: (jsonString: string) => {
+  1399→        try {
+  1400→          const parsed = JSON.parse(jsonString);
+  1401→          if (parsed.app !== "labelpulse" || !parsed.data) return false;
+  1402→          
+  1403→          const { labels: importedLabels = [], demos: importedDemos = [], userProfile, locale: importedLocale } = parsed.data;
+  1404→          // Read snapshots from the backup file (new field, may be absent in old backups).
+  1405→          const importedSnapshots: RankingSnapshot[] = Array.isArray(parsed.data?.rankingSnapshots)
+  1406→            ? parsed.data.rankingSnapshots
+  1407→            : [];
+  1408→          const currentLabels = get().labels;
+  1409→          const currentDemos = get().demos;
+  1410→          const currentSnapshots = get().rankingSnapshots || [];
+  1411→
+  1412→          // === LABEL MERGE ===
+  1413→          const currentLabelById = new Map(currentLabels.map(l => [l.id, l]));
+  1414→          const currentLabelByName = new Map(currentLabels.map(l => [l.name.toLowerCase().trim(), l]));
+  1415→
+  1416→          const newLabels: Label[] = [];
+  1417→
+  1418→          for (const imported of importedLabels as Label[]) {
+  1419→            if (currentLabelById.has(imported.id)) {
+  1420→              const existing = currentLabelById.get(imported.id)!;
+  1421→              const merged = {
+  1422→                ...existing,
+  1423→                ...mergePreservingUserData(existing, imported),
+  1424→              };
+  1425→              currentLabelById.set(imported.id, merged);
+  1426→              continue;
+  1427→            }
+  1428→
+  1429→            const nameKey = imported.name.toLowerCase().trim();
+  1430→            if (currentLabelByName.has(nameKey)) {
+  1431→              const existing = currentLabelByName.get(nameKey)!;
+  1432→              const mergedLabel: Label = {
+  1433→                ...existing,
+  1434→                ...mergePreservingUserData(existing, imported),
+  1435→              };
+  1436→              currentLabelById.set(existing.id, mergedLabel);
+  1437→              currentLabelByName.set(nameKey, mergedLabel);
+  1438→              continue;
+  1439→            }
+  1440→
+  1441→            newLabels.push({
+  1442→              ...imported,
+  1443→              id: imported.id || genId(),
+  1444→              createdAt: imported.createdAt || new Date().toISOString(),
+  1445→              // ⚠️ CRITICAL FIX (bug 2026-06-23):
+  1446→              // Default isCustom to FALSE (not true). The previous default
+  1447→              // (`imported.isCustom ?? true`) caused every freshly-imported
+  1448→              // Beatport label that was NEW to the user's local state to be
+  1449→              // marked isCustom=true — even though it came straight from the
+  1450→              // Beatport scraper via RankingsWizard, which never sets
+  1451→              // isCustom. This produced hundreds of ghost "custom" labels
+  1452→              // with no user data attached (notes/emails/links all empty),
+  1453→              // bloating the personal cloud row.
+  1454→              //
+  1455→              // The correct default for labels arriving via importData()
+  1456→              // is FALSE (Beatport-sourced). True custom labels (added
+  1457→              // manually via "Add label" UI) explicitly set isCustom=true
+  1458→              // before calling their own add path, so they're unaffected.
+  1459→              isCustom: imported.isCustom ?? false,
+  1460→              genres: imported.genres || [],
+  1461→              rankByGenre: imported.rankByGenre || {},
+  1462→              pointsByGenre: imported.pointsByGenre || {},
+  1463→              trending: imported.trending || false,
+  1464→              trendingRankByGenre: imported.trendingRankByGenre || {},
+  1465→              trendingPointsByGenre: imported.trendingPointsByGenre || {},
+  1466→              emails: imported.emails || [],
+  1467→              website: imported.website || "",
+  1468→              demoLink: imported.demoLink || "",
+  1469→              socialLink: imported.socialLink || "",
+  1470→              soundcloudLink: imported.soundcloudLink || "",
+  1471→              contactInfo: imported.contactInfo || "",
+  1472→              notes: imported.notes || "",
+  1473→              status: imported.status || "open",
+  1474→              submissionType: imported.submissionType || "email",
+  1475→            });
+  1476→          }
+  1477→
+  1478→          const mergedLabels = [...currentLabelById.values(), ...newLabels];
+  1479→
+  1480→          // === DEMO MERGE ===
+  1481→          const currentDemoById = new Map(currentDemos.map(d => [d.id, d]));
+  1482→          const currentDemoByKey = new Map(
+  1483→            currentDemos.map(d => [`${d.trackName.toLowerCase().trim()}||${d.labelId}`, d])
+  1484→          );
+  1485→
+  1486→          const newDemos: Demo[] = [];
+  1487→
+  1488→          for (const imported of importedDemos as Demo[]) {
+  1489→            if (currentDemoById.has(imported.id)) {
+  1490→              const existing = currentDemoById.get(imported.id)!;
+  1491→              currentDemoById.set(imported.id, {
+  1492→                ...existing,
+  1493→                ...imported,
+  1494→                id: existing.id,
+  1495→              });
+  1496→              continue;
+  1497→            }
+  1498→
+  1499→            const key = `${imported.trackName?.toLowerCase().trim()}||${imported.labelId}`;
+  1500→            if (currentDemoByKey.has(key)) {
+  1501→              const existing = currentDemoByKey.get(key)!;
+  1502→              const merged: Demo = {
+  1503→                ...existing,
+  1504→                ...imported,
+  1505→                id: existing.id,
+  1506→              };
+  1507→              currentDemoById.set(existing.id, merged);
+  1508→              currentDemoByKey.set(key, merged);
+  1509→              continue;
+  1510→            }
+  1511→
+  1512→            newDemos.push({
+  1513→              ...imported,
+  1514→              id: imported.id || genId(),
+  1515→              createdAt: imported.createdAt || new Date().toISOString(),
+  1516→            });
+  1517→          }
+  1518→
+  1519→          const mergedDemos = [...currentDemoById.values(), ...newDemos];
+  1520→
+  1521→          const isRankingsImport = parsed._meta?.source === 'beatport' || parsed._meta?.source === 'beatstats';
+  1522→          const hasGenresAndLabels = parsed.genres && parsed.labels && Array.isArray(parsed.labels);
+  1523→
+  1524→          // === BUILD SNAPSHOT OF THIS IMPORT ===
+  1525→          // Create ONE snapshot representing the state AFTER this import (the
+  1526→          // merged labels). For Beatstats historical imports, use _meta.scrapedPeriod
+  1527→          // as the timestamp so the snapshot is correctly dated in the past
+  1528→          // (e.g., 2024-12-31T23:59:59Z for "December 2024"). This lets the user
+  1529→          // build up months/years of historical rankings in minutes and have them
+  1530→          // sort chronologically in the Classifiche page period filters.
+  1531→          //
+  1532→          // CRITICAL FIX: the previous implementation created the snapshot via a
+  1533→          // separate `set()` call BEFORE the final `set()`, but the final `set()`
+  1534→          // overwrote rankingSnapshots with `mergedSnapshots` (which did NOT
+  1535→          // include the pre-merge snapshot). Result: every import's snapshot was
+  1536→          // silently discarded. The user's "storico caricamenti" never accumulated
+  1537→          // — explaining the original data-loss report.
+  1538→          let snapshotOfThisImport: RankingSnapshot | null = null;
+  1539→          if (isRankingsImport || hasGenresAndLabels) {
+  1540→            const source = parsed._meta?.source || 'import';
+  1541→            // For beatstats historical imports, use the scraped period as the
+  1542→            // snapshot timestamp. For everything else (beatport current, generic
+  1543→            // imports), use "now".
+  1544→            const snapshotTimestamp =
+  1545→              source === 'beatstats' && parsed._meta?.scrapedPeriod
+  1546→                ? parsed._meta.scrapedPeriod
+  1547→                : new Date().toISOString();
+  1548→
+  1549→            const snapshotGenres: RankingSnapshot["genres"] = {};
+  1550→            // Build from the MERGED labels — this captures the state AS OF this
+  1551→            // import (the new rankings are the data we just imported).
+  1552→            // Cast to Label[] because earlier merge logic uses untyped maps (TS
+  1553→            // infers `unknown[]`); at runtime the array contains valid Label objects.
+  1554→            const mergedLabelsForSnapshot = mergedLabels as Label[];
+  1555→            for (const label of mergedLabelsForSnapshot) {
+  1556→              if (!label.rankByGenre || Object.keys(label.rankByGenre).length === 0) continue;
+  1557→              for (const genre of Object.keys(label.rankByGenre)) {
+  1558→                if (!snapshotGenres[genre]) snapshotGenres[genre] = {};
+  1559→                snapshotGenres[genre][label.name] = {
+  1560→                  rank: label.rankByGenre[genre],
+  1561→                  points: label.pointsByGenre?.[genre] ?? 0,
+  1562→                };
+  1563→              }
+  1564→            }
+  1565→            snapshotOfThisImport = {
+  1566→              id: genId(),
+  1567→              timestamp: snapshotTimestamp,
+  1568→              source,
+  1569→              genres: snapshotGenres,
+  1570→            };
+  1571→          }
+  1572→
+  1573→          // === SNAPSHOT MERGE ===
+  1574→          // Never let an import wipe existing snapshots. Merge by id+timestamp+source.
+  1575→          // Sources merged:
+  1576→          //   1. currentSnapshots  — already in the live store
+  1577→          //   2. snapshotOfThisImport — the snapshot we just built for THIS import
+  1578→          //   3. importedSnapshots — from the backup file (if user is restoring a backup)
+  1579→          //   4. sidecarSnaps     — from the emergency backup slot (labelpulse-snapshots-backup)
+  1580→          // mergeSnapshots dedupes by id first, then by `timestamp|source`. This
+  1581→          // means re-importing the same Beatstats period (e.g., "Dec 2024" twice)
+  1582→          // is idempotent — the second import does not create a duplicate.
+  1583→          const sidecarSnaps =
+  1584→            typeof window !== "undefined"
+  1585→              ? extractSnapshotsFromRaw(safeLocalStorageGet(SNAPSHOTS_BACKUP_KEY))
+  1586→              : [];
+  1587→          const thisSnapshotArr = snapshotOfThisImport ? [snapshotOfThisImport] : [];
+  1588→          // Order matters for dedup: we want currentSnapshots + thisSnapshot first
+  1589→          // (so the just-imported snapshot wins over a duplicate from the backup
+  1590→          // file or sidecar — the user's fresh data should be the source of truth).
+  1591→          const mergedSnapshots = mergeSnapshots(
+  1592→            mergeSnapshots(currentSnapshots, thisSnapshotArr),
+  1593→            mergeSnapshots(importedSnapshots, sidecarSnaps)
+  1594→          );
+  1595→          if (snapshotOfThisImport) {
+  1596→            console.info(
+  1597→              `[LabelPulse Import] Created snapshot: source=${snapshotOfThisImport.source}, timestamp=${snapshotOfThisImport.timestamp}, genres=${Object.keys(snapshotOfThisImport.genres).length}. Total snapshots: ${currentSnapshots.length} → ${mergedSnapshots.length}.`
+  1598→            );
+  1599→          }
+  1600→
+  1601→          // === ARTIST MERGE (scraper v2) ===
+  1602→          // If the imported JSON contains artists[] (from scraper v2), merge them
+  1603→          // with existing artists in the store. Dedup by id (e.g. "bp_6824").
+  1604→          // Tracks within each artist's tracksByGenre are also merged by track.id
+  1605→          // so historical data accumulates across multiple scrapes.
+  1606→          // See mergeArtists() for full strategy.
+  1607→          let mergedArtists: Artist[] | undefined;
+  1608→          const importedArtists: Artist[] = Array.isArray(parsed.artists) ? parsed.artists : [];
+  1609→          if (importedArtists.length > 0) {
+  1610→            const now = new Date().toISOString();
+  1611→            const currentArtists = get().artists || [];
+  1612→            mergedArtists = mergeArtists(currentArtists, importedArtists, now);
+  1613→            console.info(
+  1614→              `[LabelPulse Import] Artists: ${currentArtists.length} existing + ${importedArtists.length} incoming → ${mergedArtists.length} merged.`
+  1615→            );
+  1616→          }
+  1617→
+  1618→          set({
+  1619→            labels: mergedLabels,
+  1620→            demos: mergedDemos,
+  1621→            ...(mergedArtists ? { artists: mergedArtists } : {}),
+  1622→            userProfile: userProfile || get().userProfile,
+  1623→            locale: importedLocale || get().locale,
+  1624→            rankingSnapshots: mergedSnapshots,
+  1625→            // For beatstats historical imports, use scrapedPeriod as rankingsUpdatedAt
+  1626→            // so the UI shows the actual period of the data (e.g., "dicembre 2024").
+  1627→            // For everything else, use "now".
+  1628→            rankingsUpdatedAt:
+  1629→              parsed._meta?.source === 'beatstats' && parsed._meta?.scrapedPeriod
+  1630→                ? parsed._meta.scrapedPeriod
+  1631→                : (parsed.data?.rankingsUpdatedAt ||
+  1632→                  (isRankingsImport || hasGenresAndLabels
+  1633→                    ? new Date().toISOString()
+  1634→                    : get().rankingsUpdatedAt)),
+  1635→            lastSavedAt: new Date().toISOString(),
+  1636→          });
+  1637→          syncToCloud();
+  1638→
+  1639→          // Persist artists to IndexedDB (non-blocking, fire-and-forget)
+  1640→          if (mergedArtists && typeof window !== "undefined") {
+  1641→            saveArtistsToIDB(mergedArtists).catch((e) =>
+  1642→              console.warn("[LabelPulse Import] Failed to persist artists to IndexedDB:", e)
+  1643→            );
+  1644→            // ⚠️ Also write sidecar backup for emergency recovery
+  1645→            writeArtistsSidecar(mergedArtists);
+  1646→            // ⚠️ Also push artists to cloud (separate row "<email>_artists")
+  1647→            // so the user can access them on other devices. Non-blocking.
+  1648→            import("./supabase").then(({ saveArtistsToCloud }) => {
+  1649→              saveArtistsToCloud(mergedArtists!).catch((e) =>
+  1650→                console.warn("[LabelPulse Import] Failed to sync artists to cloud:", e)
+  1651→              );
+  1652→            }).catch(() => {});
+  1653→          }
+  1654→
+  1655→          return true;
+  1656→        } catch {
+  1657→          return false;
+  1658→        }
+  1659→      },
+  1660→    }),
+  1661→    {
+  1662→      name: PRIMARY_KEY,
+  1663→      version: 11,
+  1664→      storage: createJSONStorage(() => robustStorage),
+  1665→      migrate: (persisted: any, version: number) => {
+  1666→        if (version < 5) {
+  1667→          if (persisted.demos) {
+  1668→            const seedIds = ["demo_1", "demo_2", "demo_3", "demo_4", "demo_5", "demo_6"];
+  1669→            persisted.demos = persisted.demos.filter(
+  1670→              (d: any) => !seedIds.includes(d.id)
+  1671→            );
+  1672→          }
+  1673→          if (persisted.labels) {
+  1674→            persisted.labels = persisted.labels.map((l: any) => ({
+  1675→              ...l,
+  1676→              genres: l.genres || (l.genre ? [l.genre] : []),
+  1677→              rankByGenre: l.rankByGenre || {},
+  1678→              pointsByGenre: l.pointsByGenre || {},
+  1679→              trending: l.trending || false,
+  1680→              trendingRankByGenre: l.trendingRankByGenre || {},
+  1681→              trendingPointsByGenre: l.trendingPointsByGenre || {},
+  1682→              isCustom: l.isCustom ?? false,
+  1683→              website: l.website || "",
+  1684→              demoLink: l.demoLink || "",
+  1685→              socialLink: l.socialLink || "",
+  1686→              soundcloudLink: l.soundcloudLink || "",
+  1687→              emails: Array.isArray(l.emails) ? l.emails : (l.contactInfo ? [l.contactInfo] : []),
+  1688→            }));
+  1689→          }
+  1690→          if (persisted.demos) {
+  1691→            persisted.demos = persisted.demos.map((d: any) => ({
+  1692→              ...d,
+  1693→              sentDate: d.sentDate ?? null,
+  1694→              link: d.link || "",
+  1695→              notes: d.notes || "",
+  1696→              pitchText: d.pitchText || "",
+  1697→              artistName: d.artistName || "",
+  1698→            }));
+  1699→          }
+  1700→          if (!persisted.locale) {
+  1701→            persisted.locale = "it";
+  1702→          }
+  1703→          if (!persisted.userProfile) {
+  1704→            persisted.userProfile = { artistName: "", scLink: "", cyaniteApiToken: "", supabaseUrl: "", supabaseAnonKey: "" };
+  1705→          }
+  1706→          if (!persisted.userProfile.cyaniteApiToken) {
+  1707→            persisted.userProfile.cyaniteApiToken = "";
+  1708→          }
+  1709→          if (!persisted.userProfile.supabaseUrl) {
+  1710→            persisted.userProfile.supabaseUrl = "";
+  1711→          }
+  1712→          if (!persisted.userProfile.supabaseAnonKey) {
+  1713→            persisted.userProfile.supabaseAnonKey = "";
+  1714→          }
+  1715→        }
+  1716→        if (version < 6) {
+  1717→          if (!persisted.gmailAuth) {
+  1718→            persisted.gmailAuth = { isConnected: false, email: "", accessToken: "", expiresAt: 0 };
+  1719→          }
+  1720→        }
+  1721→        if (version < 7) {
+  1722→          if (!persisted.rankingsUpdatedAt) {
+  1723→            persisted.rankingsUpdatedAt = null;
+  1724→          }
+  1725→        }
+  1726→        if (version < 8) {
+  1727→          if (!persisted.lastSavedAt) {
+  1728→            persisted.lastSavedAt = null;
+  1729→          }
+  1730→          if (persisted.labels) {
+  1731→            persisted.labels = persisted.labels.map((l: any) => {
+  1732→              if (l.notes === "open" || l.notes === "closed") {
+  1733→                l.notes = "";
+  1734→              }
+  1735→              return l;
+  1736→            });
+  1737→          }
+  1738→        }
+  1739→        if (version < 10) {
+  1740→          if (!persisted.rankingSnapshots) {
+  1741→            persisted.rankingSnapshots = [];
+  1742→          }
+  1743→          if (persisted.labels) {
+  1744→            persisted.labels = persisted.labels.map((l: any) => ({
+  1745→              ...l,
+  1746→              prevRankByGenre: l.prevRankByGenre || {},
+  1747→            }));
+  1748→          }
+  1749→        }
+  1750→        if (version < 11) {
+  1751→          // Ensure userProfile has the new BYOK cloud sync fields
+  1752→          if (persisted.userProfile) {
+  1753→            if (!persisted.userProfile.supabaseUrl) {
+  1754→              persisted.userProfile.supabaseUrl = "";
+  1755→            }
+  1756→            if (!persisted.userProfile.supabaseAnonKey) {
+  1757→              persisted.userProfile.supabaseAnonKey = "";
+  1758→            }
+  1759→          }
+  1760→        }
+  1761→        return persisted;
+  1762→      },
+  1763→      partialize: (state) => ({
+  1764→        labels: state.labels,
+  1765→        demos: state.demos,
+  1766→        activeTab: state.activeTab,
+  1767→        locale: state.locale,
+  1768→        userProfile: state.userProfile,
+  1769→        gmailAuth: state.gmailAuth,
+  1770→        rankingsUpdatedAt: state.rankingsUpdatedAt,
+  1771→        lastSavedAt: state.lastSavedAt,
+  1772→        rankingSnapshots: state.rankingSnapshots,
+  1773→      }),
+  1774→      merge: (persistedState: any, currentState: any) => {
+  1775→        // SIMPLE & SAFE merge: preserve persisted data, add defaults, append new seed labels
+  1776→        // CRITICAL: We must NEVER modify persisted user data during merge.
+  1777→
+  1778→        if (!persistedState) {
+  1779→          return currentState;
+  1780→        }
+  1781→
+  1782→        const merged = { ...currentState, ...persistedState };
+  1783→
+  1784→        if (persistedState.labels && Array.isArray(persistedState.labels) && persistedState.labels.length > 0) {
+  1785→          // Step 1: Add safe defaults to ALL persisted labels (never overwrite existing values)
+  1786→          merged.labels = persistedState.labels.map((l: any) => ({
+  1787→            ...LABEL_DEFAULTS,
+  1788→            ...l,
+  1789→          }));
+  1790→
+  1791→          // Step 2: Append NEW seed labels that don't exist in persisted data
+  1792→          const persistedIds = new Set(persistedState.labels.map((l: any) => l.id));
+  1793→          const persistedNames = new Set(
+  1794→            persistedState.labels
+  1795→              .map((l: any) => l.name?.toLowerCase().trim())
+  1796→              .filter(Boolean)
+  1797→          );
+  1798→          const seedLabels = buildLabelsFromData();
+  1799→          for (const seed of seedLabels) {
+  1800→            if (!persistedIds.has(seed.id) && !persistedNames.has(seed.name.toLowerCase().trim())) {
+  1801→              merged.labels.push(seed);
+  1802→            }
+  1803→          }
+  1804→
+  1805→          // Step 3: Repair corrupted data (e.g., same email on too many labels)
+  1806→          merged.labels = repairLabelData(merged.labels);
+  1807→        }
+  1808→
+  1809→        return merged;
+  1810→      },
+  1811→      onRehydrateStorage: () => (state, error) => {
+  1812→        // ALWAYS mark rehydrated — even on error — to avoid permanently blocking writes
+  1813→        _rehydrated = true;
+  1814→
+  1815→        if (error) {
+  1816→          console.error("[LabelPulse Storage] Rehydration error:", error);
+  1817→        } else if (state) {
+  1818→          const userEditedCount = countUserEditedLabels(state.labels);
+  1819→          console.log(
+  1820→            `[LabelPulse Storage] Rehydrated: ${state.labels.length} labels, ${userEditedCount} with user data`
+  1821→          );
+  1822→        }
+  1823→
+  1824→        // Signal to UI that rehydration is complete.
+  1825→        // IMPORTANT: onRehydrateStorage can be called synchronously INSIDE create(),
+  1826→        // before useAppStore is assigned. We use setTimeout to defer setState to the
+  1827→        // next macrotask, by which time useAppStore will be fully initialized.
+  1828→        if (typeof window !== "undefined") {
+  1829→          setTimeout(() => {
+  1830→            useAppStore.setState({ hasRehydrated: true });
+  1831→          }, 0);
+  1832→        }
+  1833→
+  1834→        // Force an immediate backup after rehydration
+  1835→        forceBackupNow();
+  1836→      },
+  1837→    }
+  1838→  )
+  1839→);
+  1840→
+  1841→// Helper: get tier for a label in a given genre
+  1842→export function getLabelTier(
+  1843→  label: Label,
+  1844→  genre?: string
+  1845→): "top" | "mid" | "emerging" | null {
+  1846→  if (!genre) genre = label.genres?.[0];
+  1847→  if (!genre) return null;
+  1848→  const rank = label.rankByGenre?.[genre];
+  1849→  if (!rank) return label.trending ? "emerging" : null;
+  1850→  if (rank <= 20) return "top";
+  1851→  if (rank <= 50) return "mid";
+  1852→  return label.trending ? "emerging" : null;
+  1853→}
+  1854→
+  1855→// ==================== CLOUD SYNC ====================
+  1856→// Sistema di sincronizzazione con Supabase.
+  1857→// - Ogni modifica ai dati viene salvata su Supabase (debounced)
+  1858→// - All'avvio, i dati vengono caricati dal cloud se più recenti
+  1859→// - Se Supabase non è configurato, funziona solo con localStorage
+  1860→
+  1861→let _cloudSyncTimer: ReturnType<typeof setTimeout> | null = null;
+  1862→const CLOUD_SYNC_DEBOUNCE_MS = 3000; // 3 secondi di debounce
+  1863→
+  1864→/**
+  1865→ * Sincronizza lo stato corrente con Supabase (debounced).
+  1866→ * Chiamata dopo ogni azione utente che modifica i dati.
+  1867→ */
+  1868→export function syncToCloud(): void {
+  1869→  if (!isSupabaseConfigured()) return;
+  1870→  // Skip if we're applying a remote update (avoids feedback loop)
+  1871→  if (isApplyingRemoteUpdate()) return;
+  1872→
+  1873→  if (_cloudSyncTimer) {
+  1874→    clearTimeout(_cloudSyncTimer);
+  1875→  }
+  1876→
+  1877→  _cloudSyncTimer = setTimeout(async () => {
+  1878→    _cloudSyncTimer = null;
+  1879→    if (isApplyingRemoteUpdate()) return;
+  1880→    const state = useAppStore.getState();
+  1881→    // Update lastSavedAt to track which device last wrote
+  1882→    const lastSavedAt = new Date().toISOString();
+  1883→    useAppStore.setState({ lastSavedAt });
+  1884→    const dataToSync = {
+  1885→      labels: state.labels,
+  1886→      demos: state.demos,
+  1887→      activeTab: state.activeTab,
+  1888→      locale: state.locale,
+  1889→      userProfile: state.userProfile,
+  1890→      gmailAuth: state.gmailAuth,
+  1891→      rankingsUpdatedAt: state.rankingsUpdatedAt,
+  1892→      lastSavedAt,
+  1893→      rankingSnapshots: state.rankingSnapshots,
+  1894→    };
+  1895→    await saveStateToCloud(dataToSync);
+  1896→  }, CLOUD_SYNC_DEBOUNCE_MS);
+  1897→}
+  1898→
+  1899→/**
+  1900→ * Forza la sincronizzazione immediata con Supabase (senza debounce).
+  1901→ * Usata quando la pagina sta per essere chiusa o nascosta.
+  1902→ */
+  1903→export async function forceCloudSync(): Promise<void> {
+  1904→  if (!isSupabaseConfigured()) return;
+  1905→  if (isApplyingRemoteUpdate()) return;
+  1906→
+  1907→  if (_cloudSyncTimer) {
+  1908→    clearTimeout(_cloudSyncTimer);
+  1909→    _cloudSyncTimer = null;
+  1910→  }
+  1911→
+  1912→  const state = useAppStore.getState();
+  1913→  const lastSavedAt = new Date().toISOString();
+  1914→  useAppStore.setState({ lastSavedAt });
+  1915→  const dataToSync = {
+  1916→    labels: state.labels,
+  1917→    demos: state.demos,
+  1918→    activeTab: state.activeTab,
+  1919→    locale: state.locale,
+  1920→    userProfile: state.userProfile,
+  1921→    gmailAuth: state.gmailAuth,
+  1922→    rankingsUpdatedAt: state.rankingsUpdatedAt,
+  1923→    lastSavedAt,
+  1924→    rankingSnapshots: state.rankingSnapshots,
+  1925→  };
+  1926→  await saveStateToCloud(dataToSync);
+  1927→}
+  1928→
+  1929→/**
+  1930→ * Carica i dati dal cloud e aggiorna lo store se i dati cloud sono più recenti.
+  1931→ * Chiamata una volta all'avvio dell'app, dopo la reidratazione da localStorage.
+  1932→ */
+  1933→export async function loadFromCloud(): Promise<void> {
+  1934→  if (!isSupabaseConfigured()) {
+  1935→    console.log("[LabelPulse Cloud] Supabase not configured, skipping cloud load");
+  1936→    useAppStore.setState({ hasCloudSynced: true });
+  1937→    return;
+  1938→  }
+  1939→
+  1940→  try {
+  1941→    const cloudData = await loadStateFromCloud();
+  1942→    if (!cloudData) {
+  1943→      // Nessun dato nel cloud.
+  1944→      // ⚠️ CRITICAL: only upload local data if it actually has real user data.
+  1945→      // If the local state is just seed data (empty profile, default labels),
+  1946→      // uploading it would create a cloud row with empty data — and future
+  1947→      // logins would pull that empty data, making the user think their data
+  1948→      // was lost. Only upload if the user has actually entered something
+  1949→      // (artistName, bio, links, custom labels, demos, etc.).
+  1950→      const localState = useAppStore.getState();
+  1951→      const localHasRealData =
+  1952→        !!localState.userProfile?.artistName ||
+  1953→        !!localState.userProfile?.bio ||
+  1954→        (Array.isArray(localState.userProfile?.links) && localState.userProfile.links.length > 0) ||
+  1955→        !!localState.userProfile?.cyaniteApiToken ||
+  1956→        !!localState.userProfile?.supabaseUrl ||
+  1957→        localState.demos.length > 0 ||
+  1958→        localState.rankingSnapshots.length > 0;
+  1959→
+  1960→      if (localHasRealData) {
+  1961→        console.log("[LabelPulse Cloud] No cloud data, uploading local data as initial sync");
+  1962→        await forceCloudSync();
+  1963→      } else {
+  1964→        console.log("[LabelPulse Cloud] No cloud data and local is seed — skipping upload to avoid creating empty cloud row.");
+  1965→      }
+  1966→      useAppStore.setState({ hasCloudSynced: true });
+  1967→      // Setup realtime subscription for future updates
+  1968→      setupRealtimeSubscriptionSafe();
+  1969→      return;
+  1970→    }
+  1971→
+  1972→    const cloud = cloudData as any;
+  1973→    const localState = useAppStore.getState();
+  1974→
+  1975→    // Confronta i timestamp per decidere quali dati usare
+  1976→    const localSavedAt = localState.lastSavedAt ? new Date(localState.lastSavedAt).getTime() : 0;
+  1977→    const cloudSavedAt = cloud.lastSavedAt ? new Date(cloud.lastSavedAt).getTime() : 0;
+  1978→
+  1979→    // ⚠️ CRITICAL: Content-aware merge decision.
+  1980→    // The old code only used timestamps: `if (cloudSavedAt > localSavedAt) merge else skip`.
+  1981→    // This was BRITTLE because:
+  1982→    //   1. If both timestamps are 0 (e.g., null on both sides), `0 > 0` is false → SKIP merge
+  1983→    //      → cloud data is ignored even when local is empty seed.
+  1984→    //   2. If local was the last writer (e.g., same device that just saved), local timestamp
+  1985→    //      equals cloud timestamp → SKIP merge → if local was wiped (e.g., fresh incognito
+  1986→    //      after a force-sync), cloud data is also ignored.
+  1987→    //   3. After the skip, useAuthEffect's forceCloudSync() would push the EMPTY local state
+  1988→    //      back to cloud, OVERWRITING the cloud's good data.
+  1989→    //
+  1990→    // FIX: Always merge if cloud has profile data that local doesn't have, regardless of
+  1991→    // timestamps. Timestamps are only used as a tiebreaker when both have data.
+  1992→    const cloudProfileHasData =
+  1993→      !!cloud.userProfile?.artistName ||
+  1994→      !!cloud.userProfile?.bio ||
+  1995→      !!cloud.userProfile?.email ||
+  1996→      !!cloud.userProfile?.scLink ||
+  1997→      !!cloud.userProfile?.photoUrl ||
+  1998→      (Array.isArray(cloud.userProfile?.links) && cloud.userProfile.links.length > 0);
+  1999→    const localProfileHasData =
+  2000→      !!localState.userProfile?.artistName ||
+
+[showing lines 1-2000 of 2453; use offset=2001 with limit to continue reading]
