@@ -26,6 +26,7 @@ export interface GmailAuthState {
 export interface SendEmailResult {
   success: boolean;
   messageId?: string;
+  threadId?: string;
   error?: string;
 }
 
@@ -237,7 +238,96 @@ export async function sendEmail(
     }
 
     const data = await response.json();
-    return { success: true, messageId: data.id };
+    return { success: true, messageId: data.id, threadId: data.threadId };
+  } catch (err: any) {
+    return { success: false, error: err.message || "Unknown error" };
+  }
+}
+
+/**
+ * Send a reply in an existing Gmail thread. The reply will appear in the same
+ * conversation both in the user's inbox and in the label's inbox (assuming
+ * the label's email client respects threading headers).
+ *
+ * If `threadId` is provided, the message is added to that thread.
+ * If `inReplyToMessageId` is provided, an `In-Reply-To` header is added so
+ * mail clients correctly nest the reply under the original message.
+ *
+ * The `to` field should normally be the label's reply-to email (parsed from
+ * the original reply's `from` header — see `findReplyForDemo`).
+ */
+export async function sendReplyInThread(
+  accessToken: string,
+  opts: {
+    to: string[];
+    subject: string;        // should be "Re: <original subject>"
+    body: string;
+    threadId?: string;
+    inReplyToMessageId?: string;
+    cc?: string[];
+    references?: string;    // References header (RFC 5322 §3.6.4)
+  }
+): Promise<SendEmailResult & { threadId?: string }> {
+  try {
+    const { to, subject, body, threadId, inReplyToMessageId, cc = [], references } = opts;
+
+    const toHeader = to.join(", ");
+    const ccHeader = cc.length > 0 ? `Cc: ${cc.join(", ")}\r\n` : "";
+    const inReplyToHeader = inReplyToMessageId
+      ? `In-Reply-To: <${inReplyToMessageId}>\r\n`
+      : "";
+    const referencesHeader = references
+      ? `References: ${references}\r\n`
+      : inReplyToMessageId
+        ? `References: <${inReplyToMessageId}>\r\n`
+        : "";
+
+    const rawEmail = [
+      `To: ${toHeader}`,
+      ccHeader,
+      inReplyToHeader,
+      referencesHeader,
+      `Subject: =?utf-8?B?${btoa(unescape(encodeURIComponent(subject)))}?=`,
+      "Content-Type: text/plain; charset=utf-8",
+      "MIME-Version: 1.0",
+      "",
+      body,
+    ].join("\r\n");
+
+    const encodedEmail = btoa(unescape(encodeURIComponent(rawEmail)))
+      .replace(/\+/g, "-")
+      .replace(/\//g, "_")
+      .replace(/=+$/, "");
+
+    // If we have a threadId, send into the thread; otherwise plain send
+    const url = threadId
+      ? `https://gmail.googleapis.com/gmail/v1/users/me/messages/send`
+      : `https://gmail.googleapis.com/gmail/v1/users/me/messages/send`;
+
+    const payload: any = { raw: encodedEmail };
+    if (threadId) payload.threadId = threadId;
+
+    const response = await fetch(url, {
+      method: "POST",
+      headers: {
+        Authorization: `Bearer ${accessToken}`,
+        "Content-Type": "application/json",
+      },
+      body: JSON.stringify(payload),
+    });
+
+    if (!response.ok) {
+      const errorData = await response.json().catch(() => ({}));
+      const errorMsg = errorData.error?.message || `HTTP ${response.status}`;
+      return { success: false, error: errorMsg };
+    }
+
+    const data = await response.json();
+    return {
+      success: true,
+      messageId: data.id,
+      threadId: data.threadId || threadId,
+    };
   } catch (err: any) {
     return { success: false, error: err.message || "Unknown error" };
   }

@@ -69,7 +69,7 @@ import {
   CommandGroup,
   CommandItem,
 } from "@/components/ui/command";
-import { Check, ChevronsUpDown, Filter, AlertCircle, Sparkles, Copy, Languages, MailOpen, SendHorizonal, RotateCcw, RefreshCw, Bell, Inbox } from "lucide-react";
+import { Check, ChevronsUpDown, Filter, AlertCircle, Sparkles, Copy, Languages, MailOpen, SendHorizonal, RotateCcw, RefreshCw, Bell, Inbox, Paperclip } from "lucide-react";
 import {
   generatePitch,
   generateSubject,
@@ -82,7 +82,7 @@ import {
   type PitchLanguage,
 } from "@/lib/pitch-utils";
 import { useToast } from "@/hooks/use-toast";
-import { sendEmail, ensureValidToken } from "@/lib/gmail";
+import { sendEmail, sendReplyInThread, ensureValidToken } from "@/lib/gmail";
 
 const STATUS_KEYS: DemoStatus[] = [
   "ready",
@@ -778,7 +778,7 @@ export function DemoTracker() {
         )}
 
         {/* Detail Dialog (reused) */}
-        <DemoDetailDialog demo={detailDemo} onClose={() => setDetailDemo(null)} locale={locale} getLabelName={getLabelName} labels={labels} updateDemo={updateDemo} userProfile={userProfile} gmailAuth={gmailAuth} setGmailAuth={setGmailAuth} />
+        <DemoDetailDialog demo={detailDemo} onClose={() => setDetailDemo(null)} locale={locale} getLabelName={getLabelName} labels={labels} updateDemo={updateDemo} userProfile={userProfile} gmailAuth={gmailAuth} setGmailAuth={setGmailAuth} demos={demos} />
       </div>
     );
   }
@@ -1072,7 +1072,7 @@ export function DemoTracker() {
       )}
 
       {/* Detail Dialog */}
-      <DemoDetailDialog demo={detailDemo} onClose={() => setDetailDemo(null)} locale={locale} getLabelName={getLabelName} labels={labels} updateDemo={updateDemo} userProfile={userProfile} gmailAuth={gmailAuth} setGmailAuth={setGmailAuth} />
+      <DemoDetailDialog demo={detailDemo} onClose={() => setDetailDemo(null)} locale={locale} getLabelName={getLabelName} labels={labels} updateDemo={updateDemo} userProfile={userProfile} gmailAuth={gmailAuth} setGmailAuth={setGmailAuth} demos={demos} />
 
       {/* Add/Edit Dialog */}
       <Dialog open={showAddDialog} onOpenChange={setShowAddDialog}>
@@ -1985,7 +1985,7 @@ function ReplyTrackerSection({
             )}
             {editStatus === "positive" && (
               <p className="text-[10px] text-emerald-400/70">
-                {locale === "it" ? "ℹ Stato passerà a 'In Ascolto'" : "ℹ Status will move to 'Reviewing'"}
+                {locale === "it" ? "ℹ Stato passerà a 'In attesa di risposta'" : "ℹ Status will move to 'Awaiting reply'"}
               </p>
             )}
             {editStatus === "rejected" && (
@@ -2009,6 +2009,709 @@ function ReplyTrackerSection({
   );
 }
 
+// ====================================================================
+// LABEL REPLY COMPOSER
+// ====================================================================
+// Lets the user reply directly to the label from inside the app — no need
+// to switch to Gmail. The reply is sent in the same Gmail thread as the
+// label's original response (using threadId), so the conversation stays
+// grouped in both inboxes.
+//
+// Reply templates depend on the current replyStatus:
+//   - ack      → "thanks for the confirmation, looking forward to hearing back"
+//   - info     → answer the info request (custom body)
+//   - positive → start the material submission flow OR send a thank-you
+//   - rejected → polite "thanks anyway, maybe next time"
+//   - none     → free-form follow-up nudge
+
+const REPLY_TEMPLATES: Record<
+  ReplyStatus,
+  { it: string; en: string; subjectPrefix: string; bodyIt: string; bodyEn: string }
+> = {
+  none: {
+    it: "Follow-up",
+    en: "Follow-up",
+    subjectPrefix: "Re:",
+    bodyIt: `Gentile team,\n\nTi scrivo per un cortese follow-up rispetto alla demo "{trackName}" inviata il {sentDate}.\n\nComprendo che valutiate con cura tutte le proposte e che i tempi possano essere lunghi, ma vi sarei grato se poteste farmi avere un feedback, anche sintetico.\n\nResto a disposizione per qualsiasi dettaglio aggiuntivo.\n\nCordiali saluti,\n{artistName}`,
+    bodyEn: `Hi team,\n\nI'm writing a quick follow-up on the demo "{trackName}" I sent on {sentDate}.\n\nI understand you carefully review every submission and that timelines can be long, but I'd be grateful for any feedback, even a brief one.\n\nHappy to provide any additional details you may need.\n\nBest regards,\n{artistName}`,
+  },
+  ack: {
+    it: "Ringraziamento ACK",
+    en: "Ack thank-you",
+    subjectPrefix: "Re:",
+    bodyIt: `Gentile {senderName},\n\nGrazie per la conferma di ricezione. Resto in attesa di un vostro feedback entro le tempistiche indicate.\n\nCordiali saluti,\n{artistName}`,
+    bodyEn: `Hi {senderName},\n\nThanks for confirming receipt. I look forward to hearing back within the timeframe you mentioned.\n\nBest regards,\n{artistName}`,
+  },
+  info: {
+    it: "Risposta info",
+    en: "Info reply",
+    subjectPrefix: "Re:",
+    bodyIt: `Gentile {senderName},\n\nGrazie per il tuo interessamento. In risposta alla tua richiesta:\n\n[scrivi qui i dettagli richiesti — es. link WAV, stems, BPM, ecc.]\n\nResto a disposizione per qualsiasi altra informazione.\n\nCordiali saluti,\n{artistName}`,
+    bodyEn: `Hi {senderName},\n\nThanks for your interest. In response to your request:\n\n[write the requested details here — e.g. WAV link, stems, BPM, etc.]\n\nHappy to provide anything else you may need.\n\nBest regards,\n{artistName}`,
+  },
+  positive: {
+    it: "Invio materiale",
+    en: "Send materials",
+    subjectPrefix: "Re:",
+    bodyIt: `Gentile {senderName},\n\nGrazie mille per il feedback positivo! Sono felice che la traccia vi sia piaciuta.\n\nProcedo subito con l'invio del materiale richiesto. Trovi tutti i link in calce a questa email.\n\nResto a disposizione per definire i prossimi passi.\n\nCordiali saluti,\n{artistName}`,
+    bodyEn: `Hi {senderName},\n\nThank you so much for the positive feedback! Glad to hear the track resonated with you.\n\nI'll send the requested materials right away — links are at the bottom of this email.\n\nAvailable to discuss the next steps.\n\nBest regards,\n{artistName}`,
+  },
+  rejected: {
+    it: "Ringraziamento rifiuto",
+    en: "Rejection thank-you",
+    subjectPrefix: "Re:",
+    bodyIt: `Gentile {senderName},\n\nGrazie comunque per aver preso il tempo di ascoltare la demo. Apprezzo la trasparenza del feedback.\n\nSpero possa esserci occasione di collaborare in futuro con materiale più in linea con il vostro catalogo.\n\nCordiali saluti,\n{artistName}`,
+    bodyEn: `Hi {senderName},\n\nThanks anyway for taking the time to listen. I appreciate the transparent feedback.\n\nHope we'll have a chance to collaborate in the future with material that's a better fit for your roster.\n\nBest regards,\n{artistName}`,
+  },
+};
+
+function extractSenderName(fromHeader: string): string {
+  // Try to extract the human-readable name from "Patrick Scuro <demo.animarum@gmail.com>"
+  const nameMatch = fromHeader.match(/^([^<]+)/);
+  if (nameMatch) {
+    return nameMatch[1].trim().replace(/"/g, "");
+  }
+  return "";
+}
+
+function LabelReplyComposer({
+  demo,
+  label,
+  userProfile,
+  gmailAuth,
+  setGmailAuth,
+  updateDemo,
+  locale,
+  demos,
+}: {
+  demo: Demo;
+  label: Label | undefined;
+  userProfile: any;
+  gmailAuth: any;
+  setGmailAuth: (a: any) => void;
+  updateDemo: (id: string, updates: Partial<Demo>) => void;
+  locale: string;
+  demos: Demo[];
+}) {
+  const { toast } = useToast();
+  const [isOpen, setIsOpen] = useState(false);
+  const [sending, setSending] = useState(false);
+  const [sent, setSent] = useState(false);
+  const [body, setBody] = useState("");
+
+  // Pick the right template based on the current reply status
+  const currentReply = getReplyStatus(demo);
+  const template = REPLY_TEMPLATES[currentReply];
+
+  // Reply target = the email address that sent the reply (preferred)
+  // or the label's emails as fallback
+  const replyToEmails = useMemo(() => {
+    if (demo.replySender) {
+      const m = demo.replySender.match(/<([^>]+)>/) || demo.replySender.match(/([\w.+-]+@[\w-]+\.[\w.-]+)/);
+      if (m) return [m[1].toLowerCase()];
+    }
+    return label?.emails?.filter((e) => e && e.includes("@")).map((e) => e.toLowerCase()) || [];
+  }, [demo.replySender, label]);
+
+  const senderName = useMemo(() => extractSenderName(demo.replySender || ""), [demo.replySender]);
+  const artistName = userProfile?.artistName || "—";
+
+  // Subject: try to reuse the original subject from pitchText, else "Re: Demo - {track}"
+  const replySubject = useMemo(() => {
+    const original = demo.pitchText?.match(/^Subject:\s*(.+)$/m)?.[1];
+    if (original) {
+      return original.startsWith("Re:") ? original : `Re: ${original}`;
+    }
+    return `Re: Demo: ${demo.trackName}`;
+  }, [demo.pitchText, demo.trackName]);
+
+  // Initialize the body when the composer opens or the template changes
+  useEffect(() => {
+    if (!isOpen) return;
+    const tpl = locale === "it" ? template.bodyIt : template.bodyEn;
+    const filled = tpl
+      .replace(/\{trackName\}/g, demo.trackName)
+      .replace(/\{sentDate\}/g, demo.sentDate || "")
+      .replace(/\{artistName\}/g, artistName)
+      .replace(/\{senderName\}/g, senderName || (locale === "it" ? "team" : "team"));
+    setBody(filled);
+  }, [isOpen, template, demo.trackName, demo.sentDate, artistName, senderName, locale]);
+
+  const handleSend = useCallback(async () => {
+    if (!body.trim()) return;
+    if (!gmailAuth?.isConnected) {
+      toast({
+        title: "Gmail non connesso",
+        description: "Connetti Gmail per inviare la risposta.",
+        variant: "destructive",
+      });
+      return;
+    }
+    if (replyToEmails.length === 0) {
+      toast({
+        title: "Nessun indirizzo email",
+        description: "Impossibile determinare a chi rispondere. Aggiungi un'email alla label.",
+        variant: "destructive",
+      });
+      return;
+    }
+    setSending(true);
+    try {
+      const validAuth = await ensureValidToken(gmailAuth);
+      if (!validAuth) {
+        toast({ title: "Sessione Gmail scaduta", description: "Riconnetti il tuo account Gmail", variant: "destructive" });
+        setSending(false);
+        return;
+      }
+      if (validAuth.accessToken !== gmailAuth.accessToken) {
+        setGmailAuth(validAuth);
+      }
+
+      const result = await sendReplyInThread(validAuth.accessToken, {
+        to: replyToEmails,
+        subject: replySubject,
+        body,
+        threadId: demo.gmailThreadId,
+        inReplyToMessageId: demo.gmailReplyMessageId,
+      });
+
+      if (result.success) {
+        setSent(true);
+        toast({
+          title: "Risposta inviata!",
+          description: `Email inviata a ${replyToEmails.join(", ")}`,
+        });
+        // Save the threadId back to the demo if it wasn't there
+        if (result.threadId && !demo.gmailThreadId) {
+          updateDemo(demo.id, { gmailThreadId: result.threadId });
+        }
+        setTimeout(() => {
+          setSent(false);
+          setIsOpen(false);
+        }, 2500);
+      } else {
+        toast({ title: "Errore invio", description: result.error || "Errore sconosciuto", variant: "destructive" });
+      }
+    } catch (err: any) {
+      toast({ title: "Errore invio", description: err.message || "Errore di connessione", variant: "destructive" });
+    } finally {
+      setSending(false);
+    }
+  }, [body, gmailAuth, replyToEmails, replySubject, demo, setGmailAuth, updateDemo, toast]);
+
+  if (!gmailAuth?.isConnected) {
+    return null; // composer only available when Gmail is connected
+  }
+
+  if (!isOpen) {
+    return (
+      <div className="flex items-center gap-2 pt-1">
+        <Button
+          size="sm"
+          variant="outline"
+          className="h-7 text-xs border-primary/30 text-primary hover:bg-primary/10"
+          onClick={() => setIsOpen(true)}
+        >
+          <Reply className="h-3 w-3 mr-1" />
+          {locale === "it" ? "Rispondi alla label" : "Reply to label"}
+        </Button>
+        <span className="text-[10px] text-muted-foreground/60">
+          {locale === "it"
+            ? `Risponde a ${replyToEmails[0] || "—"} nello stesso thread Gmail`
+            : `Replies to ${replyToEmails[0] || "—"} in the same Gmail thread`}
+        </span>
+      </div>
+    );
+  }
+
+  return (
+    <div className="space-y-2 rounded-md border border-primary/30 bg-primary/5 p-3 mt-2">
+      <div className="flex items-center justify-between gap-2">
+        <div className="flex items-center gap-2">
+          <Reply className="h-3.5 w-3.5 text-primary" />
+          <span className="text-[11px] font-medium text-primary">
+            {locale === "it" ? "Rispondi alla label" : "Reply to label"}
+          </span>
+        </div>
+        <Button
+          size="sm"
+          variant="ghost"
+          className="h-6 text-[10px] text-muted-foreground hover:text-foreground"
+          onClick={() => setIsOpen(false)}
+        >
+          <X className="h-3 w-3" />
+        </Button>
+      </div>
+
+      {/* Reply target info */}
+      <div className="text-[10px] text-muted-foreground/70 space-y-0.5">
+        <p><span className="text-muted-foreground/50">To:</span> {replyToEmails.join(", ") || "—"}</p>
+        <p><span className="text-muted-foreground/50">Subject:</span> {replySubject}</p>
+        {demo.gmailThreadId && (
+          <p className="text-emerald-400/60 flex items-center gap-1">
+            <CheckCircle2 className="h-2.5 w-2.5" />
+            {locale === "it" ? "Thread Gmail originale" : "Original Gmail thread"}
+          </p>
+        )}
+      </div>
+
+      {/* Template label */}
+      <div className="flex items-center gap-1.5 text-[10px] text-primary/70">
+        <Sparkles className="h-3 w-3" />
+        <span>{locale === "it" ? template.it : template.en}</span>
+      </div>
+
+      <Textarea
+        value={body}
+        onChange={(e) => setBody(e.target.value)}
+        rows={10}
+        className="bg-secondary/50 text-[11px] font-mono resize-y min-h-[180px]"
+        spellCheck={false}
+      />
+
+      <div className="flex items-center gap-2">
+        <Button
+          size="sm"
+          onClick={handleSend}
+          disabled={sending || !body.trim()}
+          className="bg-emerald-600 hover:bg-emerald-500 text-white"
+        >
+          {sent ? (
+            <><CheckCircle2 className="h-3.5 w-3.5 mr-1.5" />Inviata!</>
+          ) : sending ? (
+            <><Loader2 className="h-3.5 w-3.5 mr-1.5 animate-spin" />Invio...</>
+          ) : (
+            <><SendHorizonal className="h-3.5 w-3.5 mr-1.5" />Invia risposta</>
+          )}
+        </Button>
+        <Button size="sm" variant="ghost" onClick={() => setIsOpen(false)}>
+          {t(locale as Locale, "labels.cancel")}
+        </Button>
+      </div>
+    </div>
+  );
+}
+
+// ====================================================================
+// MATERIAL SUBMISSION FORM
+// ====================================================================
+// When the label replies "positive" (interested in signing), this panel
+// lets the user send the requested materials directly from the app:
+//
+//  - Producer info auto-filled from userProfile (artistName, email, SC link)
+//  - Track dropdown: lists all demos in the user's database so they can
+//    pick which track to send (defaults to the current demo)
+//  - Link fields pre-populated from the selected demo's links[]
+//  - "Generate material email" button: builds an email with all the links
+//    formatted, sends via Gmail in the original thread
+//
+// Saves `materialSentDate` + `materialSentLinks` on the demo so the user
+// can see at a glance which materials have been delivered.
+
+function MaterialSubmissionForm({
+  demo,
+  label,
+  userProfile,
+  gmailAuth,
+  setGmailAuth,
+  updateDemo,
+  locale,
+  demos,
+}: {
+  demo: Demo;
+  label: Label | undefined;
+  userProfile: any;
+  gmailAuth: any;
+  setGmailAuth: (a: any) => void;
+  updateDemo: (id: string, updates: Partial<Demo>) => void;
+  locale: string;
+  demos: Demo[];
+}) {
+  const { toast } = useToast();
+  const [isOpen, setIsOpen] = useState(false);
+  const [sending, setSending] = useState(false);
+  const [sent, setSent] = useState(false);
+
+  // Pre-filled producer info from profile (editable)
+  const [producerName, setProducerName] = useState(userProfile?.artistName || "");
+  const [producerEmail, setProducerEmail] = useState(userProfile?.email || "");
+  const [producerSc, setProducerSc] = useState(userProfile?.scLink || "");
+  const [producerBio, setProducerBio] = useState(userProfile?.bio || "");
+
+  // Selected demo for materials — defaults to the current demo
+  const [selectedDemoId, setSelectedDemoId] = useState(demo.id);
+  const selectedDemo = demos.find((d) => d.id === selectedDemoId) || demo;
+
+  // Material links — pre-populated from the selected demo's links
+  const [links, setLinks] = useState<{ type: string; value: string }[]>([]);
+  useEffect(() => {
+    if (selectedDemo) {
+      // Start from the selected demo's links, plus the legacy `link` field
+      const initial = [...(selectedDemo.links || [])];
+      if (selectedDemo.link && !initial.some((l) => l.value === selectedDemo.link)) {
+        initial.unshift({ type: "soundcloud", value: selectedDemo.link });
+      }
+      setLinks(initial.length > 0 ? initial : [{ type: "soundcloud", value: "" }]);
+    }
+  }, [selectedDemoId, selectedDemo]);
+
+  const addLink = () => setLinks([...links, { type: "soundcloud", value: "" }]);
+  const removeLink = (i: number) => setLinks(links.filter((_, idx) => idx !== i));
+  const updateLink = (i: number, field: "type" | "value", value: string) => {
+    setLinks(links.map((l, idx) => (idx === i ? { ...l, [field]: value } : l)));
+  };
+
+  const replyToEmails = useMemo(() => {
+    if (demo.replySender) {
+      const m = demo.replySender.match(/<([^>]+)>/) || demo.replySender.match(/([\w.+-]+@[\w-]+\.[\w.-]+)/);
+      if (m) return [m[1].toLowerCase()];
+    }
+    return label?.emails?.filter((e) => e && e.includes("@")).map((e) => e.toLowerCase()) || [];
+  }, [demo.replySender, label]);
+
+  const replySubject = useMemo(() => {
+    const original = demo.pitchText?.match(/^Subject:\s*(.+)$/m)?.[1];
+    if (original) {
+      return original.startsWith("Re:") ? original : `Re: ${original}`;
+    }
+    return `Re: Demo: ${demo.trackName} — Materials`;
+  }, [demo.pitchText, demo.trackName]);
+
+  const buildMaterialEmailBody = useCallback(() => {
+    const linkLines = links
+      .filter((l) => l.value.trim())
+      .map((l) => `  • ${l.type.toUpperCase()}: ${l.value.trim()}`)
+      .join("\n");
+
+    if (locale === "it") {
+      return `Gentile team ${label?.name || ""},
+
+In seguito al vostro feedback positivo sulla traccia "${demo.trackName}", vi invio il materiale richiesto.
+
+PRODUTTORE
+  • Nome: ${producerName}
+  • Email: ${producerEmail}
+  • SoundCloud: ${producerSc}
+${producerBio ? `\nBIO\n  ${producerBio}\n` : ""}
+TRACCIA: ${selectedDemo.trackName}
+${selectedDemo.bpm ? `BPM: ${selectedDemo.bpm}\n` : ""}${selectedDemo.key ? `Key: ${selectedDemo.key}\n` : ""}${selectedDemo.genre ? `Genere: ${selectedDemo.genre}\n` : ""}
+LINK MATERIALE
+${linkLines}
+
+Resto a disposizione per qualsiasi ulteriore necessità.
+
+Cordiali saluti,
+${producerName}`;
+    }
+    return `Hi ${label?.name || "team"},
+
+Following your positive feedback on "${demo.trackName}", here are the requested materials.
+
+PRODUCER
+  • Name: ${producerName}
+  • Email: ${producerEmail}
+  • SoundCloud: ${producerSc}
+${producerBio ? `\nBIO\n  ${producerBio}\n` : ""}
+TRACK: ${selectedDemo.trackName}
+${selectedDemo.bpm ? `BPM: ${selectedDemo.bpm}\n` : ""}${selectedDemo.key ? `Key: ${selectedDemo.key}\n` : ""}${selectedDemo.genre ? `Genre: ${selectedDemo.genre}\n` : ""}
+MATERIAL LINKS
+${linkLines}
+
+Happy to provide anything else you may need.
+
+Best regards,
+${producerName}`;
+  }, [links, locale, label, demo.trackName, producerName, producerEmail, producerSc, producerBio, selectedDemo]);
+
+  const [emailPreview, setEmailPreview] = useState("");
+  useEffect(() => {
+    if (isOpen) setEmailPreview(buildMaterialEmailBody());
+  }, [isOpen, buildMaterialEmailBody]);
+
+  const handleSend = useCallback(async () => {
+    if (!gmailAuth?.isConnected) {
+      toast({
+        title: "Gmail non connesso",
+        description: "Connetti Gmail per inviare il materiale.",
+        variant: "destructive",
+      });
+      return;
+    }
+    if (replyToEmails.length === 0) {
+      toast({
+        title: "Nessun indirizzo email",
+        description: "Impossibile determinare a chi inviare.",
+        variant: "destructive",
+      });
+      return;
+    }
+    setSending(true);
+    try {
+      const validAuth = await ensureValidToken(gmailAuth);
+      if (!validAuth) {
+        toast({ title: "Sessione Gmail scaduta", description: "Riconnetti il tuo account Gmail", variant: "destructive" });
+        setSending(false);
+        return;
+      }
+      if (validAuth.accessToken !== gmailAuth.accessToken) {
+        setGmailAuth(validAuth);
+      }
+
+      const result = await sendReplyInThread(validAuth.accessToken, {
+        to: replyToEmails,
+        subject: replySubject,
+        body: emailPreview,
+        threadId: demo.gmailThreadId,
+        inReplyToMessageId: demo.gmailReplyMessageId,
+      });
+
+      if (result.success) {
+        setSent(true);
+        toast({
+          title: "Materiale inviato!",
+          description: `Email inviata a ${replyToEmails.join(", ")}`,
+        });
+        // Record the material submission on the demo
+        updateDemo(demo.id, {
+          materialSentDate: new Date().toISOString(),
+          materialSentLinks: links.filter((l) => l.value.trim()).map((l) => l.value.trim()),
+          ...(result.threadId && !demo.gmailThreadId ? { gmailThreadId: result.threadId } : {}),
+        });
+        setTimeout(() => {
+          setSent(false);
+          setIsOpen(false);
+        }, 2500);
+      } else {
+        toast({ title: "Errore invio", description: result.error || "Errore sconosciuto", variant: "destructive" });
+      }
+    } catch (err: any) {
+      toast({ title: "Errore invio", description: err.message || "Errore di connessione", variant: "destructive" });
+    } finally {
+      setSending(false);
+    }
+  }, [gmailAuth, replyToEmails, replySubject, emailPreview, demo, links, setGmailAuth, updateDemo, toast]);
+
+  // Already-sent indicator
+  if (demo.materialSentDate && !isOpen) {
+    const sentDate = new Date(demo.materialSentDate).toLocaleDateString(locale === "it" ? "it-IT" : "en-US");
+    return (
+      <div className="rounded-md border border-emerald-500/30 bg-emerald-500/5 p-3 mt-2">
+        <div className="flex items-center gap-2">
+          <CheckCircle2 className="h-4 w-4 text-emerald-400" />
+          <span className="text-xs font-medium text-emerald-300">
+            {locale === "it" ? `Materiale inviato il ${sentDate}` : `Materials sent on ${sentDate}`}
+          </span>
+        </div>
+        {demo.materialSentLinks && demo.materialSentLinks.length > 0 && (
+          <ul className="mt-2 space-y-0.5">
+            {demo.materialSentLinks.map((l, i) => (
+              <li key={i} className="text-[10px] text-muted-foreground/70 truncate">
+                <a href={l} target="_blank" rel="noopener noreferrer" className="text-primary hover:underline">
+                  {l}
+                </a>
+              </li>
+            ))}
+          </ul>
+        )}
+        <Button
+          size="sm"
+          variant="ghost"
+          className="h-7 text-[10px] text-muted-foreground hover:text-foreground mt-2"
+          onClick={() => setIsOpen(true)}
+        >
+          <Paperclip className="h-3 w-3 mr-1" />
+          {locale === "it" ? "Invia altro materiale" : "Send more materials"}
+        </Button>
+      </div>
+    );
+  }
+
+  if (!isOpen) {
+    return (
+      <div className="rounded-md border border-emerald-500/40 bg-emerald-500/10 p-3 mt-2">
+        <div className="flex items-start gap-2">
+          <Paperclip className="h-4 w-4 text-emerald-400 shrink-0 mt-0.5" />
+          <div className="flex-1 min-w-0">
+            <p className="text-xs font-medium text-emerald-300">
+              {locale === "it" ? "Invia materiale alla label" : "Send materials to label"}
+            </p>
+            <p className="text-[10px] text-emerald-400/70 mt-0.5">
+              {locale === "it"
+                ? "La label ha mostrato interesse. Invia WAV/stems/dati producer con un click."
+                : "Label showed interest. Send WAV/stems/producer info in one click."}
+            </p>
+          </div>
+        </div>
+        <Button
+          size="sm"
+          className="w-full mt-2 bg-emerald-600 hover:bg-emerald-500 text-white"
+          onClick={() => setIsOpen(true)}
+        >
+          <Paperclip className="h-3.5 w-3.5 mr-1.5" />
+          {locale === "it" ? "Prepara email materiale" : "Prepare material email"}
+        </Button>
+      </div>
+    );
+  }
+
+  return (
+    <div className="space-y-3 rounded-md border border-emerald-500/40 bg-emerald-500/5 p-3 mt-2">
+      <div className="flex items-center justify-between gap-2">
+        <div className="flex items-center gap-2">
+          <Paperclip className="h-3.5 w-3.5 text-emerald-400" />
+          <span className="text-[11px] font-medium text-emerald-300">
+            {locale === "it" ? "Invia materiale" : "Send materials"}
+          </span>
+        </div>
+        <Button
+          size="sm"
+          variant="ghost"
+          className="h-6 text-[10px] text-muted-foreground hover:text-foreground"
+          onClick={() => setIsOpen(false)}
+        >
+          <X className="h-3 w-3" />
+        </Button>
+      </div>
+
+      {/* Producer info — auto-filled from profile */}
+      <div className="space-y-2">
+        <p className="text-[10px] text-muted-foreground/70 uppercase tracking-wider font-medium">
+          {locale === "it" ? "Dati producer (dal profilo)" : "Producer info (from profile)"}
+        </p>
+        <div className="grid grid-cols-2 gap-2">
+          <div className="space-y-1">
+            <UILabel className="text-[9px] uppercase text-muted-foreground">{locale === "it" ? "Nome" : "Name"}</UILabel>
+            <Input value={producerName} onChange={(e) => setProducerName(e.target.value)} className="bg-secondary/50 text-xs h-8" />
+          </div>
+          <div className="space-y-1">
+            <UILabel className="text-[9px] uppercase text-muted-foreground">{locale === "it" ? "Email" : "Email"}</UILabel>
+            <Input value={producerEmail} onChange={(e) => setProducerEmail(e.target.value)} className="bg-secondary/50 text-xs h-8" />
+          </div>
+          <div className="space-y-1 col-span-2">
+            <UILabel className="text-[9px] uppercase text-muted-foreground">SoundCloud</UILabel>
+            <Input value={producerSc} onChange={(e) => setProducerSc(e.target.value)} className="bg-secondary/50 text-xs h-8" />
+          </div>
+          <div className="space-y-1 col-span-2">
+            <UILabel className="text-[9px] uppercase text-muted-foreground">{locale === "it" ? "Bio (opzionale)" : "Bio (optional)"}</UILabel>
+            <Textarea value={producerBio} onChange={(e) => setProducerBio(e.target.value)} rows={2} className="bg-secondary/50 text-xs" />
+          </div>
+        </div>
+      </div>
+
+      {/* Track selector — dropdown of all demos in the database */}
+      <div className="space-y-1">
+        <UILabel className="text-[10px] uppercase text-muted-foreground">
+          {locale === "it" ? "Traccia da inviare" : "Track to send"}
+        </UILabel>
+        <Select value={selectedDemoId} onValueChange={setSelectedDemoId}>
+          <SelectTrigger className="bg-secondary/50 text-sm h-9">
+            <SelectValue />
+          </SelectTrigger>
+          <SelectContent>
+            {demos.length === 0 ? (
+              <SelectItem value={demo.id} disabled>
+                {locale === "it" ? "Nessuna demo nel database" : "No demos in database"}
+              </SelectItem>
+            ) : (
+              demos.map((d) => (
+                <SelectItem key={d.id} value={d.id}>
+                  {d.trackName} {d.bpm ? `· ${d.bpm} BPM` : ""} {d.genre ? `· ${d.genre}` : ""}
+                </SelectItem>
+              ))
+            )}
+          </SelectContent>
+        </Select>
+        {selectedDemo.id !== demo.id && (
+          <p className="text-[10px] text-amber-400/70">
+            {locale === "it"
+              ? `Attenzione: stai inviando "${selectedDemo.trackName}" invece di "${demo.trackName}"`
+              : `Note: you're sending "${selectedDemo.trackName}" instead of "${demo.trackName}"`}
+          </p>
+        )}
+      </div>
+
+      {/* Material links — pre-populated from selected demo, editable */}
+      <div className="space-y-2">
+        <div className="flex items-center justify-between">
+          <p className="text-[10px] text-muted-foreground/70 uppercase tracking-wider font-medium">
+            {locale === "it" ? "Link materiale" : "Material links"}
+          </p>
+          <Button size="sm" variant="ghost" className="h-6 text-[10px]" onClick={addLink}>
+            + {locale === "it" ? "Aggiungi link" : "Add link"}
+          </Button>
+        </div>
+        {links.map((link, i) => (
+          <div key={i} className="flex gap-2">
+            <Select value={link.type} onValueChange={(v) => updateLink(i, "type", v)}>
+              <SelectTrigger className="bg-secondary/50 text-xs h-8 w-[120px] shrink-0">
+                <SelectValue />
+              </SelectTrigger>
+              <SelectContent>
+                <SelectItem value="soundcloud">SoundCloud</SelectItem>
+                <SelectItem value="wav">WAV</SelectItem>
+                <SelectItem value="stems">Stems</SelectItem>
+                <SelectItem value="wetransfer">WeTransfer</SelectItem>
+                <SelectItem value="dropbox">Dropbox</SelectItem>
+                <SelectItem value="google_drive">Google Drive</SelectItem>
+                <SelectItem value="other">Other</SelectItem>
+              </SelectContent>
+            </Select>
+            <Input
+              value={link.value}
+              onChange={(e) => updateLink(i, "value", e.target.value)}
+              placeholder="https://..."
+              className="bg-secondary/50 text-xs h-8 flex-1"
+            />
+            <Button
+              size="sm"
+              variant="ghost"
+              className="h-8 text-muted-foreground hover:text-destructive shrink-0"
+              onClick={() => removeLink(i)}
+              disabled={links.length === 1}
+            >
+              <X className="h-3 w-3" />
+            </Button>
+          </div>
+        ))}
+      </div>
+
+      {/* Email preview */}
+      <div className="space-y-1">
+        <p className="text-[10px] text-muted-foreground/70 uppercase tracking-wider font-medium">
+          {locale === "it" ? "Anteprima email" : "Email preview"}
+        </p>
+        <Textarea
+          value={emailPreview}
+          onChange={(e) => setEmailPreview(e.target.value)}
+          rows={14}
+          className="bg-secondary/50 text-[11px] font-mono resize-y min-h-[200px]"
+          spellCheck={false}
+        />
+      </div>
+
+      <div className="flex items-center gap-2">
+        <Button
+          size="sm"
+          onClick={handleSend}
+          disabled={sending || !emailPreview.trim()}
+          className="bg-emerald-600 hover:bg-emerald-500 text-white"
+        >
+          {sent ? (
+            <><CheckCircle2 className="h-3.5 w-3.5 mr-1.5" />Inviata!</>
+          ) : sending ? (
+            <><Loader2 className="h-3.5 w-3.5 mr-1.5 animate-spin" />Invio...</>
+          ) : (
+            <><SendHorizonal className="h-3.5 w-3.5 mr-1.5" />Invia materiale via Gmail</>
+          )}
+        </Button>
+        <Button size="sm" variant="ghost" onClick={() => setIsOpen(false)}>
+          {t(locale as Locale, "labels.cancel")}
+        </Button>
+      </div>
+    </div>
+  );
+}
+
 function DemoDetailDialog({
   demo,
   onClose,
@@ -2019,6 +2722,7 @@ function DemoDetailDialog({
   userProfile,
   gmailAuth,
   setGmailAuth,
+  demos,
 }: {
   demo: Demo | null;
   onClose: () => void;
@@ -2029,6 +2733,7 @@ function DemoDetailDialog({
   userProfile: { artistName: string; scLink: string };
   gmailAuth: any;
   setGmailAuth: (auth: any) => void;
+  demos: Demo[];
 }) {
   // Pitch generator state — kept inside the dialog component so it persists
   // across re-renders while the dialog is open, and resets when the dialog
@@ -2282,6 +2987,39 @@ function DemoDetailDialog({
               For now this is manual entry; later Gmail API will auto-populate
               these fields by reading the user's inbox. */}
           <ReplyTrackerSection demo={demo} updateDemo={updateDemo} locale={locale} />
+
+          {/* ===================== LABEL REPLY COMPOSER ===================== */}
+          {/* Inline Gmail reply — only shown when the label has replied AND
+              Gmail is connected. Lets the user reply in the same thread. */}
+          {getReplyStatus(demo) !== "none" && (
+            <LabelReplyComposer
+              demo={demo}
+              label={label}
+              userProfile={userProfile}
+              gmailAuth={gmailAuth}
+              setGmailAuth={setGmailAuth}
+              updateDemo={updateDemo}
+              locale={locale}
+              demos={demos}
+            />
+          )}
+
+          {/* ===================== MATERIAL SUBMISSION FORM ===================== */}
+          {/* When the label replies "positive" (interested), this panel lets
+              the user send requested materials (WAV/stems/producer info) in
+              one click — auto-filled from profile + selected demo's links. */}
+          {(getReplyStatus(demo) === "positive" || demo.materialSentDate) && (
+            <MaterialSubmissionForm
+              demo={demo}
+              label={label}
+              userProfile={userProfile}
+              gmailAuth={gmailAuth}
+              setGmailAuth={setGmailAuth}
+              updateDemo={updateDemo}
+              locale={locale}
+              demos={demos}
+            />
+          )}
 
           {/* ===================== PITCH SECTION ===================== */}
           {/* Full pitch generator + editor — mirrors the Label Finder dialog.

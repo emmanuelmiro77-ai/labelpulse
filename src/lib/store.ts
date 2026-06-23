@@ -147,6 +147,17 @@ export interface Demo {
   replyDate?: string | null; // ISO date when the reply was received
   replySender?: string;     // who replied (e.g. "Patrick Scuro, Animarum")
   followUpDueDate?: string | null; // ISO date after which a follow-up is suggested
+  // Gmail thread ID of the original pitch email — when present, replies to
+  // the label are sent in the same Gmail thread (so the conversation stays
+  // grouped in both the user's and the label's inbox).
+  gmailThreadId?: string;
+  // Gmail message ID of the label's reply — used as In-Reply-To header when
+  // sending a follow-up so mail clients correctly thread the message.
+  gmailReplyMessageId?: string;
+  // Material submission tracking — when the label accepts and asks for
+  // materials (WAV/stems/artwork), we record what was sent here.
+  materialSentDate?: string | null;
+  materialSentLinks?: string[]; // list of URLs sent to the label
 }
 
 // ==================== HELPERS ====================
@@ -1500,6 +1511,9 @@ export const useAppStore = create<AppState>()(
             replyText: reply.bodyText.slice(0, 4000), // cap to keep localStorage manageable
             replyDate: reply.date,
             replySender: reply.from,
+            // Save Gmail thread + message IDs so the user can reply in-thread
+            gmailThreadId: reply.threadId,
+            gmailReplyMessageId: reply.messageId,
           };
 
           // Auto-advance status based on classification:
@@ -1986,6 +2000,10 @@ export const useAppStore = create<AppState>()(
               replyDate: d.replyDate ?? null,
               replySender: d.replySender ?? "",
               followUpDueDate: d.followUpDueDate ?? null,
+              gmailThreadId: d.gmailThreadId ?? undefined,
+              gmailReplyMessageId: d.gmailReplyMessageId ?? undefined,
+              materialSentDate: d.materialSentDate ?? null,
+              materialSentLinks: Array.isArray(d.materialSentLinks) ? d.materialSentLinks : [],
             }));
           }
         }
