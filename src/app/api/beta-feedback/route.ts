@@ -196,5 +196,60 @@ export async function GET(req: NextRequest) {
     return NextResponse.json({ error: error.message }, { status: 500 });
   }
 
-  return NextResponse.json({ items: data || [] });
+  return NextResponse.json({ items: data || [], feedback: data || [] });
+}
+
+/**
+ * PATCH /api/beta-feedback?id=<id>
+ * Body: { status: "new" | "read" | "resolved" | "ignored" }
+ *
+ * Updates the status of a single feedback item. Admin-only (Bearer token).
+ */
+export async function PATCH(req: NextRequest) {
+  const authHeader = req.headers.get("authorization");
+  const token = authHeader?.replace("Bearer ", "");
+  if (!token || token !== process.env.BETA_ADMIN_TOKEN) {
+    return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
+  }
+
+  const { searchParams } = new URL(req.url);
+  const id = searchParams.get("id");
+  if (!id) {
+    return NextResponse.json({ error: "Missing id" }, { status: 400 });
+  }
+
+  let body: any;
+  try {
+    body = await req.json();
+  } catch {
+    return NextResponse.json({ error: "Invalid JSON" }, { status: 400 });
+  }
+
+  const validStatuses = ["new", "read", "resolved", "ignored"];
+  if (!validStatuses.includes(body?.status)) {
+    return NextResponse.json(
+      { error: `Invalid status. Must be one of: ${validStatuses.join(", ")}` },
+      { status: 400 }
+    );
+  }
+
+  const supabaseUrl = process.env.NEXT_PUBLIC_SUPABASE_URL;
+  const supabaseKey =
+    process.env.SUPABASE_SERVICE_ROLE_KEY ||
+    process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY;
+  if (!supabaseUrl || !supabaseKey) {
+    return NextResponse.json({ error: "Server not configured" }, { status: 503 });
+  }
+
+  const supabase = createClient(supabaseUrl, supabaseKey);
+  const { error } = await supabase
+    .from("beta_feedback")
+    .update({ status: body.status })
+    .eq("id", Number(id));
+
+  if (error) {
+    return NextResponse.json({ error: error.message }, { status: 500 });
+  }
+
+  return NextResponse.json({ ok: true });
 }

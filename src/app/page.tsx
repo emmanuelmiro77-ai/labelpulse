@@ -341,6 +341,7 @@ export default function Home() {
                   <CloudSyncButton />
                   <DataBackup />
                   <AutoSave />
+                  <BetaFeedbackButton />
                 </div>
 
                 {/* Help */}
