@@ -52,7 +52,7 @@ EXIT_CODE=2
 # Stampa la tabella
 echo "$RESP" | jq -r '.deployments[] | [
   .state,
-  (.createdAt | tonumber | strftime("%Y-%m-%d %H:%M")),
+  (.createdAt | tonumber | if . > 1000000000000 then ./1000 | floor else . end | strftime("%Y-%m-%d %H:%M")),
   (.meta.gitCommitMessage // "—" | .[0:60]),
   (.meta.gitCommitSha // "—" | .[0:7]),
   .url

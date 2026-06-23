@@ -115,14 +115,21 @@ print_step "Trigger deploy Vercel..."
 GIT_SHA=$(git rev-parse HEAD)
 SHORT_SHA=$(git rev-parse --short HEAD)
 
-# Metodo 1: Promote (crea un nuovo deployment dal Git SHA corrente)
-# Questo è il metodo ufficiale per forzare un deploy da un commit specifico
+# Metodo 1: POST /v13/deployments — crea un nuovo deployment production
+# dal commit SHA corrente. Questo è il metodo ufficiale Vercel, testato e
+# funzionante: non dipende dall'integrazione GitHub→Vercel.
+#
+# Body JSON:
+#   name:     "labelpulse"  (nome progetto, NON project ID)
+#   project:  prj_xxx       (project ID da .env.deploy)
+#   target:   "production"
+#   gitSource: {type: github, org, repo, ref: <git_sha>}
 TRIGGER_RESULT=$(curl -sS -w "\n%{http_code}" \
-  -X POST "https://api.vercel.com/v13/deployments?forceNew=1" \
+  -X POST "https://api.vercel.com/v13/deployments" \
   -H "Authorization: Bearer $VERCEL_TOKEN" \
   -H "Content-Type: application/json" \
   -d "$(jq -n --arg pid "$VERCEL_PROJECT_ID" --arg sha "$GIT_SHA" \
-    '{name: ($pid | split("_")[-1]), project: $pid, ref: $sha, target: "production", gitSource: {type: "github", repo: "emmanuelmiro77-ai/labelpulse", ref: $sha}}')" \
+    '{name: "labelpulse", project: $pid, target: "production", gitSource: {type: "github", org: "emmanuelmiro77-ai", repo: "labelpulse", ref: $sha}}')" \
   2>&1) || true
 
 HTTP_CODE=$(echo "$TRIGGER_RESULT" | tail -1)
@@ -144,76 +151,69 @@ if [[ "$HTTP_CODE" != "200" && "$HTTP_CODE" != "201" ]]; then
   exit 1
 fi
 
-# Estrai deployment ID o URL dalla response
+# Estrai deployment ID dalla response (per il polling successivo)
 DEPLOY_ID=$(echo "$RESPONSE_BODY" | jq -r '.id // .uid // empty' 2>/dev/null || echo "")
 DEPLOY_URL=$(echo "$RESPONSE_BODY" | jq -r '.url // empty' 2>/dev/null || echo "")
+DEPLOY_INSPECTOR=$(echo "$RESPONSE_BODY" | jq -r '.inspectorUrl // empty' 2>/dev/null || echo "")
 
 if [[ -n "$DEPLOY_ID" ]]; then
   print_ok "Deploy triggerato (id: $DEPLOY_ID)"
-else
-  print_ok "Deploy triggerato"
+fi
+if [[ -n "$DEPLOY_INSPECTOR" ]]; then
+  print_info "Inspector: $DEPLOY_INSPECTOR"
 fi
 
 # ---------- Step 4: poll stato deploy ----------
 print_step "Attesa deploy in corso..."
 echo "  (CTRL+C per interrompere — il deploy continua su Vercel)"
 
-MAX_ATTEMPTS=60  # 60 * 10s = 10 minuti max
+MAX_ATTEMPTS=40  # 40 * 8s = ~5 minuti max (di solito ci mette 30-60s)
 ATTEMPT=0
 LAST_STATE=""
 
 while [[ $ATTEMPT -lt $MAX_ATTEMPTS ]]; do
-  sleep 10
+  sleep 8
   ATTEMPT=$((ATTEMPT + 1))
 
-  # Cerca il deployment più recente per questo commit
+  # Polla direttamente il deployment tramite il suo ID (modo più affidabile)
   STATUS_RESP=$(curl -sS \
     -H "Authorization: Bearer $VERCEL_TOKEN" \
-    "https://api.vercel.com/v6/deployments?projectId=$VERCEL_PROJECT_ID&limit=1&meta.gitCommitSha=$GIT_SHA" \
+    "https://api.vercel.com/v13/deployments/$DEPLOY_ID" \
     2>/dev/null) || continue
 
-  STATE=$(echo "$STATUS_RESP" | jq -r '.deployments[0].state // empty' 2>/dev/null || echo "")
-  READY=$(echo "$STATUS_RESP" | jq -r '.deployments[0].ready // empty' 2>/dev/null || echo "")
-  CURL_URL=$(echo "$STATUS_RESP" | jq -r '.deployments[0].url // empty' 2>/dev/null || echo "")
-  DEPLOY_INSPECT_URL=$(echo "$STATUS_RESP" | jq -r '.deployments[0].inspectorUrl // empty' 2>/dev/null || echo "")
-
-  if [[ -z "$STATE" ]]; then
-    # Prova con il deployment ID diretto
-    if [[ -n "$DEPLOY_ID" ]]; then
-      STATUS_RESP=$(curl -sS \
-        -H "Authorization: Bearer $VERCEL_TOKEN" \
-        "https://api.vercel.com/v13/deployments/$DEPLOY_ID" \
-        2>/dev/null) || continue
-      STATE=$(echo "$STATUS_RESP" | jq -r '.state // empty' 2>/dev/null || echo "")
-      READY=$(echo "$STATUS_RESP" | jq -r '.ready // empty' 2>/dev/null || echo "")
-      CURL_URL=$(echo "$STATUS_RESP" | jq -r '.url // empty' 2>/dev/null || echo "")
-    fi
-  fi
+  # readyState è il campo ufficiale: INITIALIZING → QUEUED → BUILDING → READY | ERROR | CANCELED
+  STATE=$(echo "$STATUS_RESP" | jq -r '.readyState // .state // empty' 2>/dev/null || echo "")
+  CURL_URL=$(echo "$STATUS_RESP" | jq -r '.url // empty' 2>/dev/null || echo "")
+  DEPLOY_INSPECT_URL=$(echo "$STATUS_RESP" | jq -r '.inspectorUrl // empty' 2>/dev/null || echo "")
+  ALIASES=$(echo "$STATUS_RESP" | jq -r '.alias // [] | join(", ")' 2>/dev/null || echo "")
 
   if [[ "$STATE" != "$LAST_STATE" ]]; then
     case "$STATE" in
-      QUEUED|BUILDING) print_info "[$ATTEMPT/$MAX_ATTEMPTS] Stato: $STATE..." ;;
-      INITIALIZING)    print_info "[$ATTEMPT/$MAX_ATTEMPTS] Inizializzazione..." ;;
-      READY)           print_ok "[$ATTEMPT/$MAX_ATTEMPTS] Deploy PRONTO!" ;;
-      ERROR)           print_err "[$ATTEMPT/$MAX_ATTEMPTS] Deploy fallito!" ;;
-      CANCELED)        print_warn "[$ATTEMPT/$MAX_ATTEMPTS] Deploy cancellato" ;;
-      *)               print_info "[$ATTEMPT/$MAX_ATTEMPTS] Stato: $STATE" ;;
+      QUEUED|BUILDING)  print_info "[$ATTEMPT/$MAX_ATTEMPTS] Stato: $STATE..." ;;
+      INITIALIZING)     print_info "[$ATTEMPT/$MAX_ATTEMPTS] Inizializzazione..." ;;
+      READY)            print_ok "[$ATTEMPT/$MAX_ATTEMPTS] Deploy PRONTO!" ;;
+      ERROR)            print_err "[$ATTEMPT/$MAX_ATTEMPTS] Deploy fallito!" ;;
+      CANCELED)         print_warn "[$ATTEMPT/$MAX_ATTEMPTS] Deploy cancellato" ;;
+      *)                print_info "[$ATTEMPT/$MAX_ATTEMPTS] Stato: $STATE" ;;
     esac
     LAST_STATE="$STATE"
   fi
 
-  if [[ "$STATE" == "READY" || "$READY" == "true" ]]; then
+  if [[ "$STATE" == "READY" ]]; then
     echo ""
     print_ok "============================="
     print_ok "DEPLOY COMPLETATO CON SUCCESSO"
     print_ok "============================="
     echo ""
     if [[ -n "$CURL_URL" ]]; then
-      print_info "URL produzione: https://$CURL_URL"
+      print_info "URL univoco:   https://$CURL_URL"
     fi
-    print_info "Commit: $SHORT_SHA ($GIT_SHA)"
+    if [[ -n "$ALIASES" ]]; then
+      print_info "Alias attivi:  $ALIASES"
+    fi
+    print_info "Commit:        $SHORT_SHA ($GIT_SHA)"
     if [[ -n "$DEPLOY_INSPECT_URL" ]]; then
-      print_info "Inspector: $DEPLOY_INSPECT_URL"
+      print_info "Inspector:     $DEPLOY_INSPECT_URL"
     fi
     exit 0
   fi
@@ -231,6 +231,6 @@ while [[ $ATTEMPT -lt $MAX_ATTEMPTS ]]; do
   fi
 done
 
-print_warn "Timeout dopo $((MAX_ATTEMPTS * 10))s. Il deploy potrebbe essere ancora in corso."
+print_warn "Timeout dopo $((MAX_ATTEMPTS * 8))s. Il deploy potrebbe essere ancora in corso."
 print_info "Controlla: https://vercel.com/dashboard"
 exit 2
