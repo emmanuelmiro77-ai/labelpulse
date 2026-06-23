@@ -69,7 +69,7 @@ import {
   CommandGroup,
   CommandItem,
 } from "@/components/ui/command";
-import { Check, ChevronsUpDown, Filter, AlertCircle, Sparkles, Copy, Languages, MailOpen, SendHorizonal, RotateCcw } from "lucide-react";
+import { Check, ChevronsUpDown, Filter, AlertCircle, Sparkles, Copy, Languages, MailOpen, SendHorizonal, RotateCcw, RefreshCw, Bell, Inbox } from "lucide-react";
 import {
   generatePitch,
   generateSubject,
@@ -188,7 +188,7 @@ function isDemoLocked(demo: Demo | null): boolean {
 // of just silently disabling fields — the user needs to know why.
 
 export function DemoTracker() {
-  const { labels, demos, addDemo, updateDemo, deleteDemo, advanceDemoStatus, locale: _locale, getGenres, userProfile, artists, setActiveTab, setSelectedLabelId, setSelectedArtistId, gmailAuth, setGmailAuth } =
+  const { labels, demos, addDemo, updateDemo, deleteDemo, advanceDemoStatus, locale: _locale, getGenres, userProfile, artists, setActiveTab, setSelectedLabelId, setSelectedArtistId, gmailAuth, setGmailAuth, scanGmailReplies, lastReplyScanAt, newRepliesCount } =
     useAppStore();
   const locale = _locale as Locale;
   const { toast } = useToast();
@@ -199,9 +199,54 @@ export function DemoTracker() {
   const [showAddDialog, setShowAddDialog] = useState(false);
   const [editingDemo, setEditingDemo] = useState<Demo | null>(null);
   const [deleteConfirmId, setDeleteConfirmId] = useState<string | null>(null);
+  const [scanningReplies, setScanningReplies] = useState(false);
 
   // Detail dialog
   const [detailDemo, setDetailDemo] = useState<Demo | null>(null);
+
+  // Gmail reply scan — invokes store action, surfaces result via toast
+  const handleScanReplies = useCallback(async () => {
+    if (scanningReplies) return;
+    if (!gmailAuth.isConnected) {
+      toast({
+        title: "Gmail non connesso",
+        description: "Connetti Gmail dall'icona in alto a destra per scansionare le risposte.",
+        variant: "destructive",
+      });
+      return;
+    }
+    setScanningReplies(true);
+    try {
+      const result = await scanGmailReplies();
+      if (result.newReplies > 0) {
+        toast({
+          title: `${result.newReplies} nuova/e risposta/e`,
+          description: result.details
+            .slice(0, 4)
+            .map((d) => `• ${d.trackName} — ${REPLY_STATUS_CONFIG[d.category as ReplyStatus]?.labelIt || "Non classificata"}`)
+            .join("\n"),
+        });
+      } else if (result.scanned > 0) {
+        toast({
+          title: "Nessuna nuova risposta",
+          description: `${result.scanned} demo scansionate. Le risposte delle label appariranno qui automaticamente.`,
+        });
+      } else {
+        toast({
+          title: "Nessuna demo da scansionare",
+          description: "Non ci sono demo inviate in attesa di risposta.",
+        });
+      }
+    } catch (err: any) {
+      toast({
+        title: "Scansione fallita",
+        description: err.message || "Riprova tra qualche secondo.",
+        variant: "destructive",
+      });
+    } finally {
+      setScanningReplies(false);
+    }
+  }, [scanningReplies, gmailAuth.isConnected, scanGmailReplies, toast]);
 
   // Label history view
   const [labelHistoryId, setLabelHistoryId] = useState<string | null>(null);
@@ -772,6 +817,32 @@ export function DemoTracker() {
             {t(locale, "demos.table")}
           </Button>
         </div>
+        <Button
+          variant="outline"
+          size="sm"
+          onClick={handleScanReplies}
+          disabled={scanningReplies || !gmailAuth.isConnected}
+          className="shrink-0 relative"
+          title={gmailAuth.isConnected ? "Scansiona Gmail per risposte delle label" : "Connetti Gmail prima di scansionare"}
+        >
+          {scanningReplies ? (
+            <RefreshCw className="h-4 w-4 mr-1.5 animate-spin" />
+          ) : (
+            <Inbox className="h-4 w-4 mr-1.5" />
+          )}
+          <span className="text-xs">
+            {scanningReplies
+              ? "Scansione..."
+              : gmailAuth.isConnected
+                ? "Scansiona risposte"
+                : "Gmail offline"}
+          </span>
+          {gmailAuth.isConnected && newRepliesCount > 0 && !scanningReplies && (
+            <span className="ml-1.5 min-w-[18px] h-[18px] px-1 rounded-full bg-cyan-500 text-white text-[10px] font-bold flex items-center justify-center">
+              {newRepliesCount > 9 ? "9+" : newRepliesCount}
+            </span>
+          )}
+        </Button>
         <Button onClick={openAdd} className="glow-purple shrink-0">
           <Plus className="h-4 w-4 mr-1.5" />
           {t(locale, "demos.addDemo")}

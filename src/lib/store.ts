@@ -841,6 +841,17 @@ interface AppState {
   locale: Locale;
   userProfile: UserProfile;
   gmailAuth: GmailAuth;
+  /**
+   * ISO timestamp of the last Gmail reply scan. Used both for UI display
+   * ("last checked 2 minutes ago") and as the `sinceDate` for the next
+   * scan (so we don't re-fetch replies we've already seen).
+   */
+  lastReplyScanAt: string | null;
+  /**
+   * Count of demos with new/updated replies detected during the most
+   * recent scan. Surfaced in the Gmail popover as a notification badge.
+   */
+  newRepliesCount: number;
   rankingsUpdatedAt: string | null;
   lastSavedAt: string | null;
   hasRehydrated: boolean;
@@ -884,6 +895,28 @@ interface AppState {
   // Gmail
   setGmailAuth: (auth: GmailAuth) => void;
   clearGmailAuth: () => void;
+  /**
+   * Scan Gmail for replies to all sent demos. Updates each demo's replyStatus,
+   * replyText, replyDate, replySender fields. Auto-advances demo status when
+   * a positive/rejected reply is detected. Returns a summary of detected
+   * replies so the UI can show a toast / notification.
+   *
+   * NOTE: This action is async and depends on the browser being online +
+   * Gmail being connected. It returns a structured result so the caller
+   * can show toasts per the user's locale.
+   */
+  scanGmailReplies: () => Promise<{
+    scanned: number;
+    newReplies: number;
+    errors: number;
+    details: Array<{
+      demoId: string;
+      trackName: string;
+      category: "ack" | "info" | "positive" | "rejected" | "none";
+      from: string;
+      date: string;
+    }>;
+  }>;
 
   // Rankings update tracking
   setRankingsUpdatedAt: (date: string) => void;
@@ -1171,6 +1204,8 @@ export const useAppStore = create<AppState>()(
       locale: "it" as Locale,
       userProfile: { artistName: "", scLink: "", bio: "", email: "", photoUrl: "", links: [], cyaniteApiToken: "", supabaseUrl: "", supabaseAnonKey: "" } as UserProfile,
       gmailAuth: { isConnected: false, email: "", accessToken: "", expiresAt: 0 } as GmailAuth,
+      lastReplyScanAt: null,
+      newRepliesCount: 0,
       rankingsUpdatedAt: null as string | null,
       lastSavedAt: null as string | null,
       hasRehydrated: false as boolean,
@@ -1329,7 +1364,183 @@ export const useAppStore = create<AppState>()(
       getGenres: () => labelData.genres,
 
       setGmailAuth: (auth) => { set({ gmailAuth: auth }); syncToCloud(); },
-      clearGmailAuth: () => { set({ gmailAuth: { isConnected: false, email: "", accessToken: "", expiresAt: 0 } }); syncToCloud(); },
+      clearGmailAuth: () => { set({ gmailAuth: { isConnected: false, email: "", accessToken: "", expiresAt: 0 }, lastReplyScanAt: null, newRepliesCount: 0 }); syncToCloud(); },
+
+      scanGmailReplies: async () => {
+        const state = get();
+        const { gmailAuth, demos, labels } = state;
+
+        // Default empty result
+        const emptyResult = {
+          scanned: 0,
+          newReplies: 0,
+          errors: 0,
+          details: [] as Array<{
+            demoId: string;
+            trackName: string;
+            category: "ack" | "info" | "positive" | "rejected" | "none";
+            from: string;
+            date: string;
+          }>,
+        };
+
+        if (!gmailAuth.isConnected || !gmailAuth.accessToken) {
+          return emptyResult;
+        }
+
+        // Ensure token is still valid (best-effort refresh)
+        let accessToken = gmailAuth.accessToken;
+        try {
+          // Lazy import to avoid SSR issues
+          const { ensureValidToken } = await import("./gmail");
+          const refreshed = await ensureValidToken(gmailAuth);
+          if (refreshed) {
+            accessToken = refreshed.accessToken;
+            // Persist refreshed token
+            set({ gmailAuth: refreshed });
+          } else if (gmailAuth.expiresAt <= Date.now()) {
+            // Token expired and silent refresh failed
+            return { ...emptyResult, errors: 1 };
+          }
+        } catch (e) {
+          console.warn("[scanGmailReplies] Token refresh failed:", e);
+        }
+
+        // Filter demos that are eligible for scanning:
+        //   - status is sent, reviewing, accepted, or rejected (not ready)
+        //   - has a sentDate
+        //   - has at least one label email OR an original subject (search key)
+        const eligibleDemos = demos.filter((d) => {
+          if (d.status === "ready") return false;
+          if (!d.sentDate) return false;
+          // Skip demos that already have a positive/rejected reply —
+          // we don't want to overwrite a confirmed outcome
+          if (d.replyStatus === "positive" || d.replyStatus === "rejected") {
+            // BUT allow re-scan if reply is older than 24h and demo status is
+            // still "reviewing" (label might have updated their stance)
+            if (d.status !== "reviewing") return false;
+            if (d.replyDate) {
+              const replyAge = Date.now() - new Date(d.replyDate).getTime();
+              if (replyAge < 24 * 60 * 60 * 1000) return false;
+            }
+          }
+          return true;
+        });
+
+        if (eligibleDemos.length === 0) {
+          set({ lastReplyScanAt: new Date().toISOString(), newRepliesCount: 0 });
+          return emptyResult;
+        }
+
+        // Build scan inputs
+        const scanInputs = eligibleDemos.map((d) => {
+          const label = labels.find((l) => l.id === d.labelId);
+          const labelEmails = label?.emails?.filter((e) => e && e.includes("@")) || [];
+          // Try to extract original subject from pitch text (first line often
+          // contains "Subject: ..." in our generated pitches, or use the
+          // track name as a fallback search key)
+          const originalSubject = d.pitchText
+            ? (d.pitchText.match(/^Subject:\s*(.+)$/m)?.[1] || undefined)
+            : undefined;
+
+          return {
+            demoId: d.id,
+            labelEmails,
+            sentDate: d.sentDate!,
+            originalSubject: originalSubject || `Demo: ${d.trackName}`,
+            sinceDate: state.lastReplyScanAt || undefined,
+          };
+        });
+
+        // Run scan
+        const { scanRepliesForDemos } = await import("./gmail");
+        const { classifyReply } = await import("./reply-classifier");
+
+        const results = await scanRepliesForDemos(accessToken, scanInputs);
+
+        // Process results
+        const details: Array<{
+          demoId: string;
+          trackName: string;
+          category: "ack" | "info" | "positive" | "rejected" | "none";
+          from: string;
+          date: string;
+        }> = [];
+        let newReplies = 0;
+        let errors = 0;
+
+        for (const result of results) {
+          if (result.error) {
+            errors++;
+            continue;
+          }
+          if (!result.found || !result.latestReply) continue;
+
+          const demo = eligibleDemos.find((d) => d.id === result.demoId);
+          if (!demo) continue;
+
+          const reply = result.latestReply;
+          const classification = classifyReply(reply.subject, reply.bodyText);
+
+          // Only count as "new" if the reply date is newer than what we have,
+          // OR we didn't have a reply before
+          const previousReplyDate = demo.replyDate
+            ? new Date(demo.replyDate).getTime()
+            : 0;
+          const thisReplyDate = new Date(reply.date).getTime();
+
+          if (thisReplyDate <= previousReplyDate && demo.replyStatus !== "none" && demo.replyStatus !== undefined) {
+            // Already saw this reply or a newer one — skip
+            continue;
+          }
+
+          // Update the demo with the classified reply
+          const updates: Partial<Demo> = {
+            replyStatus: classification.category,
+            replyText: reply.bodyText.slice(0, 4000), // cap to keep localStorage manageable
+            replyDate: reply.date,
+            replySender: reply.from,
+          };
+
+          // Auto-advance status based on classification:
+          //  - positive → reviewing (label expressed interest, user should follow up)
+          //  - rejected → rejected (label said no, close the loop)
+          //  - ack / info / none → leave status as-is
+          if (classification.category === "positive" && demo.status === "sent") {
+            updates.status = "reviewing";
+          } else if (classification.category === "rejected") {
+            updates.status = "rejected";
+          }
+
+          // Update follow-up due date — 28 days from reply date if info/positive
+          if (classification.category === "info" || classification.category === "positive") {
+            const followUpDate = new Date(reply.date);
+            followUpDate.setDate(followUpDate.getDate() + 28);
+            updates.followUpDueDate = followUpDate.toISOString();
+          }
+
+          get().updateDemo(result.demoId, updates);
+
+          details.push({
+            demoId: result.demoId,
+            trackName: demo.trackName,
+            category: classification.category,
+            from: reply.from,
+            date: reply.date,
+          });
+          newReplies++;
+        }
+
+        const now = new Date().toISOString();
+        set({ lastReplyScanAt: now, newRepliesCount: newReplies });
+
+        return {
+          scanned: eligibleDemos.length,
+          newReplies,
+          errors,
+          details,
+        };
+      },
 
       setRankingsUpdatedAt: (date) => { set({ rankingsUpdatedAt: date }); syncToCloud(); },
 
@@ -1660,7 +1871,7 @@ export const useAppStore = create<AppState>()(
     }),
     {
       name: PRIMARY_KEY,
-      version: 11,
+      version: 12,
       storage: createJSONStorage(() => robustStorage),
       migrate: (persisted: any, version: number) => {
         if (version < 5) {
@@ -1758,6 +1969,26 @@ export const useAppStore = create<AppState>()(
             }
           }
         }
+        if (version < 12) {
+          // Gmail reply tracker fields
+          if (persisted.lastReplyScanAt === undefined) {
+            persisted.lastReplyScanAt = null;
+          }
+          if (persisted.newRepliesCount === undefined) {
+            persisted.newRepliesCount = 0;
+          }
+          // Ensure all demos have reply fields initialized
+          if (Array.isArray(persisted.demos)) {
+            persisted.demos = persisted.demos.map((d: any) => ({
+              ...d,
+              replyStatus: d.replyStatus ?? "none",
+              replyText: d.replyText ?? "",
+              replyDate: d.replyDate ?? null,
+              replySender: d.replySender ?? "",
+              followUpDueDate: d.followUpDueDate ?? null,
+            }));
+          }
+        }
         return persisted;
       },
       partialize: (state) => ({
@@ -1767,6 +1998,8 @@ export const useAppStore = create<AppState>()(
         locale: state.locale,
         userProfile: state.userProfile,
         gmailAuth: state.gmailAuth,
+        lastReplyScanAt: state.lastReplyScanAt,
+        newRepliesCount: state.newRepliesCount,
         rankingsUpdatedAt: state.rankingsUpdatedAt,
         lastSavedAt: state.lastSavedAt,
         rankingSnapshots: state.rankingSnapshots,
@@ -1888,6 +2121,8 @@ export function syncToCloud(): void {
       locale: state.locale,
       userProfile: state.userProfile,
       gmailAuth: state.gmailAuth,
+      lastReplyScanAt: state.lastReplyScanAt,
+      newRepliesCount: state.newRepliesCount,
       rankingsUpdatedAt: state.rankingsUpdatedAt,
       lastSavedAt,
       rankingSnapshots: state.rankingSnapshots,
@@ -1919,6 +2154,8 @@ export async function forceCloudSync(): Promise<void> {
     locale: state.locale,
     userProfile: state.userProfile,
     gmailAuth: state.gmailAuth,
+    lastReplyScanAt: state.lastReplyScanAt,
+    newRepliesCount: state.newRepliesCount,
     rankingsUpdatedAt: state.rankingsUpdatedAt,
     lastSavedAt,
     rankingSnapshots: state.rankingSnapshots,
@@ -2322,6 +2559,8 @@ function mergeCloudData(cloudData: any, localState: any): Partial<AppState> {
     cloudData.userProfile ||
     localState.userProfile;
   merged.gmailAuth = cloudData.gmailAuth || localState.gmailAuth;
+  merged.lastReplyScanAt = cloudData.lastReplyScanAt ?? localState.lastReplyScanAt;
+  merged.newRepliesCount = cloudData.newRepliesCount ?? localState.newRepliesCount ?? 0;
   merged.rankingsUpdatedAt = cloudData.rankingsUpdatedAt ?? localState.rankingsUpdatedAt;
   merged.lastSavedAt = cloudData.lastSavedAt ?? localState.lastSavedAt;
 
