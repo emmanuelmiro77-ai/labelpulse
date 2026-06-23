@@ -2024,46 +2024,192 @@ function ReplyTrackerSection({
 //   - rejected → polite "thanks anyway, maybe next time"
 //   - none     → free-form follow-up nudge
 
-const REPLY_TEMPLATES: Record<
-  ReplyStatus,
-  { it: string; en: string; subjectPrefix: string; bodyIt: string; bodyEn: string }
-> = {
-  none: {
-    it: "Follow-up",
-    en: "Follow-up",
-    subjectPrefix: "Re:",
-    bodyIt: `Gentile team,\n\nTi scrivo per un cortese follow-up rispetto alla demo "{trackName}" inviata il {sentDate}.\n\nComprendo che valutiate con cura tutte le proposte e che i tempi possano essere lunghi, ma vi sarei grato se poteste farmi avere un feedback, anche sintetico.\n\nResto a disposizione per qualsiasi dettaglio aggiuntivo.\n\nCordiali saluti,\n{artistName}`,
-    bodyEn: `Hi team,\n\nI'm writing a quick follow-up on the demo "{trackName}" I sent on {sentDate}.\n\nI understand you carefully review every submission and that timelines can be long, but I'd be grateful for any feedback, even a brief one.\n\nHappy to provide any additional details you may need.\n\nBest regards,\n{artistName}`,
-  },
-  ack: {
-    it: "Ringraziamento ACK",
-    en: "Ack thank-you",
-    subjectPrefix: "Re:",
-    bodyIt: `Gentile {senderName},\n\nGrazie per la conferma di ricezione. Resto in attesa di un vostro feedback entro le tempistiche indicate.\n\nCordiali saluti,\n{artistName}`,
-    bodyEn: `Hi {senderName},\n\nThanks for confirming receipt. I look forward to hearing back within the timeframe you mentioned.\n\nBest regards,\n{artistName}`,
-  },
-  info: {
-    it: "Risposta info",
-    en: "Info reply",
-    subjectPrefix: "Re:",
-    bodyIt: `Gentile {senderName},\n\nGrazie per il tuo interessamento. In risposta alla tua richiesta:\n\n[scrivi qui i dettagli richiesti — es. link WAV, stems, BPM, ecc.]\n\nResto a disposizione per qualsiasi altra informazione.\n\nCordiali saluti,\n{artistName}`,
-    bodyEn: `Hi {senderName},\n\nThanks for your interest. In response to your request:\n\n[write the requested details here — e.g. WAV link, stems, BPM, etc.]\n\nHappy to provide anything else you may need.\n\nBest regards,\n{artistName}`,
-  },
-  positive: {
-    it: "Invio materiale",
-    en: "Send materials",
-    subjectPrefix: "Re:",
-    bodyIt: `Gentile {senderName},\n\nGrazie mille per il feedback positivo! Sono felice che la traccia vi sia piaciuta.\n\nProcedo subito con l'invio del materiale richiesto. Trovi tutti i link in calce a questa email.\n\nResto a disposizione per definire i prossimi passi.\n\nCordiali saluti,\n{artistName}`,
-    bodyEn: `Hi {senderName},\n\nThank you so much for the positive feedback! Glad to hear the track resonated with you.\n\nI'll send the requested materials right away — links are at the bottom of this email.\n\nAvailable to discuss the next steps.\n\nBest regards,\n{artistName}`,
-  },
-  rejected: {
-    it: "Ringraziamento rifiuto",
-    en: "Rejection thank-you",
-    subjectPrefix: "Re:",
-    bodyIt: `Gentile {senderName},\n\nGrazie comunque per aver preso il tempo di ascoltare la demo. Apprezzo la trasparenza del feedback.\n\nSpero possa esserci occasione di collaborare in futuro con materiale più in linea con il vostro catalogo.\n\nCordiali saluti,\n{artistName}`,
-    bodyEn: `Hi {senderName},\n\nThanks anyway for taking the time to listen. I appreciate the transparent feedback.\n\nHope we'll have a chance to collaborate in the future with material that's a better fit for your roster.\n\nBest regards,\n{artistName}`,
-  },
+// Each reply status has multiple template variants (formal / warm) so the
+// user can pick the tone that fits. Each variant is available in 5 languages
+// (it/en/de/fr/es) — the language is decoupled from the app locale so the
+// producer can reply in whatever language the label used.
+
+export type ReplyLang = "it" | "en" | "de" | "fr" | "es";
+
+export const REPLY_LANGUAGES: { code: ReplyLang; labelIt: string; labelEn: string; flag: string }[] = [
+  { code: "it", labelIt: "Italiano", labelEn: "Italian", flag: "🇮🇹" },
+  { code: "en", labelIt: "Inglese", labelEn: "English", flag: "🇬🇧" },
+  { code: "de", labelIt: "Tedesco", labelEn: "German", flag: "🇩🇪" },
+  { code: "fr", labelIt: "Francese", labelEn: "French", flag: "🇫🇷" },
+  { code: "es", labelIt: "Spagnolo", labelEn: "Spanish", flag: "🇪🇸" },
+];
+
+type ReplyTemplate = {
+  id: string;
+  toneIt: string; // label shown in IT locale
+  toneEn: string; // label shown in EN locale
+  body: Record<ReplyLang, string>;
 };
+
+const REPLY_TEMPLATES: Record<ReplyStatus, ReplyTemplate[]> = {
+  none: [
+    {
+      id: "followup-formal",
+      toneIt: "Follow-up formale",
+      toneEn: "Formal follow-up",
+      body: {
+        it: `Gentile team,\n\nTi scrivo per un cortese follow-up rispetto alla demo "{trackName}" inviata il {sentDate}.\n\nComprendo che valutiate con cura tutte le proposte e che i tempi possano essere lunghi, ma vi sarei grato se poteste farmi avere un feedback, anche sintetico.\n\nResto a disposizione per qualsiasi dettaglio aggiuntivo.\n\nCordiali saluti,\n{artistName}`,
+        en: `Hi team,\n\nI'm writing a quick follow-up on the demo "{trackName}" I sent on {sentDate}.\n\nI understand you carefully review every submission and that timelines can be long, but I'd be grateful for any feedback, even a brief one.\n\nHappy to provide any additional details you may need.\n\nBest regards,\n{artistName}`,
+        de: `Hallo liebes Team,\n\nich melde mich kurz bezüglich der Demo „{trackName}", die ich am {sentDate} eingereicht habe.\n\nIch verstehe, dass ihr jede Einsendung sorgfältig prüft und dass dies Zeit braucht, aber ich wäre dankbar für eine kurze Rückmeldung.\n\nFür weitere Informationen stehe ich jederzeit zur Verfügung.\n\nMit freundlichen Grüßen,\n{artistName}`,
+        fr: `Bonjour,\n\nJe me permets de revenir vers vous au sujet de la démo « {trackName} » envoyée le {sentDate}.\n\nJe comprends que vous examinez chaque proposition avec soin et que les délais peuvent être longs, mais je serais reconnaissant de tout retour, même bref.\n\nJe reste à votre disposition pour tout complément d'information.\n\nCordialement,\n{artistName}`,
+        es: `Hola,\n\nLes escribo como seguimiento sobre la demo «{trackName}» que envié el {sentDate}.\n\nEntiendo que revisan cada propuesta con detenimiento y que los tiempos pueden ser largos, pero les agradecería cualquier comentario, aunque sea breve.\n\nQuedo a su disposición para cualquier información adicional.\n\nUn cordial saludo,\n{artistName}`,
+      },
+    },
+    {
+      id: "followup-warm",
+      toneIt: "Follow-up amichevole",
+      toneEn: "Warm follow-up",
+      body: {
+        it: `Ciao {senderName},\n\nspero tutto bene! Ti scrivo solo per sapere se avete avuto modo di dare un ascolto a "{trackName}".\n\nNessuna fretta — so che siete sommersi di demo. Se vi serve altro materiale o dettagli, fatemi sapere.\n\nA presto,\n{artistName}`,
+        en: `Hi {senderName},\n\nHope you're doing well! Just a quick note to check if you've had a chance to listen to "{trackName}".\n\nNo rush at all — I know you get flooded with demos. If you need any extra material or details, just say the word.\n\nCheers,\n{artistName}`,
+        de: `Hi {senderName},\n\nich hoffe, es geht dir gut! Ich melde mich nur kurz, um nachzufragen, ob ihr schon Zeit hattet, euch „{trackName}" anzuhören.\n\nKein Stress — ich weiß, dass ihr mit Demos überschüttet werdet. Falls ihr weiteres Material oder Infos braucht, sagt einfach Bescheid.\n\nLiebe Grüße,\n{artistName}`,
+        fr: `Salut {senderName},\n\nJ'espère que tu vas bien ! Je me permets de demander si vous avez pu écouter « {trackName} ».\n\nPas d'urgence — je sais que vous recevez énormément de démos. S'il vous faut d'autres éléments ou infos, n'hésitez pas.\n\nÀ bientôt,\n{artistName}`,
+        es: `Hola {senderName},\n\n¡Espero que estés bien! Te escribo solo para saber si habéis tenido ocasión de escuchar «{trackName}».\n\nSin prisa — sé que recibís muchísimas demos. Si necesitáis más material o información, decidme.\n\nUn saludo,\n{artistName}`,
+      },
+    },
+  ],
+  ack: [
+    {
+      id: "ack-formal",
+      toneIt: "Ringraziamento formale",
+      toneEn: "Formal thank-you",
+      body: {
+        it: `Gentile {senderName},\n\nGrazie per la conferma di ricezione. Resto in attesa di un vostro feedback entro le tempistiche indicate.\n\nCordiali saluti,\n{artistName}`,
+        en: `Hi {senderName},\n\nThanks for confirming receipt. I look forward to hearing back within the timeframe you mentioned.\n\nBest regards,\n{artistName}`,
+        de: `Hallo {senderName},\n\nvielen Dank für die Bestätigung des Eingangs. Ich freue mich auf euer Feedback innerhalb des genannten Zeitraums.\n\nMit freundlichen Grüßen,\n{artistName}`,
+        fr: `Bonjour {senderName},\n\nMerci pour la confirmation de bonne réception. Je reste dans l'attente de votre retour dans les délais indiqués.\n\nCordialement,\n{artistName}`,
+        es: `Hola {senderName},\n\nGracias por confirmar la recepción. Quedo a la espera de sus comentarios dentro del plazo indicado.\n\nUn cordial saludo,\n{artistName}`,
+      },
+    },
+    {
+      id: "ack-warm",
+      toneIt: "Ringraziamento breve",
+      toneEn: "Brief thank-you",
+      body: {
+        it: `Ciao {senderName},\n\ntutto ricevuto, grazie mille! Aspetto vostri — prendetevi il tempo necessario.\n\nA presto,\n{artistName}`,
+        en: `Hi {senderName},\n\nGot it, thanks a lot! I'll wait for your feedback — take all the time you need.\n\nCheers,\n{artistName}`,
+        de: `Hi {senderName},\n\nalles angekommen, vielen Dank! Ich warte auf euer Feedback — nehmt euch die Zeit, die ihr braucht.\n\nLiebe Grüße,\n{artistName}`,
+        fr: `Salut {senderName},\n\nBien reçu, merci beaucoup ! J'attends votre retour — prenez le temps qu'il vous faut.\n\nÀ bientôt,\n{artistName}`,
+        es: `Hola {senderName},\n\n¡Todo recibido, muchas gracias! Espero vuestros comentarios — tomáos el tiempo que necesitéis.\n\nUn saludo,\n{artistName}`,
+      },
+    },
+  ],
+  info: [
+    {
+      id: "info-formal",
+      toneIt: "Risposta formale",
+      toneEn: "Formal reply",
+      body: {
+        it: `Gentile {senderName},\n\nGrazie per il tuo interessamento. In risposta alla tua richiesta:\n\n[scrivi qui i dettagli richiesti — es. link WAV, stems, BPM, ecc.]\n\nResto a disposizione per qualsiasi altra informazione.\n\nCordiali saluti,\n{artistName}`,
+        en: `Hi {senderName},\n\nThanks for your interest. In response to your request:\n\n[write the requested details here — e.g. WAV link, stems, BPM, etc.]\n\nHappy to provide anything else you may need.\n\nBest regards,\n{artistName}`,
+        de: `Hallo {senderName},\n\nvielen Dank für dein Interesse. Als Antwort auf deine Anfrage:\n\n[hier die gewünschten Details eintragen — z. B. WAV-Link, Stems, BPM usw.]\n\nFür weitere Informationen stehe ich gerne zur Verfügung.\n\nMit freundlichen Grüßen,\n{artistName}`,
+        fr: `Bonjour {senderName},\n\nMerci pour votre intérêt. En réponse à votre demande :\n\n[inscrivez ici les détails demandés — ex. lien WAV, stems, BPM, etc.]\n\nJe reste à votre disposition pour tout complément.\n\nCordialement,\n{artistName}`,
+        es: `Hola {senderName},\n\nGracias por vuestro interés. En respuesta a tu solicitud:\n\n[escribe aquí los detalles solicitados — p. ej. enlace WAV, stems, BPM, etc.]\n\nQuedo a su disposición para cualquier otra información.\n\nUn cordial saludo,\n{artistName}`,
+      },
+    },
+    {
+      id: "info-warm",
+      toneIt: "Risposta diretta",
+      toneEn: "Direct reply",
+      body: {
+        it: `Ciao {senderName},\n\ncerto, ecco quello che mi hai chiesto:\n\n[scrivi qui i dettagli richiesti]\n\nSe serve altro dimmi pure.\n\nA presto,\n{artistName}`,
+        en: `Hi {senderName},\n\nsure, here's what you asked for:\n\n[write the requested details here]\n\nLet me know if you need anything else.\n\nCheers,\n{artistName}`,
+        de: `Hi {senderName},\n\nklar, hier das Gewünschte:\n\n[hier die gewünschten Details eintragen]\n\nFalls ihr noch etwas braucht, sagt einfach Bescheid.\n\nLiebe Grüße,\n{artistName}`,
+        fr: `Salut {senderName},\n\nbien sûr, voici ce que tu as demandé :\n\n[inscris ici les détails demandés]\n\nSi tu as besoin d'autre chose, dis-moi.\n\nÀ bientôt,\n{artistName}`,
+        es: `Hola {senderName},\n\nclaro, aquí lo que pediste:\n\n[escribe aquí los detalles solicitados]\n\nSi necesitáis algo más, decidme.\n\nUn saludo,\n{artistName}`,
+      },
+    },
+  ],
+  positive: [
+    {
+      id: "positive-formal",
+      toneIt: "Invio materiale formale",
+      toneEn: "Formal material send",
+      body: {
+        it: `Gentile {senderName},\n\nGrazie mille per il feedback positivo! Sono felice che la traccia vi sia piaciuta.\n\nProcedo subito con l'invio del materiale richiesto. Trovi tutti i link in calce a questa email.\n\nResto a disposizione per definire i prossimi passi.\n\nCordiali saluti,\n{artistName}`,
+        en: `Hi {senderName},\n\nThank you so much for the positive feedback! Glad to hear the track resonated with you.\n\nI'll send the requested materials right away — links are at the bottom of this email.\n\nAvailable to discuss the next steps.\n\nBest regards,\n{artistName}`,
+        de: `Hallo {senderName},\n\nvielen Dank für das positive Feedback! Es freut mich, dass der Track bei euch ankam.\n\nIch sende die gewünschten Materialien umgehend — die Links findet ihr am Ende dieser E-Mail.\n\nFür die nächsten Schritte stehe ich gerne zur Verfügung.\n\nMit freundlichen Grüßen,\n{artistName}`,
+        fr: `Bonjour {senderName},\n\nMerci beaucoup pour ce retour positif ! Ravi que le titre vous ait parlé.\n\nJe vous envoie les éléments demandés tout de suite — les liens se trouvent en bas de cet e-mail.\n\nJe reste à votre disposition pour définir les prochaines étapes.\n\nCordialement,\n{artistName}`,
+        es: `Hola {senderName},\n\n¡Muchas gracias por el comentario positivo! Me alegra que el tema os haya gustado.\n\nOs envío enseguida el material solicitado — los enlaces están al final de este correo.\n\nQuedo a su disposición para concretar los próximos pasos.\n\nUn cordial saludo,\n{artistName}`,
+      },
+    },
+    {
+      id: "positive-warm",
+      toneIt: "Invio materiale entusiasta",
+      toneEn: "Enthusiastic send",
+      body: {
+        it: `Ciao {senderName},\n\nche bella notizia, grazie! 😊 Sono super felice che "{trackName}" vi sia piaciuta.\n\nTi invio subito tutto il materiale richiesto — lo trovi in fondo.\n\nDimmi tu i prossimi passi, sono a disposizione.\n\nA presto,\n{artistName}`,
+        en: `Hi {senderName},\n\namazing news, thanks! 😊 Super happy that "{trackName}" resonated with you.\n\nSending all the requested materials right away — links at the bottom.\n\nLet me know the next steps, I'm here.\n\nCheers,\n{artistName}`,
+        de: `Hi {senderName},\n\ntolle Nachricht, danke! 😊 Super, dass „{trackName}" bei euch ankam.\n\nIch schicke dir sofort das gesamte gewünschte Material — die Links findest du unten.\n\nSag Bescheid, wie es weitergeht, ich bin da.\n\nLiebe Grüße,\n{artistName}`,
+        fr: `Salut {senderName},\n\nquelle belle nouvelle, merci ! 😊 Super ravi que « {trackName} » vous ait parlé.\n\nJe t'envoie tout de suite le matériel demandé — les liens sont en bas.\n\nDis-moi la suite, je suis dispo.\n\nÀ bientôt,\n{artistName}`,
+        es: `Hola {senderName},\n\n¡qué buena noticia, gracias! 😊 Super contento de que «{trackName}» os haya gustado.\n\nTe envío enseguida todo el material solicitado — los enlaces están abajo.\n\nDime los próximos pasos, aquí estoy.\n\nUn saludo,\n{artistName}`,
+      },
+    },
+  ],
+  rejected: [
+    {
+      id: "rejected-formal",
+      toneIt: "Ringraziamento formale",
+      toneEn: "Formal thank-you",
+      body: {
+        it: `Gentile {senderName},\n\nGrazie comunque per aver preso il tempo di ascoltare la demo. Apprezzo la trasparenza del feedback.\n\nSpero possa esserci occasione di collaborare in futuro con materiale più in linea con il vostro catalogo.\n\nCordiali saluti,\n{artistName}`,
+        en: `Hi {senderName},\n\nThanks anyway for taking the time to listen. I appreciate the transparent feedback.\n\nHope we'll have a chance to collaborate in the future with material that's a better fit for your roster.\n\nBest regards,\n{artistName}`,
+        de: `Hallo {senderName},\n\ntrotzdem vielen Dank, dass ihr euch die Zeit genommen habt, die Demo anzuhören. Ich schätze das offene Feedback.\n\nIch hoffe, wir künftig Gelegenheit haben, mit passenderem Material für euren Katalog zusammenzuarbeiten.\n\nMit freundlichen Grüßen,\n{artistName}`,
+        fr: `Bonjour {senderName},\n\nMerci quand même d'avoir pris le temps d'écouter la démo. J'apprécie le retour transparent.\n\nJ'espère que nous aurons l'occasion de collaborer à l'avenir avec un matériel plus adapté à votre catalogue.\n\nCordialement,\n{artistName}`,
+        es: `Hola {senderName},\n\nGracias de todos modos por tomarse el tiempo de escuchar la demo. Agradezco el comentario transparente.\n\nEspero que tengamos ocasión de colaborar en el futuro con material más adecuado a vuestro catálogo.\n\nUn cordial saludo,\n{artistName}`,
+      },
+    },
+    {
+      id: "rejected-warm",
+      toneIt: "Ringraziamento breve",
+      toneEn: "Brief thank-you",
+      body: {
+        it: `Ciao {senderName},\n\nnessun problema, grazie per l'ascolto e la sincerità. Ci provo con la prossima — a presto!\n\n{artistName}`,
+        en: `Hi {senderName},\n\nno worries, thanks for listening and for the honesty. I'll come back with the next one — see you soon!\n\n{artistName}`,
+        de: `Hi {senderName},\n\nkein Problem, danke fürs Zuhören und die Ehrlichkeit. Ich komme mit der nächsten Demo wieder — bis bald!\n\n{artistName}`,
+        fr: `Salut {senderName},\n\npas de souci, merci pour l'écoute et l'honnêteté. Je reviens avec la prochaine — à bientôt !\n\n{artistName}`,
+        es: `Hola {senderName},\n\nsin problema, gracias por escuchar y por la sinceridad. Vuelvo con la próxima — ¡hasta pronto!\n\n{artistName}`,
+      },
+    },
+  ],
+};
+
+// Detect the most likely language of a label's reply so the producer can
+// reply in the same language by default. Returns the highest-scoring lang.
+function detectReplyLanguage(text: string): ReplyLang {
+  if (!text) return "en";
+  const lower = text.toLowerCase();
+  const scores: Record<ReplyLang, number> = { it: 0, en: 0, de: 0, fr: 0, es: 0 };
+  // Common stop-words / greetings per language
+  const markers: Record<ReplyLang, RegExp[]> = {
+    it: [/grazie/g, /gentile/g, /caro/g, /ciao/g, /saluti/g, /ricevuto/g, /ascolto/g, /demo/g, /vielen/g, /cordiali/g],
+    en: [/thanks/g, /thank you/g, /dear/g, /hi\b/g, /hello/g, /best/g, /regards/g, /received/g, /listen/g, /demo/g],
+    de: [/vielen dank/g, /hallo/g, /liebe[r]?/g, /freundliche grüße/g, /demo/g, /erhalten/g, /anhören/g, /feedback/g],
+    fr: [/merci/g, /bonjour/g, /cordialement/g, /reçu/g, /écouter/g, /démo/g, /salut/g, /bien à vous/g],
+    es: [/gracias/g, /hola/g, /saludos/g, /recibido/g, /escuchar/g, /demo/g, /un cordial/g, /estimado/g],
+  };
+  for (const lang of Object.keys(markers) as ReplyLang[]) {
+    for (const re of markers[lang]) {
+      const matches = lower.match(re);
+      if (matches) scores[lang] += matches.length;
+    }
+  }
+  // Pick highest, default to en on tie
+  let best: ReplyLang = "en";
+  let bestScore = 0;
+  for (const lang of Object.keys(scores) as ReplyLang[]) {
+    if (scores[lang] > bestScore) {
+      bestScore = scores[lang];
+      best = lang;
+    }
+  }
+  return best;
+}
 
 function extractSenderName(fromHeader: string): string {
   // Try to extract the human-readable name from "Patrick Scuro <demo.animarum@gmail.com>"
@@ -2098,10 +2244,15 @@ function LabelReplyComposer({
   const [sending, setSending] = useState(false);
   const [sent, setSent] = useState(false);
   const [body, setBody] = useState("");
+  const [selectedLang, setSelectedLang] = useState<ReplyLang>("en");
+  const [selectedVariantIdx, setSelectedVariantIdx] = useState(0);
+  const [bodyDirty, setBodyDirty] = useState(false);
+  const [genMenuOpen, setGenMenuOpen] = useState(false);
 
-  // Pick the right template based on the current reply status
+  // Pick the right template family based on the current reply status
   const currentReply = getReplyStatus(demo);
-  const template = REPLY_TEMPLATES[currentReply];
+  const variants = REPLY_TEMPLATES[currentReply];
+  const activeVariant = variants[selectedVariantIdx] || variants[0];
 
   // Reply target = the email address that sent the reply (preferred)
   // or the label's emails as fallback
@@ -2125,17 +2276,68 @@ function LabelReplyComposer({
     return `Re: Demo: ${demo.trackName}`;
   }, [demo.pitchText, demo.trackName]);
 
-  // Initialize the body when the composer opens or the template changes
+  // Detect the label's reply language once when the composer opens so the
+  // producer can reply in the same language by default.
+  const detectedLang = useMemo<ReplyLang>(() => {
+    const source = `${demo.replyText || ""} ${demo.replySender || ""}`;
+    return detectReplyLanguage(source);
+  }, [demo.replyText, demo.replySender]);
+
+  // Helper that fills a template body with demo data
+  const fillTemplate = useCallback(
+    (tpl: ReplyTemplate, lang: ReplyLang): string => {
+      const raw = tpl.body[lang] || tpl.body.en;
+      return raw
+        .replace(/\{trackName\}/g, demo.trackName)
+        .replace(/\{sentDate\}/g, demo.sentDate || "")
+        .replace(/\{artistName\}/g, artistName)
+        .replace(/\{senderName\}/g, senderName || (lang === "it" ? "team" : "team"));
+    },
+    [demo.trackName, demo.sentDate, artistName, senderName]
+  );
+
+  // When the composer opens for the first time, auto-detect language and
+  // populate the body with the first variant. Don't overwrite if the user
+  // has already edited the body manually.
   useEffect(() => {
     if (!isOpen) return;
-    const tpl = locale === "it" ? template.bodyIt : template.bodyEn;
-    const filled = tpl
-      .replace(/\{trackName\}/g, demo.trackName)
-      .replace(/\{sentDate\}/g, demo.sentDate || "")
-      .replace(/\{artistName\}/g, artistName)
-      .replace(/\{senderName\}/g, senderName || (locale === "it" ? "team" : "team"));
-    setBody(filled);
-  }, [isOpen, template, demo.trackName, demo.sentDate, artistName, senderName, locale]);
+    if (!bodyDirty) {
+      setSelectedLang(detectedLang);
+      setSelectedVariantIdx(0);
+      setBody(fillTemplate(variants[0], detectedLang));
+    }
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [isOpen]);
+
+  // When the user picks a different language or variant via the controls,
+  // re-fill the body (we DO overwrite here because they explicitly asked).
+  // But only if the body hasn't been hand-edited yet — otherwise show a
+  // confirm via toast and let them click again to force.
+  const applyVariant = useCallback(
+    (variantIdx: number, lang: ReplyLang, force = false) => {
+      if (bodyDirty && !force) {
+        toast({
+          title: locale === "it" ? "Testo già modificato" : "Body already edited",
+          description:
+            locale === "it"
+              ? "Hai modificato manualmente il testo. Clicca di nuovo per sovrascrivere."
+              : "You've edited the text manually. Click again to overwrite.",
+          variant: "destructive",
+        });
+        return;
+      }
+      setSelectedVariantIdx(variantIdx);
+      setSelectedLang(lang);
+      setBody(fillTemplate(variants[variantIdx], lang));
+      setBodyDirty(false);
+    },
+    [bodyDirty, fillTemplate, variants, toast, locale]
+  );
+
+  const handleBodyChange = (next: string) => {
+    setBody(next);
+    setBodyDirty(true);
+  };
 
   const handleSend = useCallback(async () => {
     if (!body.trim()) return;
@@ -2255,15 +2457,116 @@ function LabelReplyComposer({
         )}
       </div>
 
-      {/* Template label */}
+      {/* Language + tone controls */}
+      <div className="flex flex-wrap items-center gap-2 pt-1">
+        {/* Language picker */}
+        <div className="flex items-center gap-1">
+          <Languages className="h-3 w-3 text-muted-foreground/60 mr-0.5" />
+          {REPLY_LANGUAGES.map((lng) => (
+            <button
+              key={lng.code}
+              type="button"
+              onClick={() => applyVariant(selectedVariantIdx, lng.code)}
+              title={locale === "it" ? lng.labelIt : lng.labelEn}
+              className={`h-6 px-1.5 rounded text-[10px] font-medium border transition-colors ${
+                selectedLang === lng.code
+                  ? "bg-primary text-primary-foreground border-primary"
+                  : "bg-transparent text-muted-foreground border-border hover:bg-secondary"
+              }`}
+            >
+              <span className="mr-0.5">{lng.flag}</span>
+              {lng.code.toUpperCase()}
+            </button>
+          ))}
+          {detectedLang && (
+            <span className="text-[9px] text-muted-foreground/50 ml-1">
+              {locale === "it" ? `rilevata: ${detectedLang.toUpperCase()}` : `detected: ${detectedLang.toUpperCase()}`}
+            </span>
+          )}
+        </div>
+
+        {/* Generate reply menu */}
+        <Popover open={genMenuOpen} onOpenChange={setGenMenuOpen}>
+          <PopoverTrigger asChild>
+            <Button
+              type="button"
+              size="sm"
+              variant="outline"
+              className="h-6 text-[10px] gap-1 border-primary/30 text-primary"
+            >
+              <Sparkles className="h-3 w-3" />
+              {locale === "it" ? "Genera risposta" : "Generate reply"}
+            </Button>
+          </PopoverTrigger>
+          <PopoverContent className="w-72 p-1" align="start">
+            <div className="px-2 py-1.5 text-[10px] font-semibold text-muted-foreground uppercase tracking-wide">
+              {locale === "it" ? "Scegli tono" : "Pick a tone"}
+            </div>
+            {variants.map((v, idx) => {
+              const isActive = idx === selectedVariantIdx;
+              return (
+                <button
+                  key={v.id}
+                  type="button"
+                  onClick={() => {
+                    applyVariant(idx, selectedLang);
+                    setGenMenuOpen(false);
+                  }}
+                  className={`w-full text-left px-2 py-1.5 rounded text-[11px] flex items-start gap-2 transition-colors ${
+                    isActive ? "bg-primary/10 text-primary" : "hover:bg-secondary"
+                  }`}
+                >
+                  <span className="flex-1">
+                    <span className="font-medium block">
+                      {locale === "it" ? v.toneIt : v.toneEn}
+                    </span>
+                    <span className="text-[9px] text-muted-foreground/70 line-clamp-2 leading-tight mt-0.5">
+                      {fillTemplate(v, selectedLang).slice(0, 90).replace(/\n/g, " ")}…
+                    </span>
+                  </span>
+                  {isActive && <Check className="h-3 w-3 mt-0.5 text-primary flex-shrink-0" />}
+                </button>
+              );
+            })}
+            <div className="border-t border-border mt-1 pt-1 px-2 py-1 text-[9px] text-muted-foreground/60">
+              {locale === "it"
+                ? "Le varianti si adattano allo stato della risposta (ACK / info / positiva / rifiuto)."
+                : "Variants adapt to the reply status (ACK / info / positive / rejected)."}
+            </div>
+          </PopoverContent>
+        </Popover>
+
+        {bodyDirty && (
+          <button
+            type="button"
+            onClick={() => {
+              // Force re-apply the current variant (overwrites manual edits)
+              applyVariant(selectedVariantIdx, selectedLang, true);
+            }}
+            className="text-[10px] text-muted-foreground hover:text-foreground flex items-center gap-1"
+            title={locale === "it" ? "Ripristina template" : "Reset to template"}
+          >
+            <RotateCcw className="h-2.5 w-2.5" />
+            {locale === "it" ? "Reset" : "Reset"}
+          </button>
+        )}
+      </div>
+
+      {/* Active template label */}
       <div className="flex items-center gap-1.5 text-[10px] text-primary/70">
         <Sparkles className="h-3 w-3" />
-        <span>{locale === "it" ? template.it : template.en}</span>
+        <span>
+          {locale === "it" ? activeVariant.toneIt : activeVariant.toneEn}
+          {" · "}
+          {REPLY_LANGUAGES.find((l) => l.code === selectedLang)?.flag}
+          {" "}
+          {selectedLang.toUpperCase()}
+        </span>
       </div>
 
       <Textarea
         value={body}
-        onChange={(e) => setBody(e.target.value)}
+        onChange={(e) => handleBodyChange(e.target.value)}
         rows={10}
         className="bg-secondary/50 text-[11px] font-mono resize-y min-h-[180px]"
         spellCheck={false}
