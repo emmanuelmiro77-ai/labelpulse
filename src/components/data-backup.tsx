@@ -14,6 +14,7 @@ import {
 import { useToast } from "@/hooks/use-toast";
 import { RankingsWizard } from "@/components/rankings-wizard";
 import { CloudDiagnostic } from "@/components/cloud-diagnostic";
+import { FeedbackInbox } from "@/components/feedback-inbox";
 import { isAdminEmail } from "@/lib/supabase";
 
 export function DataBackup() {
@@ -117,6 +118,14 @@ export function DataBackup() {
 
           {/* Cloud Diagnostic — ADMIN ONLY */}
           {isAdmin && <CloudDiagnostic />}
+
+          {/* Feedback Inbox — ADMIN ONLY */}
+          {isAdmin && (
+            <>
+              <div className="border-t border-border/30" />
+              <FeedbackInbox />
+            </>
+          )}
 
           {/* Rankings Wizard — ADMIN ONLY */}
           {isAdmin ? (
