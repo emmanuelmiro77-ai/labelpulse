@@ -1,5 +1,5 @@
 /**
- * LabelPulse Service Worker v4 — Bulletproof Offline-First PWA
+ * LabelPulse Service Worker v5 — Bulletproof Offline-First PWA + Web Push
  * 
  * Strategy: Cache-First for static assets, Network-First for HTML
  * 
@@ -8,9 +8,10 @@
  * - HTML is always fresh when online (updates detected immediately)
  * - If the server is down, the app still works 100% from cache
  * - Users get an update notification when a new version is available
+ * - Web Push notifications work on iOS (Home Screen), Android, Desktop
  */
 
-const CACHE_NAME = "labelpulse-v4";
+const CACHE_NAME = "labelpulse-v5";
 const OFFLINE_URL = "/";
 
 // Pre-cache essential assets on install
@@ -165,3 +166,80 @@ self.addEventListener("message", (event) => {
     self.skipWaiting();
   }
 });
+
+// =====================================================================
+// WEB PUSH NOTIFICATIONS
+// =====================================================================
+
+// Handle incoming push events
+self.addEventListener("push", (event) => {
+  let payload = {};
+  try {
+    payload = event.data ? event.data.json() : {};
+  } catch (err) {
+    // Fallback: treat as plain text
+    payload = { title: "LabelPulse", body: event.data ? event.data.text() : "" };
+  }
+
+  const title = payload.title || "LabelPulse";
+  const options = {
+    body: payload.body || "",
+    icon: payload.icon || "/icons/icon-192.png",
+    badge: "/icons/icon-192.png",
+    tag: payload.tag || "labelpulse-notification",
+    renotify: true,
+    data: {
+      url: payload.url || "/",
+    },
+  };
+
+  event.waitUntil(
+    Promise.all([
+      self.registration.showNotification(title, options),
+      // Update badge count (iOS Safari 16.4+ supports this)
+      navigator.setAppBadge ? navigator.setAppBadge(1).catch(() => {}) : Promise.resolve(),
+    ])
+  );
+});
+
+// Handle notification click — focus existing window or open new one
+self.addEventListener("notificationclick", (event) => {
+  event.notification.close();
+  const targetUrl = event.notification.data?.url || "/";
+
+  event.waitUntil(
+    (async () => {
+      // Clear badge on click
+      if (navigator.clearAppBadge) {
+        try { await navigator.clearAppBadge(); } catch {}
+      }
+      // Try to focus an existing window
+      const allClients = await self.clients.matchAll({
+        type: "window",
+        includeUncontrolled: true,
+      });
+      for (const client of allClients) {
+        // If a window is already open at our origin, focus + navigate
+        if (client.url.includes(self.location.origin)) {
+          if ("focus" in client) {
+            try { await client.focus(); } catch {}
+          }
+          if ("navigate" in client) {
+            try { await client.navigate(targetUrl); } catch {}
+          }
+          return;
+        }
+      }
+      // Otherwise open a new window
+      if (self.clients.openWindow) {
+        try { await self.clients.openWindow(targetUrl); } catch {}
+      }
+    })()
+  );
+});
+
+// Handle notification close (optional: analytics)
+self.addEventListener("notificationclose", (event) => {
+  // No-op for now
+});
+

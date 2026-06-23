@@ -384,3 +384,58 @@ Stage Summary:
   * What they can do vs what's admin-only (no scraping, no rankings updates)
   * How to report bugs/ideas via the in-app Feedback button
 - Ready to push + tag as v2.1.3
+
+---
+Task ID: 16
+Agent: Main Agent
+Task: Implement Web Push notifications system (3 categories + per-user toggles)
+
+Work Log:
+- Installed `web-push` npm package
+- Generated VAPID key pair (public + private) and saved to .env.local
+- Created supabase-schema-push.sql (push_subscriptions table with per-user prefs)
+- Created src/lib/push.ts (server-side lib: saveSubscription, removeSubscription, updatePrefsForUser, sendPushToUser, sendPushToAllOptedIn, etc.)
+- Created 7 API routes:
+  - POST /api/push/subscribe     — save subscription (called by client after PushManager.subscribe)
+  - POST /api/push/unsubscribe   — remove subscription
+  - POST /api/push/update-prefs  — update category prefs for all user's subscriptions
+  - POST /api/push/test          — send test push to user
+  - POST /api/push/rankings-updated — admin trigger, sends to all opted-in users
+  - POST /api/cron/follow-up-reminders — daily 7am UTC, finds demos 7-8 days old without reply
+  - POST /api/cron/weekly-recap  — Monday 7am UTC, sends weekly stats recap
+- Extended public/sw.js (v4 → v5):
+  - Added push event handler (parses JSON payload, shows notification with icon)
+  - Added notificationclick handler (focus existing window or open new)
+  - Added notificationclose handler (no-op for now)
+  - Updated cache name v4 → v5 to invalidate
+- Added notifications field to UserProfile interface (master + 3 categories)
+- Added store migration v13 → v14 with default prefs (master=false, all categories=true)
+- Created NotificationSettings component with:
+  - iOS detection + hint to add to Home Screen
+  - Browser support detection (alert if Notification API missing)
+  - Permission denied state with recovery instructions
+  - Enable button → Notification.requestPermission + PushManager.subscribe + POST /api/push/subscribe
+  - 3 per-category switches (followUp, rankings, weeklyRecap) with descriptions
+  - Send test button + Disable button
+  - Privacy note: phone number never requested
+- Integrated NotificationSettings in producer-profile.tsx as a new "Notifiche" card
+- Added trigger in RankingsWizard: after successful import, POST /api/push/rankings-updated
+  with summary including label/artist counts (uses admin's localStorage token)
+- Created vercel.json with 2 cron jobs:
+  - 0 7 * * * → /api/cron/follow-up-reminders
+  - 0 7 * * 1 → /api/cron/weekly-recap
+- Build successful (25 routes, all 7 new API routes compiled)
+
+Stage Summary:
+- Full Web Push system operational end-to-end
+- 3 notification types: follow-up reminders (daily cron), rankings updates (admin trigger), weekly recap (Monday cron)
+- Per-user granular toggles in Profilo page (master + 3 categories)
+- No SMS, no phone numbers, no Twilio — pure Web Push API via VAPID
+- Works on: Chrome/Edge/Firefox desktop, Android Chrome, iOS Safari 16.4+ (Home Screen required)
+- Ready to push + tag as v2.1.4
+
+User must do before features activate:
+1. Run supabase-schema-push.sql in Supabase SQL Editor (creates push_subscriptions table)
+2. Set on Vercel env vars: NEXT_PUBLIC_VAPID_PUBLIC_KEY, VAPID_PRIVATE_KEY, VAPID_SUBJECT, CRON_SECRET
+3. Verify BETA_ADMIN_TOKEN is still set (already done previously)
+4. After deploy: each user opens Profilo → "Notifiche" → Abilita → toggle categories

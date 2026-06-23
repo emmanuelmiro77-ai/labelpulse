@@ -853,6 +853,21 @@ interface UserProfile {
   cyaniteApiToken: string; // BYOK: user's Cyanite API token (optional)
   supabaseUrl: string;     // BYOK: user's Supabase project URL (optional, for cloud sync)
   supabaseAnonKey: string; // BYOK: user's Supabase anon key (optional, for cloud sync)
+  /**
+   * Web Push notification preferences. Persisted client-side + mirrored
+   * to the server (push_subscriptions table) on every toggle.
+   * - master: whether notifications are enabled at all (push permission
+   *   granted AND user opted in)
+   * - followUp: 7-day reminder for demos awaiting reply
+   * - rankings: notify when admin updates Beatport rankings
+   * - weeklyRecap: Monday 9am recap of the previous week's activity
+   */
+  notifications?: {
+    master: boolean;
+    followUp: boolean;
+    rankings: boolean;
+    weeklyRecap: boolean;
+  };
 }
 
 interface GmailAuth {
@@ -1249,7 +1264,7 @@ export const useAppStore = create<AppState>()(
       navigationReturnTo: null as { kind: "label"; labelId: string; labelName?: string } | null,
       activeTab: "dashboard" as const,
       locale: "it" as Locale,
-      userProfile: { artistName: "", scLink: "", bio: "", email: "", photoUrl: "", links: [], cyaniteApiToken: "", supabaseUrl: "", supabaseAnonKey: "" } as UserProfile,
+      userProfile: { artistName: "", scLink: "", bio: "", email: "", photoUrl: "", links: [], cyaniteApiToken: "", supabaseUrl: "", supabaseAnonKey: "", notifications: { master: false, followUp: true, rankings: true, weeklyRecap: true } } as UserProfile,
       gmailAuth: { isConnected: false, email: "", accessToken: "", expiresAt: 0 } as GmailAuth,
       releases: [] as Release[],
       lastReplyScanAt: null,
@@ -1955,7 +1970,7 @@ export const useAppStore = create<AppState>()(
     }),
     {
       name: PRIMARY_KEY,
-      version: 13,
+      version: 14,
       storage: createJSONStorage(() => robustStorage),
       migrate: (persisted: any, version: number) => {
         if (version < 5) {
@@ -2091,6 +2106,17 @@ export const useAppStore = create<AppState>()(
                 : (d.artistName ? [d.artistName] : []),
               parentReleaseId: d.parentReleaseId ?? null,
             }));
+          }
+        }
+        if (version < 14) {
+          // Web Push notification preferences (defaults: master OFF, all categories ON)
+          if (persisted.userProfile && !persisted.userProfile.notifications) {
+            persisted.userProfile.notifications = {
+              master: false,
+              followUp: true,
+              rankings: true,
+              weeklyRecap: true,
+            };
           }
         }
         return persisted;

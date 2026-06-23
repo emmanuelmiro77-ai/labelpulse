@@ -620,6 +620,32 @@ export function RankingsWizard() {
           setRankingsUpdatedAt(new Date().toISOString());
           toast({ title: t(locale, "data.rankingsSuccess") });
           setImportWarning(false);
+
+          // Fire-and-forget: notify all users who opted in to 'rankings'
+          // pushes. Admin's BETA_ADMIN_TOKEN is in localStorage (set from
+          // /admin/feedback page). If not present, skip silently — admin
+          // can still see the rankings, users just won't get a push.
+          try {
+            const adminToken = localStorage.getItem("beta_admin_token");
+            if (adminToken) {
+              const labelCount = (parsed.labels || []).length;
+              const artistCount = (parsed.artists || []).length;
+              const summary =
+                locale === "it"
+                  ? `${labelCount} label e ${artistCount} artisti aggiornati. Vai in Classifiche per vedere le novità.`
+                  : `${labelCount} labels and ${artistCount} artists updated. Go to Rankings to see what's new.`;
+              fetch("/api/push/rankings-updated", {
+                method: "POST",
+                headers: {
+                  "Content-Type": "application/json",
+                  Authorization: `Bearer ${adminToken}`,
+                },
+                body: JSON.stringify({ summary }),
+              }).catch(() => {});
+            }
+          } catch {
+            // Non-fatal: push is best-effort
+          }
         } else {
           toast({
             title: t(locale, "data.importError"),

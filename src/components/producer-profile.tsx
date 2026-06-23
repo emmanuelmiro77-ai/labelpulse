@@ -22,6 +22,7 @@ import {
   Loader2,
 } from "lucide-react";
 import { CloudRecovery } from "@/components/cloud-recovery";
+import { NotificationSettings } from "@/components/notification-settings";
 import { Input } from "@/components/ui/input";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent } from "@/components/ui/card";
@@ -793,6 +794,18 @@ export function ProducerProfile() {
               </div>
             </div>
           )}
+        </CardContent>
+      </Card>
+
+      {/* ==================== NOTIFICATIONS SECTION ==================== */}
+      <Card className="bg-card/60 border-border/40">
+        <CardContent className="p-6">
+          <div className="flex items-center justify-between mb-4">
+            <p className="text-[10px] uppercase tracking-wider font-medium text-muted-foreground">
+              {locale === "it" ? "Notifiche" : "Notifications"}
+            </p>
+          </div>
+          <NotificationSettings />
         </CardContent>
       </Card>
 
