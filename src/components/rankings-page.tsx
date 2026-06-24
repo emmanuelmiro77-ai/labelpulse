@@ -87,6 +87,32 @@ function findPrevRankFromSnapshots(
 }
 
 /**
+ * Check if a label has EVER appeared (at any rank) in any historical snapshot
+ * for the given genre. Used to distinguish:
+ *
+ *   - TRUE new entry  → label never seen before in any snapshot → show "NUOVA"
+ *   - Stable incumbent → label seen before but always at the same rank      → show "—"
+ *                        (e.g. Drumcode has been #1 in Techno Peak Time forever)
+ *
+ * Without this check, dominant labels that never change rank would be
+ * permanently flagged "NUOVA" because findPrevRankFromSnapshots returns
+ * undefined (it only finds DIFFERENT ranks, not identical ones).
+ */
+function labelEverAppearedInSnapshots(
+  snapshots: RankingSnapshot[],
+  labelName: string,
+  genre: string,
+): boolean {
+  for (const snap of snapshots) {
+    const entry = snap.genres?.[genre]?.[labelName];
+    if (entry && typeof entry.rank === "number") {
+      return true;
+    }
+  }
+  return false;
+}
+
+/**
  * Compact row of clickable discovery icons for a label.
  * Renders tiny icon-buttons that open Beatport / Beatstats / SoundCloud /
  * Website in a new tab. Hidden entirely if the label has no name (defensive).
@@ -367,8 +393,22 @@ function buildRankedList(
 
       if (prevRank !== null && prevRank !== undefined) {
         movement = prevRank - rank;
-      } else if (Object.keys(label.prevRankByGenre || {}).length > 0) {
-        movement = null;
+      } else {
+        // prevRank is null — but is the label REALLY new, or just stable?
+        // Check if it has EVER appeared in any snapshot for this genre.
+        // - NEVER appeared → true new entry → movement = null → "NUOVA"
+        // - Appeared before (at any rank, even same) → stable → movement = 0 → "—"
+        // This fixes the bug where dominant labels like Drumcode (#1 forever in
+        // Techno Peak Time) were permanently flagged "NUOVA".
+        const appearedBefore = labelEverAppearedInSnapshots(snapshots, label.name, genre);
+        if (appearedBefore) {
+          movement = 0; // stable incumbent, not a new entry
+        } else if (Object.keys(label.prevRankByGenre || {}).length > 0) {
+          // No snapshot history but label has prevRankByGenre populated from a
+          // previous import — preserve old behavior (treat as new entry).
+          movement = null;
+        }
+        // else: truly never seen before → movement stays null → "NUOVA"
       }
 
       ranked.push({ label, rank, prevRank, points, movement, snapshotCount: 1 });
