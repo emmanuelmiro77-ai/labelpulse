@@ -1,9 +1,13 @@
 // ===================================================================
 // LabelPulse Beatport Scraper v3
 // ===================================================================
-// Captures: labels, artists (with tracks), full track list per genre
+// Captures: labels (con loghi), artists (with tracks), full track list per genre
 // Output: JSON with { genres, labels, artists, tracks, _meta }
 // Backward-compatible with v1/v2 import (labels[] unchanged)
+//
+// LOGHI LABEL: per ogni label viene catturato imageUrl (CDN Beatport) da
+// label.image.uri nella response API. Le label senza logo su Beatport
+// avranno imageUrl='' e l'UI mostrerà un fallback con iniziali+gradiente.
 //
 // NOVITÀ v3: al termine, oltre a scaricare il JSON, INVIA
 // AUTOMATICAMENTE lo snapshot a Supabase per il calcolo del diff
@@ -63,7 +67,7 @@
 
   var S = '%c[LabelPulse]', c1 = 'color:#8b5cf6;font-weight:bold', c2 = 'color:#666', cOk = 'color:#22c55e;font-weight:bold', cErr = 'color:#ef4444', cWarn = 'color:#f59e0b;font-weight:bold';
   console.log(S + ' %cBeatport Scraper v3 avviato', c1, c2);
-  console.log(S + ' %cGeneri: ' + G.length + ' — cattura label, artisti, tracce', c1, c2);
+  console.log(S + ' %cGeneri: ' + G.length + ' — cattura label (con loghi), artisti, tracce', c1, c2);
   console.log(S + ' %cUpload automatico a: ' + LP_BACKEND, c1, c2);
 
   var NOW = new Date().toISOString();
@@ -301,7 +305,8 @@
 
     if (la.length > 0) {
       sC++;
-      console.log(S + ' %c  OK ' + la.length + ' label \u2014 ' + res.am.size + ' artisti \u2014 ' + res.tm.size + ' tracce \u2014 #1: ' + la[0].name, c1, cOk);
+      var logosHere = la.filter(function (l) { return l.imageUrl; }).length;
+      console.log(S + ' %c  OK ' + la.length + ' label (loghi: ' + logosHere + '/' + la.length + ') \u2014 ' + res.am.size + ' artisti \u2014 ' + res.tm.size + ' tracce \u2014 #1: ' + la[0].name, c1, cOk);
     } else {
       fC++;
     }
@@ -386,14 +391,19 @@
   // ===================================================================
   // OUTPUT
   // ===================================================================
+  // Conteggio loghi acquisiti (diagnostica visibile in console + nel JSON)
+  var labelArr = Object.values(lM);
+  var logosCount = labelArr.filter(function (l) { return l.imageUrl; }).length;
+
   var out = {
     genres: G.map(function (g) { return g.name; }),
-    labels: Object.values(lM),
+    labels: labelArr,
     artists: artistsArr,
     tracks: tracksArr,
     _meta: {
       source: 'beatport', version: 3, scrapedAt: NOW,
-      totalLabels: Object.keys(lM).length, totalArtists: artistsArr.length,
+      totalLabels: labelArr.length, totalLabelsWithLogo: logosCount,
+      totalArtists: artistsArr.length,
       totalTracks: tracksArr.length, totalGenres: G.length,
       successGenres: sC, failedGenres: fC
     }
@@ -416,6 +426,7 @@
   console.log(S + ' %c========================================', c1, c1);
   console.log(S + ' %cCOMPLETATO!', c1, cOk);
   console.log(S + ' %c' + Object.keys(lM).length + ' label, ' + artistsArr.length + ' artisti, ' + tracksArr.length + ' tracce da ' + sC + '/' + G.length + ' generi', c1, cOk);
+  console.log(S + ' %cLoghi label acquisiti: ' + logosCount + '/' + labelArr.length + (labelArr.length > 0 ? ' (' + Math.round(logosCount * 100 / labelArr.length) + '%)' : ''), c1, cOk);
   if (fC > 0) console.log(S + ' %c ' + fC + ' generi senza dati', c1, cErr);
   console.log(S + ' %cFile JSON scaricato! Importa in LabelPulse', c1, cOk);
 
@@ -443,10 +454,11 @@
     source: 'browser-scrape',
     totalGenres: out._meta.totalGenres,
     totalLabels: out._meta.totalLabels,
+    totalLabelsWithLogo: out._meta.totalLabelsWithLogo,
     totalArtists: out._meta.totalArtists,
     totalTracks: out._meta.totalTracks,
     incompleteGenres: incompleteGenres,
-    notes: 'Scraped from browser console. ' + out._meta.successGenres + '/' + out._meta.totalGenres + ' genres succeeded.',
+    notes: 'Scraped from browser console. ' + out._meta.successGenres + '/' + out._meta.totalGenres + ' genres succeeded. ' + out._meta.totalLabelsWithLogo + '/' + out._meta.totalLabels + ' labels have logo.',
     tracks: tracksArr
   };
 
