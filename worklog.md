@@ -543,3 +543,52 @@ Stage Summary:
 - User can long-press/hold the shortened link preview to see the full URL via title attr
 - The label detail card is now readable end-to-end on mobile without horizontal scroll
 - Vercel deploy in progress
+
+---
+Task ID: 19
+Agent: Main Agent
+Task: Preserve navigation context when opening label detail + add discovery icons in detail header
+
+Work Log:
+- Investigated user report: "quando chiudo la pagina della label mi ritrovo a dover
+  di nuovo cliccare su smart match e rifiltrare il genere per tornare su quella
+  pagina" + "sarebbe utile avere anche i pulsantini di link verso beatport e verso
+  beatstats" inside the label detail
+- Found root cause for context loss in src/components/label-finder.tsx:
+  * Smart Match dialog open handlers (3 occurrences at lines 2297, 2317, 2337)
+    were calling: onClick={() => { setShowSmartMatch(false); openDetail(l); }}
+  * This closed Smart Match BEFORE opening the detail dialog
+  * When user closed the detail, Smart Match was gone → forced to re-click
+    Smart Match button + re-select genre filter + re-scroll
+- Verified other detail-opening sites (card list, URL deep-link, dashboard)
+  already do NOT close other state — only Smart Match had this bug
+- Removed setShowSmartMatch(false) from all 3 Smart Match click handlers:
+  * Top tier (purple cards): onClick={() => openDetail(l)}
+  * Mid tier (blue cards): onClick={() => openDetail(l)}
+  * Emerging (emerald cards): onClick={() => openDetail(l)}
+- Detail dialog is a Radix modal with z-50 overlay → stacks on top of Smart
+  Match without dismissing it. When user closes detail (X / outside click /
+  Chiudi button), Smart Match is still open behind with genre filter intact.
+- Added LabelDiscoveryIcons in DialogTitle of detail dialog (line 1582):
+  * <LabelDiscoveryIcons label={detailLabel} size={16} />
+  * Wrapped in <span className="ml-auto flex items-center gap-1 pr-6">
+    to push to right and clear the close button
+  * Added "Esplora:" / "Discover:" label (hidden on mobile via sm:inline)
+  * Icons are size=16 (vs size=12 on cards) for easier clicking in dialog
+  * Beatport icon: green if user has saved direct link, muted if search
+  * Beatstats icon: always search
+  * SoundCloud icon: only renders if user has saved direct link
+  * All click handlers use stopPropagation to not close detail dialog
+- Build successful (Next.js 16.2.9 Turbopack, 28 routes, no errors)
+- Commit 53726f1 pushed to origin/main
+
+Stage Summary:
+- Open Smart Match → pick genre → click a label → close detail → Smart Match
+  is still there with same genre selected (no more re-filtering)
+- Inside any label detail dialog, user can now jump to Beatport / Beatstats /
+  SoundCloud with one click from the dialog header itself
+- Discovery icons visible at size=16 in dialog header, with "Esplora:" label
+  on desktop (hidden on mobile to save space)
+- No regressions: card list still opens detail normally, URL deep-link works,
+  close button still works
+- Vercel deploy in progress
