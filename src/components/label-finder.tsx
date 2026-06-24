@@ -65,6 +65,7 @@ import { Label as UILabel } from "@/components/ui/label";
 import { Textarea } from "@/components/ui/textarea";
 import { Popover, PopoverContent, PopoverTrigger } from "@/components/ui/popover";
 import { Checkbox } from "@/components/ui/checkbox";
+import { ErrorBoundary } from "@/components/error-boundary";
 import {
   generatePitch,
   generateSubject,
@@ -262,48 +263,53 @@ function getLinkDisplay(value: string): string {
  * original URL.
  */
 function shortenUrlForDisplay(rawUrl: string, maxLen: number = 60): string {
-  if (!rawUrl) return "";
-  // Strip protocol
-  let s = rawUrl.replace(/^https?:\/\//i, "").replace(/^mailto:/i, "");
-  // Strip trailing slash
-  s = s.replace(/\/$/, "");
-  if (s.length <= maxLen) return s;
+  try {
+    if (!rawUrl || typeof rawUrl !== "string") return "";
+    // Strip protocol
+    let s = rawUrl.replace(/^https?:\/\//i, "").replace(/^mailto:/i, "");
+    // Strip trailing slash
+    s = s.replace(/\/$/, "");
+    if (s.length <= maxLen) return s;
 
-  // Try to parse: hostname + path + ?query
-  // We do this manually (not new URL) because some inputs may be partial URLs.
-  const slashIdx = s.indexOf("/");
-  const hostname = slashIdx >= 0 ? s.slice(0, slashIdx) : s;
-  const rest = slashIdx >= 0 ? s.slice(slashIdx) : "";
+    // Try to parse: hostname + path + ?query
+    // We do this manually (not new URL) because some inputs may be partial URLs.
+    const slashIdx = s.indexOf("/");
+    const hostname = slashIdx >= 0 ? s.slice(0, slashIdx) : s;
+    const rest = slashIdx >= 0 ? s.slice(slashIdx) : "";
 
-  // Find query string
-  const qIdx = rest.indexOf("?");
-  const path = qIdx >= 0 ? rest.slice(0, qIdx) : rest;
-  const query = qIdx >= 0 ? rest.slice(qIdx) : "";
+    // Find query string
+    const qIdx = rest.indexOf("?");
+    const path = qIdx >= 0 ? rest.slice(0, qIdx) : rest;
+    const query = qIdx >= 0 ? rest.slice(qIdx) : "";
 
-  // Last path segment
-  const segments = path.split("/").filter(Boolean);
-  const lastSeg = segments.length > 0 ? segments[segments.length - 1] : "";
+    // Last path segment
+    const segments = path.split("/").filter(Boolean);
+    const lastSeg = segments.length > 0 ? segments[segments.length - 1] : "";
 
-  // Build shortened version
-  let shortPath: string;
-  if (lastSeg) {
-    shortPath = `/.../${lastSeg}`;
-  } else {
-    shortPath = "/...";
+    // Build shortened version
+    let shortPath: string;
+    if (lastSeg) {
+      shortPath = `/.../${lastSeg}`;
+    } else {
+      shortPath = "/...";
+    }
+
+    // If query is very long, truncate it too
+    let shortQuery = query;
+    if (query.length > 25) {
+      shortQuery = query.slice(0, 22) + "...";
+    }
+
+    const result = hostname + shortPath + shortQuery;
+    // Final safety cap
+    if (result.length > maxLen + 10) {
+      return result.slice(0, maxLen - 1) + "…";
+    }
+    return result;
+  } catch {
+    // Defensive: any unexpected input → return truncated original
+    return String(rawUrl || "").slice(0, maxLen);
   }
-
-  // If query is very long, truncate it too
-  let shortQuery = query;
-  if (query.length > 25) {
-    shortQuery = query.slice(0, 22) + "...";
-  }
-
-  const result = hostname + shortPath + shortQuery;
-  // Final safety cap
-  if (result.length > maxLen + 10) {
-    return result.slice(0, maxLen - 1) + "…";
-  }
-  return result;
 }
 
 /**
@@ -1567,6 +1573,10 @@ export function LabelFinder() {
       {/* =========== DETAIL DIALOG =========== */}
       <Dialog open={!!detailLabel} onOpenChange={(open) => { if (!open) setDetailLabel(null); }}>
         <DialogContent className="sm:max-w-2xl bg-card border-border/50 max-h-[90vh] overflow-y-auto max-w-[calc(100vw-1rem)] overflow-x-hidden">
+          <ErrorBoundary
+            resetKey={detailLabel?.id}
+            label={`scheda ${detailLabel?.name || "label"}`}
+          >
           {detailLabel && (() => {
             const bestGenre = genreFilter.length > 0 ? genreFilter[0] : detailLabel.genres[0];
             const rank = getBestRank(detailLabel, bestGenre);
@@ -1694,10 +1704,18 @@ export function LabelFinder() {
                               {track.keyCamelot && <span>· {track.keyCamelot}</span>}
                               {track.releaseDate && (
                                 <span className="ml-auto">
-                                  {new Date(track.releaseDate).toLocaleDateString(
-                                    locale === "it" ? "it-IT" : "en-US",
-                                    { year: "numeric", month: "short", day: "numeric" }
-                                  )}
+                                  {(() => {
+                                    try {
+                                      const d = new Date(track.releaseDate);
+                                      if (isNaN(d.getTime())) return "";
+                                      return d.toLocaleDateString(
+                                        locale === "it" ? "it-IT" : "en-US",
+                                        { year: "numeric", month: "short", day: "numeric" }
+                                      );
+                                    } catch {
+                                      return "";
+                                    }
+                                  })()}
                                 </span>
                               )}
                             </div>
@@ -1857,7 +1875,9 @@ export function LabelFinder() {
                           </div>
                           <div className="shrink-0 text-right">
                             <p className="text-sm font-bold text-primary">
-                              {artist.totalLabelPoints.toLocaleString()}
+                              {(typeof artist.totalLabelPoints === "number" && Number.isFinite(artist.totalLabelPoints))
+                                ? artist.totalLabelPoints.toLocaleString()
+                                : "0"}
                             </p>
                             <p className="text-[9px] text-muted-foreground uppercase">pts</p>
                           </div>
@@ -2274,6 +2294,7 @@ export function LabelFinder() {
               </>
             );
           })()}
+          </ErrorBoundary>
         </DialogContent>
       </Dialog>
 
