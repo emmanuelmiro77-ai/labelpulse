@@ -413,6 +413,13 @@ const LABEL_BEATPORT_FIELDS = [
   "genres", "rankByGenre", "pointsByGenre",
   "trending", "trendingRankByGenre", "trendingPointsByGenre",
   "beatportLink", "isCustom",
+  // ⚠️ Beatport identity — added 2026-06-25 (label logos feature).
+  // Without these in LABEL_BEATPORT_FIELDS, buildGlobalPayload() strips them
+  // before pushing to the GLOBAL cloud row. Result: admin's scrape captures
+  // imageUrl, but it never reaches the cloud → other devices (mobile, other
+  // browsers) see labels with imageUrl='' and fall back to the initials
+  // avatar instead of the real logo.
+  "imageUrl", "slug", "beatportId",
 ] as const;
 
 const LABEL_PERSONAL_FIELDS = [
