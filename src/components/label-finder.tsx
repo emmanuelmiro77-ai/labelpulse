@@ -321,6 +321,70 @@ function shortenUrlForDisplay(rawUrl: string, maxLen: number = 60): string {
  * Each click handler stops propagation so the parent card's onClick
  * (which opens the detail dialog) doesn't also fire.
  */
+
+/**
+ * Label logo with fallback to initials avatar.
+ *
+ * Added 2026-06-24 after beta tester Frank fonico requested:
+ *   "aggiungerei se si può, il logo delle labels, per un riconoscimento immediato"
+ *
+ * Behavior:
+ *  1. If `label.imageUrl` is present (Beatport CDN URL, captured by the
+ *     scraper on import) → render the logo as a rounded square image.
+ *  2. Otherwise → render a gradient square with the first letter of the
+ *     label name. This gives the eye something distinct to recognize even
+ *     for seed labels that haven't been scraped yet.
+ *
+ * Image errors (404, CORS, broken CDN) silently fall back to initials via
+ * the onError handler — this is important because Beatport CDN URLs from
+ * old scrapes can expire, and we don't want broken-image icons in the UI.
+ */
+function getLabelInitial(name: string): string {
+  // Take the first alphanumeric character (skip leading bullets, dashes,
+  // spaces, special chars like "• KOSA •" → "K", "12+1 LONDON" → "1").
+  const m = name.match(/[A-Za-z0-9]/);
+  return m ? m[0].toUpperCase() : "?";
+}
+
+function LabelLogo({
+  label,
+  size = 28,
+}: {
+  label: Label;
+  size?: number;
+}) {
+  const [imgError, setImgError] = useState(false);
+  const showImage = label.imageUrl && !imgError;
+  const initial = getLabelInitial(label.name);
+
+  if (showImage) {
+    return (
+      <img
+        src={label.imageUrl}
+        alt=""
+        aria-hidden="true"
+        width={size}
+        height={size}
+        onError={() => setImgError(true)}
+        loading="lazy"
+        className="shrink-0 rounded-md object-cover bg-secondary/50 border border-border/30"
+        style={{ width: size, height: size }}
+      />
+    );
+  }
+
+  // Fallback: gradient square with initial
+  return (
+    <div
+      aria-hidden="true"
+      className="shrink-0 rounded-md flex items-center justify-center bg-gradient-to-br from-primary/30 to-primary/5 border border-primary/20 text-primary font-bold"
+      style={{ width: size, height: size, fontSize: size * 0.5 }}
+    >
+      {initial}
+    </div>
+  );
+}
+
 function LabelDiscoveryIcons({
   label,
   size = 12,
@@ -1443,6 +1507,21 @@ export function LabelFinder() {
                 );
               })}
             </div>
+            {/* Footer "Fatto" — fix segnalazione beta tester Frank fonico
+                "i menu a tendina non spariscono dopo la selezione":
+                il popover è multi-select per design, quindi resta aperto
+                dopo ogni selezione. Aggiungiamo un bottone esplicito per
+                chiuderlo, altrimenti l'utente deve cliccare fuori (non
+                sempre intuitivo, specialmente su mobile). */}
+            <div className="border-t border-border/30 p-2">
+              <Button
+                size="sm"
+                className="w-full h-8"
+                onClick={() => setGenrePopoverOpen(false)}
+              >
+                {t(locale, "labels.close")}
+              </Button>
+            </div>
           </PopoverContent>
         </Popover>
         <Select value={statusFilter} onValueChange={setStatusFilter}>
@@ -1481,7 +1560,7 @@ export function LabelFinder() {
                 <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-2">
                   <div className="flex-1 min-w-0">
                     <div className="flex items-center gap-2 flex-wrap">
-                      <Music2 className="h-3.5 w-3.5 text-primary shrink-0" />
+                      <LabelLogo label={label} size={28} />
                       <h3 className="font-semibold text-foreground text-sm truncate">{label.name}</h3>
                       {enriched && (
                         <Badge className="bg-primary/15 text-primary border-primary/20 text-[10px] px-1.5 py-0">
@@ -1588,7 +1667,7 @@ export function LabelFinder() {
               <>
                 <DialogHeader>
                   <DialogTitle className="flex items-center gap-2 flex-wrap">
-                    <Music2 className="h-5 w-5 text-primary" />
+                    <LabelLogo label={detailLabel} size={36} />
                     <span>{detailLabel.name}</span>
                     {rank && <span className="text-xs font-mono text-primary/70 bg-primary/10 px-2 py-0.5 rounded">{t(locale, "labels.rank")} {rank}</span>}
                     {getTierBadge(detailLabel)}

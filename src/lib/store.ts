@@ -44,6 +44,15 @@ export interface Label {
   trendingPointsByGenre: Record<string, number>;
   isCustom?: boolean; // user-added label
   prevRankByGenre?: Record<string, number>; // Previous ranking snapshot (before last import)
+  // ⚠️ Beatport identity (added 2026-06-24, beta tester Frank fonico request:
+  // "aggiungerei se si può, il logo delle labels, per un riconoscimento immediato").
+  // Captured by the scraper when the label is imported. imageUrl is the Beatport
+  // CDN URL for the label's logo. slug/beatportId let us build a Beatport link
+  // and a predicible fallback URL. These fields are OPTIONAL because the seed
+  // labels-data.json does not have them — only scraper-imported labels do.
+  beatportId?: number | null;
+  slug?: string;
+  imageUrl?: string;
 }
 
 // ==================== ARTISTS & TRACKS (scraper v2) ====================
@@ -220,6 +229,10 @@ function buildLabelsFromData(): Label[] {
     trendingRankByGenre: (l.trendingRankByGenre || {}) as Record<string, number>,
     trendingPointsByGenre: (l.trendingPointsByGenre || {}) as Record<string, number>,
     isCustom: false,
+    // Beatport identity (optional — only present on scraper-imported labels)
+    beatportId: (l as any).beatportId ?? null,
+    slug: (l as any).slug ?? "",
+    imageUrl: (l as any).imageUrl ?? "",
   }));
 }
 
@@ -1179,6 +1192,14 @@ function mergePreservingUserData(existing: Label, imported: Label): Partial<Labe
     trendingRankByGenre: Object.keys(imported.trendingRankByGenre || {}).length ? imported.trendingRankByGenre : existing.trendingRankByGenre,
     trendingPointsByGenre: Object.keys(imported.trendingPointsByGenre || {}).length ? imported.trendingPointsByGenre : existing.trendingPointsByGenre,
 
+    // Beatport identity (logo / slug / beatportId) — prefer imported (fresh
+    // scrape) when present, fall back to existing. This ensures that once a
+    // label has been scraped once and has imageUrl, it keeps it even if a
+    // later partial import doesn't include the field.
+    beatportId: (imported.beatportId != null ? imported.beatportId : existing.beatportId) ?? null,
+    slug: imported.slug?.trim() || existing.slug || "",
+    imageUrl: imported.imageUrl?.trim() || existing.imageUrl || "",
+
     // Ranking history — idempotent: only update prev when rank actually changed
     prevRankByGenre: newPrevRankByGenre,
   };
@@ -1195,6 +1216,9 @@ const LABEL_DEFAULTS = {
   trendingRankByGenre: {},
   trendingPointsByGenre: {},
   isCustom: false,
+  beatportId: null,
+  slug: "",
+  imageUrl: "",
   website: "",
   demoLink: "",
   socialLink: "",
@@ -1812,6 +1836,10 @@ export const useAppStore = create<AppState>()(
               trending: imported.trending || false,
               trendingRankByGenre: imported.trendingRankByGenre || {},
               trendingPointsByGenre: imported.trendingPointsByGenre || {},
+              // Beatport identity — capture on first import (used for logos)
+              beatportId: imported.beatportId ?? null,
+              slug: imported.slug || "",
+              imageUrl: imported.imageUrl || "",
               emails: imported.emails || [],
               website: imported.website || "",
               demoLink: imported.demoLink || "",
@@ -2009,7 +2037,7 @@ export const useAppStore = create<AppState>()(
     }),
     {
       name: PRIMARY_KEY,
-      version: 14,
+      version: 15,
       storage: createJSONStorage(() => robustStorage),
       migrate: (persisted: any, version: number) => {
         if (version < 5) {
@@ -2156,6 +2184,20 @@ export const useAppStore = create<AppState>()(
               rankings: true,
               weeklyRecap: true,
             };
+          }
+        }
+        if (version < 15) {
+          // Label Beatport identity (logo / slug / beatportId) — added for the
+          // "logos on label cards" feature. Existing persisted labels don't
+          // have these fields; backfill with empty defaults so the UI can
+          // fall back to the initials avatar.
+          if (Array.isArray(persisted.labels)) {
+            persisted.labels = persisted.labels.map((l: any) => ({
+              ...l,
+              beatportId: l.beatportId ?? null,
+              slug: l.slug ?? "",
+              imageUrl: l.imageUrl ?? "",
+            }));
           }
         }
         return persisted;
@@ -2580,6 +2622,9 @@ function mergeCloudData(cloudData: any, localState: any): Partial<AppState> {
     "emails", "notes", "website", "demoLink", "socialLink",
     "soundcloudLink", "status", "tier", "instagramLink", "facebookLink",
     "bandcampLink", "beatstatsLink",
+    // Beatport identity — preserve from local if non-empty (so logos
+    // scraped on device A propagate to device B via the merge)
+    "imageUrl", "slug",
   ];
   const labelsById = new Map<string, Label>();
   const labelsByName = new Map<string, Label>();

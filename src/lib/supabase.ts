@@ -1102,6 +1102,8 @@ async function applyRemoteData(cloudData: any): Promise<void> {
     "emails", "notes", "website", "demoLink", "socialLink",
     "soundcloudLink", "status", "tier", "instagramLink", "facebookLink",
     "bandcampLink", "beatstatsLink",
+    // Beatport identity — preserve from local so logos propagate via realtime
+    "imageUrl", "slug",
   ];
   const labelsById = new Map<string, any>();
   const labelsByName = new Map<string, any>();
