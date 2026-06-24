@@ -501,3 +501,45 @@ User must do before feature activates:
 4. Test: as user (different browser/incognito with same email), open app → see Bell badge
    → click → read reply → badge should disappear within 60s
 
+
+---
+Task ID: 18
+Agent: Main Agent
+Task: Fix mobile crash on label detail + auto-shorten long URLs in display
+
+Work Log:
+- Investigated user report: "4x crash opening Hilomatik label, pasting ultra-long URLs makes card unreadable"
+- Found 3 root causes in src/components/label-finder.tsx:
+  1. Layout: ultra-long URL string could push Dialog wider than mobile viewport → React render crash
+  2. Store thrash: updateDetailLink called saveLinksToStore on EVERY keystroke → updateLabel → syncToCloud
+     + setTimeout per keystroke → JS thread saturation on mobile → "page couldn't load"
+  3. URL preview <a> used 'truncate' but flex parent lacked min-w-0 → truncation unreliable
+- Added shortenUrlForDisplay(rawUrl, maxLen=60) helper at line 264:
+  * Strips protocol
+  * For short URLs (<=60 chars), shows as-is
+  * For long URLs: shows hostname/.../last-path-segment?short-query
+  * Query truncated to 25 chars if too long
+  * Final safety cap with ellipsis
+  * href stays FULL URL — only display is shortened
+- Applied shorten to preview <a> (line 1958):
+  * className: text-[11px] font-mono + color + hover:underline + block + pl-[138px] + truncate
+  * Added title={clickUrl} so user can long-press to see full URL
+  * Passes shortenUrlForDisplay(clickUrl, 70) as the visible text
+- Added maxLength={2000} to URL Input (line 1940) — sanity cap
+- Added min-w-0 to URL row container and Input — fixes flexbox truncation
+- Added max-w-[calc(100vw-1rem)] + overflow-x-hidden to DialogContent (line 1562)
+- Removed saveLinksToStore call from updateDetailLink for 'value' field (line 979):
+  * Saving now happens ONLY on blur via saveDetailLinkOnBlur
+  * For 'type' dropdown changes, still save immediately (no onBlur for Select)
+  * Added explanatory comment about why this matters
+- Build successful (Next.js 16.2.9 Turbopack, 28 routes, no errors)
+- Commit 34ecb67 pushed to origin/main
+
+Stage Summary:
+- Mobile crash on label detail panel with long URLs is FIXED
+- Long URLs now display compactly (e.g. 'www.beatport.com/.../67890?utm_source=googl...')
+  while remaining fully clickable to the original destination
+- No more per-keystroke store writes — only onBlur saves, eliminating React thrash
+- User can long-press/hold the shortened link preview to see the full URL via title attr
+- The label detail card is now readable end-to-end on mobile without horizontal scroll
+- Vercel deploy in progress
