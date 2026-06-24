@@ -247,6 +247,66 @@ function getLinkDisplay(value: string): string {
 }
 
 /**
+ * Shorten a URL for DISPLAY ONLY — the clickable href stays the full URL.
+ *
+ * Strategy:
+ *   - For short URLs (<= maxLen chars without protocol), show as-is.
+ *   - For long URLs, show:  hostname/.../last-path-segment?query
+ *     Example:
+ *       https://www.beatport.com/label/hilomatik-records/12345/release/67890?utm_source=google&utm_campaign=...
+ *       →  www.beatport.com/.../67890?utm_source=google&utm_campaign=...
+ *
+ * This keeps the link recognizable (hostname + final destination visible)
+ * while preventing ultra-long tracking URLs from breaking the layout on
+ * mobile. The href attribute is NEVER shortened — clicks still go to the
+ * original URL.
+ */
+function shortenUrlForDisplay(rawUrl: string, maxLen: number = 60): string {
+  if (!rawUrl) return "";
+  // Strip protocol
+  let s = rawUrl.replace(/^https?:\/\//i, "").replace(/^mailto:/i, "");
+  // Strip trailing slash
+  s = s.replace(/\/$/, "");
+  if (s.length <= maxLen) return s;
+
+  // Try to parse: hostname + path + ?query
+  // We do this manually (not new URL) because some inputs may be partial URLs.
+  const slashIdx = s.indexOf("/");
+  const hostname = slashIdx >= 0 ? s.slice(0, slashIdx) : s;
+  const rest = slashIdx >= 0 ? s.slice(slashIdx) : "";
+
+  // Find query string
+  const qIdx = rest.indexOf("?");
+  const path = qIdx >= 0 ? rest.slice(0, qIdx) : rest;
+  const query = qIdx >= 0 ? rest.slice(qIdx) : "";
+
+  // Last path segment
+  const segments = path.split("/").filter(Boolean);
+  const lastSeg = segments.length > 0 ? segments[segments.length - 1] : "";
+
+  // Build shortened version
+  let shortPath: string;
+  if (lastSeg) {
+    shortPath = `/.../${lastSeg}`;
+  } else {
+    shortPath = "/...";
+  }
+
+  // If query is very long, truncate it too
+  let shortQuery = query;
+  if (query.length > 25) {
+    shortQuery = query.slice(0, 22) + "...";
+  }
+
+  const result = hostname + shortPath + shortQuery;
+  // Final safety cap
+  if (result.length > maxLen + 10) {
+    return result.slice(0, maxLen - 1) + "…";
+  }
+  return result;
+}
+
+/**
  * Compact row of clickable discovery icons for a label.
  * Renders tiny icon-buttons that open Beatport / Beatstats / SoundCloud /
  * Website in a new tab. Mirrors the same component in rankings-page.tsx
@@ -920,7 +980,14 @@ export function LabelFinder() {
     const newLinks = [...detailLinks];
     newLinks[index] = { ...newLinks[index], [field]: val };
     setDetailLinks(newLinks);
-    if (field === "value" && val.trim()) {
+    // NOTE: We do NOT call saveLinksToStore here. Saving on every keystroke
+    // was causing React render thrashing + "page couldn't load" crashes on
+    // mobile when pasting ultra-long URLs (each keystroke triggered
+    // updateLabel → syncToCloud → setTimeout). Saving now happens only on
+    // blur via saveDetailLinkOnBlur, which is called from the Input's
+    // onBlur handler. For "type" changes (dropdown), we DO save immediately
+    // because there's no onBlur for Select.
+    if (field === "type") {
       saveLinksToStore(newLinks);
     }
   }, [detailLinks, saveLinksToStore]);
@@ -1499,7 +1566,7 @@ export function LabelFinder() {
 
       {/* =========== DETAIL DIALOG =========== */}
       <Dialog open={!!detailLabel} onOpenChange={(open) => { if (!open) setDetailLabel(null); }}>
-        <DialogContent className="sm:max-w-2xl bg-card border-border/50 max-h-[90vh] overflow-y-auto">
+        <DialogContent className="sm:max-w-2xl bg-card border-border/50 max-h-[90vh] overflow-y-auto max-w-[calc(100vw-1rem)] overflow-x-hidden">
           {detailLabel && (() => {
             const bestGenre = genreFilter.length > 0 ? genreFilter[0] : detailLabel.genres[0];
             const rank = getBestRank(detailLabel, bestGenre);
@@ -1859,7 +1926,7 @@ export function LabelFinder() {
                       // Find which types are already used (to limit dropdown choices)
                       const usedTypes = new Set(detailLinks.map((l, i) => i !== idx ? l.type : null).filter(Boolean));
                       return (
-                        <div key={idx} className="space-y-1">
+                        <div key={idx} className="space-y-1 min-w-0">
                           <div className="flex items-center gap-1.5">
                             {/* Type selector */}
                             <Select value={link.type} onValueChange={(v) => updateDetailLink(idx, "type", v)}>
@@ -1877,7 +1944,8 @@ export function LabelFinder() {
                             {/* Value input */}
                             <Input value={link.value} onChange={(e) => updateDetailLink(idx, "value", e.target.value)}
                               onBlur={() => saveDetailLinkOnBlur(idx)}
-                              placeholder={getLinkPlaceholder(link.type)} className="bg-secondary/50 flex-1 text-sm" />
+                              maxLength={2000}
+                              placeholder={getLinkPlaceholder(link.type)} className="bg-secondary/50 flex-1 text-sm min-w-0" />
                             {/* Open link button */}
                             {clickUrl && (
                               <Button variant="ghost" size="icon" className={`shrink-0 h-9 w-9 ${color} hover:opacity-80 hover:bg-white/5`}
@@ -1892,11 +1960,12 @@ export function LabelFinder() {
                               <X className="h-3.5 w-3.5" />
                             </Button>
                           </div>
-                          {/* Clickable URL preview */}
+                          {/* Clickable URL preview — shortened for display, full URL for click */}
                           {clickUrl && (
                             <a href={clickUrl} target="_blank" rel="noopener noreferrer"
-                              className={`text-[11px] font-mono ${color} hover:underline truncate block pl-[138px]`}>
-                              {clickUrl}
+                              className={`text-[11px] font-mono ${color} hover:underline block pl-[138px] truncate`}
+                              title={clickUrl}>
+                              {shortenUrlForDisplay(clickUrl, 70)}
                             </a>
                           )}
                         </div>
