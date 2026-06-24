@@ -1,0 +1,289 @@
+From 3378c3cb652a42436497dc25717223f051f062cc Mon Sep 17 00:00:00 2001
+From: Z User <z@container>
+Date: Wed, 24 Jun 2026 20:59:19 +0000
+Subject: [PATCH 2/2] 2739b322-db1a-4bff-a6a1-1d1413afad9a
+
+---
+ src/components/label-finder.tsx | 83 ++++++++++++++++++++++++++++++++-
+ src/lib/store.ts                | 47 ++++++++++++++++++-
+ src/lib/supabase.ts             |  2 +
+ worklog.md                      | 31 ++++++++++++
+ 4 files changed, 160 insertions(+), 3 deletions(-)
+
+diff --git a/src/components/label-finder.tsx b/src/components/label-finder.tsx
+index c10fe9e..4767dcd 100755
+--- a/src/components/label-finder.tsx
++++ b/src/components/label-finder.tsx
+@@ -255,6 +255,70 @@ function getLinkDisplay(value: string): string {
+  * Each click handler stops propagation so the parent card's onClick
+  * (which opens the detail dialog) doesn't also fire.
+  */
++
++/**
++ * Label logo with fallback to initials avatar.
++ *
++ * Added 2026-06-24 after beta tester Frank fonico requested:
++ *   "aggiungerei se si può, il logo delle labels, per un riconoscimento immediato"
++ *
++ * Behavior:
++ *  1. If `label.imageUrl` is present (Beatport CDN URL, captured by the
++ *     scraper on import) → render the logo as a rounded square image.
++ *  2. Otherwise → render a gradient square with the first letter of the
++ *     label name. This gives the eye something distinct to recognize even
++ *     for seed labels that haven't been scraped yet.
++ *
++ * Image errors (404, CORS, broken CDN) silently fall back to initials via
++ * the onError handler — this is important because Beatport CDN URLs from
++ * old scrapes can expire, and we don't want broken-image icons in the UI.
++ */
++function getLabelInitial(name: string): string {
++  // Take the first alphanumeric character (skip leading bullets, dashes,
++  // spaces, special chars like "• KOSA •" → "K", "12+1 LONDON" → "1").
++  const m = name.match(/[A-Za-z0-9]/);
++  return m ? m[0].toUpperCase() : "?";
++}
++
++function LabelLogo({
++  label,
++  size = 28,
++}: {
++  label: Label;
++  size?: number;
++}) {
++  const [imgError, setImgError] = useState(false);
++  const showImage = label.imageUrl && !imgError;
++  const initial = getLabelInitial(label.name);
++
++  if (showImage) {
++    return (
++      <img
++        src={label.imageUrl}
++        alt=""
++        aria-hidden="true"
++        width={size}
++        height={size}
++        onError={() => setImgError(true)}
++        loading="lazy"
++        className="shrink-0 rounded-md object-cover bg-secondary/50 border border-border/30"
++        style={{ width: size, height: size }}
++      />
++    );
++  }
++
++  // Fallback: gradient square with initial
++  return (
++    <div
++      aria-hidden="true"
++      className="shrink-0 rounded-md flex items-center justify-center bg-gradient-to-br from-primary/30 to-primary/5 border border-primary/20 text-primary font-bold"
++      style={{ width: size, height: size, fontSize: size * 0.5 }}
++    >
++      {initial}
++    </div>
++  );
++}
++
+ function LabelDiscoveryIcons({
+   label,
+   size = 12,
+@@ -1366,6 +1430,21 @@ export function LabelFinder() {
+                 );
+               })}
+             </div>
++            {/* Footer "Fatto" — fix segnalazione beta tester Frank fonico
++                "i menu a tendina non spariscono dopo la selezione":
++                il popover è multi-select per design, quindi resta aperto
++                dopo ogni selezione. Aggiungiamo un bottone esplicito per
++                chiuderlo, altrimenti l'utente deve cliccare fuori (non
++                sempre intuitivo, specialmente su mobile). */}
++            <div className="border-t border-border/30 p-2">
++              <Button
++                size="sm"
++                className="w-full h-8"
++                onClick={() => setGenrePopoverOpen(false)}
++              >
++                {t(locale, "labels.close")}
++              </Button>
++            </div>
+           </PopoverContent>
+         </Popover>
+         <Select value={statusFilter} onValueChange={setStatusFilter}>
+@@ -1404,7 +1483,7 @@ export function LabelFinder() {
+                 <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-2">
+                   <div className="flex-1 min-w-0">
+                     <div className="flex items-center gap-2 flex-wrap">
+-                      <Music2 className="h-3.5 w-3.5 text-primary shrink-0" />
++                      <LabelLogo label={label} size={28} />
+                       <h3 className="font-semibold text-foreground text-sm truncate">{label.name}</h3>
+                       {enriched && (
+                         <Badge className="bg-primary/15 text-primary border-primary/20 text-[10px] px-1.5 py-0">
+@@ -1507,7 +1586,7 @@ export function LabelFinder() {
+               <>
+                 <DialogHeader>
+                   <DialogTitle className="flex items-center gap-2 flex-wrap">
+-                    <Music2 className="h-5 w-5 text-primary" />
++                    <LabelLogo label={detailLabel} size={36} />
+                     <span>{detailLabel.name}</span>
+                     {rank && <span className="text-xs font-mono text-primary/70 bg-primary/10 px-2 py-0.5 rounded">{t(locale, "labels.rank")} {rank}</span>}
+                     {getTierBadge(detailLabel)}
+diff --git a/src/lib/store.ts b/src/lib/store.ts
+index 40959de..aacb08d 100755
+--- a/src/lib/store.ts
++++ b/src/lib/store.ts
+@@ -44,6 +44,15 @@ export interface Label {
+   trendingPointsByGenre: Record<string, number>;
+   isCustom?: boolean; // user-added label
+   prevRankByGenre?: Record<string, number>; // Previous ranking snapshot (before last import)
++  // ⚠️ Beatport identity (added 2026-06-24, beta tester Frank fonico request:
++  // "aggiungerei se si può, il logo delle labels, per un riconoscimento immediato").
++  // Captured by the scraper when the label is imported. imageUrl is the Beatport
++  // CDN URL for the label's logo. slug/beatportId let us build a Beatport link
++  // and a predicible fallback URL. These fields are OPTIONAL because the seed
++  // labels-data.json does not have them — only scraper-imported labels do.
++  beatportId?: number | null;
++  slug?: string;
++  imageUrl?: string;
+ }
+ 
+ // ==================== ARTISTS & TRACKS (scraper v2) ====================
+@@ -220,6 +229,10 @@ function buildLabelsFromData(): Label[] {
+     trendingRankByGenre: (l.trendingRankByGenre || {}) as Record<string, number>,
+     trendingPointsByGenre: (l.trendingPointsByGenre || {}) as Record<string, number>,
+     isCustom: false,
++    // Beatport identity (optional — only present on scraper-imported labels)
++    beatportId: (l as any).beatportId ?? null,
++    slug: (l as any).slug ?? "",
++    imageUrl: (l as any).imageUrl ?? "",
+   }));
+ }
+ 
+@@ -1191,6 +1204,14 @@ function mergePreservingUserData(existing: Label, imported: Label): Partial<Labe
+     trendingRankByGenre: Object.keys(imported.trendingRankByGenre || {}).length ? imported.trendingRankByGenre : existing.trendingRankByGenre,
+     trendingPointsByGenre: Object.keys(imported.trendingPointsByGenre || {}).length ? imported.trendingPointsByGenre : existing.trendingPointsByGenre,
+ 
++    // Beatport identity (logo / slug / beatportId) — prefer imported (fresh
++    // scrape) when present, fall back to existing. This ensures that once a
++    // label has been scraped once and has imageUrl, it keeps it even if a
++    // later partial import doesn't include the field.
++    beatportId: (imported.beatportId != null ? imported.beatportId : existing.beatportId) ?? null,
++    slug: imported.slug?.trim() || existing.slug || "",
++    imageUrl: imported.imageUrl?.trim() || existing.imageUrl || "",
++
+     // Ranking history — idempotent: only update prev when rank actually changed
+     prevRankByGenre: newPrevRankByGenre,
+   };
+@@ -1207,6 +1228,9 @@ const LABEL_DEFAULTS = {
+   trendingRankByGenre: {},
+   trendingPointsByGenre: {},
+   isCustom: false,
++  beatportId: null,
++  slug: "",
++  imageUrl: "",
+   website: "",
+   demoLink: "",
+   socialLink: "",
+@@ -1813,6 +1837,10 @@ export const useAppStore = create<AppState>()(
+               trending: imported.trending || false,
+               trendingRankByGenre: imported.trendingRankByGenre || {},
+               trendingPointsByGenre: imported.trendingPointsByGenre || {},
++              // Beatport identity — capture on first import (used for logos)
++              beatportId: imported.beatportId ?? null,
++              slug: imported.slug || "",
++              imageUrl: imported.imageUrl || "",
+               emails: imported.emails || [],
+               website: imported.website || "",
+               demoLink: imported.demoLink || "",
+@@ -2010,7 +2038,7 @@ export const useAppStore = create<AppState>()(
+     }),
+     {
+       name: PRIMARY_KEY,
+-      version: 14,
++      version: 15,
+       storage: createJSONStorage(() => robustStorage),
+       migrate: (persisted: any, version: number) => {
+         if (version < 5) {
+@@ -2159,6 +2187,20 @@ export const useAppStore = create<AppState>()(
+             };
+           }
+         }
++        if (version < 15) {
++          // Label Beatport identity (logo / slug / beatportId) — added for the
++          // "logos on label cards" feature. Existing persisted labels don't
++          // have these fields; backfill with empty defaults so the UI can
++          // fall back to the initials avatar.
++          if (Array.isArray(persisted.labels)) {
++            persisted.labels = persisted.labels.map((l: any) => ({
++              ...l,
++              beatportId: l.beatportId ?? null,
++              slug: l.slug ?? "",
++              imageUrl: l.imageUrl ?? "",
++            }));
++          }
++        }
+         return persisted;
+       },
+       partialize: (state) => ({
+@@ -2581,6 +2623,9 @@ function mergeCloudData(cloudData: any, localState: any): Partial<AppState> {
+     "emails", "notes", "website", "demoLink", "socialLink",
+     "soundcloudLink", "status", "tier", "instagramLink", "facebookLink",
+     "bandcampLink", "beatstatsLink",
++    // Beatport identity — preserve from local if non-empty (so logos
++    // scraped on device A propagate to device B via the merge)
++    "imageUrl", "slug",
+   ];
+   const labelsById = new Map<string, Label>();
+   const labelsByName = new Map<string, Label>();
+diff --git a/src/lib/supabase.ts b/src/lib/supabase.ts
+index 135c556..7fab0dc 100755
+--- a/src/lib/supabase.ts
++++ b/src/lib/supabase.ts
+@@ -1102,6 +1102,8 @@ async function applyRemoteData(cloudData: any): Promise<void> {
+     "emails", "notes", "website", "demoLink", "socialLink",
+     "soundcloudLink", "status", "tier", "instagramLink", "facebookLink",
+     "bandcampLink", "beatstatsLink",
++    // Beatport identity — preserve from local so logos propagate via realtime
++    "imageUrl", "slug",
+   ];
+   const labelsById = new Map<string, any>();
+   const labelsByName = new Map<string, any>();
+diff --git a/worklog.md b/worklog.md
+index 3e13639..e0de33e 100755
+--- a/worklog.md
++++ b/worklog.md
+@@ -464,3 +464,34 @@ Stage Summary:
+ - Compatibile con tutti gli scenari: realtime echo, multi-tab, ricarica pagina, sidecar restore
+ - Per artistName/email/bio/scLink/links resta la regola "non-empty wins" (per non perdere dati se cloud ha stringhe vuote)
+ - File modificati: src/lib/store.ts (mergeProfiles + 4 chiamanti), src/lib/supabase.ts (1 chiamante)
++
++---
++Task ID: logos-and-dropdown-fix-2026-06-24
++Agent: main (Super Z)
++Task: Due segnalazioni beta tester Frank fonico (gaudiofranco@gmail.com):
++  (1) "i menu a tendina non spariscono dopo la selezione"
++  (2) "aggiungerei se si può, il logo delle labels, per un riconoscimento immediato"
++
++Work Log:
++- Indagato il bug "menu a tendina non spariscono": identificato il Popover multi-select del genre filter come causa principale. Per design il popover resta aperto dopo ogni selezione (per permettere selezioni multiple), ma senza un bottone "Fatto" l'utente deve cliccare fuori — controintuitivo, soprattutto su mobile
++- Fix 1 (Popover genre filter): aggiunto footer con bottone "Chiudi" che chiama setGenrePopoverOpen(false). Riutilizzo la chiave di traduzione labels.close già presente in 6 lingue
++- Fix 2 (loghi label): implementato end-to-end
++  - Aggiunti campi beatportId/slug/imageUrl all'interfaccia Label (opzionali, perché il seed non li ha)
++  - Aggiornato buildLabelsFromData per passare i nuovi campi
++  - Aggiornato mergePreservingUserData per preservarli (prefer imported = fresh scrape)
++  - Aggiunti ai labelUserEditFields in mergeCloudData e applyRemoteData per propagarli via cloud sync
++  - Aggiornato il path newLabels in importData per catturarli al primo import
++  - Aggiunta migration v15 per backfillare i campi sulle label persistite da versioni precedenti
++  - Creato componente LabelLogo in label-finder.tsx:
++    * Se imageUrl presente → <img> con onError fallback
++    * Altrimenti → quadrato con gradiente primary e iniziale del nome (getLabelInitial salta bullet/dashes, es "• KOSA •" → "K")
++  - Sostituito <Music2 /> con <LabelLogo size={28} /> nelle card label
++  - Sostituito <Music2 /> con <LabelLogo size={36} /> nell'header del detail dialog
++- Build verificato: ✓ Compiled successfully in 7.2s, nessun errore nuovo
++
++Stage Summary:
++- Popover multi-select ora ha un bottone "Chiudi" esplicito nel footer — fix UX immediato
++- Loghi label mostrati su card + detail dialog con fallback a iniziali gradiente per label non ancora scrape
++- I loghi appaiono automaticamente quando l'utente fa uno scrape Beatport (lo scraper cattura già imageUrl, slug, beatportId dal DOM — prima venivano scartati perché non presenti nell'interfaccia Label)
++- Migration v15 assicura backcompat con dati persistiti da versioni precedenti
++- File modificati: src/lib/store.ts (interfaccia + 5 chiamanti + migration), src/lib/supabase.ts (labelUserEditFields), src/components/label-finder.tsx (LabelLogo + card + detail dialog + popover footer)
+-- 
+2.47.3
+
