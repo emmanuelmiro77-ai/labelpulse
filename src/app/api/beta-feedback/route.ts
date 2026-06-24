@@ -1,5 +1,6 @@
 import { NextRequest, NextResponse } from "next/server";
 import { createClient } from "@supabase/supabase-js";
+import { sendPushToUser } from "@/lib/push";
 
 /**
  * POST /api/beta-feedback
@@ -274,20 +275,25 @@ export async function PATCH(req: NextRequest) {
   const supabase = createClient(supabaseUrl, supabaseKey);
 
   // If adminReply is being set and this is the first reply, set replied_at = NOW()
+  let userEmail: string | null = null;
+  let subjectForNotif: string | null = null;
   if (body?.adminReply !== undefined) {
     const { data: existing } = await supabase
       .from("beta_feedback")
-      .select("admin_replied_at, status")
+      .select("admin_replied_at, status, email, subject")
       .eq("id", Number(id))
       .maybeSingle();
 
-    if (existing && !existing.admin_replied_at) {
-      update.admin_replied_at = new Date().toISOString();
-    }
-
-    // If status not explicitly set and was "new" or "read", bump to "resolved"
-    if (body?.status === undefined && existing && (existing.status === "new" || existing.status === "read")) {
-      update.status = "resolved";
+    if (existing) {
+      userEmail = existing.email;
+      subjectForNotif = existing.subject;
+      if (!existing.admin_replied_at) {
+        update.admin_replied_at = new Date().toISOString();
+      }
+      // If status not explicitly set and was "new" or "read", bump to "resolved"
+      if (body?.status === undefined && (existing.status === "new" || existing.status === "read")) {
+        update.status = "resolved";
+      }
     }
   }
 
@@ -300,5 +306,30 @@ export async function PATCH(req: NextRequest) {
     return NextResponse.json({ error: error.message }, { status: 500 });
   }
 
-  return NextResponse.json({ ok: true });
+  // Send Web Push notification to the user (best-effort, non-blocking).
+  // Only fires when adminReply was just set (not on status-only updates).
+  // The user must have: opted in to notifications + toggled "followUp" category.
+  // If they haven't, sendPushToUser silently returns { sent: 0, gone: 0 }.
+  let pushResult: { sent: number; gone: number } | null = null;
+  if (body?.adminReply !== undefined && userEmail) {
+    try {
+      const replyPreview = String(body.adminReply).slice(0, 100);
+      const notifSubject = subjectForNotif || "il tuo feedback";
+      pushResult = await sendPushToUser(userEmail, "followUp", {
+        title: "LabelPulse — Risposta dell'admin",
+        body: `Riguardo: ${notifSubject}\n\n${replyPreview}${String(body.adminReply).length > 100 ? "…" : ""}`,
+        url: "/",
+        tag: `feedback-reply-${id}`,
+      });
+      console.log(`[beta-feedback] Push sent to ${userEmail}:`, pushResult);
+    } catch (err) {
+      // Don't fail the request if push fails — the reply itself was saved
+      console.error("[beta-feedback] Push notification failed (non-blocking):", err);
+    }
+  }
+
+  return NextResponse.json({
+    ok: true,
+    push: pushResult, // null = no push attempted, { sent, gone } = result
+  });
 }

@@ -55,6 +55,10 @@ export default function AdminFeedbackPage() {
   const [replyMode, setReplyMode] = useState(false);
   const [replyText, setReplyText] = useState("");
   const [sendingReply, setSendingReply] = useState(false);
+  const [notifStatus, setNotifStatus] = useState<{
+    push?: { sent: number; gone: number } | null;
+    email?: { ok: boolean; error?: string } | null;
+  } | null>(null);
 
   // Load token from localStorage on mount
   useEffect(() => {
@@ -136,6 +140,8 @@ export default function AdminFeedbackPage() {
       return;
     }
     setSendingReply(true);
+    setNotifStatus(null);
+    const replyContent = replyText.trim();
     try {
       const res = await fetch(`/api/beta-feedback?id=${selected.id}`, {
         method: "PATCH",
@@ -143,15 +149,66 @@ export default function AdminFeedbackPage() {
           Authorization: `Bearer ${adminToken}`,
           "Content-Type": "application/json",
         },
-        body: JSON.stringify({ adminReply: replyText.trim() }),
+        body: JSON.stringify({ adminReply: replyContent }),
       });
       if (!res.ok) throw new Error(await res.text());
+      const data = await res.json().catch(() => ({}));
+      const pushResult: { sent: number; gone: number } | null = data.push ?? null;
+
+      // Send email from admin's Gmail (best-effort — admin is logged in via Google OAuth)
+      let emailResult: { ok: boolean; error?: string } | null = null;
+      try {
+        const emailSubject = selected.subject
+          ? `LabelPulse — Risposta al tuo feedback: ${selected.subject}`
+          : "LabelPulse — Risposta al tuo feedback";
+        const emailBody = [
+          `Ciao,`,
+          ``,
+          `Hai ricevuto una risposta al tuo feedback su LabelPulse.`,
+          ``,
+          `--- Il tuo feedback ---`,
+          selected.subject ? `Oggetto: ${selected.subject}` : "",
+          selected.subject ? `` : null,
+          selected.message,
+          `-----------------------`,
+          ``,
+          `--- Risposta ---`,
+          replyContent,
+          `-----------------`,
+          ``,
+          `Apri l'app per rispondere o inviare un nuovo feedback:`,
+          `https://labelpulse.vercel.app/`,
+          ``,
+          `— Team LabelPulse`,
+        ].filter(Boolean).join("\n");
+
+        const emailRes = await fetch("/api/gmail/send", {
+          method: "POST",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({
+            to: selected.email,
+            subject: emailSubject,
+            body: emailBody,
+          }),
+        });
+        if (emailRes.ok) {
+          emailResult = { ok: true };
+        } else {
+          const errData = await emailRes.json().catch(() => ({}));
+          emailResult = { ok: false, error: errData.error || `HTTP ${emailRes.status}` };
+        }
+      } catch (err: any) {
+        emailResult = { ok: false, error: err.message || "Network error" };
+      }
+
+      setNotifStatus({ push: pushResult, email: emailResult });
+
       // Refresh list + update selected
       await fetchFeedbacks();
       const now = new Date().toISOString();
       setSelected({
         ...selected,
-        admin_reply: replyText.trim(),
+        admin_reply: replyContent,
         admin_replied_at: selected.admin_replied_at || now,
         admin_reply_seen_at: null,
         status: selected.status === "new" || selected.status === "read" ? "resolved" : selected.status,
@@ -258,6 +315,9 @@ export default function AdminFeedbackPage() {
                   key={f.id}
                   onClick={() => {
                     setSelected(f);
+                    setNotifStatus(null);
+                    setReplyMode(false);
+                    setReplyText("");
                     if (f.status === "new") updateStatus(f.id, "read");
                   }}
                   className="w-full text-left rounded-lg border border-border/40 bg-card/50 p-3 hover:bg-card transition-colors"
@@ -417,6 +477,42 @@ export default function AdminFeedbackPage() {
                             ? "L'utente vedrà il messaggio aggiornato e riceverà di nuovo il badge \"nuova risposta\"."
                             : "Quando invii, lo status passa automaticamente a \"Risolto\" e l'utente vede un badge nella sua app."}
                         </p>
+                      </div>
+                    )}
+
+                    {/* Notification status — shown after a reply is sent */}
+                    {notifStatus && (
+                      <div className="rounded-md border border-border/30 bg-background/40 p-2.5 space-y-1.5 text-xs">
+                        <p className="font-semibold text-foreground flex items-center gap-1.5">
+                          <Send className="h-3 w-3" /> Notifiche inviate
+                        </p>
+                        <div className="flex items-start gap-2">
+                          <span className="text-muted-foreground shrink-0 w-14">Email:</span>
+                          {notifStatus.email?.ok ? (
+                            <span className="text-green-400">✓ Inviata a {selected.email}</span>
+                          ) : (
+                            <span className="text-amber-400">
+                              ⚠ Non inviata{notifStatus.email?.error ? ` — ${notifStatus.email.error}` : ""}
+                              <span className="block text-[10px] text-muted-foreground/70 mt-0.5">
+                                (La risposta è comunque visibile nell'app. Per inviare email, assicurati di aver fatto login con Gmail.)
+                              </span>
+                            </span>
+                          )}
+                        </div>
+                        <div className="flex items-start gap-2">
+                          <span className="text-muted-foreground shrink-0 w-14">Push:</span>
+                          {notifStatus.push == null ? (
+                            <span className="text-muted-foreground">— Non tentata</span>
+                          ) : notifStatus.push.sent > 0 ? (
+                            <span className="text-green-400">
+                              ✓ Consegnata a {notifStatus.push.sent} dispositivo/i
+                            </span>
+                          ) : (
+                            <span className="text-muted-foreground">
+                              — L'utente non ha attivato le notifiche push (badge in-app rimane attivo)
+                            </span>
+                          )}
+                        </div>
                       </div>
                     )}
                   </div>
