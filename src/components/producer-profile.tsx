@@ -811,8 +811,10 @@ export function ProducerProfile() {
 
       {/* ==================== CLOUD RECOVERY (diagnostica & ripristino) ====================
           Mostra lo stato reale di locale/cloud/sidecar e dà bottoni di
-          ripristino per risolvere "post login non vedo niente". */}
-      <CloudRecovery />
+          ripristino per risolvere "post login non vedo niente".
+          Le azioni distruttive (Sovrascrivi cloud/locale) sono admin-only
+          per evitare che utenti beta/clienti facciano danni. */}
+      <CloudRecovery isAdmin={isAdmin} />
     </div>
   );
 }

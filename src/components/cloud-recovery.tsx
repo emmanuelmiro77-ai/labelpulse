@@ -83,7 +83,7 @@ function formatRelativeTime(iso: string | null): string {
   }
 }
 
-export function CloudRecovery() {
+export function CloudRecovery({ isAdmin = false }: { isAdmin?: boolean }) {
   const { toast } = useToast();
   const [localState, setLocalState] = useState<LocalState | null>(null);
   const [cloudState, setCloudState] = useState<CloudState | null>(null);
@@ -375,26 +375,36 @@ export function CloudRecovery() {
             {actionLoading === "mergeArtists" ? <Loader2 className="h-3.5 w-3.5 animate-spin" /> : <RefreshCw className="h-3.5 w-3.5" />}
             Unisci artisti cloud + locale
           </Button>
-          <Button
-            size="sm"
-            variant="outline"
-            onClick={() => setConfirmAction("push")}
-            disabled={!configured || actionLoading !== null}
-            className="gap-1.5"
-          >
-            {actionLoading === "push" ? <Loader2 className="h-3.5 w-3.5 animate-spin" /> : <Upload className="h-3.5 w-3.5" />}
-            Sovrascrivi cloud con locale
-          </Button>
-          <Button
-            size="sm"
-            variant="outline"
-            onClick={() => setConfirmAction("pull")}
-            disabled={!configured || actionLoading !== null}
-            className="gap-1.5"
-          >
-            {actionLoading === "pull" ? <Loader2 className="h-3.5 w-3.5 animate-spin" /> : <Download className="h-3.5 w-3.5" />}
-            Sovrascrivi locale con cloud
-          </Button>
+          {/* ⚠️ Azioni distruttive — visibili solo agli admin.
+              Per gli utenti finali sono pericolose perché possono wipeare
+              dati validi (sia sul cloud che sul locale). L'utente base ha
+              il merge intelligente + il ripristino sidecar per risolvere
+              i problemi di sync; se le azioni distruttive servono davvero,
+              significa che c'è un bug e va gestito dal supporto. */}
+          {isAdmin && (
+            <Button
+              size="sm"
+              variant="outline"
+              onClick={() => setConfirmAction("push")}
+              disabled={!configured || actionLoading !== null}
+              className="gap-1.5"
+            >
+              {actionLoading === "push" ? <Loader2 className="h-3.5 w-3.5 animate-spin" /> : <Upload className="h-3.5 w-3.5" />}
+              Sovrascrivi cloud con locale
+            </Button>
+          )}
+          {isAdmin && (
+            <Button
+              size="sm"
+              variant="outline"
+              onClick={() => setConfirmAction("pull")}
+              disabled={!configured || actionLoading !== null}
+              className="gap-1.5"
+            >
+              {actionLoading === "pull" ? <Loader2 className="h-3.5 w-3.5 animate-spin" /> : <Download className="h-3.5 w-3.5" />}
+              Sovrascrivi locale con cloud
+            </Button>
+          )}
           <Button
             size="sm"
             variant="outline"
@@ -433,10 +443,19 @@ export function CloudRecovery() {
           <ol className="list-decimal list-inside space-y-0.5 ml-2">
             <li>Controlla quanti &quot;Label con classifiche&quot; hai in locale vs cloud.</li>
             <li>Se cloud ne ha di più → clicca &quot;Unisci cloud + locale&quot; (NON sovrascrivere).</li>
-            <li>Se cloud è vuoto → clicca &quot;Sovrascrivi cloud con locale&quot; per fare backup.</li>
             <li>Se entrambi vuoti → usa &quot;Ripristina da sidecar&quot; per recuperare dai backup di emergenza.</li>
             <li>Se ancora niente → &quot;Scarica backup JSON&quot; e mandalo al supporto, poi rifai il login.</li>
           </ol>
+          {isAdmin && (
+            <p className="mt-2 text-amber-400/80">
+              <strong>Admin only:</strong> &quot;Sovrascrivi cloud/locale&quot; sono operazioni distruttive — usale solo se sai che una delle due parti ha dati certamente migliori. Il merge intelligente è quasi sempre preferibile.
+            </p>
+          )}
+          {!isAdmin && (
+            <p className="mt-2 text-muted-foreground/50">
+              Per problemi persistenti di sync, scarica il backup JSON e contatta il supporto — le azioni di sovrascrittura sono riservate all&apos;admin per evitare perdite di dati.
+            </p>
+          )}
         </div>
       </CardContent>
 
