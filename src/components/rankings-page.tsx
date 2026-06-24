@@ -234,7 +234,7 @@ function ClickableLabelName({
         onOpen?.(label);
       }}
       title={`Apri la pagina dedicata di ${label.name} (dati, top tracce, artisti)`}
-      className={`hover:text-primary hover:underline cursor-pointer transition-colors text-left bg-transparent border-0 p-0 ${className}`}
+      className={`hover:text-primary hover:underline cursor-pointer transition-colors text-left bg-transparent border-0 p-0 min-w-0 flex-1 truncate ${className}`}
     >
       {label.name}
     </button>
@@ -1144,16 +1144,23 @@ export function RankingsPage() {
             {/* Table header */}
             <div className={`grid items-center gap-1 px-3 py-2 bg-secondary/30 text-xs font-medium text-muted-foreground border-b border-border/50 ${
               timePeriod !== "current"
-                ? "grid-cols-[3rem_1fr_4.5rem_4rem_4.5rem_3.5rem] sm:grid-cols-[3rem_1fr_5rem_5rem_5.5rem_4rem]"
-                : "grid-cols-[3rem_1fr_4.5rem_4rem_4rem] sm:grid-cols-[3rem_1fr_5rem_5rem_5rem]"
+                ? "grid-cols-[2.5rem_1fr_auto] sm:grid-cols-[3rem_1fr_5rem_5rem_5.5rem_4rem]"
+                : "grid-cols-[2.5rem_1fr_auto] sm:grid-cols-[3rem_1fr_5rem_5rem_5rem]"
             }`}>
               <span>#</span>
               <span>{t(locale, "rankings.colLabel")}</span>
-              <span className="text-right">{t(locale, "rankings.colRank")}</span>
-              <span className="text-right">{t(locale, "rankings.colMovement")}</span>
-              <span className="text-right">{timePeriod !== "current" ? t(locale, "rankings.colCumPoints") : t(locale, "rankings.colPoints")}</span>
+              {/* Mobile: rank hidden, movement hidden, only label + points */}
+              <span className="text-right sm:hidden">
+                {timePeriod !== "current" ? t(locale, "rankings.colCumPoints") : t(locale, "rankings.colPoints")}
+              </span>
+              {/* Desktop: full columns */}
+              <span className="hidden text-right sm:block">{t(locale, "rankings.colRank")}</span>
+              <span className="hidden text-right sm:block">{t(locale, "rankings.colMovement")}</span>
+              <span className="hidden text-right sm:block">
+                {timePeriod !== "current" ? t(locale, "rankings.colCumPoints") : t(locale, "rankings.colPoints")}
+              </span>
               {timePeriod !== "current" && (
-                <span className="text-right">{t(locale, "rankings.colUpdates")}</span>
+                <span className="hidden text-right sm:block">{t(locale, "rankings.colUpdates")}</span>
               )}
             </div>
 
@@ -1168,8 +1175,8 @@ export function RankingsPage() {
                     key={`${item.label.id}-${item.rank}`}
                     className={`grid items-center gap-1 px-3 py-2.5 text-sm transition-colors hover:bg-secondary/20 ${
                       timePeriod !== "current"
-                        ? "grid-cols-[3rem_1fr_4.5rem_4rem_4.5rem_3.5rem] sm:grid-cols-[3rem_1fr_5rem_5rem_5.5rem_4rem]"
-                        : "grid-cols-[3rem_1fr_4.5rem_4rem_4rem] sm:grid-cols-[3rem_1fr_5rem_5rem_5rem]"
+                        ? "grid-cols-[2.5rem_1fr_auto] sm:grid-cols-[3rem_1fr_5rem_5rem_5.5rem_4rem]"
+                        : "grid-cols-[2.5rem_1fr_auto] sm:grid-cols-[3rem_1fr_5rem_5rem_5rem]"
                     } ${item.rank <= 3 ? "bg-primary/5" : ""}`}
                   >
                     {/* Rank number */}
@@ -1177,11 +1184,11 @@ export function RankingsPage() {
                       {item.rank}
                     </span>
 
-                    {/* Label name + tier */}
-                    <div className="flex items-center gap-2 min-w-0">
+                    {/* Label name + tier + (mobile: movement inline) */}
+                    <div className="flex items-center gap-1.5 min-w-0">
                       <ClickableLabelName
                         label={item.label}
-                        className="font-medium text-foreground truncate"
+                        className="font-medium text-foreground"
                         onOpen={handleOpenLabel}
                       />
                       {timePeriod === "current" && (
@@ -1191,18 +1198,33 @@ export function RankingsPage() {
                             {tier === "top" ? "T" : tier === "mid" ? "M" : tier === "emerging" ? "E" : ""}
                           </span>
                           {item.label.trending && <Flame className="h-3 w-3 text-orange-400 shrink-0" />}
+                          {/* Mobile: movement inline as icon + small number */}
+                          <span className="shrink-0 flex items-center gap-0.5 sm:hidden">
+                            {getMovementIcon(item.movement)}
+                            <span className={`font-mono text-[10px] ${getMovementColor(item.movement)}`}>
+                              {getMovementText(item.movement, locale)}
+                            </span>
+                          </span>
                         </>
                       )}
-                      <LabelDiscoveryIcons label={item.label} size={11} />
+                      {/* Discovery icons only on desktop */}
+                      <div className="hidden sm:block">
+                        <LabelDiscoveryIcons label={item.label} size={11} />
+                      </div>
                     </div>
 
-                    {/* Current rank */}
-                    <span className="text-right font-mono text-foreground">
+                    {/* Mobile: points only (compact) */}
+                    <span className="text-right font-mono text-xs text-muted-foreground sm:hidden">
+                      {item.points.toLocaleString(locale === "it" ? "it-IT" : "en-US")}
+                    </span>
+
+                    {/* Desktop: Current rank */}
+                    <span className="hidden text-right font-mono text-foreground sm:block">
                       #{item.rank}
                     </span>
 
-                    {/* Movement */}
-                    <div className="flex items-center justify-end gap-1">
+                    {/* Desktop: Movement */}
+                    <div className="hidden items-center justify-end gap-1 sm:flex">
                       {timePeriod === "current" ? (
                         <>
                           {getMovementIcon(item.movement)}
@@ -1215,14 +1237,14 @@ export function RankingsPage() {
                       )}
                     </div>
 
-                    {/* Points */}
-                    <span className="text-right font-mono text-xs text-muted-foreground">
+                    {/* Desktop: Points */}
+                    <span className="hidden text-right font-mono text-xs text-muted-foreground sm:block">
                       {item.points.toLocaleString(locale === "it" ? "it-IT" : "en-US")}
                     </span>
 
-                    {/* Snapshot count (only for cumulative views) */}
+                    {/* Desktop: Snapshot count (only for cumulative views) */}
                     {timePeriod !== "current" && (
-                      <span className="text-right font-mono text-[10px] text-muted-foreground">
+                      <span className="hidden text-right font-mono text-[10px] text-muted-foreground sm:block">
                         {item.snapshotCount}×
                       </span>
                     )}
