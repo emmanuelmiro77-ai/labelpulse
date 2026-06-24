@@ -592,3 +592,55 @@ Stage Summary:
 - No regressions: card list still opens detail normally, URL deep-link works,
   close button still works
 - Vercel deploy in progress
+
+---
+Task ID: 20
+Agent: Main Agent
+Task: Add ErrorBoundary + defensive guards to prevent full-page "This page couldn't load" crashes
+
+Work Log:
+- Investigated user report: 4th time the page crashes with "This page couldn't load"
+  while inserting URLs in label detail dialog on PC
+- Found ROOT CAUSE: LabelPulse had NO error boundary anywhere in the React tree
+  * When any render error throws (null deref, toLocaleString on undefined,
+    new Date(invalidString), unexpected API shape, etc.), the error
+    propagated to Next.js root → full-page crash → forced reload
+- Identified most likely throw sites in label detail dialog:
+  * artist.totalLabelPoints.toLocaleString() — if field is undefined/null
+  * new Date(track.releaseDate).toLocaleDateString() — if releaseDate
+    is a non-ISO string, new Date() returns Invalid Date → throws
+- Created src/components/error-boundary.tsx (NEW):
+  * ErrorBoundary class component (getDerivedStateFromError + componentDidCatch)
+  * Catches render errors in wrapped subtree
+  * Shows inline "Qualcosa è andato storto in questo pannello" card
+  * "Riprova" button resets boundary state and re-mounts subtree
+  * resetKey prop auto-resets when user navigates to different item
+  * label prop for context (e.g. "scheda Hilomatik")
+  * Logs error to console for debugging
+  * minimal prop for compact variant
+  * DialogErrorFallback export for dialog-specific UI with Riprova + Chiudi
+- Wrapped label detail DialogContent in <ErrorBoundary>:
+  * resetKey={detailLabel?.id} → auto-reset on label change
+  * label={`scheda ${detailLabel?.name}`} for context
+  * Render error now shows inline card INSIDE dialog instead of crashing page
+- Added defensive guard on artist.totalLabelPoints.toLocaleString() (line 1865):
+  * Was: {artist.totalLabelPoints.toLocaleString()}
+  * Now: typeof check + Number.isFinite → falls back to "0"
+- Added defensive guard on new Date(track.releaseDate) (line 1700):
+  * Was: new Date(track.releaseDate).toLocaleDateString(...)
+  * Now: wrapped in try/catch, isNaN(d.getTime()) check, returns "" on invalid
+- Wrapped shortenUrlForDisplay in try/catch:
+  * Belt-and-suspenders defense for unexpected URL shapes
+  * Falls back to String(rawUrl).slice(0, maxLen)
+  * Added typeof check: non-string input returns ""
+- Build successful (Next.js 16.2.9 Turbopack, 28 routes, no errors)
+- Commit 044669f pushed to origin/main
+
+Stage Summary:
+- A render error in the label detail dialog NO LONGER crashes the whole page
+- User sees an inline error card with Riprova/Chiudi — rest of app keeps working
+- Most likely crash causes (toLocaleString, new Date) are individually guarded
+- When user opens a different label after seeing an error, boundary auto-resets
+- Vercel deploy in progress
+- If the error happens again, the inline card will show the actual error message
+  so we can identify the exact throw site and fix it definitively
