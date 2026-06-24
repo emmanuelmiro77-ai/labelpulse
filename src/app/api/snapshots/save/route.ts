@@ -16,23 +16,66 @@ import { saveSnapshot, SnapshotInput } from "@/lib/snapshots";
  *   SnapshotInput — see src/lib/snapshots.ts
  *
  * NOTE: same-day scrapes REPLACE the existing snapshot (idempotent).
+ * CORS is allowed from beatport.com so the browser scraper can POST
+ * directly without a separate uploader step.
  */
+
+const ALLOWED_ORIGINS = [
+  "https://www.beatport.com",
+  "https://beatport.com",
+  "http://localhost:3000",
+];
+
+function corsHeaders(origin: string | null): Record<string, string> {
+  const headers: Record<string, string> = {
+    "Access-Control-Allow-Methods": "POST, OPTIONS",
+    "Access-Control-Allow-Headers": "Content-Type",
+  };
+  if (origin && ALLOWED_ORIGINS.includes(origin)) {
+    headers["Access-Control-Allow-Origin"] = origin;
+    headers["Access-Control-Allow-Credentials"] = "false";
+  }
+  return headers;
+}
+
+function jsonWithCors(
+  body: unknown,
+  status: number,
+  origin: string | null
+): NextResponse {
+  return NextResponse.json(body, {
+    status,
+    headers: corsHeaders(origin),
+  });
+}
+
+export async function OPTIONS(req: NextRequest) {
+  const origin = req.headers.get("origin");
+  return new NextResponse(null, {
+    status: 204,
+    headers: corsHeaders(origin),
+  });
+}
+
 export async function POST(req: NextRequest) {
+  const origin = req.headers.get("origin");
   try {
     const body = await req.json();
     const input = body as SnapshotInput;
 
     // Basic validation
     if (!input || !Array.isArray(input.tracks)) {
-      return NextResponse.json(
+      return jsonWithCors(
         { error: "invalid_input", message: "tracks[] is required" },
-        { status: 400 }
+        400,
+        origin
       );
     }
     if (input.tracks.length === 0) {
-      return NextResponse.json(
+      return jsonWithCors(
         { error: "empty_snapshot", message: "tracks[] must not be empty" },
-        { status: 400 }
+        400,
+        origin
       );
     }
     if (!input.snapshotDate) {
@@ -42,15 +85,15 @@ export async function POST(req: NextRequest) {
       input.source = "browser-scrape";
     }
 
-    // Optional: cap payload size (3500 tracks × ~5 positions each = ~17.5k rows max)
-    // Vercel has a 4.5MB body limit on free tier — we should be well under
+    // Cap payload size (3500 tracks × ~5 positions each = ~17.5k rows max)
     if (input.tracks.length > 10000) {
-      return NextResponse.json(
+      return jsonWithCors(
         {
           error: "too_many_tracks",
           message: `Track count ${input.tracks.length} exceeds limit of 10000`,
         },
-        { status: 413 }
+        413,
+        origin
       );
     }
 
@@ -64,12 +107,13 @@ export async function POST(req: NextRequest) {
       `[snapshots/save] Saved snapshot #${result.snapshotId}: new=${result.newEntries} climbers=${result.climbers} droppers=${result.droppers} stable=${result.stable}`
     );
 
-    return NextResponse.json({ ok: true, diff: result });
+    return jsonWithCors({ ok: true, diff: result }, 200, origin);
   } catch (err: any) {
     console.error("[/api/snapshots/save]", err);
-    return NextResponse.json(
+    return jsonWithCors(
       { error: err?.message || "internal_error" },
-      { status: 500 }
+      500,
+      origin
     );
   }
 }
