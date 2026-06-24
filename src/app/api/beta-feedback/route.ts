@@ -201,9 +201,18 @@ export async function GET(req: NextRequest) {
 
 /**
  * PATCH /api/beta-feedback?id=<id>
- * Body: { status: "new" | "read" | "resolved" | "ignored" }
+ * Body (any combination):
+ *   - status: "new" | "read" | "resolved" | "ignored"
+ *   - adminReply: string  — set or update the admin's reply. Empty string clears it.
  *
- * Updates the status of a single feedback item. Admin-only (Bearer token).
+ * Updates a single feedback item. Admin-only (Bearer token = BETA_ADMIN_TOKEN).
+ *
+ * When `adminReply` is provided:
+ *   - Sets admin_reply = body.adminReply (truncated to 5000 chars)
+ *   - Sets admin_replied_at = NOW() (only if it wasn't already set, so we keep
+ *     the first-reply timestamp on edits)
+ *   - Resets admin_reply_seen_at = NULL so the user gets the "new reply" badge again
+ *   - If status was "new" or "read", bumps it to "resolved" (admin replied = handled)
  */
 export async function PATCH(req: NextRequest) {
   const authHeader = req.headers.get("authorization");
@@ -225,10 +234,31 @@ export async function PATCH(req: NextRequest) {
     return NextResponse.json({ error: "Invalid JSON" }, { status: 400 });
   }
 
-  const validStatuses = ["new", "read", "resolved", "ignored"];
-  if (!validStatuses.includes(body?.status)) {
+  // Build the update payload based on what was sent
+  const update: Record<string, any> = {};
+
+  if (body?.status !== undefined) {
+    const validStatuses = ["new", "read", "resolved", "ignored"];
+    if (!validStatuses.includes(body.status)) {
+      return NextResponse.json(
+        { error: `Invalid status. Must be one of: ${validStatuses.join(", ")}` },
+        { status: 400 }
+      );
+    }
+    update.status = body.status;
+  }
+
+  if (body?.adminReply !== undefined) {
+    const replyText = String(body.adminReply).slice(0, 5000);
+    update.admin_reply = replyText || null;
+    // Set replied_at only on first reply (NULL → NOW); keep original on edits
+    // We use coalesce-style logic by reading current row first
+    update.admin_reply_seen_at = null; // Reset seen flag so user sees the badge again
+  }
+
+  if (Object.keys(update).length === 0) {
     return NextResponse.json(
-      { error: `Invalid status. Must be one of: ${validStatuses.join(", ")}` },
+      { error: "Nothing to update. Send 'status' or 'adminReply'." },
       { status: 400 }
     );
   }
@@ -242,9 +272,28 @@ export async function PATCH(req: NextRequest) {
   }
 
   const supabase = createClient(supabaseUrl, supabaseKey);
+
+  // If adminReply is being set and this is the first reply, set replied_at = NOW()
+  if (body?.adminReply !== undefined) {
+    const { data: existing } = await supabase
+      .from("beta_feedback")
+      .select("admin_replied_at, status")
+      .eq("id", Number(id))
+      .maybeSingle();
+
+    if (existing && !existing.admin_replied_at) {
+      update.admin_replied_at = new Date().toISOString();
+    }
+
+    // If status not explicitly set and was "new" or "read", bump to "resolved"
+    if (body?.status === undefined && existing && (existing.status === "new" || existing.status === "read")) {
+      update.status = "resolved";
+    }
+  }
+
   const { error } = await supabase
     .from("beta_feedback")
-    .update({ status: body.status })
+    .update(update)
     .eq("id", Number(id));
 
   if (error) {

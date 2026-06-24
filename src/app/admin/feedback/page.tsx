@@ -3,7 +3,7 @@
 import { useEffect, useState } from "react";
 import { useRouter } from "next/navigation";
 import { useSession } from "next-auth/react";
-import { Bug, CheckCircle2, Eye, RefreshCw, Trash2, Inbox, AlertCircle } from "lucide-react";
+import { Bug, CheckCircle2, Eye, RefreshCw, Trash2, Inbox, AlertCircle, Reply, Send, Loader2, Check, Pencil } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Badge } from "@/components/ui/badge";
@@ -22,6 +22,9 @@ type Feedback = {
   locale: string | null;
   status: "new" | "read" | "resolved" | "ignored";
   created_at: string;
+  admin_reply?: string | null;
+  admin_replied_at?: string | null;
+  admin_reply_seen_at?: string | null;
 };
 
 const ADMIN_EMAILS = new Set(["emmanuel.miro77@gmail.com"]);
@@ -49,6 +52,9 @@ export default function AdminFeedbackPage() {
   const [tokenInput, setTokenInput] = useState("");
   const [filterStatus, setFilterStatus] = useState<string>("all");
   const [selected, setSelected] = useState<Feedback | null>(null);
+  const [replyMode, setReplyMode] = useState(false);
+  const [replyText, setReplyText] = useState("");
+  const [sendingReply, setSendingReply] = useState(false);
 
   // Load token from localStorage on mount
   useEffect(() => {
@@ -121,6 +127,47 @@ export default function AdminFeedbackPage() {
     } catch (err: any) {
       alert(`Errore aggiornamento: ${err.message}`);
     }
+  };
+
+  const sendReply = async () => {
+    if (!selected || !adminToken) return;
+    if (!replyText.trim()) {
+      alert("Scrivi qualcosa prima di inviare.");
+      return;
+    }
+    setSendingReply(true);
+    try {
+      const res = await fetch(`/api/beta-feedback?id=${selected.id}`, {
+        method: "PATCH",
+        headers: {
+          Authorization: `Bearer ${adminToken}`,
+          "Content-Type": "application/json",
+        },
+        body: JSON.stringify({ adminReply: replyText.trim() }),
+      });
+      if (!res.ok) throw new Error(await res.text());
+      // Refresh list + update selected
+      await fetchFeedbacks();
+      const now = new Date().toISOString();
+      setSelected({
+        ...selected,
+        admin_reply: replyText.trim(),
+        admin_replied_at: selected.admin_replied_at || now,
+        admin_reply_seen_at: null,
+        status: selected.status === "new" || selected.status === "read" ? "resolved" : selected.status,
+      });
+      setReplyMode(false);
+      setReplyText("");
+    } catch (err: any) {
+      alert(`Errore invio risposta: ${err.message}`);
+    } finally {
+      setSendingReply(false);
+    }
+  };
+
+  const openReplyEditor = () => {
+    setReplyText(selected?.admin_reply || "");
+    setReplyMode(true);
   };
 
   const saveToken = () => {
@@ -224,6 +271,11 @@ export default function AdminFeedbackPage() {
                         <Badge variant="outline" className={STATUS_LABELS[f.status]?.color}>
                           {STATUS_LABELS[f.status]?.label}
                         </Badge>
+                        {(f as any).admin_reply && (
+                          <Badge variant="outline" className="bg-primary/10 text-primary border-primary/30 text-[10px]">
+                            <Reply className="h-2.5 w-2.5 mr-1" /> Risposto
+                          </Badge>
+                        )}
                         {f.subject && (
                           <span className="text-sm font-medium truncate">
                             {f.subject}
@@ -277,6 +329,97 @@ export default function AdminFeedbackPage() {
                   <pre className="whitespace-pre-wrap text-sm font-sans bg-secondary/30 rounded-md p-3 mb-4">
                     {selected.message}
                   </pre>
+
+                  {/* Admin reply section */}
+                  <div className="rounded-lg border border-primary/30 bg-primary/5 p-3 mb-4">
+                    <div className="flex items-center justify-between mb-2">
+                      <div className="flex items-center gap-2">
+                        <Reply className="h-4 w-4 text-primary" />
+                        <h4 className="text-sm font-semibold">Risposta all'utente</h4>
+                      </div>
+                      <div className="flex items-center gap-2 text-[11px] text-muted-foreground">
+                        {selected.admin_replied_at && (
+                          <span>
+                            {new Date(selected.admin_replied_at).toLocaleString("it-IT")}
+                          </span>
+                        )}
+                        {selected.admin_reply && selected.admin_reply_seen_at && (
+                          <Badge variant="outline" className="text-[10px] bg-green-500/10 text-green-400 border-green-500/30">
+                            <Check className="h-3 w-3 mr-1" /> Vista
+                          </Badge>
+                        )}
+                        {selected.admin_reply && !selected.admin_reply_seen_at && (
+                          <Badge variant="outline" className="text-[10px] bg-amber-500/10 text-amber-400 border-amber-500/30">
+                            Non letta
+                          </Badge>
+                        )}
+                      </div>
+                    </div>
+
+                    {/* Existing reply (read-only) */}
+                    {selected.admin_reply && !replyMode && (
+                      <div className="space-y-2">
+                        <div className="whitespace-pre-wrap text-sm font-sans bg-background/50 rounded-md p-2.5 border border-border/30">
+                          {selected.admin_reply}
+                        </div>
+                        <Button size="sm" variant="outline" onClick={openReplyEditor}>
+                          <Pencil className="h-3.5 w-3.5" /> Modifica risposta
+                        </Button>
+                      </div>
+                    )}
+
+                    {/* Reply editor (new or edit) */}
+                    {(replyMode || !selected.admin_reply) && (
+                      <div className="space-y-2">
+                        <textarea
+                          value={replyText}
+                          onChange={(e) => setReplyText(e.target.value)}
+                          placeholder="Scrivi qui la tua risposta all'utente. La vedrà nella sua app la prossima volta che apre il pulsante Feedback."
+                          rows={5}
+                          maxLength={5000}
+                          className="w-full text-sm font-sans bg-background/50 rounded-md p-2.5 border border-border/40 focus:outline-none focus:border-primary resize-y min-h-[100px]"
+                          disabled={sendingReply}
+                        />
+                        <div className="flex items-center justify-between gap-2">
+                          <span className="text-[11px] text-muted-foreground">
+                            {replyText.length}/5000
+                          </span>
+                          <div className="flex gap-2">
+                            {selected.admin_reply && (
+                              <Button
+                                size="sm"
+                                variant="ghost"
+                                onClick={() => {
+                                  setReplyMode(false);
+                                  setReplyText("");
+                                }}
+                                disabled={sendingReply}
+                              >
+                                Annulla
+                              </Button>
+                            )}
+                            <Button
+                              size="sm"
+                              onClick={sendReply}
+                              disabled={sendingReply || !replyText.trim()}
+                            >
+                              {sendingReply ? (
+                                <Loader2 className="h-3.5 w-3.5 animate-spin" />
+                              ) : (
+                                <Send className="h-3.5 w-3.5" />
+                              )}
+                              {selected.admin_reply ? "Aggiorna" : "Invia risposta"}
+                            </Button>
+                          </div>
+                        </div>
+                        <p className="text-[11px] text-muted-foreground/80 leading-snug">
+                          {selected.admin_reply
+                            ? "L'utente vedrà il messaggio aggiornato e riceverà di nuovo il badge \"nuova risposta\"."
+                            : "Quando invii, lo status passa automaticamente a \"Risolto\" e l'utente vede un badge nella sua app."}
+                        </p>
+                      </div>
+                    )}
+                  </div>
 
                   <div className="grid grid-cols-2 gap-3 text-xs mb-4">
                     <Field label="Da" value={selected.email} mono />

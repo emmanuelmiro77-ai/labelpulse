@@ -439,3 +439,65 @@ User must do before features activate:
 2. Set on Vercel env vars: NEXT_PUBLIC_VAPID_PUBLIC_KEY, VAPID_PRIVATE_KEY, VAPID_SUBJECT, CRON_SECRET
 3. Verify BETA_ADMIN_TOKEN is still set (already done previously)
 4. After deploy: each user opens Profilo → "Notifiche" → Abilita → toggle categories
+
+---
+Task ID: 17
+Agent: Main Agent
+Task: Implement "Rispondi all'utente" button in /admin/feedback + in-app reply viewer for users
+
+Work Log:
+- Created supabase-schema-feedback-reply.sql migration adding 3 columns to beta_feedback:
+  - admin_reply TEXT (nullable) — admin's reply text
+  - admin_replied_at TIMESTAMPTZ — when first replied (kept on edits)
+  - admin_reply_seen_at TIMESTAMPTZ — when user saw the reply (NULL = unseen)
+  - Index on (email) WHERE admin_reply IS NOT NULL for fast user-side queries
+- Extended PATCH /api/beta-feedback to accept `adminReply` (string):
+  - When adminReply sent: sets admin_reply, resets admin_reply_seen_at to NULL,
+    sets admin_replied_at = NOW() on first reply only, auto-bumps status
+    "new"/"read" → "resolved" if status not explicitly given
+- Created /api/beta-feedback/my-replies (GET, NextAuth-protected):
+  - Filters by session.user.email — user only sees their OWN feedback
+  - Only returns rows with admin_reply NOT NULL
+  - Query params: includeSeen=true (default: only unseen), markSeen=true
+  - Returns { items, unseenCount }
+- Updated /admin/feedback page:
+  - Added "Risposta all'utente" panel inside detail modal (bordered, primary-tinted)
+  - Shows existing reply (if any) with read-only box + "Modifica risposta" button
+  - Shows reply editor (textarea, 5000 char limit) when no reply yet OR user clicks Modifica
+  - Shows "Vista" green badge if user has seen, "Non letta" amber badge otherwise
+  - Shows replied_at timestamp
+  - Added "Risposto" badge with Reply icon in the feedback list rows
+  - Type extended with admin_reply/admin_replied_at/admin_reply_seen_at
+- Updated beta-feedback-button.tsx (user-facing):
+  - Added MyReply type + helpers (CATEGORY_LABELS, formatRelative)
+  - Added state: repliesOpen, replies, unseenCount, loadingReplies
+  - fetchReplies() — calls /api/beta-feedback/my-replies with optional includeSeen/markSeen
+  - useEffect polls every 60s for unseen replies (badge counter)
+  - useEffect on repliesOpen: fetches all + marks them as seen
+  - Added Bell button next to Feedback button — visible only when unseenCount > 0 OR replies.length > 0
+    - Shows unseenCount as a small primary badge
+  - Added Replies Dialog: list of all replies (newest first), each card shows:
+    * Category badge + "Nuova" badge if unseen
+    * Relative time (formatRelative)
+    * Subject (if any)
+    * User's original feedback (greyed, line-clamp-3)
+    * Admin's reply (primary-tinted, whitespace-pre-wrap)
+  - Replaced direct session.user.email references with extracted `email` const
+- Build successful (Next.js 16.2.9 Turbopack, 6.2s compile, 7 static pages)
+
+Stage Summary:
+- Admin can now reply to any user feedback directly from /admin/feedback detail modal
+- Reply auto-marks feedback as "resolved" + records replied_at timestamp
+- Edit existing replies → user re-gets the "new reply" badge
+- Users see a Bell icon with counter in the header (next to Feedback button)
+- Opening the replies dialog shows all admin replies + auto-marks as seen
+- Polling every 60s means user sees new replies within 1 minute (no refresh needed)
+- No external channel (WhatsApp/email) needed — fully in-app
+
+User must do before feature activates:
+1. Run supabase-schema-feedback-reply.sql in Supabase SQL Editor (adds 3 columns + index)
+2. Push + deploy to Vercel (API routes need server-side runtime, not in static export)
+3. Test: as admin, open /admin/feedback → click a feedback → write a reply → Invia
+4. Test: as user (different browser/incognito with same email), open app → see Bell badge
+   → click → read reply → badge should disappear within 60s
+

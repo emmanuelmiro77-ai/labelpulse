@@ -1,7 +1,7 @@
 "use client";
 
-import { useState } from "react";
-import { Bug, Send, X, Loader2 } from "lucide-react";
+import { useState, useEffect, useCallback } from "react";
+import { Bug, Send, X, Loader2, MessageCircle, Reply, Bell } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import {
   Dialog,
@@ -18,6 +18,36 @@ import { useToast } from "@/hooks/use-toast";
 import { useSession } from "next-auth/react";
 import { useAppStore } from "@/lib/store";
 
+type MyReply = {
+  id: number;
+  category: "bug" | "feature" | "other";
+  subject: string | null;
+  message: string;
+  status: string;
+  created_at: string;
+  admin_reply: string;
+  admin_replied_at: string;
+  admin_reply_seen_at: string | null;
+};
+
+const CATEGORY_LABELS: Record<string, string> = {
+  bug: "Bug",
+  feature: "Funzione",
+  other: "Altro",
+};
+
+function formatRelative(iso: string): string {
+  const diff = Date.now() - new Date(iso).getTime();
+  const min = Math.floor(diff / 60000);
+  if (min < 1) return "ora";
+  if (min < 60) return `${min}m fa`;
+  const h = Math.floor(min / 60);
+  if (h < 24) return `${h}h fa`;
+  const d = Math.floor(h / 24);
+  if (d < 30) return `${d}g fa`;
+  return new Date(iso).toLocaleDateString("it-IT");
+}
+
 /**
  * Beta Feedback Button
  *
@@ -26,6 +56,7 @@ import { useAppStore } from "@/lib/store";
  *   - Describe a bug
  *   - Suggest a feature
  *   - Give general feedback
+ *   - Read replies from the admin
  *
  * The feedback is sent to a Supabase table `beta_feedback` (auto-created on
  * first submission via the API route). Each submission includes:
@@ -50,9 +81,50 @@ export function BetaFeedbackButton() {
   const [message, setMessage] = useState("");
   const [sending, setSending] = useState(false);
 
+  // Replies state
+  const [repliesOpen, setRepliesOpen] = useState(false);
+  const [replies, setReplies] = useState<MyReply[]>([]);
+  const [unseenCount, setUnseenCount] = useState(0);
+  const [loadingReplies, setLoadingReplies] = useState(false);
+
   // Don't show the button if the user is not logged in — we need their email
   // to follow up. The unauthenticated banner already tells them to log in.
-  if (!session?.user?.email) return null;
+  const email = session?.user?.email;
+
+  const fetchReplies = useCallback(async (includeSeen: boolean = false, markSeen: boolean = false) => {
+    if (!email) return;
+    try {
+      const params = new URLSearchParams();
+      if (includeSeen) params.set("includeSeen", "true");
+      if (markSeen) params.set("markSeen", "true");
+      const url = `/api/beta-feedback/my-replies${params.toString() ? `?${params.toString()}` : ""}`;
+      const res = await fetch(url);
+      if (!res.ok) return;
+      const data = await res.json();
+      setReplies(data.items || []);
+      setUnseenCount(data.unseenCount || 0);
+    } catch (err) {
+      console.error("fetchReplies failed:", err);
+    }
+  }, [email]);
+
+  // Poll for unseen replies on mount + every 60s while logged in
+  useEffect(() => {
+    if (!email) return;
+    fetchReplies(false, false);
+    const interval = setInterval(() => {
+      fetchReplies(false, false);
+    }, 60000);
+    return () => clearInterval(interval);
+  }, [email, fetchReplies]);
+
+  // When opening the replies dialog, fetch all (seen + unseen) and mark as seen
+  useEffect(() => {
+    if (repliesOpen && email) {
+      setLoadingReplies(true);
+      fetchReplies(true, true).finally(() => setLoadingReplies(false));
+    }
+  }, [repliesOpen, email, fetchReplies]);
 
   const handleSubmit = async () => {
     if (!message.trim()) {
@@ -73,7 +145,7 @@ export function BetaFeedbackButton() {
         method: "POST",
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({
-          email: session.user.email,
+          email,
           category,
           subject: subject.trim(),
           message: message.trim(),
@@ -114,20 +186,42 @@ export function BetaFeedbackButton() {
     }
   };
 
+  if (!email) return null;
+
   return (
     <>
-      <Button
-        variant="ghost"
-        size="sm"
-        className="gap-1.5 text-xs text-muted-foreground hover:text-amber-400"
-        onClick={() => setOpen(true)}
-        title={locale === "it" ? "Segnala un problema o suggerisci una funzione" : "Report a bug or suggest a feature"}
-      >
-        <Bug className="h-3.5 w-3.5" />
-        <span className="hidden lg:inline">
-          {locale === "it" ? "Feedback" : "Feedback"}
-        </span>
-      </Button>
+      <div className="flex items-center gap-1">
+        {/* Replies bell — only render if user has any replies (seen or unseen) */}
+        {(unseenCount > 0 || replies.length > 0) && (
+          <Button
+            variant="ghost"
+            size="sm"
+            className="relative gap-1.5 text-xs text-muted-foreground hover:text-primary"
+            onClick={() => setRepliesOpen(true)}
+            title={locale === "it" ? "Risposte dall'admin" : "Admin replies"}
+          >
+            <Bell className="h-3.5 w-3.5" />
+            {unseenCount > 0 && (
+              <span className="absolute -top-0.5 -right-0.5 inline-flex items-center justify-center min-w-[16px] h-4 px-1 rounded-full text-[10px] font-bold bg-primary text-primary-foreground">
+                {unseenCount}
+              </span>
+            )}
+          </Button>
+        )}
+
+        <Button
+          variant="ghost"
+          size="sm"
+          className="gap-1.5 text-xs text-muted-foreground hover:text-amber-400"
+          onClick={() => setOpen(true)}
+          title={locale === "it" ? "Segnala un problema o suggerisci una funzione" : "Report a bug or suggest a feature"}
+        >
+          <Bug className="h-3.5 w-3.5" />
+          <span className="hidden lg:inline">
+            {locale === "it" ? "Feedback" : "Feedback"}
+          </span>
+        </Button>
+      </div>
 
       <Dialog open={open} onOpenChange={setOpen}>
         <DialogContent className="max-w-md">
@@ -207,7 +301,7 @@ export function BetaFeedbackButton() {
 
             <div className="rounded-md bg-secondary/30 p-3 text-xs text-muted-foreground border border-border/30">
               {locale === "it" ? "Inviato da:" : "Sent from:"}{" "}
-              <span className="font-mono text-foreground">{session.user.email}</span>
+              <span className="font-mono text-foreground">{email}</span>
             </div>
           </div>
 
@@ -223,6 +317,87 @@ export function BetaFeedbackButton() {
                 <Send className="h-4 w-4" />
               )}
               {locale === "it" ? "Invia" : "Send"}
+            </Button>
+          </DialogFooter>
+        </DialogContent>
+      </Dialog>
+
+      {/* Replies dialog — shows admin replies to user's feedback */}
+      <Dialog open={repliesOpen} onOpenChange={setRepliesOpen}>
+        <DialogContent className="max-w-lg max-h-[85vh] overflow-y-auto">
+          <DialogHeader>
+            <DialogTitle className="flex items-center gap-2">
+              <Reply className="h-5 w-5 text-primary" />
+              {locale === "it" ? "Risposte dall'admin" : "Admin replies"}
+            </DialogTitle>
+            <DialogDescription>
+              {locale === "it"
+                ? "Le risposte ai tuoi feedback, in ordine cronologico."
+                : "Replies to your feedback, in chronological order."}
+            </DialogDescription>
+          </DialogHeader>
+
+          <div className="space-y-3 py-2">
+            {loadingReplies ? (
+              <div className="flex items-center justify-center py-8">
+                <Loader2 className="h-5 w-5 animate-spin text-muted-foreground" />
+              </div>
+            ) : replies.length === 0 ? (
+              <div className="text-center py-8 text-muted-foreground">
+                <MessageCircle className="h-8 w-8 mx-auto mb-2 opacity-50" />
+                <p className="text-sm">
+                  {locale === "it"
+                    ? "Nessuna risposta ancora. Quando l'admin risponderà ai tuoi feedback, le troverai qui."
+                    : "No replies yet. When the admin responds to your feedback, you'll find them here."}
+                </p>
+              </div>
+            ) : (
+              replies.map((r) => (
+                <div
+                  key={r.id}
+                  className={`rounded-md border p-3 space-y-2 ${
+                    !r.admin_reply_seen_at
+                      ? "border-primary/40 bg-primary/5"
+                      : "border-border/40 bg-card/50"
+                  }`}
+                >
+                  <div className="flex items-center justify-between gap-2">
+                    <div className="flex items-center gap-1.5">
+                      <span className="text-[10px] uppercase px-1.5 py-0.5 rounded border border-border/40 text-muted-foreground">
+                        {CATEGORY_LABELS[r.category] || r.category}
+                      </span>
+                      {!r.admin_reply_seen_at && (
+                        <span className="text-[10px] uppercase px-1.5 py-0.5 rounded bg-primary text-primary-foreground font-semibold">
+                          Nuova
+                        </span>
+                      )}
+                    </div>
+                    <span className="text-[11px] text-muted-foreground">
+                      {formatRelative(r.admin_replied_at)}
+                    </span>
+                  </div>
+
+                  {r.subject && (
+                    <p className="text-sm font-medium text-foreground">
+                      {r.subject}
+                    </p>
+                  )}
+                  <div className="rounded bg-secondary/20 p-2 text-xs text-muted-foreground">
+                    <span className="opacity-60">Tu: </span>
+                    <span className="line-clamp-3">{r.message}</span>
+                  </div>
+                  <div className="rounded bg-primary/10 border border-primary/20 p-2.5 text-sm text-foreground whitespace-pre-wrap">
+                    <span className="text-[10px] text-primary font-semibold uppercase block mb-1">Admin</span>
+                    {r.admin_reply}
+                  </div>
+                </div>
+              ))
+            )}
+          </div>
+
+          <DialogFooter>
+            <Button variant="outline" onClick={() => setRepliesOpen(false)}>
+              {locale === "it" ? "Chiudi" : "Close"}
             </Button>
           </DialogFooter>
         </DialogContent>
