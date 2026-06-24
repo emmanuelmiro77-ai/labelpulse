@@ -19,7 +19,7 @@ import {
   PopoverTrigger,
 } from "@/components/ui/popover"
 import { useState, useCallback } from "react"
-import { requestGmailAccess, revokeGmailAccess } from "@/lib/gmail"
+import { requestGmailAccess, revokeGmailAccess, type GmailAuthError } from "@/lib/gmail"
 import { useToast } from "@/hooks/use-toast"
 import {
   REPLY_CATEGORY_LABELS,
@@ -88,15 +88,24 @@ export function GmailSettings() {
     setConnecting(true)
     setErrorMsg("")
     try {
-      const auth = await requestGmailAccess()
-      if (auth) {
-        setGmailAuth(auth)
+      const result = await requestGmailAccess()
+      // Distinguish success (GmailAuthState) from structured error (GmailAuthError)
+      // by checking for the `kind` field, which only exists on errors.
+      if (result && "kind" in result) {
+        // Structured error — surface the actionable message to the user
+        const err = result as GmailAuthError
+        console.error("[Gmail] Connection failed:", err.kind, err.rawError || "")
+        setErrorMsg(err.message)
+      } else if (result && "accessToken" in result) {
+        // Success
+        setGmailAuth(result)
         toast({
           title: "Gmail connesso",
-          description: `Autorizzato come ${auth.email || "account Gmail"}. Ora puoi scansionare le risposte alle demo.`,
+          description: `Autorizzato come ${result.email || "account Gmail"}. Ora puoi scansionare le risposte alle demo.`,
         })
       } else {
-        setErrorMsg("Connessione fallita. Verifica che l'app sia autorizzata su Google Cloud Console.")
+        // Defensive: should not happen
+        setErrorMsg("Errore sconosciuto durante la connessione. Riprova.")
       }
     } catch (err) {
       console.error("Gmail connection failed:", err)

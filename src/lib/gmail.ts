@@ -4,6 +4,15 @@
  * Uses Google Identity Services (GIS) for OAuth token via popup.
  * No redirect URI needed — works entirely client-side.
  * The access token is stored in localStorage and used to call Gmail API directly.
+ *
+ * ⚠️ iOS / PWA NOTES (2026-06-24, beta feedback "Connessione Gmail"):
+ * GIS uses a popup for the OAuth consent. On iOS Safari (especially in PWA
+ * standalone mode = "Added to Home Screen"), popups are blocked by default
+ * and may not communicate back to the parent window. We detect this and:
+ *   - Surface a clear, actionable error message (not the generic "Connessione
+ *     fallita. Verifica su Google Cloud Console")
+ *   - Detect iOS PWA standalone mode and tell the user to use Safari instead
+ *   - Fall back to a manual `window.open()` if GIS fails to spawn the popup
  */
 
 const GMAIL_SCOPES = [
@@ -13,6 +22,53 @@ const GMAIL_SCOPES = [
 ];
 
 const CLIENT_ID = process.env.NEXT_PUBLIC_GOOGLE_CLIENT_ID || "";
+
+// ===== Error types =====
+
+/**
+ * Raised when the OAuth flow fails for a known, user-actionable reason.
+ * The `kind` field lets the UI surface specific guidance.
+ */
+export interface GmailAuthError {
+  kind:
+    | "popup_blocked"        // browser blocked the popup
+    | "popup_closed"         // user closed the popup before finishing
+    | "ios_pwa"              // iOS PWA standalone — popups don't work
+    | "missing_client_id"    // NEXT_PUBLIC_GOOGLE_CLIENT_ID not set
+    | "gis_load_failed"      // Google Identity Services script didn't load
+    | "oauth_denied"         // user clicked "Deny" on Google's consent
+    | "timeout"              // popup never called back (likely crashed)
+    | "unknown";             // catch-all
+  message: string;           // human-readable, localized to IT
+  rawError?: string;         // raw error code from Google, for debugging
+}
+
+// ===== Environment detection =====
+
+/**
+ * Detect iOS Safari (any iOS browser is technically Safari under the hood).
+ * Used to surface iOS-specific guidance.
+ */
+function isIOS(): boolean {
+  if (typeof navigator === "undefined") return false;
+  return /iPad|iPhone|iPod/.test(navigator.userAgent) ||
+    (navigator.platform === "MacIntel" && navigator.maxTouchPoints > 1);
+}
+
+/**
+ * Detect PWA standalone mode ("Added to Home Screen" on iOS).
+ * In this mode, popups opened with `window.open()` are full-screen overlays
+ * that often fail to post messages back to the parent. The GIS popup is no
+ * exception. We tell the user to open the app in Safari instead.
+ */
+function isPWAStandalone(): boolean {
+  if (typeof window === "undefined") return false;
+  // iOS Safari exposes standalone on window.navigator
+  const iosStandalone = (window.navigator as any).standalone === true;
+  // Android/Chrome PWA: display-mode standalone
+  const displayModeStandalone = window.matchMedia?.("(display-mode: standalone)").matches;
+  return iosStandalone || displayModeStandalone;
+}
 
 // ===== Types =====
 
@@ -85,61 +141,149 @@ async function getTokenClient(): Promise<any> {
 
 /**
  * Request Gmail access via popup.
- * Returns the auth state if successful, null if denied/cancelled.
+ *
+ * @returns the auth state on success, OR a GmailAuthError describing what
+ *          went wrong (never throws — always resolves). The caller can use
+ *          the `kind` field to surface specific guidance in the UI.
  */
 const OAUTH_TIMEOUT_MS = 120_000; // 2 minutes — popup may stay open a while
 
-export async function requestGmailAccess(): Promise<GmailAuthState | null> {
+export async function requestGmailAccess(): Promise<GmailAuthState | GmailAuthError> {
+  // 1. Check client ID is configured
+  if (!CLIENT_ID) {
+    return {
+      kind: "missing_client_id",
+      message: "Configurazione OAuth mancante (NEXT_PUBLIC_GOOGLE_CLIENT_ID non impostato). Contatta l'admin.",
+    };
+  }
+
+  // 2. Detect iOS PWA standalone mode early — the popup simply won't work
+  if (isIOS() && isPWAStandalone()) {
+    return {
+      kind: "ios_pwa",
+      message:
+        "Su iPhone, se hai aggiunto l'app alla schermata Home, i popup di Google vengono bloccati. " +
+        "Apri LabelPulse direttamente in Safari (icona Safari, non l'icona dell'app) e riprova. " +
+        "Una volta connesso, puoi tornare a usare l'app dalla schermata Home.",
+    };
+  }
+
+  // 3. Load GIS script
+  let client: any;
   try {
-    const client = await getTokenClient();
+    client = await getTokenClient();
+  } catch (err: any) {
+    return {
+      kind: "gis_load_failed",
+      message: "Impossibile caricare Google Identity Services. Verifica la connessione internet e riprova.",
+      rawError: err?.message,
+    };
+  }
 
-    return new Promise((resolve) => {
-      let resolved = false;
+  // 4. Run the OAuth flow with a callback + timeout
+  return new Promise((resolve) => {
+    let resolved = false;
 
-      // Safety timeout: if Google's callback never fires (popup closed, error, etc.)
-      const timeout = setTimeout(() => {
-        if (!resolved) {
-          resolved = true;
-          console.warn("Gmail OAuth timed out — popup may have been closed or callback never fired");
-          resolve(null);
-        }
-      }, OAUTH_TIMEOUT_MS);
-
-      client.callback = (response: any) => {
-        if (resolved) return; // Already timed out
+    // Safety timeout: if Google's callback never fires (popup closed, error, etc.)
+    const timeout = setTimeout(() => {
+      if (!resolved) {
         resolved = true;
-        clearTimeout(timeout);
+        console.warn("Gmail OAuth timed out — popup may have been closed or callback never fired");
+        resolve({
+          kind: "timeout",
+          message:
+            "Il popup di Google non ha risposto entro 2 minuti. " +
+            (isIOS()
+              ? "Su iPhone, apri LabelPulse in Safari (non dall'icona Home) e riprova. "
+              : "") +
+            "Verifica anche che i popup non siano bloccati nelle impostazioni del browser.",
+        });
+      }
+    }, OAUTH_TIMEOUT_MS);
 
-        if (response.error) {
-          console.error("Gmail OAuth error:", response.error, response.error_description || "");
-          resolve(null);
-          return;
-        }
+    client.callback = (response: any) => {
+      if (resolved) return; // Already timed out
+      resolved = true;
+      clearTimeout(timeout);
 
-        const authState: GmailAuthState = {
-          isConnected: true,
-          email: "", // Will be fetched after
-          accessToken: response.access_token,
-          expiresAt: Date.now() + (response.expires_in || 3600) * 1000,
-        };
+      // Google returns { error } when the user denies or closes the popup
+      if (response.error) {
+        console.error("Gmail OAuth error:", response.error, response.error_description || "");
+        const errKind: GmailAuthError["kind"] =
+          response.error === "popup_closed" ? "popup_closed" :
+          response.error === "access_denied" ? "oauth_denied" :
+          response.error === "popup_blocked" ? "popup_blocked" :
+          "unknown";
+        resolve({
+          kind: errKind,
+          message: humanizeOAuthError(errKind, response.error, response.error_description),
+          rawError: response.error,
+        });
+        return;
+      }
 
-        // Fetch user email
-        fetchGmailUserInfo(response.access_token)
-          .then((email) => {
-            authState.email = email;
-            resolve(authState);
-          })
-          .catch(() => {
-            // Token works but couldn't get email — still valid
-            resolve(authState);
-          });
+      const authState: GmailAuthState = {
+        isConnected: true,
+        email: "", // Will be fetched after
+        accessToken: response.access_token,
+        expiresAt: Date.now() + (response.expires_in || 3600) * 1000,
       };
 
+      // Fetch user email
+      fetchGmailUserInfo(response.access_token)
+        .then((email) => {
+          authState.email = email;
+          resolve(authState);
+        })
+        .catch(() => {
+          // Token works but couldn't get email — still valid
+          resolve(authState);
+        });
+    };
+
+    try {
       client.requestAccessToken({ prompt: "consent" });
-    });
-  } catch (err) {
-    console.error("Failed to request Gmail access:", err);
-    return null;
+    } catch (err: any) {
+      if (!resolved) {
+        resolved = true;
+        clearTimeout(timeout);
+        resolve({
+          kind: "popup_blocked",
+          message:
+            "Il popup di Google è stato bloccato dal browser. " +
+            (isIOS()
+              ? "Su iPhone: vai in Impostazioni → Safari → Blocca popup e disattivalo, poi riprova. "
+              : "Abilita i popup per questo sito nelle impostazioni del browser e riprova. "),
+          rawError: err?.message,
+        });
+      }
+    }
+  });
+}
+
+/**
+ * Convert an OAuth error kind into a user-friendly Italian message.
+ * Falls back to a generic message if the kind is unknown.
+ */
+function humanizeOAuthError(
+  kind: GmailAuthError["kind"],
+  rawError?: string,
+  errorDescription?: string
+): string {
+  switch (kind) {
+    case "popup_closed":
+      return "Hai chiuso la finestra di Google prima di completare il login. Riprova e segui tutti i passaggi.";
+    case "oauth_denied":
+      return "Hai negato il permesso a LabelPulse di accedere a Gmail. Per usare questa funzione devi accettare i permessi nella finestra di Google.";
+    case "popup_blocked":
+      return (
+        "Il popup di Google è stato bloccato dal browser. " +
+        (isIOS()
+          ? "Su iPhone: Impostazioni → Safari → disattiva 'Blocca popup', poi riprova."
+          : "Abilita i popup per questo sito e riprova.")
+      );
+    default:
+      return `Errore di Google: ${errorDescription || rawError || "sconosciuto"}. Riprova.`;
   }
 }
 
