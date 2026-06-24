@@ -1579,6 +1579,13 @@ export function LabelFinder() {
                     {rank && <span className="text-xs font-mono text-primary/70 bg-primary/10 px-2 py-0.5 rounded">{t(locale, "labels.rank")} {rank}</span>}
                     {getTierBadge(detailLabel)}
                     {detailLabel.trending && <Badge className="bg-orange-500/20 text-orange-300 border-orange-500/30 text-[10px] px-1.5 py-0">🔥 Trending</Badge>}
+                    {/* Quick discovery icons — Beatport / Beatstats / SoundCloud */}
+                    <span className="ml-auto flex items-center gap-1 pr-6">
+                      <span className="text-[10px] text-muted-foreground uppercase tracking-wider mr-0.5 hidden sm:inline">
+                        {locale === "it" ? "Esplora:" : "Discover:"}
+                      </span>
+                      <LabelDiscoveryIcons label={detailLabel} size={16} />
+                    </span>
                   </DialogTitle>
                 </DialogHeader>
 
@@ -2294,7 +2301,7 @@ export function LabelFinder() {
                   <div className="grid gap-1.5">
                     {smartMatchResults.top.map((l) => (
                       <div key={l.id} className="flex items-center justify-between px-3 py-1.5 rounded-lg bg-purple-500/5 border border-purple-500/10 text-sm cursor-pointer hover:bg-purple-500/10 transition-colors"
-                        onClick={() => { setShowSmartMatch(false); openDetail(l); }}>
+                        onClick={() => openDetail(l)}>
                         <div className="flex items-center gap-2">
                           <span className="text-[10px] font-mono text-purple-400 w-8">#{l.rankByGenre?.[smartMatchGenre]}</span>
                           <span className="font-medium text-foreground">{l.name}</span>
@@ -2314,7 +2321,7 @@ export function LabelFinder() {
                   <div className="grid gap-1.5">
                     {smartMatchResults.mid.map((l) => (
                       <div key={l.id} className="flex items-center justify-between px-3 py-1.5 rounded-lg bg-blue-500/5 border border-blue-500/10 text-sm cursor-pointer hover:bg-blue-500/10 transition-colors"
-                        onClick={() => { setShowSmartMatch(false); openDetail(l); }}>
+                        onClick={() => openDetail(l)}>
                         <div className="flex items-center gap-2">
                           <span className="text-[10px] font-mono text-blue-400 w-8">#{l.rankByGenre?.[smartMatchGenre]}</span>
                           <span className="font-medium text-foreground">{l.name}</span>
@@ -2334,7 +2341,7 @@ export function LabelFinder() {
                   <div className="grid gap-1.5">
                     {smartMatchResults.emerging.map((l) => (
                       <div key={l.id} className="flex items-center justify-between px-3 py-1.5 rounded-lg bg-emerald-500/5 border border-emerald-500/10 text-sm cursor-pointer hover:bg-emerald-500/10 transition-colors"
-                        onClick={() => { setShowSmartMatch(false); openDetail(l); }}>
+                        onClick={() => openDetail(l)}>
                         <div className="flex items-center gap-2">
                           <span className="text-[10px] text-orange-400">🔥</span>
                           <span className="font-medium text-foreground">{l.name}</span>
