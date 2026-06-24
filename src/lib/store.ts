@@ -385,6 +385,16 @@ function getUserEditCountFromRaw(raw: string | null): number {
 
 // (debounced backup removed — we now write backup IMMEDIATELY on every write for maximum data safety)
 
+// Track backup write failures so we can stop spamming the console when
+// localStorage is full. After MAX_BACKUP_FAILURES consecutive QuotaExceeded
+// errors, we disable the backup entirely (until next page reload) and only
+// log a single warning. The primary key keeps being written normally.
+// The backup is a safety net — if it can't fit, we can't do anything about
+// it from the app, so we don't keep retrying every keystroke.
+const MAX_BACKUP_FAILURES = 3;
+let _backupFailures = 0;
+let _backupDisabled = false;
+
 const robustStorage: StateStorage = {
   getItem: (name: string): string | null => {
     const primaryRaw = safeLocalStorageGet(PRIMARY_KEY);
@@ -533,7 +543,25 @@ const robustStorage: StateStorage = {
 
     // Write to backup IMMEDIATELY (no debounce) for maximum data safety.
     // Previous 60s debounce caused data loss if browser crashed before backup was written.
-    safeLocalStorageSet(BACKUP_KEY, value);
+    // THROTTLE: if backup has failed MAX_BACKUP_FAILURES times in a row (usually
+    // because localStorage quota is exceeded — common when the user has 1900+
+    // labels with user data), stop retrying until next page reload. We log a
+    // single warning instead of spamming console.error on every keystroke.
+    if (!_backupDisabled) {
+      const backupOk = safeLocalStorageSet(BACKUP_KEY, value);
+      if (!backupOk) {
+        _backupFailures += 1;
+        if (_backupFailures >= MAX_BACKUP_FAILURES) {
+          _backupDisabled = true;
+          console.warn(
+            `[LabelPulse Storage] Backup disabled after ${_backupFailures} consecutive failures (localStorage quota exceeded). Primary storage is still working. Consider exporting a manual backup from the Backup Dati button.`
+          );
+        }
+      } else if (_backupFailures > 0) {
+        // Reset on success — transient failure recovered
+        _backupFailures = 0;
+      }
+    }
 
     // CRITICAL: also persist rankingSnapshots to a dedicated slot.
     // This is the user's "storico caricamenti" — months of imports that cannot
@@ -1187,8 +1215,19 @@ const LABEL_DEFAULTS = {
  * Detects and fixes: same email appearing on too many labels (likely corruption).
  */
 function repairLabelData(labels: Label[]): Label[] {
+  // First pass: filter out corrupted labels (no name, or not an object).
+  // These cause "Cannot read properties of undefined (reading 'toLowerCase')"
+  // crashes in useMemo filters downstream when cloud merge produces
+  // half-formed label objects. Better to drop them silently than crash the UI.
+  let safeLabels = labels.filter(l => l && typeof l === "object" && typeof l.name === "string" && l.name.trim() !== "");
+  if (safeLabels.length !== labels.length) {
+    console.warn(
+      `[LabelPulse Repair] Filtered out ${labels.length - safeLabels.length} corrupted label(s) (missing/empty name) out of ${labels.length}.`
+    );
+  }
+
   const emailLabelCount = new Map<string, number>();
-  for (const l of labels) {
+  for (const l of safeLabels) {
     if (l.emails && Array.isArray(l.emails)) {
       for (const e of l.emails) {
         if (e && e.trim()) {
@@ -1210,12 +1249,12 @@ function repairLabelData(labels: Label[]): Label[] {
   }
 
   if (corruptedEmails.size === 0) {
-    return labels;
+    return safeLabels;
   }
 
   const emailOwner = new Map<string, string>();
   for (const email of corruptedEmails) {
-    for (const l of labels) {
+    for (const l of safeLabels) {
       if (l.emails?.some(e => e.toLowerCase().trim() === email)) {
         const domain = email.split("@")[1]?.split(".")[0]?.toLowerCase();
         if (domain && l.name.toLowerCase().includes(domain)) {
@@ -1225,7 +1264,7 @@ function repairLabelData(labels: Label[]): Label[] {
       }
     }
     if (!emailOwner.has(email)) {
-      for (const l of labels) {
+      for (const l of safeLabels) {
         if (l.emails?.some(e => e.toLowerCase().trim() === email)) {
           emailOwner.set(email, l.id);
           break;
@@ -1234,7 +1273,7 @@ function repairLabelData(labels: Label[]): Label[] {
     }
   }
 
-  return labels.map(l => {
+  return safeLabels.map(l => {
     if (!l.emails || !Array.isArray(l.emails)) return l;
     const cleanedEmails = l.emails.filter(e => {
       const key = e?.toLowerCase().trim();

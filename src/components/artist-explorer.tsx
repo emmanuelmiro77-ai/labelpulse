@@ -1252,8 +1252,9 @@ export default function ArtistExplorer() {
         setActiveTab("labels");
         return;
       }
+      const target = (labelName || "").toLowerCase().trim();
       const match = labels.find(
-        (l) => l.name.toLowerCase().trim() === labelName.toLowerCase().trim()
+        (l) => l && l.name && l.name.toLowerCase().trim() === target
       );
       // If we have an id, pass that. Otherwise pass the name itself —
       // LabelFinder's useEffect falls back to name matching.

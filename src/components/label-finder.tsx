@@ -806,16 +806,19 @@ export function LabelFinder() {
   const [formNotes, setFormNotes] = useState("");
 
   const filteredLabels = useMemo(() => {
-    return labels.filter((l) => {
+    const safeLabels = Array.isArray(labels) ? labels : [];
+    const q = (search || "").toLowerCase().trim();
+    return safeLabels.filter((l) => {
+      if (!l || !l.name) return false;  // skip corrupted labels
       const matchSearch =
-        !search ||
-        l.name.toLowerCase().includes(search.toLowerCase()) ||
-        l.genres.some((g) => g.toLowerCase().includes(search.toLowerCase())) ||
-        l.contactInfo.toLowerCase().includes(search.toLowerCase()) ||
-        l.emails.some((e) => e.toLowerCase().includes(search.toLowerCase()));
+        !q ||
+        (l.name || "").toLowerCase().includes(q) ||
+        (Array.isArray(l.genres) && l.genres.some((g) => (g || "").toLowerCase().includes(q))) ||
+        (l.contactInfo || "").toLowerCase().includes(q) ||
+        (Array.isArray(l.emails) && l.emails.some((e) => (e || "").toLowerCase().includes(q)));
       const matchGenre =
         genreFilter.length === 0 ||
-        genreFilter.every((g) => l.genres.includes(g));
+        (Array.isArray(l.genres) && genreFilter.every((g) => l.genres.includes(g)));
       const matchStatus =
         statusFilter === "all" || l.status === statusFilter;
       return matchSearch && matchGenre && matchStatus;
@@ -907,7 +910,8 @@ export function LabelFinder() {
     }
     // Fallback: selectedLabelId might actually be a label name passed
     // through from artist-explorer (we set both id and name there).
-    const byName = labels.find(l => l.name.toLowerCase().trim() === String(selectedLabelId).toLowerCase().trim());
+    const targetName = String(selectedLabelId).toLowerCase().trim();
+    const byName = labels.find(l => l && l.name && l.name.toLowerCase().trim() === targetName);
     if (byName) {
       openDetail(byName);
       setSelectedLabelId(null);

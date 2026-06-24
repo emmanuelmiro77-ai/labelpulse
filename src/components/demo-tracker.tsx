@@ -407,12 +407,15 @@ export function DemoTracker() {
   // ---------- end pitch section ----------
 
   const filteredDemos = useMemo(() => {
-    return demos.filter((d) => {
+    const safeDemos = Array.isArray(demos) ? demos : [];
+    const q = (search || "").toLowerCase().trim();
+    return safeDemos.filter((d) => {
+      if (!d) return false;  // skip corrupted demos
       const matchSearch =
-        !search ||
-        d.trackName.toLowerCase().includes(search.toLowerCase()) ||
-        d.notes.toLowerCase().includes(search.toLowerCase()) ||
-        (d.artists || []).some(a => a.toLowerCase().includes(search.toLowerCase()));
+        !q ||
+        (d.trackName || "").toLowerCase().includes(q) ||
+        (d.notes || "").toLowerCase().includes(q) ||
+        (Array.isArray(d.artists) && d.artists.some(a => (a || "").toLowerCase().includes(q)));
       const matchStatus = statusFilter === "all" || d.status === statusFilter;
       const matchRelease =
         releaseFilter === "all" ? true :
@@ -1487,11 +1490,12 @@ export function DemoTracker() {
                           const q = labelSearchQuery.toLowerCase().trim();
                           const filtered = labels
                             .filter((l) => {
+                              if (!l || !l.name) return false;
                               if (!q) return true;
                               // Match by name (case-insensitive)
-                              if (l.name.toLowerCase().includes(q)) return true;
+                              if ((l.name || "").toLowerCase().includes(q)) return true;
                               // Match by genre
-                              if ((l.genres || []).some((g) => g.toLowerCase().includes(q))) return true;
+                              if ((l.genres || []).some((g) => (g || "").toLowerCase().includes(q))) return true;
                               return false;
                             })
                             .sort((a, b) => {
@@ -1500,11 +1504,11 @@ export function DemoTracker() {
                               if (a.status !== "open" && b.status === "open") return 1;
                               // When searching, sort by startsWith first
                               if (q) {
-                                const aStarts = a.name.toLowerCase().startsWith(q) ? 0 : 1;
-                                const bStarts = b.name.toLowerCase().startsWith(q) ? 0 : 1;
+                                const aStarts = (a.name || "").toLowerCase().startsWith(q) ? 0 : 1;
+                                const bStarts = (b.name || "").toLowerCase().startsWith(q) ? 0 : 1;
                                 if (aStarts !== bStarts) return aStarts - bStarts;
                               }
-                              return a.name.localeCompare(b.name);
+                              return (a.name || "").localeCompare(b.name || "");
                             })
                             .slice(0, 250);
 
