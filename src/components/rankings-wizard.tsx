@@ -621,6 +621,71 @@ export function RankingsWizard() {
           toast({ title: t(locale, "data.rankingsSuccess") });
           setImportWarning(false);
 
+          // ─────────────────────────────────────────────────────────────
+          // Fire-and-forget: save the Beatport snapshot to Supabase so we
+          // build chart history over time (powers future "trending",
+          // "new entries", "climbers/droppers", producer ranking pushes).
+          // This is transparent to the admin — same flow as before. The
+          // scraper's `tracks[]` shape already matches SnapshotTrackInput
+          // exactly, so we forward the parsed data as-is. Failures are
+          // logged but never block the import (the data is already in the
+          // user's local store; the snapshot is supplementary).
+          // ─────────────────────────────────────────────────────────────
+          try {
+            const meta = parsed._meta || {};
+            const snapshotPayload = {
+              snapshotDate: new Date().toISOString().split("T")[0],
+              source: "admin-import",
+              totalGenres: meta.totalGenres || (parsed.genres?.length ?? 0),
+              totalLabels: meta.totalLabels || (parsed.labels?.length ?? 0),
+              totalArtists: meta.totalArtists || (parsed.artists?.length ?? 0),
+              totalTracks: meta.totalTracks || (parsed.tracks?.length ?? 0),
+              incompleteGenres: [],
+              notes: "Imported via rankings wizard",
+              tracks: Array.isArray(parsed.tracks) ? parsed.tracks : [],
+            };
+            console.info(
+              "%c[LabelPulse]%c Salvataggio snapshot in background…",
+              "color:#8b5cf6;font-weight:bold",
+              "color:#666",
+              { tracks: snapshotPayload.tracks.length }
+            );
+            fetch("/api/snapshots/save", {
+              method: "POST",
+              headers: { "Content-Type": "application/json" },
+              body: JSON.stringify(snapshotPayload),
+            })
+              .then((r) => (r.ok ? r.json() : Promise.reject(r)))
+              .then((res) => {
+                if (res?.diff) {
+                  const d = res.diff;
+                  console.info(
+                    "%c[LabelPulse]%c Snapshot salvato ✓",
+                    "color:#8b5cf6;font-weight:bold",
+                    "color:#22c55e;font-weight:bold",
+                    {
+                      snapshotId: d.snapshotId,
+                      previous: d.previousSnapshotDate,
+                      newEntries: d.newEntries,
+                      climbers: d.climbers,
+                      droppers: d.droppers,
+                      stable: d.stable,
+                    }
+                  );
+                }
+              })
+              .catch((err) => {
+                console.warn(
+                  "%c[LabelPulse]%c Snapshot save fallito (non bloccante)",
+                  "color:#8b5cf6;font-weight:bold",
+                  "color:#ef4444",
+                  err?.status || err
+                );
+              });
+          } catch {
+            // Non-fatal: snapshot save is best-effort
+          }
+
           // Fire-and-forget: notify all users who opted in to 'rankings'
           // pushes. Admin's BETA_ADMIN_TOKEN is in localStorage (set from
           // /admin/feedback page). If not present, skip silently — admin
