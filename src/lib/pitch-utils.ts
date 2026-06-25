@@ -6,6 +6,17 @@
 export type PitchTone = "professional" | "confident" | "friendly" | "storytelling";
 export type PitchLanguage = "en" | "it" | "es" | "fr" | "de" | "pt";
 
+/**
+ * Pitch shape — controls how the body template is structured.
+ *  • "single"      — traditional single-track pitch (default).
+ *  • "ep-single"   — whole EP with ONE SoundCloud link (album/private set).
+ *  • "ep-multi"    — multi-track pitch where each track has its own SC link,
+ *                    and the format is left open (EP / separate singles / label
+ *                    picks the strongest track). Used when the user has NOT
+ *                    created a single SC album URL yet.
+ */
+export type PitchShape = "single" | "ep-single" | "ep-multi";
+
 export const PITCH_LANGUAGES: Record<PitchLanguage, string> = {
   en: "English",
   it: "Italiano",
@@ -16,7 +27,33 @@ export const PITCH_LANGUAGES: Record<PitchLanguage, string> = {
 };
 
 /**
- * Generate the email body text for a pitch in the specified language and tone
+ * Represents a track entry in an EP pitch — used by ep-multi templates so
+ * each track has its own name + SoundCloud link, properly attributed.
+ */
+export interface PitchTrackEntry {
+  trackName: string;
+  artistName: string;        // primary artist (+ collaborators, already joined)
+  scLink: string;            // direct SoundCloud link to THIS track
+}
+
+/**
+ * Generate the email body text for a pitch in the specified language and tone.
+ *
+ * The `shape` parameter controls the overall structure:
+ *  • "single"    — single-track pitch (trackName + scLink + customNote)
+ *  • "ep-single" — whole-EP pitch with a single SoundCloud album URL.
+ *                  `trackName` is the EP title, `scLink` is the album URL,
+ *                  `customNote` typically contains the tracklist (names only).
+ *  • "ep-multi"  — multi-track pitch where each track has its own SC link.
+ *                  `trackName` is the EP title (or "EP (N tracks)"),
+ *                  `epTracks` carries the per-track entries, `customNote`
+ *                  is a free-form user note. The body lists every track
+ *                  with its own link, and explicitly leaves the format
+ *                  open ("EP, separate singles, or whichever track
+ *                  resonates — we're open to discussing it").
+ *
+ * For backward compatibility, `shape` defaults to "single" and `epTracks`
+ * is optional — existing callers that don't pass them keep working.
  */
 function generateBody(
   labelName: string,
@@ -25,10 +62,102 @@ function generateBody(
   scLink: string,
   tone: PitchTone,
   customNote: string,
-  lang: PitchLanguage
+  lang: PitchLanguage,
+  shape: PitchShape = "single",
+  epTracks?: PitchTrackEntry[]
 ): string {
-  const link = scLink.trim() || (lang === "it" ? "[Il tuo link privato SoundCloud]" : lang === "es" ? "[Tu enlace privado de SoundCloud]" : lang === "fr" ? "[Votre lien SoundCloud privé]" : lang === "de" ? "[Ihr privater SoundCloud-Link]" : lang === "pt" ? "[Seu link privado do SoundCloud]" : "[Your private SoundCloud link]");
   const artist = artistName.trim();
+  const isEpSingle = shape === "ep-single";
+  const isEpMulti = shape === "ep-multi";
+
+  // === EP single-link (album URL on SoundCloud) ===
+  // The whole EP is one continuous album/private set; the label listens
+  // to it as a single piece. The body uses "my latest EP" language and
+  // references one link. If epTracks is provided, we add a "Tracklist:"
+  // section with just the names (no per-track links — redundant with the
+  // album URL).
+  if (isEpSingle) {
+    const epLink = scLink.trim() || (lang === "it" ? "[Il tuo link EP SoundCloud]" : lang === "es" ? "[Tu enlace EP de SoundCloud]" : lang === "fr" ? "[Votre lien EP SoundCloud]" : lang === "de" ? "[Ihr EP SoundCloud-Link]" : lang === "pt" ? "[Seu link EP do SoundCloud]" : "[Your EP SoundCloud link]");
+    const tracklistText = (epTracks && epTracks.length > 0)
+      ? epTracks.map((t, i) => `${i + 1}. ${t.trackName}${t.artistName && t.artistName !== artist ? ` — ${t.artistName}` : ""}`).join("\n")
+      : "";
+    if (lang === "it") {
+      const opening = tone === "confident"
+        ? `Hey Team ${labelName},\n\nVi mando il mio EP "${trackName}" perché credo sia esattamente ciò di cui ${labelName} ha bisogno in questo momento.`
+        : tone === "friendly"
+          ? `Ehi ${labelName}!\n\nHo un EP fresco per voi — "${trackName}" — e penso davvero che vi piacerà.`
+          : tone === "storytelling"
+            ? `Gentile Team ${labelName},\n\nAlcuni EP nascono in studio — altri vengono da un posto più profondo. "${trackName}" è di quelli.`
+            : `Gentile Team ${labelName},\n\nVi contatto per sottoporre alla vostra attenzione il mio EP "${trackName}" per una possibile pubblicazione su ${labelName}.`;
+      const middle = `${artist ? `Produco con il nome d'arte ${artist}, e ` : ""}credo che questo lavoro si allinei perfettamente all'identità sonora e alla direzione artistica della label. L'EP è pensato come un viaggio continuo, da ascoltare nella sua interezza.`;
+      const closing = `${customNote.trim() ? `Contesto aggiuntivo: ${customNote.trim()}\n\n` : ""}Sarei davvero grato per l'opportunità di discuterne. Grazie per il vostro tempo.\n\nCordiali saluti,\n${artist || "Produttore Indipendente"}`;
+      return `${opening}\n\n${middle}\n\nPotete ascoltare l'EP completo al seguente link:\n${epLink}${tracklistText ? `\n\nTracklist:\n${tracklistText}` : ""}\n\n${closing}`;
+    }
+    // English fallback (also covers es/fr/de/pt with translated link placeholder above)
+    const opening = tone === "confident"
+      ? `Hey ${labelName} Team,\n\nI'm sending you my EP "${trackName}" because I believe this is exactly what ${labelName} needs right now.`
+      : tone === "friendly"
+        ? `Hey ${labelName}!\n\nI've got a fresh EP for you — "${trackName}" — and I genuinely think you're going to dig it.`
+        : tone === "storytelling"
+          ? `Dear ${labelName} Team,\n\nSome EPs come from the studio — others come from somewhere deeper. "${trackName}" is the latter.`
+          : `Dear ${labelName} Team,\n\nI'm reaching out to submit my EP "${trackName}" for your consideration at ${labelName}.`;
+    const middle = `${artist ? `I produce under the name ${artist}, and ` : ""}I believe this work aligns closely with the sonic identity and artistic direction of the label. The EP is built as a continuous journey, meant to be heard in full.`;
+    const closing = `${customNote.trim() ? `Additional context: ${customNote.trim()}\n\n` : ""}I would greatly appreciate the opportunity to discuss this submission further. Thank you for your time and consideration.\n\nBest regards,\n${artist || "Independent Producer"}`;
+    return `${opening}\n\n${middle}\n\nYou can listen to the full EP here:\n${epLink}${tracklistText ? `\n\nTracklist:\n${tracklistText}` : ""}\n\n${closing}`;
+  }
+
+  // === EP multi-link (each track has its own SC URL, format open) ===
+  // The user has 2+ tracks but no single SC album URL yet. The body lists
+  // every track with its own link, and explicitly invites the label to
+  // choose the format (EP, separate singles, or just the strongest track).
+  // This is the most flexible pitch — no commitment to a specific format
+  // until the label shows interest.
+  if (isEpMulti && epTracks && epTracks.length > 0) {
+    const trackCount = epTracks.length;
+    const primaryArtist = artist || (epTracks[0]?.artistName || "");
+    // Build the per-track list with explicit attribution: each line shows
+    // the track name + (if different from primary artist) the artist credit
+    // + the direct SC link. Numbers make it easy for the A&R to reference
+    // a specific track in their reply.
+    const trackList = epTracks
+      .map((t, i) => {
+        const credit = t.artistName && t.artistName !== primaryArtist
+          ? ` (${t.artistName})`
+          : "";
+        const link = t.scLink.trim()
+          ? t.scLink.trim()
+          : (lang === "it" ? "[link SoundCloud]" : "[SoundCloud link]");
+        return `${i + 1}. ${t.trackName}${credit}\n   ${link}`;
+      })
+      .join("\n\n");
+
+    if (lang === "it") {
+      const opening = tone === "confident"
+        ? `Hey Team ${labelName},\n\nVi mando una selezione di ${trackCount} tracce perché credo che tra queste ci sia esattamente ciò di cui ${labelName} ha bisogno in questo momento.`
+        : tone === "friendly"
+          ? `Ehi ${labelName}!\n\nHo una selezione di ${trackCount} tracce fresche per voi — e penso davvero che vi piaceranno.`
+          : tone === "storytelling"
+            ? `Gentile Team ${labelName},\n\nAlcune tracce nascono in studio — altre vengono da un posto più profondo. Questa selezione è di quelle.`
+            : `Gentile Team ${labelName},\n\nVi contatto per sottoporre alla vostra attenzione una selezione di ${trackCount} tracce per una possibile pubblicazione su ${labelName}.`;
+      const middle = `${primaryArtist ? `Produco con il nome d'arte ${primaryArtist}, e ` : ""}credendo che queste produzioni si allineino all'identità sonora della label. Le tracce sono pensate per funzionare sia come EP sia come singoli separati — vi lascio la libertà di scegliere il formato che preferite, o anche solo la traccia che vi risuona di più.`;
+      const closing = `${customNote.trim() ? `Contesto aggiuntivo: ${customNote.trim()}\n\n` : ""}Sarei davvero grato per l'opportunità di discuterne. Grazie per il vostro tempo.\n\nCordiali saluti,\n${primaryArtist || "Produttore Indipendente"}`;
+      return `${opening}\n\n${middle}\n\nPotete ascoltare le tracce ai seguenti link:\n\n${trackList}\n\n${closing}`;
+    }
+    // English fallback
+    const opening = tone === "confident"
+      ? `Hey ${labelName} Team,\n\nI'm sending you a selection of ${trackCount} tracks because I believe among these is exactly what ${labelName} needs right now.`
+      : tone === "friendly"
+        ? `Hey ${labelName}!\n\nI've got a fresh selection of ${trackCount} tracks for you — and I genuinely think you're going to dig them.`
+        : tone === "storytelling"
+          ? `Dear ${labelName} Team,\n\nSome tracks come from the studio — others come from somewhere deeper. This selection is the latter.`
+          : `Dear ${labelName} Team,\n\nI'm reaching out to submit a selection of ${trackCount} tracks for your consideration at ${labelName}.`;
+    const middle = `${primaryArtist ? `I produce under the name ${primaryArtist}, and ` : ""}I believe these productions align closely with the sonic identity of the label. The tracks work both as an EP and as separate singles — I'm leaving the format open to your preference, or you can simply pick the track that resonates most.`;
+    const closing = `${customNote.trim() ? `Additional context: ${customNote.trim()}\n\n` : ""}I would greatly appreciate the opportunity to discuss this submission further. Thank you for your time and consideration.\n\nBest regards,\n${primaryArtist || "Independent Producer"}`;
+    return `${opening}\n\n${middle}\n\nYou can listen to the tracks at the following links:\n\n${trackList}\n\n${closing}`;
+  }
+
+  // === Standard single-track pitch (legacy behavior) ===
+  const link = scLink.trim() || (lang === "it" ? "[Il tuo link privato SoundCloud]" : lang === "es" ? "[Tu enlace privado de SoundCloud]" : lang === "fr" ? "[Votre lien SoundCloud privé]" : lang === "de" ? "[Ihr privater SoundCloud-Link]" : lang === "pt" ? "[Seu link privado do SoundCloud]" : "[Your private SoundCloud link]");
 
   // English templates
   if (lang === "en") {
@@ -120,6 +249,11 @@ function generateBody(
 
 /**
  * Generate the complete pitch text with subject line
+ *
+ * `shape` and `epTracks` are optional and default to a single-track pitch.
+ * Pass `shape: "ep-single"` for whole-EP pitches with one SoundCloud album
+ * URL, or `shape: "ep-multi"` with `epTracks` for multi-track pitches where
+ * each track keeps its individual SC link.
  */
 export function generatePitch(
   labelName: string,
@@ -130,13 +264,24 @@ export function generatePitch(
   customNote: string,
   emails: string[],
   submissionType: string,
-  lang: PitchLanguage = "en"
+  lang: PitchLanguage = "en",
+  shape: PitchShape = "single",
+  epTracks?: PitchTrackEntry[]
 ): string {
   const artist = artistName.trim();
-  const subject = `Demo Submission: "${trackName}" — ${artist || (lang === "it" ? "Produttore Indipendente" : "Independent Producer")}`;
+  // Subject line adapts to the shape: "EP" for ep-single (whole EP),
+  // "selection of N tracks" for ep-multi, plain trackName for single.
+  const subjectLabel = shape === "ep-single"
+    ? (lang === "it" ? `EP "${trackName}"` : `EP "${trackName}"`)
+    : shape === "ep-multi" && epTracks && epTracks.length > 1
+      ? (lang === "it"
+          ? `Selezione di ${epTracks.length} tracce`
+          : `Selection of ${epTracks.length} tracks`)
+      : `"${trackName}"`;
+  const subject = `Demo Submission: ${subjectLabel} — ${artist || (lang === "it" ? "Produttore Indipendente" : "Independent Producer")}`;
   const isEmail = submissionType === "email";
   const firstEmail = emails.length > 0 ? emails[0] : "";
-  const body = generateBody(labelName, trackName, artistName, scLink, tone, customNote, lang);
+  const body = generateBody(labelName, trackName, artistName, scLink, tone, customNote, lang, shape, epTracks);
 
   return isEmail
     ? `Subject: ${subject}\nTo: ${firstEmail}\n${emails.length > 1 ? `CC: ${emails.slice(1).join(", ")}\n` : ""}\n${body}`
@@ -144,19 +289,32 @@ export function generatePitch(
 }
 
 /**
- * Generate just the subject line for the pitch
+ * Generate just the subject line for the pitch.
+ * Adapts the subject to the pitch shape (EP / multi-track / single).
  */
 export function generateSubject(
   trackName: string,
   artistName: string,
-  lang: PitchLanguage = "en"
+  lang: PitchLanguage = "en",
+  shape: PitchShape = "single",
+  trackCount?: number
 ): string {
   const artist = artistName.trim();
-  return `Demo Submission: "${trackName}" — ${artist || (lang === "it" ? "Produttore Indipendente" : "Independent Producer")}`;
+  const subjectLabel = shape === "ep-single"
+    ? `EP "${trackName}"`
+    : shape === "ep-multi" && trackCount && trackCount > 1
+      ? (lang === "it"
+          ? `Selezione di ${trackCount} tracce`
+          : `Selection of ${trackCount} tracks`)
+      : `"${trackName}"`;
+  return `Demo Submission: ${subjectLabel} — ${artist || (lang === "it" ? "Produttore Indipendente" : "Independent Producer")}`;
 }
 
 /**
- * Generate just the body for the pitch (without subject/To/CC headers)
+ * Generate just the body for the pitch (without subject/To/CC headers).
+ * Pass `shape` and `epTracks` to select the EP single-link or EP multi-link
+ * templates; omit them (or pass shape="single") for the legacy single-track
+ * template.
  */
 export function generatePitchBody(
   labelName: string,
@@ -165,9 +323,11 @@ export function generatePitchBody(
   scLink: string,
   tone: PitchTone,
   customNote: string,
-  lang: PitchLanguage = "en"
+  lang: PitchLanguage = "en",
+  shape: PitchShape = "single",
+  epTracks?: PitchTrackEntry[]
 ): string {
-  return generateBody(labelName, trackName, artistName, scLink, tone, customNote, lang);
+  return generateBody(labelName, trackName, artistName, scLink, tone, customNote, lang, shape, epTracks);
 }
 
 /**

@@ -44,6 +44,8 @@ import {
   PITCH_LANGUAGES,
   type PitchTone,
   type PitchLanguage,
+  type PitchShape,
+  type PitchTrackEntry,
 } from "@/lib/pitch-utils";
 import { useToast } from "@/hooks/use-toast";
 import { SimilarSuggestions } from "@/components/similar-suggestions";
@@ -104,6 +106,11 @@ export function PitchGenerator() {
   // auto-builds an EP pitch (trackName = "EP (N tracce)", note = tracklist).
   const [epMode, setEpMode] = useState(false);
   const [selectedDemoIds, setSelectedDemoIds] = useState<Set<string>>(new Set());
+  // EP link mode: "separate" (each track keeps its own SC link, body lists
+  // them all with format left open) or "single" (one album/private set URL
+  // for the whole EP). Mirrors the label-finder.tsx picker.
+  const [epLinkMode, setEpLinkMode] = useState<"separate" | "single">("separate");
+  const [epSingleLink, setEpSingleLink] = useState("");
 
   // Helper: extract the SoundCloud link from a Demo.
   const getDemoScLink = useCallback((d: Demo): string => {
@@ -152,8 +159,8 @@ export function PitchGenerator() {
       }
 
       // If this demo is part of a Release (EP), expand the form to pitch
-      // the whole EP: trackName = release.title, note = tracklist with
-      // every track's name + SoundCloud link.
+      // the whole EP. The Release may have a single SC album URL
+      // (epSoundCloudUrl) → ep-single template. Otherwise → ep-multi.
       if (demo.parentReleaseId) {
         const release = releases.find((r) => r.id === demo.parentReleaseId);
         const epTracks = demos
@@ -161,22 +168,38 @@ export function PitchGenerator() {
           .sort((a, b) => new Date(a.createdAt).getTime() - new Date(b.createdAt).getTime());
         if (release && epTracks.length > 1) {
           setTrackName(release.title);
-          const tracklist = epTracks
-            .map((t, i) => {
-              const tLink = getDemoScLink(t);
-              const collab = getDemoCollaborators(t);
-              return `${i + 1}. ${t.trackName}${collab}${tLink ? ` — ${tLink}` : ""}`;
-            })
-            .join("\n");
-          setCustomNote(tracklist);
-          toast({
-            title: locale === "it" ? "EP caricato" : "EP loaded",
-            description: `${release.title} (${epTracks.length} ${locale === "it" ? "tracce" : "tracks"})`,
-          });
+          if (release.epSoundCloudUrl && release.epSoundCloudUrl.trim()) {
+            // Release has a single EP SoundCloud URL → ep-single
+            setEpLinkMode("single");
+            setEpSingleLink(release.epSoundCloudUrl.trim());
+            setScLink(release.epSoundCloudUrl.trim());
+            // Names-only tracklist in the note
+            const tracklist = epTracks
+              .map((t, i) => `${i + 1}. ${t.trackName}`)
+              .join("\n");
+            setCustomNote(tracklist);
+            toast({
+              title: locale === "it" ? "EP caricato (link unico)" : "EP loaded (single link)",
+              description: `${release.title} (${epTracks.length} ${locale === "it" ? "tracce" : "tracks"})`,
+            });
+          } else {
+            // No single EP URL → ep-multi with per-track links
+            setEpLinkMode("separate");
+            setEpSingleLink("");
+            setScLink(getDemoScLink(epTracks[0]));
+            setCustomNote("");
+            toast({
+              title: locale === "it" ? "EP caricato (link separati)" : "EP loaded (separate links)",
+              description: `${release.title} (${epTracks.length} ${locale === "it" ? "tracce" : "tracks"})`,
+            });
+          }
           return;
         }
       }
 
+      // Standalone single demo (no Release) → classic single-track pitch
+      setEpLinkMode("separate");
+      setEpSingleLink("");
       setCustomNote("");
       toast({
         title: locale === "it" ? "Demo caricata" : "Demo loaded",
@@ -198,6 +221,7 @@ export function PitchGenerator() {
     if (selectedDemos.length === 0) {
       setTrackName("");
       setScLink("");
+      setEpSingleLink("");
       setCustomNote("");
       setTrackAnalysis(null);
       return;
@@ -209,6 +233,7 @@ export function PitchGenerator() {
       const primaryArtist = getDemoPrimaryArtist(d);
       if (primaryArtist) setArtistName(primaryArtist);
       setScLink(getDemoScLink(d));
+      setEpSingleLink("");
       setCustomNote("");
       setTrackAnalysis(null);
       return;
@@ -218,13 +243,6 @@ export function PitchGenerator() {
     const firstDemo = selectedDemos[0];
     const primaryArtist = getDemoPrimaryArtist(firstDemo) || userProfile.artistName || "";
     const firstScLink = getDemoScLink(firstDemo);
-    const tracklist = selectedDemos
-      .map((t, i) => {
-        const tLink = getDemoScLink(t);
-        const collab = getDemoCollaborators(t);
-        return `${i + 1}. ${t.trackName}${collab}${tLink ? ` — ${tLink}` : ""}`;
-      })
-      .join("\n");
     setTrackName(
       locale === "it"
         ? `EP (${selectedDemos.length} tracce)`
@@ -232,10 +250,25 @@ export function PitchGenerator() {
     );
     if (primaryArtist) setArtistName(primaryArtist);
     setScLink(firstScLink);
-    setCustomNote(tracklist);
+    if (epLinkMode === "single" && !epSingleLink.trim()) {
+      setEpSingleLink(firstScLink);
+    }
+
+    if (epLinkMode === "single") {
+      // Names-only tracklist in the note
+      const tracklist = selectedDemos
+        .map((t, i) => `${i + 1}. ${t.trackName}`)
+        .join("\n");
+      setCustomNote(tracklist);
+    } else {
+      // Separate mode — note stays empty; per-track links go in body
+      setCustomNote("");
+    }
     setTrackAnalysis(null);
   }, [
     epMode,
+    epLinkMode,
+    epSingleLink,
     selectedDemoIds,
     demos,
     releases,
@@ -418,15 +451,96 @@ export function PitchGenerator() {
     [selectedLabels, getLabelEmails]
   );
 
-  // Generate personalized pitch preview for a label
+  // When the user toggles the EP link mode (separate ↔ single) after
+  // selecting demos, recompute the note (single = names-only tracklist,
+  // separate = empty) and sync scLink/epSingleLink. Mirrors the same
+  // function in label-finder.tsx.
+  const handleToggleEpLinkMode = useCallback((mode: "separate" | "single") => {
+    if (mode === epLinkMode) return;
+    setEpLinkMode(mode);
+
+    const selectedDemos = demos
+      .filter((d) => selectedDemoIds.has(d.id))
+      .sort((a, b) => new Date(a.createdAt).getTime() - new Date(b.createdAt).getTime());
+
+    if (selectedDemos.length < 2) {
+      if (mode === "single" && selectedDemos.length === 1) {
+        setEpSingleLink(getDemoScLink(selectedDemos[0]));
+      } else {
+        setEpSingleLink("");
+      }
+      return;
+    }
+
+    if (mode === "single") {
+      setEpSingleLink(getDemoScLink(selectedDemos[0]) || scLink);
+      const tracklist = selectedDemos
+        .map((t, i) => `${i + 1}. ${t.trackName}`)
+        .join("\n");
+      setCustomNote(tracklist);
+    } else {
+      setEpSingleLink("");
+      setCustomNote("");
+    }
+  }, [epLinkMode, selectedDemoIds, demos, scLink, getDemoScLink]);
+
+  // Derived: the list of PitchTrackEntry objects for the current EP
+  // selection. Used by generatePitchBody to render the per-track list in
+  // ep-multi mode, and to render the names-only tracklist section in
+  // ep-single mode.
+  const epTracks = useMemo<PitchTrackEntry[]>(() => {
+    const ids = epMode
+      ? selectedDemoIds
+      : (() => {
+          // In single-pick mode, if the picked demo is part of a Release,
+          // include all of the Release's tracks.
+          const pickedDemo = demos.find(
+            (d) => d.trackName === trackName &&
+              (d.artists?.[0] || d.artistName) === artistName
+          );
+          if (!pickedDemo || !pickedDemo.parentReleaseId) return new Set<string>();
+          const release = releases.find((r) => r.id === pickedDemo.parentReleaseId);
+          if (!release || (release.trackIds?.length ?? 0) < 2) return new Set<string>();
+          return new Set(release.trackIds);
+        })();
+    return demos
+      .filter((d) => ids.has(d.id))
+      .sort((a, b) => new Date(a.createdAt).getTime() - new Date(b.createdAt).getTime())
+      .map((d) => ({
+        trackName: d.trackName,
+        artistName: getDemoPrimaryArtist(d) + getDemoCollaborators(d),
+        scLink: getDemoScLink(d),
+      }));
+  }, [
+    epMode, selectedDemoIds, trackName, artistName, demos, releases,
+    getDemoPrimaryArtist, getDemoCollaborators, getDemoScLink,
+  ]);
+
+  // Derived: the PitchShape to pass to generatePitch / generatePitchBody.
+  const pitchShape = useMemo<PitchShape>(() => {
+    if (epTracks.length >= 2) {
+      return epLinkMode === "single" ? "ep-single" : "ep-multi";
+    }
+    return "single";
+  }, [epTracks.length, epLinkMode]);
+
+  // Derived: the effective scLink to pass to generatePitchBody.
+  const effectiveScLink = useMemo(() => {
+    if (pitchShape === "ep-single") return epSingleLink;
+    if (pitchShape === "ep-multi") return "";
+    return scLink;
+  }, [pitchShape, epSingleLink, scLink]);
+
+  // Generate personalized pitch preview for a label — passes pitchShape +
+  // epTracks + effectiveScLink so the right template is used.
   const getPitchForLabel = useCallback(
     (label: Label) => {
       if (!trackName.trim()) return { subject: "", body: "" };
-      const subject = generateSubject(trackName.trim(), artistName, language);
-      const body = generatePitchBody(label.name, trackName.trim(), artistName, scLink, tone, customNote, language);
+      const subject = generateSubject(trackName.trim(), artistName, language, pitchShape, epTracks.length);
+      const body = generatePitchBody(label.name, trackName.trim(), artistName, effectiveScLink, tone, customNote, language, pitchShape, epTracks);
       return { subject, body };
     },
-    [trackName, artistName, scLink, tone, customNote, language]
+    [trackName, artistName, effectiveScLink, tone, customNote, language, pitchShape, epTracks]
   );
 
   // Tier badge component
@@ -482,7 +596,7 @@ export function PitchGenerator() {
           labelId: label.id,
           status: "sent",
           sentDate: new Date().toISOString().split("T")[0],
-          link: scLink.trim(),
+          link: effectiveScLink.trim() || scLink.trim(),
           notes: customNote.trim() ? `${customNote.trim()} (Campaign)` : "Campaign",
           pitchText: `Subject: ${subject}\n\n${body}`,
           artistName: artistName.trim(),
@@ -503,7 +617,7 @@ export function PitchGenerator() {
       title: t(locale, "campaign.complete"),
       description: t(locale, "campaign.reviewAndSend").replace("{count}", String(sentCount)),
     });
-  }, [selectedWithEmail, selectedWithoutEmail, getLabelEmails, getPitchForLabel, demos, trackName, scLink, customNote, artistName, addDemo, locale, toast]);
+  }, [selectedWithEmail, selectedWithoutEmail, getLabelEmails, getPitchForLabel, demos, trackName, scLink, effectiveScLink, customNote, artistName, addDemo, locale, toast]);
 
   // Copy all emails to clipboard
   const handleCopyEmails = useCallback(async () => {
@@ -658,6 +772,56 @@ export function PitchGenerator() {
                     : "Select at least 2 tracks to build an EP pitch."}
                 </p>
               )}
+              {epMode && selectedDemoIds.size >= 2 && (
+                <div className="mt-1 pt-1.5 border-t border-border/30 space-y-1.5">
+                  <p className="text-[10px] font-mono uppercase text-muted-foreground/80">
+                    {locale === "it"
+                      ? "Come vuoi gestire i link SoundCloud?"
+                      : "How do you want to handle SoundCloud links?"}
+                  </p>
+                  <div className="flex gap-1.5 flex-wrap">
+                    <button
+                      type="button"
+                      onClick={() => handleToggleEpLinkMode("separate")}
+                      className={`text-[10px] font-medium px-2 py-1 rounded border transition-colors inline-flex items-center gap-1 ${
+                        epLinkMode === "separate"
+                          ? "bg-primary text-primary-foreground border-primary"
+                          : "bg-secondary/50 text-muted-foreground border-border/50 hover:border-primary/30 hover:bg-primary/10"
+                      }`}
+                      title={locale === "it"
+                        ? "Ogni traccia mantiene il suo link SoundCloud. L'email li elenca tutti, lasciando alla label la scelta del formato."
+                        : "Each track keeps its own SoundCloud link. The email lists them all, leaving the format choice to the label."}
+                    >
+                      <Music2 className="h-3 w-3" />
+                      {locale === "it" ? "Link separati" : "Separate links"}
+                    </button>
+                    <button
+                      type="button"
+                      onClick={() => handleToggleEpLinkMode("single")}
+                      className={`text-[10px] font-medium px-2 py-1 rounded border transition-colors inline-flex items-center gap-1 ${
+                        epLinkMode === "single"
+                          ? "bg-primary text-primary-foreground border-primary"
+                          : "bg-secondary/50 text-muted-foreground border-border/50 hover:border-primary/30 hover:bg-primary/10"
+                      }`}
+                      title={locale === "it"
+                        ? "Hai creato l'EP come album/set privato su SoundCloud. L'email usa un solo link + tracklist nomi nel corpo."
+                        : "You've created the EP as a private album/set on SoundCloud. The email uses one link + names-only tracklist in the body."}
+                    >
+                      <Disc3 className="h-3 w-3" />
+                      {locale === "it" ? "Link unico EP" : "Single EP link"}
+                    </button>
+                  </div>
+                  <p className="text-[10px] text-muted-foreground/70 leading-snug">
+                    {epLinkMode === "separate"
+                      ? (locale === "it"
+                          ? "Modalità flessibile: la mail dice «queste tracce funzionano sia come EP sia come singoli — scegliete voi»."
+                          : "Flexible mode: the email says «these tracks work both as an EP and as separate singles — your choice».")
+                      : (locale === "it"
+                          ? "Modalità EP vero: la mail presenta l'EP come un viaggio continuo con un solo link. Richiede album/set privato su SoundCloud."
+                          : "True EP mode: the email presents the EP as a continuous journey with a single link. Requires private album/set on SoundCloud.")}
+                  </p>
+                </div>
+              )}
             </div>
           )}
 
@@ -683,15 +847,55 @@ export function PitchGenerator() {
             </div>
           </div>
 
+          {/* scLink field — behavior depends on pitchShape (same UX as the
+              label detail dialog). In ep-multi mode the per-track links are
+              baked into the email body, so the single-link field is replaced
+              by an explanatory note. In ep-single mode the field becomes the
+              "EP SoundCloud URL" input (bound to epSingleLink). */}
           <div className="space-y-1.5 mt-3">
-            <UILabel className="text-xs font-mono uppercase text-muted-foreground">{t(locale, "pitch.scLink")}</UILabel>
-            <Input
-              value={scLink}
-              onChange={(e) => setScLink(e.target.value)}
-              onBlur={handleScLinkBlur}
-              placeholder="https://soundcloud.com/..."
-              className="bg-secondary/50 border-border/50"
-            />
+            {pitchShape === "ep-multi" ? (
+              <>
+                <UILabel className="text-xs font-mono uppercase text-muted-foreground">
+                  {t(locale, "pitch.scLink")}
+                </UILabel>
+                <div className="text-[11px] text-muted-foreground/80 italic leading-snug bg-secondary/30 border border-dashed border-border/40 rounded px-2 py-1.5">
+                  {locale === "it"
+                    ? "I link SoundCloud di ogni traccia vengono inseriti automaticamente nel corpo dell'email (uno per traccia, con attribuzione)."
+                    : "Each track's SoundCloud link is automatically included in the email body (one per track, with attribution)."}
+                </div>
+              </>
+            ) : pitchShape === "ep-single" ? (
+              <>
+                <UILabel className="text-xs font-mono uppercase text-primary flex items-center gap-1">
+                  <Disc3 className="h-3 w-3" />
+                  {locale === "it" ? "Link EP SoundCloud" : "EP SoundCloud URL"}
+                </UILabel>
+                <Input
+                  value={epSingleLink}
+                  onChange={(e) => setEpSingleLink(e.target.value)}
+                  placeholder={locale === "it"
+                    ? "https://soundcloud.com/.../sets/ep-title"
+                    : "https://soundcloud.com/.../sets/ep-title"}
+                  className="bg-secondary/50 border-border/50"
+                />
+                <p className="text-[10px] text-muted-foreground/60 leading-tight">
+                  {locale === "it"
+                    ? "URL dell'album/set privato SoundCloud che contiene tutte le tracce dell'EP in sequenza."
+                    : "URL of the private SoundCloud album/set containing all EP tracks in sequence."}
+                </p>
+              </>
+            ) : (
+              <>
+                <UILabel className="text-xs font-mono uppercase text-muted-foreground">{t(locale, "pitch.scLink")}</UILabel>
+                <Input
+                  value={scLink}
+                  onChange={(e) => setScLink(e.target.value)}
+                  onBlur={handleScLinkBlur}
+                  placeholder="https://soundcloud.com/..."
+                  className="bg-secondary/50 border-border/50"
+                />
+              </>
+            )}
           </div>
 
           <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-3 mt-3">

@@ -739,3 +739,121 @@ Stage Summary:
 - Both pitch UIs (standalone Pitch tab + label detail dialog) now have
   consistent demo picker UX with EP multi-select
 - Vercel deploy in progress
+
+---
+Task ID: 22
+Agent: Main Agent
+Task: Implement EP single-link vs multi-link pitch modes + EP SoundCloud URL field on Release
+
+Work Log:
+- User feedback: EP mode selects multiple tracks but the SoundCloud links
+  handling was confused — the body said "my latest track" (singular)
+  with only one SC link, while the note listed both tracks with their
+  own links (duplicating the first). User asked how to handle:
+  (a) EP vero with single SC album URL — user creates the EP on SC, gets
+  one link, pastes it in app
+  (b) Multi-traccia separata — each track keeps its own SC link, email
+  lists them all, format left open
+- User decision: "procedi lasciando spazio a tutte le possibilita" —
+  implement BOTH modes as a toggle, with the email body adapting to the
+  selected mode.
+
+Changes to src/lib/store.ts:
+- Added `epSoundCloudUrl?: string` to Release interface — optional
+  single SoundCloud URL for the whole EP (album/private set)
+- Bumped Zustand persist version 16 → 17
+- Added migration v17: backfill `epSoundCloudUrl: ""` on every existing
+  Release so the field is always present
+- addRelease/updateRelease automatically pick up the new field via
+  spread (no signature change needed)
+
+Changes to src/lib/pitch-utils.ts:
+- Added `PitchShape = "single" | "ep-single" | "ep-multi"` type
+- Added `PitchTrackEntry` interface (trackName + artistName + scLink)
+- generateBody now accepts `shape` and `epTracks` params (both optional,
+  default to "single" → backward compatible)
+- NEW ep-single template: "submit my latest EP 'XYZ'" + single link +
+  names-only tracklist section. IT + EN variants for all 4 tones.
+- NEW ep-multi template: "submit a selection of N tracks" + numbered
+  per-track list (each with attribution + own SC link) + explicit
+  "format left open to your preference (EP, separate singles, or
+  whichever track resonates)". IT + EN variants for all 4 tones.
+- generatePitch / generateSubject / generatePitchBody all extended with
+  shape + epTracks params. Subject adapts: "EP 'XYZ'" for ep-single,
+  "Selection of N tracks" for ep-multi, plain "Trackname" for single.
+
+Changes to src/components/label-finder.tsx (label detail dialog):
+- Imported PitchShape + PitchTrackEntry types
+- Added state: pitchEpLinkMode ("separate" | "single"), pitchEpSingleLink
+- openDetail resets both new states when opening a new label
+- handlePickDemoForPitch rewritten:
+  * Single-pick + demo in Release:
+    - If Release has epSoundCloudUrl → ep-single (use that URL,
+      names-only tracklist in note)
+    - Else → ep-multi (per-track SC links, empty note)
+  * EP multi-select + 2+ demos:
+    - separate mode → ep-multi (per-track links in body, empty note)
+    - single mode → ep-single (user-typed URL field, names-only note)
+- Added handleToggleEpLinkMode callback: switches between modes,
+  recomputes note (single = names-only tracklist, separate = empty)
+- Added derived memo `pitchEpTracks` (PitchTrackEntry[]) — computes the
+  track list from either the EP-mode selection set OR (in single-pick
+  mode) from the Release that the picked demo belongs to
+- Added derived memo `pitchShape` (PitchShape) — picks the right shape
+  based on pitchEpTracks.length + pitchEpLinkMode
+- Added derived memo `pitchEffectiveScLink` — single mode: pitchScLink;
+  ep-single: pitchEpSingleLink; ep-multi: "" (per-track links are in
+  pitchEpTracks)
+- Updated pitchText / pitchMailtoLink / pitchGmailLink / effectivePitchSubject
+  / effectivePitchBody useMemo to pass shape + epTracks + effectiveScLink
+- UI: added sub-toggle "Link separati" / "Link unico EP" (visible only
+  when EP mode is on AND 2+ demos are selected) with explanatory hint
+- UI: scLink field is now conditional on pitchShape:
+  * single → classic single-track SC link input (unchanged)
+  * ep-single → "Link EP SoundCloud" input bound to pitchEpSingleLink,
+    with placeholder "https://soundcloud.com/.../sets/ep-title" and
+    help text explaining it's the private album/set URL
+  * ep-multi → HIDDEN, replaced by an italic note explaining that
+    per-track links are baked into the email body
+
+Changes to src/components/pitch-generator.tsx (standalone Pitch tab):
+- Imported PitchShape + PitchTrackEntry types
+- Added state: epLinkMode, epSingleLink (mirrors label-finder.tsx)
+- handlePickDemo rewritten with the same logic as handlePickDemoForPitch
+- Added handleToggleEpLinkMode, epTracks, pitchShape, effectiveScLink
+  derived memos (same as label-finder.tsx)
+- getPitchForLabel now passes shape + epTracks + effectiveScLink
+- handleSendCampaign's addDemo call uses effectiveScLink instead of
+  raw scLink (so the demo record gets the right URL in EP modes)
+- UI: same sub-toggle + conditional scLink field as label-finder.tsx
+
+Changes to src/components/demo-tracker.tsx (Crea EP dialog):
+- Added state: epSoundCloudUrl
+- openAddEp resets epSoundCloudUrl to ""
+- openEditEp loads release.epSoundCloudUrl
+- handleSaveEp includes epSoundCloudUrl in releaseData
+- UI: added "Link EP SoundCloud" input field in the EP dialog, placed
+  between the track selector and the EP notes. Field is optional with
+  extensive help text explaining when to use it (private album/set)
+  vs leaving it empty (tracks are separate on SC).
+
+Stage Summary:
+- Two distinct EP pitch workflows now supported:
+  1. EP vero (single link): user creates EP as private album/set on
+     SoundCloud → pastes URL in Crea EP dialog → picking any track of
+     that EP (or selecting multiple in EP mode + "Link unico EP")
+     produces an "ep-single" pitch with one URL + names-only tracklist
+  2. Multi-traccia separata: tracks stay separate on SC → picking an
+     EP without epSoundCloudUrl, or selecting multiple in EP mode +
+     "Link separati", produces an "ep-multi" pitch with per-track
+     links + "format left open" language
+- Subject line adapts: "Demo Submission: EP 'XYZ' — Artist" (ep-single),
+  "Demo Submission: Selection of N tracks — Artist" (ep-multi),
+  'Demo Submission: "Trackname" — Artist' (single)
+- Email body uses different templates per shape (4 tones × 2 langs ×
+  3 shapes = 24 base templates, plus per-tone variants)
+- The same UX is consistent between the label detail dialog inline
+  pitch form AND the standalone Pitch tab
+- Build successful (Next.js 16.2.9 Turbopack, 28 routes, no errors)
+- Pre-existing baseline TypeScript errors unchanged
+- Vercel deploy in progress

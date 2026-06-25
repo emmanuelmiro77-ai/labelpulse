@@ -141,6 +141,15 @@ export interface Release {
   genre: string; // overall release genre
   notes: string;
   createdAt: string;
+  /**
+   * Optional SoundCloud URL of the EP as a single album/private set.
+   * When set, pitches that include this whole EP will reference THIS link
+   * instead of the per-track SC links, so the label can preview the EP as
+   * a continuous sequence (the way it's meant to be heard).
+   * Empty/null = the EP doesn't have a single SoundCloud URL yet; pitches
+   * fall back to listing each track's individual SC link.
+   */
+  epSoundCloudUrl?: string;
 }
 
 export interface Demo {
@@ -2075,7 +2084,7 @@ export const useAppStore = create<AppState>()(
     }),
     {
       name: PRIMARY_KEY,
-      version: 16,
+      version: 17,
       storage: createJSONStorage(() => robustStorage),
       migrate: (persisted: any, version: number) => {
         if (version < 5) {
@@ -2277,6 +2286,24 @@ export const useAppStore = create<AppState>()(
               // Otherwise keep "open" — the user has interacted with it,
               // so the status is more likely a real user choice.
               return l;
+            });
+          }
+        }
+        if (version < 17) {
+          // Release.epSoundCloudUrl — optional single SoundCloud URL for an EP
+          // (album/private set). Existing releases don't have this field;
+          // backfill with "" so the field exists on every Release. Pitches
+          // that include a whole EP check this field: if non-empty, they use
+          // it as the single EP link; otherwise they fall back to listing
+          // each track's individual SC link.
+          if (Array.isArray(persisted.releases)) {
+            persisted.releases = persisted.releases.map((r: any) => {
+              if (!r || typeof r !== "object") return r;
+              return {
+                ...r,
+                epSoundCloudUrl:
+                  typeof r.epSoundCloudUrl === "string" ? r.epSoundCloudUrl : "",
+              };
             });
           }
         }

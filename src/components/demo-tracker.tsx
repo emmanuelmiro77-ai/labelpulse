@@ -207,6 +207,11 @@ export function DemoTracker() {
   const [epArtistInput, setEpArtistInput] = useState("");
   const [epGenre, setEpGenre] = useState("");
   const [epNotes, setEpNotes] = useState("");
+  // Optional single SoundCloud URL for the whole EP (album/private set).
+  // When set, pitches that include this EP will use this URL instead of
+  // the per-track SC links — the label can preview the EP as a continuous
+  // sequence.
+  const [epSoundCloudUrl, setEpSoundCloudUrl] = useState("");
   const [epSelectedTrackIds, setEpSelectedTrackIds] = useState<Set<string>>(new Set());
   const [editingReleaseId, setEditingReleaseId] = useState<string | null>(null);
   const [deleteConfirmId, setDeleteConfirmId] = useState<string | null>(null);
@@ -568,6 +573,7 @@ export function DemoTracker() {
     setEpArtistInput("");
     setEpGenre("");
     setEpNotes("");
+    setEpSoundCloudUrl("");
     setEpSelectedTrackIds(new Set());
     setEditingReleaseId(null);
     setShowEpDialog(true);
@@ -579,6 +585,7 @@ export function DemoTracker() {
     setEpArtistInput("");
     setEpGenre(release.genre || "");
     setEpNotes(release.notes || "");
+    setEpSoundCloudUrl(release.epSoundCloudUrl || "");
     setEpSelectedTrackIds(new Set(release.trackIds || []));
     setEditingReleaseId(release.id);
     setShowEpDialog(true);
@@ -611,6 +618,7 @@ export function DemoTracker() {
       trackIds,
       genre: epGenre.trim(),
       notes: epNotes.trim(),
+      epSoundCloudUrl: epSoundCloudUrl.trim(),
     };
     if (editingReleaseId) {
       // Update existing release: first detach all demos that were previously
@@ -2265,6 +2273,30 @@ export function DemoTracker() {
                     : `${epSelectedTrackIds.size} tracks selected. Send order follows list order.`}
                 </p>
               )}
+            </div>
+
+            {/* EP SoundCloud URL — optional single link for the whole EP */}
+            <div className="space-y-1.5">
+              <UILabel className="text-xs font-mono uppercase text-muted-foreground flex items-center gap-1">
+                <Disc3 className="h-3 w-3" />
+                {locale === "it" ? "Link EP SoundCloud" : "EP SoundCloud URL"}
+                <span className="ml-1 text-[10px] text-muted-foreground/60 normal-case font-sans">
+                  ({locale === "it" ? "opzionale" : "optional"})
+                </span>
+              </UILabel>
+              <Input
+                value={epSoundCloudUrl}
+                onChange={(e) => setEpSoundCloudUrl(e.target.value)}
+                placeholder={locale === "it"
+                  ? "https://soundcloud.com/.../sets/ep-title"
+                  : "https://soundcloud.com/.../sets/ep-title"}
+                className="bg-secondary/50 text-[12px]"
+              />
+              <p className="text-[10px] text-muted-foreground/60 leading-tight">
+                {locale === "it"
+                  ? "Se hai creato l'EP come album/set privato su SoundCloud, incolla qui l'URL. I pitch che includono questo EP useranno questo link unico invece dei link separati di ogni traccia — la label potrà ascoltare l'EP come un viaggio continuo. Lascia vuoto se le tracce sono separate su SoundCloud."
+                  : "If you've created the EP as a private album/set on SoundCloud, paste the URL here. Pitches that include this EP will use this single link instead of each track's individual link — the label can preview the EP as a continuous journey. Leave empty if the tracks are separate on SoundCloud."}
+              </p>
             </div>
 
             {/* EP notes */}
