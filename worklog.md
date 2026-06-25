@@ -955,3 +955,104 @@ Stage Summary:
   fields error (links/genre/bpm/key) that was already there before, just
   shifted in line number due to the added pitchTracks line
 - Pushed to main (commit 19d0fc8)
+
+---
+Task ID: 24
+Agent: Main Agent
+Task: Fix Gmail API sending garbage emails (no subject + MIME headers in body + wrong single-track content)
+
+Work Log:
+- User disaster report: clicked "Invia direttamente da Gmail" on the demo
+  detail dialog for "Define Ourself" (a multi-track EP pitch). The email
+  that was actually sent to info@alula-tunes.com had:
+    (a) Subject: "(nessun oggetto)" — NO subject
+    (b) Body started with raw MIME headers:
+        "Subject: =?utf-8?B?RGVtbyBTdWJtaXNzaW9uOiAiRGVtbyIg4oCUIEVtbWFudWVsIE1pcm8=?="
+        "Content-Type: text/plain; charset=utf-8"
+        "MIME-Version: 1.0"
+    (c) The actual body was a SINGLE-track pitch ("my latest track 'Demo'")
+        with only ONE SoundCloud link — NOT the multi-track pitch
+        ("Selection of 2 tracks" with both SC URLs) shown in the preview.
+
+- TWO distinct bugs identified:
+
+BUG 1 — MIME headers leaking into body
+ROOT CAUSE (src/lib/gmail.ts): sendEmail() and sendReplyInThread() built
+the raw email as an array joined with \r\n. The optional Cc/In-Reply-To/
+References headers used the pattern:
+    ccHeader = cc.length > 0 ? `Cc: ${cc.join(", ")}\r\n` : ""
+Two failure modes:
+  (a) When the header was absent → array element was "" → joined with
+      \r\n produced a blank line between surrounding headers → RFC 2822
+      §3.5 interprets blank line as end of headers section → Gmail
+      treated Subject/Content-Type/MIME-Version as body.
+  (b) When the header was present → had trailing \r\n inside string +
+      join added another \r\n → double \r\n → same blank-line termination.
+
+FIX: rewrote both functions to build a headers array containing only the
+lines that should actually appear (no trailing \r\n inside any element,
+no empty-string elements for missing optional headers). Then join with
+\r\n and append "\r\n\r\n" + body to mark the headers/body separator.
+
+BUG 2 — effectivePitch ignoring saved pitchText
+ROOT CAUSE (src/components/demo-tracker.tsx): the effectivePitchSubject
+and effectivePitchBody useMemo hooks had this logic:
+    if (pitchEditedText === null) {
+      // user hasn't manually typed → regenerate fresh from demo fields
+      return generateSubject(demo.trackName, demo.artistName, ...)
+      return generatePitchBody(label.name, demo.trackName, demo.link, ...)
+    }
+    return parsePitchText(displayPitchText).subject/body
+
+The problem: when the user opens an existing demo (not editing), they see
+the saved multi-track pitch in the textarea (displayPitchText falls back
+to demo.pitchText). But effectivePitchSubject/Body IGNORED demo.pitchText
+entirely and regenerated a fresh single-track pitch from demo.trackName
+(which was "Demo" — a placeholder) + demo.link (first track's SC URL only).
+Result: textarea showed the correct multi-track pitch, but the Gmail API
+send used the wrong single-track pitch.
+
+FIX: when pitchEditedText === null AND demo.pitchText exists, parse the
+subject/body FROM demo.pitchText. Only regenerate fresh when there's no
+saved pitchText at all.
+
+Applied the same fix to BOTH:
+  - DemoDetailDialog (line ~3724) — for demos opened from the tracker
+  - Add/Edit demo form (line ~354) — for demos being edited
+
+Changes to src/lib/gmail.ts:
+- sendEmail() rewritten: builds headers[] array with only the lines that
+  should appear (To, optional Cc, Subject, Content-Type, MIME-Version),
+  joins with \r\n, appends \r\n\r\n + body. No more empty-string array
+  elements, no more trailing \r\n inside string elements.
+- sendReplyInThread() rewritten with the same pattern (handles 3 optional
+  headers: Cc, In-Reply-To, References).
+
+Changes to src/components/demo-tracker.tsx:
+- effectivePitchSubject (DemoDetailDialog): added demo.pitchText
+  short-circuit before falling back to generateSubject()
+- effectivePitchBody (DemoDetailDialog): added demo.pitchText
+  short-circuit before falling back to generatePitchBody()
+- effectivePitchSubject (Add/Edit form): added editingDemo.pitchText
+  short-circuit before falling back to generateSubject()
+- effectivePitchBody (Add/Edit form): added editingDemo.pitchText
+  short-circuit before falling back to generatePitchBody()
+- Both fixes preserve backward compat: when there's no saved pitchText
+  (new demo), the fresh generation path is unchanged.
+
+/api/gmail/send/route.ts checked — it already used `if (cc) push()`
+conditional, so it didn't have Bug 1. No change needed there.
+
+Stage Summary:
+- Gmail API direct send now sends properly-structured MIME messages:
+  Subject appears as a real header (not base64-encoded text in the body),
+  body is just the message body, no MIME headers leak through.
+- "Invia direttamente da Gmail" now sends the SAME pitch text the user
+  sees in the preview textarea (including multi-track EP pitches with
+  all their SC links), instead of silently regenerating a single-track
+  pitch from demo.trackName + demo.link.
+- The bug was destructive: the email already went out to info@alula-tunes.com
+  with the wrong content and no subject. The user cannot un-send it. The
+  fix prevents this from happening again on future sends.
+- Build successful (Next.js 16.2.9 Turbopack, 28 routes, no new TS errors)
+- Pushed to main (commit 03f4d17)
