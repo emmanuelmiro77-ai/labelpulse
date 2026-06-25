@@ -56,7 +56,14 @@ export function Dashboard() {
   const stats = useMemo(() => {
     const totalDemos = demos.length;
     const totalLabels = labels.length;
+    // "open" = explicitly confirmed by the user (manual edit or demo sent).
+    // "unknown" = default for seed labels — we have no signal.
+    // "closed" = explicitly marked as not accepting demos.
+    // See fix 2026-06-25: previously every label defaulted to "open",
+    // making this counter misleading.
     const openLabels = labels.filter((l) => l.status === "open").length;
+    const closedLabels = labels.filter((l) => l.status === "closed").length;
+    const unknownLabels = labels.filter((l) => l.status === "unknown" || (l.status !== "open" && l.status !== "closed")).length;
     const sent = demos.filter((d) => d.status === "sent").length;
     const reviewing = demos.filter((d) => d.status === "reviewing").length;
     const accepted = demos.filter((d) => d.status === "accepted").length;
@@ -65,7 +72,7 @@ export function Dashboard() {
     const responded = reviewing + accepted + rejected;
     const responseRate = sent + reviewing + accepted + rejected > 0
       ? Math.round((responded / (sent + reviewing + accepted + rejected)) * 100) : 0;
-    return { totalDemos, totalLabels, openLabels, sent, reviewing, accepted, rejected, ready, responseRate };
+    return { totalDemos, totalLabels, openLabels, closedLabels, unknownLabels, sent, reviewing, accepted, rejected, ready, responseRate };
   }, [labels, demos]);
 
   const pieData = useMemo(() => [
@@ -106,7 +113,18 @@ export function Dashboard() {
                 <p className="text-2xl font-bold text-foreground">{stats.totalLabels.toLocaleString()}</p>
               </div>
             </div>
-            <p className="text-[11px] text-emerald-400 mt-2">{stats.openLabels} {t(locale, "dash.acceptingDemos")}</p>
+            <p className="text-[11px] text-muted-foreground mt-2">
+              {stats.openLabels > 0 ? (
+                <>
+                  <span className="text-emerald-400">{stats.openLabels}</span> {t(locale, "dash.confirmedOpen")}
+                  {stats.unknownLabels > 0 && (
+                    <span className="text-muted-foreground/70"> · {stats.unknownLabels} {t(locale, "dash.unknownStatus")}</span>
+                  )}
+                </>
+              ) : (
+                <span className="text-muted-foreground/70">{stats.unknownLabels} {t(locale, "dash.unknownStatus")}</span>
+              )}
+            </p>
           </CardContent>
         </Card>
         <Card className="bg-card/60 border-border/30">

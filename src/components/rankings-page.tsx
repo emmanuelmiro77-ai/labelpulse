@@ -446,7 +446,7 @@ function buildRankedList(
       genre: genre,
       submissionType: "email" as const,
       contactInfo: "",
-      status: "open" as const,
+      status: "unknown" as const,
       notes: "",
       createdAt: new Date().toISOString(),
       emails: [],

@@ -565,7 +565,7 @@ export function mergeGlobalAndPersonalCloud(global: any, personal: any): any {
         soundcloudLink: "",
         customLinks: [],
         notes: "",
-        status: "open",
+        status: "unknown",
         submissionType: "email",
         genre: "",
         createdAt: new Date().toISOString(),
@@ -828,13 +828,13 @@ async function computeRowMetrics(
     // Beatport label — check if it has any real personal data
     const hasNotes = typeof lbl.notes === "string" && lbl.notes.trim() !== "";
     const hasEmails = Array.isArray(lbl.emails) ? lbl.emails.length > 0 : (!!lbl.emails && String(lbl.emails).trim() !== "");
-    const hasNonOpenStatus = typeof lbl.status === "string" && lbl.status !== "" && lbl.status !== "open";
+    const hasNonUnknownStatus = typeof lbl.status === "string" && lbl.status !== "" && lbl.status !== "unknown";
     const hasWebsite = typeof lbl.website === "string" && lbl.website.trim() !== "";
     const hasDemoLink = typeof lbl.demoLink === "string" && lbl.demoLink.trim() !== "";
     const hasSocialLink = typeof lbl.socialLink === "string" && lbl.socialLink.trim() !== "";
     const hasSoundcloudLink = typeof lbl.soundcloudLink === "string" && lbl.soundcloudLink.trim() !== "";
     const hasCustomLinks = Array.isArray(lbl.customLinks) ? lbl.customLinks.length > 0 : false;
-    if (hasNotes || hasEmails || hasNonOpenStatus || hasWebsite || hasDemoLink ||
+    if (hasNotes || hasEmails || hasNonUnknownStatus || hasWebsite || hasDemoLink ||
         hasSocialLink || hasSoundcloudLink || hasCustomLinks) {
       beatportWithPersonalCount++;
     }

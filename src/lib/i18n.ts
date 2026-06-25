@@ -39,6 +39,8 @@ type TranslationKeys = {
   "dash.responseRate": string;
   "dash.accepted": string;
   "dash.acceptingDemos": string;
+  "dash.confirmedOpen": string;
+  "dash.unknownStatus": string;
   "dash.readyToSend": string;
   "dash.underReview": string;
   "dash.rejected": string;
@@ -67,6 +69,7 @@ type TranslationKeys = {
   "labels.noLabels": string;
   "labels.open": string;
   "labels.closed": string;
+  "labels.unknown": string;
   "labels.email": string;
   "labels.webform": string;
   "labels.platform": string;
@@ -442,6 +445,8 @@ const translations: Record<Locale, TranslationKeys> = {
     "dash.responseRate": "Tasso di Risposta",
     "dash.accepted": "Accettate",
     "dash.acceptingDemos": "accettano demo",
+    "dash.confirmedOpen": "confermate aperte",
+    "dash.unknownStatus": "da verificare",
     "dash.readyToSend": "pronte per l'invio",
     "dash.underReview": "in valutazione",
     "dash.rejected": "rifiutate",
@@ -468,6 +473,7 @@ const translations: Record<Locale, TranslationKeys> = {
     "labels.noLabels": "Nessuna label trovata con questi filtri.",
     "labels.open": "Aperta",
     "labels.closed": "Chiusa",
+    "labels.unknown": "Da verificare",
     "labels.email": "Email",
     "labels.webform": "Modulo Web",
     "labels.platform": "Groover/SubmitHub",
@@ -812,6 +818,8 @@ const translations: Record<Locale, TranslationKeys> = {
     "dash.responseRate": "Response Rate",
     "dash.accepted": "Accepted",
     "dash.acceptingDemos": "accepting demos",
+    "dash.confirmedOpen": "confirmed open",
+    "dash.unknownStatus": "to verify",
     "dash.readyToSend": "ready to send",
     "dash.underReview": "under review",
     "dash.rejected": "rejected",
@@ -838,6 +846,7 @@ const translations: Record<Locale, TranslationKeys> = {
     "labels.noLabels": "No labels found matching your filters.",
     "labels.open": "Open",
     "labels.closed": "Closed",
+    "labels.unknown": "To verify",
     "labels.email": "Email",
     "labels.webform": "Web Form",
     "labels.platform": "Groover/SubmitHub",
@@ -1182,6 +1191,8 @@ const translations: Record<Locale, TranslationKeys> = {
     "dash.responseRate": "Tasa de Respuesta",
     "dash.accepted": "Aceptadas",
     "dash.acceptingDemos": "aceptan demos",
+    "dash.confirmedOpen": "confirmadas abiertas",
+    "dash.unknownStatus": "por verificar",
     "dash.readyToSend": "listas para enviar",
     "dash.underReview": "en revisión",
     "dash.rejected": "rechazadas",
@@ -1208,6 +1219,7 @@ const translations: Record<Locale, TranslationKeys> = {
     "labels.noLabels": "No se encontraron labels con estos filtros.",
     "labels.open": "Abierta",
     "labels.closed": "Cerrada",
+    "labels.unknown": "Por verificar",
     "labels.email": "Email",
     "labels.webform": "Formulario Web",
     "labels.platform": "Groover/SubmitHub",
@@ -1552,6 +1564,8 @@ const translations: Record<Locale, TranslationKeys> = {
     "dash.responseRate": "Taux de Réponse",
     "dash.accepted": "Acceptées",
     "dash.acceptingDemos": "acceptent les démos",
+    "dash.confirmedOpen": "confirmées ouvertes",
+    "dash.unknownStatus": "à vérifier",
     "dash.readyToSend": "prêtes à envoyer",
     "dash.underReview": "en cours de révision",
     "dash.rejected": "rejetées",
@@ -1578,6 +1592,7 @@ const translations: Record<Locale, TranslationKeys> = {
     "labels.noLabels": "Aucun label trouvé avec ces filtres.",
     "labels.open": "Ouverte",
     "labels.closed": "Fermée",
+    "labels.unknown": "À vérifier",
     "labels.email": "Email",
     "labels.webform": "Formulaire Web",
     "labels.platform": "Groover/SubmitHub",
@@ -1922,6 +1937,8 @@ const translations: Record<Locale, TranslationKeys> = {
     "dash.responseRate": "Antwortrate",
     "dash.accepted": "Angenommen",
     "dash.acceptingDemos": "nehmen Demos an",
+    "dash.confirmedOpen": "bestätigt offen",
+    "dash.unknownStatus": "zu prüfen",
     "dash.readyToSend": "bereit zum Senden",
     "dash.underReview": "in Prüfung",
     "dash.rejected": "abgelehnt",
@@ -1948,6 +1965,7 @@ const translations: Record<Locale, TranslationKeys> = {
     "labels.noLabels": "Keine Labels mit diesen Filtern gefunden.",
     "labels.open": "Offen",
     "labels.closed": "Geschlossen",
+    "labels.unknown": "Zu prüfen",
     "labels.email": "E-Mail",
     "labels.webform": "Webformular",
     "labels.platform": "Groover/SubmitHub",
@@ -2292,6 +2310,8 @@ const translations: Record<Locale, TranslationKeys> = {
     "dash.responseRate": "Taxa de Resposta",
     "dash.accepted": "Aceites",
     "dash.acceptingDemos": "aceitam demos",
+    "dash.confirmedOpen": "confirmadas abertas",
+    "dash.unknownStatus": "a verificar",
     "dash.readyToSend": "prontas para enviar",
     "dash.underReview": "em revisão",
     "dash.rejected": "rejeitadas",
@@ -2318,6 +2338,7 @@ const translations: Record<Locale, TranslationKeys> = {
     "labels.noLabels": "Nenhuma label encontrada com estes filtros.",
     "labels.open": "Aberta",
     "labels.closed": "Fechada",
+    "labels.unknown": "A verificar",
     "labels.email": "Email",
     "labels.webform": "Formulário Web",
     "labels.platform": "Groover/SubmitHub",

@@ -10,7 +10,20 @@ import { saveArtistsToIDB, loadArtistsFromIDB } from "./artists-idb";
 // ==================== TYPES ====================
 
 export type SubmissionType = "email" | "webform" | "platform";
-export type LabelStatus = "open" | "closed";
+/**
+ * LabelStatus — the demo-submission policy of a label.
+ *
+ * - "open":    user has explicitly confirmed the label accepts demos
+ *              (either by manual edit, or by sending a demo to it)
+ * - "closed":  user has explicitly marked the label as not accepting demos
+ * - "unknown": default for seed labels — we have no real signal. Used for
+ *              all labels imported from Beatport that the user hasn't
+ *              interacted with yet. See fix 2026-06-25: previously every
+ *              seed label defaulted to "open", which made the dashboard
+ *              show "1976 accettano demo" — a misleading number since
+ *              Beatport doesn't expose this data and we never verified it.
+ */
+export type LabelStatus = "open" | "closed" | "unknown";
 export type DemoStatus =
   | "ready"
   | "sent"
@@ -212,7 +225,7 @@ function buildLabelsFromData(): Label[] {
     genre: l.genres[0] || "",
     submissionType: "email" as SubmissionType,
     contactInfo: "",
-    status: "open" as LabelStatus,
+    status: "unknown" as LabelStatus,
     notes: "",
     createdAt: new Date().toISOString(),
     emails: [] as string[],
@@ -1182,7 +1195,9 @@ function mergePreservingUserData(existing: Label, imported: Label): Partial<Labe
     socialLink: imported.socialLink?.trim() || existing.socialLink,
     soundcloudLink: imported.soundcloudLink?.trim() || existing.soundcloudLink,
     notes: imported.notes?.trim() || existing.notes,
-    status: (imported.status === "open" || imported.status === "closed") ? imported.status : (existing.status || "open"),
+    status: (imported.status === "open" || imported.status === "closed" || imported.status === "unknown")
+      ? imported.status
+      : (existing.status && existing.status !== "unknown" ? existing.status : "unknown"),
 
     // Beatport/ranking data — prefer imported (it's the fresh data)
     genres: imported.genres?.length ? imported.genres : existing.genres,
@@ -1229,7 +1244,7 @@ const LABEL_DEFAULTS = {
   notes: "",
   contactInfo: "",
   submissionType: "email" as SubmissionType,
-  status: "open" as LabelStatus,
+  status: "unknown" as LabelStatus,
   genre: "",
   prevRankByGenre: {},
 };
@@ -1237,6 +1252,14 @@ const LABEL_DEFAULTS = {
 /**
  * Repair corrupted label data.
  * Detects and fixes: same email appearing on too many labels (likely corruption).
+ *
+ * Also normalizes legacy "open" status on seed labels to "unknown" when
+ * the user has never interacted with them. See fix 2026-06-25: previously
+ * every seed label defaulted to "open", making the dashboard show a
+ * misleading "1976 accettano demo" number. We can't tell from the data
+ * alone which labels the user manually set to "open" vs which inherited
+ * the old default — the migration in persist config handles that
+ * distinction. Here we just coerce invalid statuses to "unknown".
  */
 function repairLabelData(labels: Label[]): Label[] {
   // First pass: filter out corrupted labels (no name, or not an object).
@@ -1248,6 +1271,15 @@ function repairLabelData(labels: Label[]): Label[] {
     console.warn(
       `[LabelPulse Repair] Filtered out ${labels.length - safeLabels.length} corrupted label(s) (missing/empty name) out of ${labels.length}.`
     );
+  }
+
+  // Normalize status: coerce invalid/legacy values to "unknown".
+  // Valid values: "open", "closed", "unknown". Anything else → "unknown".
+  // This handles old localStorage data that might still have "" or null.
+  for (const l of safeLabels) {
+    if (l.status !== "open" && l.status !== "closed" && l.status !== "unknown") {
+      l.status = "unknown";
+    }
   }
 
   const emailLabelCount = new Map<string, number>();
@@ -1349,7 +1381,7 @@ export const useAppStore = create<AppState>()(
               isCustom: true,
               genre: label.genre || "",
               contactInfo: label.contactInfo || "",
-              status: label.status || "open",
+              status: (label.status === "open" || label.status === "closed" || label.status === "unknown") ? label.status : "unknown",
               notes: label.notes || "",
               submissionType: label.submissionType || "email",
               genres: label.genres || (label.genre ? [label.genre] : []),
@@ -1847,7 +1879,7 @@ export const useAppStore = create<AppState>()(
               soundcloudLink: imported.soundcloudLink || "",
               contactInfo: imported.contactInfo || "",
               notes: imported.notes || "",
-              status: imported.status || "open",
+              status: (imported.status === "open" || imported.status === "closed" || imported.status === "unknown") ? imported.status : "unknown",
               submissionType: imported.submissionType || "email",
             });
           }
@@ -2037,7 +2069,7 @@ export const useAppStore = create<AppState>()(
     }),
     {
       name: PRIMARY_KEY,
-      version: 15,
+      version: 16,
       storage: createJSONStorage(() => robustStorage),
       migrate: (persisted: any, version: number) => {
         if (version < 5) {
@@ -2198,6 +2230,48 @@ export const useAppStore = create<AppState>()(
               slug: l.slug ?? "",
               imageUrl: l.imageUrl ?? "",
             }));
+          }
+        }
+        if (version < 16) {
+          // Label status default: previously every seed label defaulted to
+          // "open", which made the dashboard show a misleading "1976 accettano
+          // demo" number. Beatport doesn't expose demo-submission policy, so
+          // we can't claim a label is "open" without user confirmation.
+          //
+          // Migration: for every label that has NO user-edited fields
+          // (no emails, no notes, no links, no manual status change), reset
+          // status from "open" to "unknown". Labels the user has interacted
+          // with are left alone — if the user set status to "open" or "closed"
+          // explicitly, we trust that. The heuristic is: if a label has any
+          // personal data, the user has touched it and we keep its status.
+          // Otherwise, it's a seed label that the user never confirmed →
+          // "unknown".
+          if (Array.isArray(persisted.labels)) {
+            persisted.labels = persisted.labels.map((l: any) => {
+              if (!l || typeof l !== "object") return l;
+              // Only touch labels that are currently "open" — leave "closed"
+              // alone (the user explicitly closed them).
+              if (l.status !== "open") return l;
+
+              const hasNotes = typeof l.notes === "string" && l.notes.trim() !== "";
+              const hasEmails = Array.isArray(l.emails) ? l.emails.length > 0 : (!!l.emails && String(l.emails).trim() !== "");
+              const hasWebsite = typeof l.website === "string" && l.website.trim() !== "";
+              const hasDemoLink = typeof l.demoLink === "string" && l.demoLink.trim() !== "";
+              const hasSocialLink = typeof l.socialLink === "string" && l.socialLink.trim() !== "";
+              const hasSoundcloudLink = typeof l.soundcloudLink === "string" && l.soundcloudLink.trim() !== "";
+              const hasCustomLinks = Array.isArray(l.customLinks) ? l.customLinks.length > 0 : false;
+              const hasUserEdits = hasNotes || hasEmails || hasWebsite || hasDemoLink ||
+                hasSocialLink || hasSoundcloudLink || hasCustomLinks;
+
+              // If the user has never touched this label, it inherited the
+              // old "open" default — reset to "unknown".
+              if (!hasUserEdits) {
+                return { ...l, status: "unknown" };
+              }
+              // Otherwise keep "open" — the user has interacted with it,
+              // so the status is more likely a real user choice.
+              return l;
+            });
           }
         }
         return persisted;

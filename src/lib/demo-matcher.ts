@@ -214,7 +214,7 @@ export function findSimilarLabelsAndArtists(
                 genre: genre,
                 submissionType: "email",
                 contactInfo: "",
-                status: "open",
+                status: "unknown",
                 notes: "",
                 createdAt: "",
                 emails: [],

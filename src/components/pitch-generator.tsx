@@ -187,10 +187,14 @@ export function PitchGenerator() {
   );
 
   // Get matching labels by genre, grouped by tier
+  // Note: include both "open" (confirmed) AND "unknown" (default seed) labels.
+  // Excluding "unknown" would hide every label the user hasn't manually
+  // confirmed yet — which, after the 2026-06-25 fix, is the vast majority.
+  // Only exclude "closed" (user explicitly said no).
   const matchingLabels = useMemo(() => {
     if (!selectedGenre) return { top: [], mid: [], emerging: [] };
     const genreLabels = labels.filter((l) =>
-      l.genres.includes(selectedGenre) && l.status === "open"
+      l.genres.includes(selectedGenre) && l.status !== "closed"
     );
     const top = genreLabels
       .filter((l) => getLabelTier(l, selectedGenre) === "top")

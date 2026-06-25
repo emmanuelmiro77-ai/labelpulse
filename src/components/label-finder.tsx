@@ -471,7 +471,7 @@ export function LabelFinder() {
   const [newEmailInput, setNewEmailInput] = useState("");
   const [detailLinks, setDetailLinks] = useState<DetailLink[]>([]);
   const [detailNotes, setDetailNotes] = useState("");
-  const [detailStatus, setDetailStatus] = useState<"open" | "closed">("open");
+  const [detailStatus, setDetailStatus] = useState<"open" | "closed" | "unknown">("unknown");
   const [detailSubmissionType, setDetailSubmissionType] = useState<"email" | "webform" | "platform">("email");
   const [detailSaved, setDetailSaved] = useState(false);
 
@@ -866,7 +866,7 @@ export function LabelFinder() {
     "email" | "webform" | "platform"
   >("email");
   const [formContact, setFormContact] = useState("");
-  const [formStatus, setFormStatus] = useState<"open" | "closed">("open");
+  const [formStatus, setFormStatus] = useState<"open" | "closed" | "unknown">("unknown");
   const [formNotes, setFormNotes] = useState("");
 
   const filteredLabels = useMemo(() => {
@@ -1533,6 +1533,7 @@ export function LabelFinder() {
             <SelectItem value="all">{t(locale, "labels.allStatus")}</SelectItem>
             <SelectItem value="open">{t(locale, "labels.open")}</SelectItem>
             <SelectItem value="closed">{t(locale, "labels.closed")}</SelectItem>
+            <SelectItem value="unknown">{t(locale, "labels.unknown")}</SelectItem>
           </SelectContent>
         </Select>
         <Button onClick={() => setShowSmartMatch(true)} variant="outline" className="border-primary/30 text-primary hover:bg-primary/10 shrink-0">
@@ -1579,8 +1580,18 @@ export function LabelFinder() {
                       )}
                       {getTierBadge(label)}
                       <Badge variant={label.status === "open" ? "default" : "secondary"}
-                        className={label.status === "open" ? "bg-emerald-500/20 text-emerald-400 border-emerald-500/30 text-[10px] px-1.5 py-0" : "bg-red-500/20 text-red-400 border-red-500/30 text-[10px] px-1.5 py-0"}>
-                        {label.status === "open" ? t(locale, "labels.open") : t(locale, "labels.closed")}
+                        className={
+                          label.status === "open"
+                            ? "bg-emerald-500/20 text-emerald-400 border-emerald-500/30 text-[10px] px-1.5 py-0"
+                            : label.status === "closed"
+                            ? "bg-red-500/20 text-red-400 border-red-500/30 text-[10px] px-1.5 py-0"
+                            : "bg-amber-500/15 text-amber-400/80 border-amber-500/30 text-[10px] px-1.5 py-0"
+                        }>
+                        {label.status === "open"
+                          ? t(locale, "labels.open")
+                          : label.status === "closed"
+                          ? t(locale, "labels.closed")
+                          : t(locale, "labels.unknown")}
                       </Badge>
                       {/* Beatport / Beatstats / SoundCloud discovery icons.
                           Same pattern as the rankings page: the label NAME
@@ -1707,8 +1718,18 @@ export function LabelFinder() {
                     )}
                     <div className="bg-secondary/30 rounded-lg p-2">
                       <p className="text-[10px] text-muted-foreground uppercase">{t(locale, "labels.status")}</p>
-                      <p className={`text-sm font-bold ${detailLabel.status === "open" ? "text-emerald-400" : "text-red-400"}`}>
-                        {detailLabel.status === "open" ? t(locale, "labels.open") : t(locale, "labels.closed")}
+                      <p className={`text-sm font-bold ${
+                        detailLabel.status === "open"
+                          ? "text-emerald-400"
+                          : detailLabel.status === "closed"
+                          ? "text-red-400"
+                          : "text-amber-400/80"
+                      }`}>
+                        {detailLabel.status === "open"
+                          ? t(locale, "labels.open")
+                          : detailLabel.status === "closed"
+                          ? t(locale, "labels.closed")
+                          : t(locale, "labels.unknown")}
                       </p>
                     </div>
                   </div>
@@ -2120,7 +2141,7 @@ export function LabelFinder() {
                     <div className="space-y-1.5">
                       <UILabel className="text-xs font-mono uppercase text-muted-foreground">{t(locale, "labels.status")}</UILabel>
                       <Select value={detailStatus} onValueChange={(v) => {
-                        const val = v as "open" | "closed";
+                        const val = v as "open" | "closed" | "unknown";
                         setDetailStatus(val);
                         if (detailLabel) updateLabel(detailLabel.id, { status: val });
                         setDetailSaved(true); setTimeout(() => setDetailSaved(false), 1500);
@@ -2129,6 +2150,7 @@ export function LabelFinder() {
                         <SelectContent>
                           <SelectItem value="open">{t(locale, "labels.open")}</SelectItem>
                           <SelectItem value="closed">{t(locale, "labels.closed")}</SelectItem>
+                          <SelectItem value="unknown">{t(locale, "labels.unknown")}</SelectItem>
                         </SelectContent>
                       </Select>
                     </div>
@@ -2497,11 +2519,12 @@ export function LabelFinder() {
             </div>
             <div className="space-y-1.5">
               <UILabel className="text-xs font-mono uppercase text-muted-foreground">{t(locale, "labels.status")}</UILabel>
-              <Select value={formStatus} onValueChange={(v) => setFormStatus(v as "open" | "closed")}>
+              <Select value={formStatus} onValueChange={(v) => setFormStatus(v as "open" | "closed" | "unknown")}>
                 <SelectTrigger className="bg-secondary/50"><SelectValue /></SelectTrigger>
                 <SelectContent>
                   <SelectItem value="open">{t(locale, "labels.open")}</SelectItem>
                   <SelectItem value="closed">{t(locale, "labels.closed")}</SelectItem>
+                  <SelectItem value="unknown">{t(locale, "labels.unknown")}</SelectItem>
                 </SelectContent>
               </Select>
             </div>
