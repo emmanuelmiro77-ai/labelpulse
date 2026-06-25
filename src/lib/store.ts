@@ -221,6 +221,91 @@ export interface Demo {
   materialSentLinks?: string[]; // list of URLs sent to the label
 }
 
+// ==================== SAVED PITCHES (Bozze) ====================
+// A SavedPitch is a snapshot of the PitchGenerator form state, captured
+// when the user clicks "Salva come bozza" instead of "Invia Campagna".
+// It can be resumed later (re-loaded into the form) or deleted.
+//
+// Status:
+//   - "draft"   : work-in-progress, NOT shown in Demo section
+//   - "ready"   : ready to send, also surfaced in Demo section as "pronta per invio"
+//
+// When status === "ready", a Demo row is created with status "ready" and
+// a `savedPitchId` link (stored in demo.notes as "[savedPitch:<id>]" prefix
+// for reverse lookup). Sending the campaign from the pitch tab consumes
+// the SavedPitch (deletes or marks as "sent" via SentCampaign).
+
+export type SavedPitchStatus = "draft" | "ready";
+
+export interface SavedPitch {
+  id: string;
+  name: string; // user-given or auto-generated "TrackName → N labels"
+  status: SavedPitchStatus;
+  createdAt: string;
+  updatedAt: string;
+  // Snapshot of PitchGenerator state at save time:
+  trackName: string;
+  artistName: string;
+  scLink: string; // primary scLink (single mode) — for EP single-link, see epSingleLink
+  tone: "professional" | "confident" | "friendly" | "storytelling";
+  language: "en" | "it" | "es" | "fr" | "de" | "pt";
+  customNote: string;
+  selectedGenre: string;
+  trackBpm: string;
+  trackKey: string;
+  // EP mode state
+  epMode: boolean;
+  epLinkMode: "separate" | "single";
+  epSingleLink: string;
+  selectedDemoIds: string[]; // ids of demos included in the EP (when epMode)
+  // Target labels
+  selectedLabelIds: string[];
+  // Per-track scLinks (for ep-multi mode) — keyed by demo id
+  perTrackLinks?: Record<string, string>;
+}
+
+// ==================== SENT CAMPAIGNS (Inviati) ====================
+// A SentCampaign is the historical record of a campaign that was actually
+// sent. Created at the end of `handleSendCampaign` in pitch-generator.tsx.
+// Each recipient gets its own entry with the exact subject/body that went
+// out + the demoId of the Demo row that was auto-created for it.
+
+export interface SentCampaignRecipient {
+  labelId: string;
+  labelName: string; // denormalized in case the label is later deleted
+  email: string; // primary email used
+  subject: string;
+  body: string; // exact text that went out
+  gmailUrl: string; // the generated compose URL
+  demoId: string | null; // Demo row created for this recipient (if any)
+  status: "opened" | "skipped"; // opened = window opened, skipped = no email
+}
+
+export interface SentCampaign {
+  id: string;
+  name: string; // user-given or auto "TrackName → N labels"
+  sentAt: string;
+  // Snapshot of pitch state at send time (same fields as SavedPitch minus status)
+  trackName: string;
+  artistName: string;
+  scLink: string;
+  tone: "professional" | "confident" | "friendly" | "storytelling";
+  language: "en" | "it" | "es" | "fr" | "de" | "pt";
+  customNote: string;
+  selectedGenre: string;
+  epMode: boolean;
+  epLinkMode: "separate" | "single";
+  epSingleLink: string;
+  selectedDemoIds: string[];
+  selectedLabelIds: string[];
+  // Send results
+  recipients: SentCampaignRecipient[];
+  sentCount: number;
+  skippedCount: number;
+  // Optional link back to the SavedPitch this was sent from (if any)
+  savedPitchId?: string | null;
+}
+
 // ==================== HELPERS ====================
 
 const genId = () =>
@@ -983,7 +1068,7 @@ interface AppState {
   deleteLabel: (id: string) => void;
 
   // Demo actions
-  addDemo: (demo: Omit<Demo, "id" | "createdAt">) => void;
+  addDemo: (demo: Omit<Demo, "id" | "createdAt">) => string; // returns new id
   updateDemo: (id: string, updates: Partial<Demo>) => void;
   deleteDemo: (id: string) => void;
   advanceDemoStatus: (id: string) => void;
@@ -993,6 +1078,17 @@ interface AppState {
   addRelease: (release: Omit<Release, "id" | "createdAt">) => string; // returns new id
   updateRelease: (id: string, updates: Partial<Release>) => void;
   deleteRelease: (id: string) => void;
+
+  // Saved Pitches (Bozze) — work-in-progress or ready-to-send pitches
+  savedPitches: SavedPitch[];
+  addSavedPitch: (pitch: Omit<SavedPitch, "id" | "createdAt" | "updatedAt">) => string;
+  updateSavedPitch: (id: string, updates: Partial<SavedPitch>) => void;
+  deleteSavedPitch: (id: string) => void;
+
+  // Sent Campaigns (Inviati) — historical record of sent campaigns
+  sentCampaigns: SentCampaign[];
+  addSentCampaign: (campaign: Omit<SentCampaign, "id" | "sentAt">) => string;
+  deleteSentCampaign: (id: string) => void;
 
   // Navigation
   setActiveTab: (tab: "dashboard" | "labels" | "artists" | "rankings" | "demos" | "pitch" | "profile") => void;
@@ -1371,6 +1467,8 @@ export const useAppStore = create<AppState>()(
       userProfile: { artistName: "", scLink: "", bio: "", email: "", photoUrl: "", links: [], cyaniteApiToken: "", supabaseUrl: "", supabaseAnonKey: "", notifications: { master: false, followUp: true, rankings: true, weeklyRecap: true } } as UserProfile,
       gmailAuth: { isConnected: false, email: "", accessToken: "", expiresAt: 0 } as GmailAuth,
       releases: [] as Release[],
+      savedPitches: [] as SavedPitch[],
+      sentCampaigns: [] as SentCampaign[],
       lastReplyScanAt: null,
       newRepliesCount: 0,
       rankingsUpdatedAt: null as string | null,
@@ -1430,14 +1528,16 @@ export const useAppStore = create<AppState>()(
       },
 
       addDemo: (demo) => {
+        const id = genId();
         set((state) => ({
           demos: [
             ...state.demos,
-            { ...demo, id: genId(), createdAt: new Date().toISOString() },
+            { ...demo, id, createdAt: new Date().toISOString() },
           ],
           lastSavedAt: new Date().toISOString(),
         }));
         syncToCloud();
+        return id;
       },
 
       updateDemo: (id, updates) => {
@@ -1486,6 +1586,59 @@ export const useAppStore = create<AppState>()(
           demos: state.demos.map((d) =>
             d.parentReleaseId === id ? { ...d, parentReleaseId: null } : d
           ),
+          lastSavedAt: new Date().toISOString(),
+        }));
+        syncToCloud();
+      },
+
+      // ==================== SAVED PITCHES (Bozze) ====================
+      addSavedPitch: (pitch) => {
+        const id = genId();
+        const now = new Date().toISOString();
+        set((state) => ({
+          savedPitches: [
+            ...state.savedPitches,
+            { ...pitch, id, createdAt: now, updatedAt: now },
+          ],
+          lastSavedAt: now,
+        }));
+        syncToCloud();
+        return id;
+      },
+      updateSavedPitch: (id, updates) => {
+        set((state) => ({
+          savedPitches: state.savedPitches.map((p) =>
+            p.id === id ? { ...p, ...updates, updatedAt: new Date().toISOString() } : p
+          ),
+          lastSavedAt: new Date().toISOString(),
+        }));
+        syncToCloud();
+      },
+      deleteSavedPitch: (id) => {
+        set((state) => ({
+          savedPitches: state.savedPitches.filter((p) => p.id !== id),
+          lastSavedAt: new Date().toISOString(),
+        }));
+        syncToCloud();
+      },
+
+      // ==================== SENT CAMPAIGNS (Inviati) ====================
+      addSentCampaign: (campaign) => {
+        const id = genId();
+        const now = new Date().toISOString();
+        set((state) => ({
+          sentCampaigns: [
+            { ...campaign, id, sentAt: now },
+            ...state.sentCampaigns, // newest first
+          ],
+          lastSavedAt: now,
+        }));
+        syncToCloud();
+        return id;
+      },
+      deleteSentCampaign: (id) => {
+        set((state) => ({
+          sentCampaigns: state.sentCampaigns.filter((c) => c.id !== id),
           lastSavedAt: new Date().toISOString(),
         }));
         syncToCloud();
@@ -1805,6 +1958,9 @@ export const useAppStore = create<AppState>()(
           data: {
             labels: state.labels,
             demos: state.demos,
+            releases: state.releases,
+            savedPitches: state.savedPitches,
+            sentCampaigns: state.sentCampaigns,
             userProfile: state.userProfile,
             locale: state.locale,
             rankingSnapshots,
@@ -2313,6 +2469,8 @@ export const useAppStore = create<AppState>()(
         labels: state.labels,
         demos: state.demos,
         releases: state.releases,
+        savedPitches: state.savedPitches,
+        sentCampaigns: state.sentCampaigns,
         activeTab: state.activeTab,
         locale: state.locale,
         userProfile: state.userProfile,
@@ -2887,6 +3045,60 @@ function mergeCloudData(cloudData: any, localState: any): Partial<AppState> {
     }
   }
   merged.releases = Array.from(releasesById.values());
+
+  // ---------- SAVED PITCHES (Bozze) ----------
+  // Union by id. If a savedPitch id exists in both, prefer the one with the
+  // newest updatedAt (since the user may have edited the draft on either device).
+  const cloudSavedPitches = Array.isArray(cloudData.savedPitches) ? cloudData.savedPitches : [];
+  const localSavedPitches = Array.isArray(localState.savedPitches) ? localState.savedPitches : [];
+  const savedPitchesById = new Map<string, SavedPitch>();
+  for (const p of cloudSavedPitches) {
+    if (!p || typeof p !== "object" || !p.id) continue;
+    savedPitchesById.set(p.id, p);
+  }
+  for (const p of localSavedPitches) {
+    if (!p || typeof p !== "object" || !p.id) continue;
+    const existing = savedPitchesById.get(p.id);
+    if (!existing) {
+      savedPitchesById.set(p.id, p);
+    } else {
+      const exTs = new Date(existing.updatedAt || existing.createdAt || 0).getTime();
+      const loTs = new Date(p.updatedAt || p.createdAt || 0).getTime();
+      if (loTs >= exTs) {
+        savedPitchesById.set(p.id, p);
+      }
+    }
+  }
+  merged.savedPitches = Array.from(savedPitchesById.values());
+
+  // ---------- SENT CAMPAIGNS (Inviati) ----------
+  // Union by id. Sent campaigns are immutable (we never edit them after
+  // creation), so conflicts should be rare — but if both devices have the
+  // same id (rare race condition), prefer the one with the newest sentAt.
+  const cloudSentCampaigns = Array.isArray(cloudData.sentCampaigns) ? cloudData.sentCampaigns : [];
+  const localSentCampaigns = Array.isArray(localState.sentCampaigns) ? localState.sentCampaigns : [];
+  const sentCampaignsById = new Map<string, SentCampaign>();
+  for (const c of cloudSentCampaigns) {
+    if (!c || typeof c !== "object" || !c.id) continue;
+    sentCampaignsById.set(c.id, c);
+  }
+  for (const c of localSentCampaigns) {
+    if (!c || typeof c !== "object" || !c.id) continue;
+    const existing = sentCampaignsById.get(c.id);
+    if (!existing) {
+      sentCampaignsById.set(c.id, c);
+    } else {
+      const exTs = new Date(existing.sentAt || 0).getTime();
+      const loTs = new Date(c.sentAt || 0).getTime();
+      if (loTs > exTs) {
+        sentCampaignsById.set(c.id, c);
+      }
+    }
+  }
+  // Sort newest-first by sentAt
+  merged.sentCampaigns = Array.from(sentCampaignsById.values()).sort(
+    (a, b) => new Date(b.sentAt || 0).getTime() - new Date(a.sentAt || 0).getTime()
+  );
 
   // ---------- RANKING SNAPSHOTS ----------
   // Union by id (and by timestamp|source as fallback). mergeSnapshots

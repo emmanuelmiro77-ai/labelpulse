@@ -1,8 +1,8 @@
 "use client";
 
-import { useAppStore, getLabelTier, type Label, type Demo } from "@/lib/store";
+import { useAppStore, getLabelTier, type Label, type Demo, type SavedPitch, type SentCampaign, type SentCampaignRecipient } from "@/lib/store";
 import { t, type Locale } from "@/lib/i18n";
-import { useState, useMemo, useCallback } from "react";
+import { useState, useMemo, useCallback, useEffect } from "react";
 import {
   Zap,
   Mail,
@@ -49,11 +49,20 @@ import {
 } from "@/lib/pitch-utils";
 import { useToast } from "@/hooks/use-toast";
 import { SimilarSuggestions } from "@/components/similar-suggestions";
+import { Tabs, TabsList, TabsTrigger, TabsContent } from "@/components/ui/tabs";
+import { FileEdit, Inbox, Send as SendIcon, Trash2, RotateCcw, Eye } from "lucide-react";
 
 export function PitchGenerator() {
-  const { labels, demos, releases, addDemo, locale, userProfile, setUserProfile, getGenres, artists, setActiveTab, setSelectedLabelId, setSelectedArtistId } = useAppStore();
+  const { labels, demos, releases, addDemo, locale, userProfile, setUserProfile, getGenres, artists, setActiveTab, setSelectedLabelId, setSelectedArtistId, savedPitches, sentCampaigns, addSavedPitch, updateSavedPitch, deleteSavedPitch, addSentCampaign, deleteSentCampaign } = useAppStore();
   const { toast } = useToast();
   const genres = getGenres();
+
+  // Sub-tab state: "new" = pitch form, "drafts" = saved drafts list, "sent" = sent campaigns list
+  const [pitchSubTab, setPitchSubTab] = useState<"new" | "drafts" | "sent">("new");
+  // When the user clicks "Riprendi" on a draft, we store the draft here
+  // and a useEffect loads it into the form. (Direct setter calls during
+  // the click handler would race with React's batching.)
+  const [pendingResume, setPendingResume] = useState<SavedPitch | null>(null);
 
   // Pre-fill from user profile (artistName only — scLink is per-track, not
   // a profile field, so it must NOT be pre-filled here. See bug fix below.)
@@ -111,6 +120,10 @@ export function PitchGenerator() {
   // for the whole EP). Mirrors the label-finder.tsx picker.
   const [epLinkMode, setEpLinkMode] = useState<"separate" | "single">("separate");
   const [epSingleLink, setEpSingleLink] = useState("");
+
+  // Draft name input (shown when saving)
+  const [draftName, setDraftName] = useState("");
+  const [showDraftNameInput, setShowDraftNameInput] = useState<false | "draft" | "ready">(false);
 
   // Helper: extract the SoundCloud link from a Demo.
   const getDemoScLink = useCallback((d: Demo): string => {
@@ -568,6 +581,9 @@ export function PitchGenerator() {
     const skipped = selectedWithoutEmail.length;
     let sentCount = 0;
 
+    // Build the SentCampaign recipient list as we go
+    const recipients: SentCampaignRecipient[] = [];
+
     setSendProgress({ current: 0, total: toSend.length });
 
     for (let i = 0; i < toSend.length; i++) {
@@ -586,12 +602,14 @@ export function PitchGenerator() {
 
       sentCount++;
 
-      // Auto-create demo entry
+      // Auto-create demo entry (returns the new demo id so we can link it
+      // from the SentCampaign record for later review)
+      let demoId: string | null = null;
       const demoAlreadyExists = demos.some(
         (d) => d.labelId === label.id && d.trackName.toLowerCase() === trackName.trim().toLowerCase()
       );
       if (!demoAlreadyExists) {
-        addDemo({
+        demoId = addDemo({
           trackName: trackName.trim(),
           labelId: label.id,
           status: "sent",
@@ -603,21 +621,71 @@ export function PitchGenerator() {
         });
       }
 
+      recipients.push({
+        labelId: label.id,
+        labelName: label.name,
+        email: emails[0],
+        subject,
+        body,
+        gmailUrl,
+        demoId,
+        status: "opened",
+      });
+
       // Small delay between opens to avoid popup blocking
       if (i < toSend.length - 1) {
         await new Promise((r) => setTimeout(r, 800));
       }
     }
 
+    // Add skipped (no-email) labels to the recipient list for the record
+    for (const label of selectedWithoutEmail) {
+      recipients.push({
+        labelId: label.id,
+        labelName: label.name,
+        email: "",
+        subject: "",
+        body: "",
+        gmailUrl: "",
+        demoId: null,
+        status: "skipped",
+      });
+    }
+
+    // Record the SentCampaign for the "Inviati" tab
+    const campaignName = draftName.trim() || `${trackName.trim()} \u2192 ${sentCount} ${locale === "it" ? "label" : "label"}`;
+    addSentCampaign({
+      name: campaignName,
+      trackName: trackName.trim(),
+      artistName: artistName.trim(),
+      scLink: effectiveScLink || scLink,
+      tone,
+      language,
+      customNote,
+      selectedGenre,
+      epMode,
+      epLinkMode,
+      epSingleLink,
+      selectedDemoIds: Array.from(selectedDemoIds),
+      selectedLabelIds: Array.from(selectedLabelIds),
+      recipients,
+      sentCount,
+      skippedCount: skipped,
+      savedPitchId: null,
+    });
+
     setCampaignResults({ sent: sentCount, skipped });
     setCampaignComplete(true);
     setSending(false);
+    // Clear the draft name input (if any) after a successful send
+    setDraftName("");
+    setShowDraftNameInput(false);
 
     toast({
       title: t(locale, "campaign.complete"),
       description: t(locale, "campaign.reviewAndSend").replace("{count}", String(sentCount)),
     });
-  }, [selectedWithEmail, selectedWithoutEmail, getLabelEmails, getPitchForLabel, demos, trackName, scLink, effectiveScLink, customNote, artistName, addDemo, locale, toast]);
+  }, [selectedWithEmail, selectedWithoutEmail, getLabelEmails, getPitchForLabel, demos, trackName, scLink, effectiveScLink, customNote, artistName, addDemo, locale, toast, draftName, tone, language, selectedGenre, epMode, epLinkMode, epSingleLink, selectedDemoIds, selectedLabelIds, addSentCampaign]);
 
   // Copy all emails to clipboard
   const handleCopyEmails = useCallback(async () => {
@@ -637,6 +705,126 @@ export function PitchGenerator() {
     }
   }, [selectedWithEmail, getLabelEmails, locale, toast]);
 
+  // ==================== SAVED PITCH HANDLERS ====================
+
+  // Build a SavedPitch snapshot from the current form state. Used by both
+  // handleSaveDraft (status="draft") and handleSaveReady (status="ready").
+  const buildSavedPitchSnapshot = useCallback((status: "draft" | "ready", name: string): Omit<SavedPitch, "id" | "createdAt" | "updatedAt"> => {
+    const autoName = `${trackName.trim() || (locale === "it" ? "Senza nome" : "Untitled")} \u2192 ${selectedLabelIds.size} ${locale === "it" ? "label" : "label"}`;
+    return {
+      name: name.trim() || autoName,
+      status,
+      trackName: trackName.trim(),
+      artistName: artistName.trim(),
+      scLink,
+      tone,
+      language,
+      customNote,
+      selectedGenre,
+      trackBpm,
+      trackKey,
+      epMode,
+      epLinkMode,
+      epSingleLink,
+      selectedDemoIds: Array.from(selectedDemoIds),
+      selectedLabelIds: Array.from(selectedLabelIds),
+    };
+  }, [trackName, artistName, scLink, tone, language, customNote, selectedGenre, trackBpm, trackKey, epMode, epLinkMode, epSingleLink, selectedDemoIds, selectedLabelIds, locale]);
+
+  // Save as draft (private — does NOT appear in Demo section)
+  const handleSaveDraft = useCallback(() => {
+    if (!trackName.trim()) {
+      toast({
+        title: t(locale, "pitch.noTrackName"),
+        description: t(locale, "pitch.needTrackName"),
+        variant: "destructive",
+      });
+      return;
+    }
+    const snapshot = buildSavedPitchSnapshot("draft", draftName);
+    addSavedPitch(snapshot);
+    toast({ title: t(locale, "pitch.draftSaved") });
+    setDraftName("");
+    setShowDraftNameInput(false);
+    setPitchSubTab("drafts");
+  }, [trackName, draftName, buildSavedPitchSnapshot, addSavedPitch, locale, toast]);
+
+  // Save as ready-to-send (also surfaces in Demo section as "pronta per invio")
+  const handleSaveReady = useCallback(() => {
+    if (!trackName.trim()) {
+      toast({
+        title: t(locale, "pitch.noTrackName"),
+        description: t(locale, "pitch.needTrackName"),
+        variant: "destructive",
+      });
+      return;
+    }
+    const snapshot = buildSavedPitchSnapshot("ready", draftName);
+    addSavedPitch(snapshot);
+    toast({ title: t(locale, "pitch.readySaved") });
+    setDraftName("");
+    setShowDraftNameInput(false);
+    setPitchSubTab("drafts");
+  }, [trackName, draftName, buildSavedPitchSnapshot, addSavedPitch, locale, toast]);
+
+  // Resume a saved draft — loads its snapshot back into the form state,
+  // then switches to the "new" tab so the user can review & send.
+  const handleResumeDraft = useCallback((pitch: SavedPitch) => {
+    setPendingResume(pitch);
+  }, []);
+
+  // useEffect that processes the pending resume. Doing this in a useEffect
+  // (rather than directly in the click handler) ensures React batches all
+  // the state updates together and the form re-renders consistently.
+  useEffect(() => {
+    if (!pendingResume) return;
+    const p = pendingResume;
+    setTrackName(p.trackName);
+    setArtistName(p.artistName);
+    setScLink(p.scLink);
+    setTone(p.tone);
+    setLanguage(p.language);
+    setCustomNote(p.customNote);
+    setSelectedGenre(p.selectedGenre);
+    setTrackBpm(p.trackBpm);
+    setTrackKey(p.trackKey);
+    setEpMode(p.epMode);
+    setEpLinkMode(p.epLinkMode);
+    setEpSingleLink(p.epSingleLink);
+    setSelectedDemoIds(new Set(p.selectedDemoIds));
+    setSelectedLabelIds(new Set(p.selectedLabelIds));
+    setPendingResume(null);
+    setPitchSubTab("new");
+    setCampaignComplete(false);
+
+    // Warn if some labels/demos referenced in the draft no longer exist
+    const missingLabels = p.selectedLabelIds.filter((id) => !labels.some((l) => l.id === id));
+    const missingDemos = p.selectedDemoIds.filter((id) => !demos.some((d) => d.id === id));
+    if (missingLabels.length > 0 || missingDemos.length > 0) {
+      toast({
+        title: t(locale, "pitch.cannotResume"),
+        description: t(locale, "pitch.cannotResumeDesc"),
+        variant: "destructive",
+      });
+    } else {
+      toast({ title: t(locale, "pitch.resumeLoaded") });
+    }
+  }, [pendingResume, labels, demos, locale, toast]);
+
+  // Delete a saved draft
+  const handleDeleteDraft = useCallback((id: string) => {
+    if (!window.confirm(t(locale, "pitch.confirmDelete"))) return;
+    deleteSavedPitch(id);
+    toast({ title: t(locale, "pitch.draftDeleted") });
+  }, [deleteSavedPitch, locale, toast]);
+
+  // Delete a sent campaign record (does NOT delete the linked Demo rows)
+  const handleDeleteSent = useCallback((id: string) => {
+    if (!window.confirm(t(locale, "pitch.confirmDeleteSent"))) return;
+    deleteSentCampaign(id);
+    toast({ title: t(locale, "pitch.sentDeleted") });
+  }, [deleteSentCampaign, locale, toast]);
+
   // Track if campaign params changed (to reset completion state)
   const campaignParamsKey = `${selectedLabelIds.size}-${trackName}-${tone}-${language}-${customNote}`;
   const [lastCampaignKey, setLastCampaignKey] = useState(campaignParamsKey);
@@ -646,7 +834,36 @@ export function PitchGenerator() {
   }
 
   return (
-    <div className="space-y-6">
+    <div className="space-y-4">
+      {/* Sub-tab switcher: Nuova Campagna | Bozze | Inviati */}
+      <Tabs value={pitchSubTab} onValueChange={(v) => setPitchSubTab(v as "new" | "drafts" | "sent")}>
+        <TabsList className="bg-card/60 border border-border/30 h-auto py-1">
+          <TabsTrigger value="new" className="gap-1.5">
+            <SendIcon className="h-3.5 w-3.5" />
+            {t(locale, "pitch.tab.new")}
+          </TabsTrigger>
+          <TabsTrigger value="drafts" className="gap-1.5">
+            <FileEdit className="h-3.5 w-3.5" />
+            {t(locale, "pitch.tab.drafts")}
+            {savedPitches.length > 0 && (
+              <Badge variant="secondary" className="ml-1 h-4 px-1 text-[10px] bg-cyan-500/20 text-cyan-300 border-cyan-500/30">
+                {savedPitches.length}
+              </Badge>
+            )}
+          </TabsTrigger>
+          <TabsTrigger value="sent" className="gap-1.5">
+            <Inbox className="h-3.5 w-3.5" />
+            {t(locale, "pitch.tab.sent")}
+            {sentCampaigns.length > 0 && (
+              <Badge variant="secondary" className="ml-1 h-4 px-1 text-[10px] bg-emerald-500/20 text-emerald-300 border-emerald-500/30">
+                {sentCampaigns.length}
+              </Badge>
+            )}
+          </TabsTrigger>
+        </TabsList>
+
+        {/* ===== TAB: Nuova Campagna (existing pitch form) ===== */}
+        <TabsContent value="new" className="space-y-6 mt-4">
       {/* ===== TOP SECTION: Track Setup ===== */}
       <Card className="bg-card/60 border-border/30">
         <CardContent className="p-4 sm:p-6">
@@ -1268,6 +1485,62 @@ export function PitchGenerator() {
                   </Button>
                 )}
 
+                {/* Save as draft / ready-to-send — alternative to immediate send.
+                    Lets the user prepare the campaign now and send it later
+                    (or from another device). Drafts are private; ready-to-send
+                    also appears in the Demo section as 'pronta per invio'. */}
+                <div className="grid grid-cols-2 gap-2">
+                  <Button
+                    variant="outline"
+                    onClick={() => setShowDraftNameInput(showDraftNameInput === "draft" ? false : "draft")}
+                    className="border-border/50 text-muted-foreground hover:text-foreground"
+                    disabled={!trackName.trim() || sending}
+                  >
+                    <FileEdit className="h-4 w-4 mr-2" />
+                    {t(locale, "pitch.saveDraft")}
+                  </Button>
+                  <Button
+                    variant="outline"
+                    onClick={() => setShowDraftNameInput(showDraftNameInput === "ready" ? false : "ready")}
+                    className="border-purple-500/30 text-purple-300 hover:text-purple-200 hover:bg-purple-500/10"
+                    disabled={!trackName.trim() || sending}
+                  >
+                    <Inbox className="h-4 w-4 mr-2" />
+                    {t(locale, "pitch.saveReady")}
+                  </Button>
+                </div>
+
+                {/* Draft name input (conditionally shown) */}
+                {showDraftNameInput && (
+                  <div className="p-3 rounded-lg bg-cyan-500/5 border border-cyan-500/20 space-y-2">
+                    <p className="text-xs text-cyan-300/80">
+                      {showDraftNameInput === "ready" ? t(locale, "pitch.saveReadyDesc") : t(locale, "pitch.saveDraftDesc")}
+                    </p>
+                    <Input
+                      value={draftName}
+                      onChange={(e) => setDraftName(e.target.value)}
+                      placeholder={t(locale, "pitch.draftNamePlaceholder")}
+                      className="bg-background/50 border-border/50"
+                    />
+                    <div className="flex gap-2">
+                      <Button
+                        onClick={showDraftNameInput === "ready" ? handleSaveReady : handleSaveDraft}
+                        className={`flex-1 h-10 ${showDraftNameInput === "ready" ? "bg-purple-600 hover:bg-purple-700 text-white" : "bg-cyan-600 hover:bg-cyan-700 text-white"}`}
+                      >
+                        <Check className="h-4 w-4 mr-2" />
+                        {showDraftNameInput === "ready" ? t(locale, "pitch.saveReady") : t(locale, "pitch.saveDraft")}
+                      </Button>
+                      <Button
+                        variant="ghost"
+                        onClick={() => { setShowDraftNameInput(false); setDraftName(""); }}
+                        className="text-muted-foreground"
+                      >
+                        {t(locale, "pitch.delete")}
+                      </Button>
+                    </div>
+                  </div>
+                )}
+
                 {/* Send button - opens Gmail compose for each */}
                 <Button
                   onClick={handleSendCampaign}
@@ -1324,6 +1597,242 @@ export function PitchGenerator() {
           )}
         </CardContent>
       </Card>
+        </TabsContent>
+
+        {/* ===== TAB: Bozze (saved drafts) ===== */}
+        <TabsContent value="drafts" className="mt-4">
+          <Card className="bg-card/60 border-border/30">
+            <CardContent className="p-4 sm:p-6">
+              <div className="flex items-center gap-2 mb-4">
+                <FileEdit className="h-4 w-4 text-cyan-400" />
+                <h3 className="text-sm font-mono uppercase tracking-wider text-muted-foreground">
+                  {t(locale, "pitch.tab.drafts")}
+                </h3>
+                {savedPitches.length > 0 && (
+                  <Badge variant="secondary" className="ml-auto bg-cyan-500/20 text-cyan-300 border-cyan-500/30">
+                    {savedPitches.length}
+                  </Badge>
+                )}
+              </div>
+
+              {savedPitches.length === 0 ? (
+                <div className="flex flex-col items-center justify-center py-12 text-muted-foreground/40 text-center">
+                  <FileEdit className="h-10 w-10 mb-3" />
+                  <p className="text-sm font-medium">{t(locale, "pitch.draftsEmpty")}</p>
+                  <p className="text-xs mt-1 max-w-md">{t(locale, "pitch.draftsEmptyDesc")}</p>
+                  <Button
+                    variant="outline"
+                    className="mt-4"
+                    onClick={() => setPitchSubTab("new")}
+                  >
+                    <SendIcon className="h-4 w-4 mr-2" />
+                    {t(locale, "pitch.tab.new")}
+                  </Button>
+                </div>
+              ) : (
+                <div className="space-y-3">
+                  {[...savedPitches]
+                    .sort((a, b) => new Date(b.updatedAt || b.createdAt).getTime() - new Date(a.updatedAt || a.createdAt).getTime())
+                    .map((pitch) => {
+                      const validLabelCount = pitch.selectedLabelIds.filter((id) => labels.some((l) => l.id === id)).length;
+                      const validDemoCount = pitch.selectedDemoIds.filter((id) => demos.some((d) => d.id === id)).length;
+                      const hasMissingRefs = validLabelCount < pitch.selectedLabelIds.length || validDemoCount < pitch.selectedDemoIds.length;
+                      return (
+                        <div
+                          key={pitch.id}
+                          className="p-4 rounded-lg border border-border/30 bg-background/40 hover:border-border/50 transition-colors"
+                        >
+                          <div className="flex items-start justify-between gap-3 mb-2">
+                            <div className="flex-1 min-w-0">
+                              <div className="flex items-center gap-2 flex-wrap">
+                                <span className="text-sm font-medium text-foreground truncate">{pitch.name}</span>
+                                <Badge
+                                  variant="secondary"
+                                  className={`h-5 text-[10px] ${
+                                    pitch.status === "ready"
+                                      ? "bg-purple-500/20 text-purple-300 border-purple-500/30"
+                                      : "bg-cyan-500/20 text-cyan-300 border-cyan-500/30"
+                                  }`}
+                                >
+                                  {pitch.status === "ready" ? t(locale, "pitch.readyToSend") : t(locale, "pitch.draft")}
+                                </Badge>
+                                {hasMissingRefs && (
+                                  <Badge variant="secondary" className="h-5 text-[10px] bg-amber-500/20 text-amber-300 border-amber-500/30">
+                                    !
+                                  </Badge>
+                                )}
+                              </div>
+                              <p className="text-xs text-muted-foreground mt-1 truncate">
+                                {pitch.trackName || <em>(no name)</em>}
+                                {pitch.epMode && pitch.selectedDemoIds.length > 0 && (
+                                  <span className="ml-2 text-purple-300/70">
+                                    · {t(locale, "pitch.trackCount").replace("{count}", String(pitch.selectedDemoIds.length))}
+                                  </span>
+                                )}
+                                <span className="ml-2 text-cyan-300/70">
+                                  · {t(locale, "pitch.labelCount").replace("{count}", String(pitch.selectedLabelIds.length))}
+                                </span>
+                              </p>
+                              <p className="text-[10px] text-muted-foreground/60 mt-0.5">
+                                {new Date(pitch.updatedAt || pitch.createdAt).toLocaleString(locale)}
+                              </p>
+                            </div>
+                            <div className="flex items-center gap-1 shrink-0">
+                              <Button
+                                size="sm"
+                                variant="outline"
+                                onClick={() => handleResumeDraft(pitch)}
+                                className="h-8 border-border/50"
+                              >
+                                <RotateCcw className="h-3.5 w-3.5 mr-1" />
+                                {t(locale, "pitch.resume")}
+                              </Button>
+                              <Button
+                                size="sm"
+                                variant="ghost"
+                                onClick={() => handleDeleteDraft(pitch.id)}
+                                className="h-8 text-red-400 hover:text-red-300 hover:bg-red-500/10"
+                              >
+                                <Trash2 className="h-3.5 w-3.5" />
+                              </Button>
+                            </div>
+                          </div>
+                        </div>
+                      );
+                    })}
+                </div>
+              )}
+            </CardContent>
+          </Card>
+        </TabsContent>
+
+        {/* ===== TAB: Inviati (sent campaigns) ===== */}
+        <TabsContent value="sent" className="mt-4">
+          <Card className="bg-card/60 border-border/30">
+            <CardContent className="p-4 sm:p-6">
+              <div className="flex items-center gap-2 mb-4">
+                <Inbox className="h-4 w-4 text-emerald-400" />
+                <h3 className="text-sm font-mono uppercase tracking-wider text-muted-foreground">
+                  {t(locale, "pitch.tab.sent")}
+                </h3>
+                {sentCampaigns.length > 0 && (
+                  <Badge variant="secondary" className="ml-auto bg-emerald-500/20 text-emerald-300 border-emerald-500/30">
+                    {sentCampaigns.length}
+                  </Badge>
+                )}
+              </div>
+
+              {sentCampaigns.length === 0 ? (
+                <div className="flex flex-col items-center justify-center py-12 text-muted-foreground/40 text-center">
+                  <Inbox className="h-10 w-10 mb-3" />
+                  <p className="text-sm font-medium">{t(locale, "pitch.sentEmpty")}</p>
+                  <p className="text-xs mt-1 max-w-md">{t(locale, "pitch.sentEmptyDesc")}</p>
+                  <Button
+                    variant="outline"
+                    className="mt-4"
+                    onClick={() => setPitchSubTab("new")}
+                  >
+                    <SendIcon className="h-4 w-4 mr-2" />
+                    {t(locale, "pitch.tab.new")}
+                  </Button>
+                </div>
+              ) : (
+                <div className="space-y-3">
+                  {sentCampaigns.map((campaign) => {
+                    const openedRecipients = campaign.recipients.filter((r) => r.status === "opened");
+                    const skippedRecipients = campaign.recipients.filter((r) => r.status === "skipped");
+                    return (
+                      <div
+                        key={campaign.id}
+                        className="p-4 rounded-lg border border-border/30 bg-background/40"
+                      >
+                        <div className="flex items-start justify-between gap-3 mb-2">
+                          <div className="flex-1 min-w-0">
+                            <div className="flex items-center gap-2 flex-wrap">
+                              <span className="text-sm font-medium text-foreground truncate">{campaign.name}</span>
+                              <Badge variant="secondary" className="h-5 text-[10px] bg-emerald-500/20 text-emerald-300 border-emerald-500/30">
+                                {campaign.sentCount} {locale === "it" ? "inviate" : "sent"}
+                              </Badge>
+                              {campaign.skippedCount > 0 && (
+                                <Badge variant="secondary" className="h-5 text-[10px] bg-amber-500/20 text-amber-300 border-amber-500/30">
+                                  {campaign.skippedCount} {locale === "it" ? "saltate" : "skipped"}
+                                </Badge>
+                              )}
+                            </div>
+                            <p className="text-xs text-muted-foreground mt-1 truncate">
+                              {campaign.trackName}
+                              {campaign.epMode && campaign.selectedDemoIds.length > 0 && (
+                                <span className="ml-2 text-purple-300/70">
+                                  · {t(locale, "pitch.trackCount").replace("{count}", String(campaign.selectedDemoIds.length))}
+                                </span>
+                              )}
+                            </p>
+                            <p className="text-[10px] text-muted-foreground/60 mt-0.5">
+                              {t(locale, "pitch.sentDate")}: {new Date(campaign.sentAt).toLocaleString(locale)}
+                            </p>
+                          </div>
+                          <Button
+                            size="sm"
+                            variant="ghost"
+                            onClick={() => handleDeleteSent(campaign.id)}
+                            className="h-8 text-red-400 hover:text-red-300 hover:bg-red-500/10"
+                          >
+                            <Trash2 className="h-3.5 w-3.5" />
+                          </Button>
+                        </div>
+
+                        {/* Recipients list — collapsible */}
+                        {openedRecipients.length > 0 && (
+                          <details className="mt-2 group">
+                            <summary className="cursor-pointer text-xs text-muted-foreground hover:text-foreground transition-colors flex items-center gap-1">
+                              <ChevronDown className="h-3 w-3 group-open:hidden" />
+                              <ChevronUp className="h-3 w-3 hidden group-open:inline" />
+                              {t(locale, "pitch.recipients")} ({openedRecipients.length})
+                            </summary>
+                            <div className="mt-2 space-y-1.5 max-h-48 overflow-y-auto">
+                              {openedRecipients.map((r, idx) => (
+                                <div key={idx} className="text-xs p-2 rounded bg-background/30 border border-border/20">
+                                  <div className="flex items-center justify-between gap-2">
+                                    <span className="font-medium text-foreground">{r.labelName}</span>
+                                    {r.gmailUrl && (
+                                      <a
+                                        href={r.gmailUrl}
+                                        target="_blank"
+                                        rel="noopener noreferrer"
+                                        className="text-cyan-400 hover:text-cyan-300 flex items-center gap-1 shrink-0"
+                                      >
+                                        <Eye className="h-3 w-3" />
+                                        {t(locale, "pitch.viewEmail")}
+                                      </a>
+                                    )}
+                                  </div>
+                                  <p className="text-[10px] text-emerald-400/60 font-mono truncate mt-0.5">{r.email}</p>
+                                  <p className="text-[10px] text-muted-foreground/60 font-mono truncate mt-0.5">{r.subject}</p>
+                                </div>
+                              ))}
+                            </div>
+                          </details>
+                        )}
+
+                        {skippedRecipients.length > 0 && (
+                          <details className="mt-1 group">
+                            <summary className="cursor-pointer text-xs text-amber-400/70 hover:text-amber-400 transition-colors">
+                              {locale === "it" ? `${skippedRecipients.length} label senza email` : `${skippedRecipients.length} labels without email`}
+                            </summary>
+                            <div className="mt-1 text-[10px] text-muted-foreground/60">
+                              {skippedRecipients.map((r, idx) => r.labelName).join(", ")}
+                            </div>
+                          </details>
+                        )}
+                      </div>
+                    );
+                  })}
+                </div>
+              )}
+            </CardContent>
+          </Card>
+        </TabsContent>
+      </Tabs>
     </div>
   );
 }

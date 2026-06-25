@@ -524,6 +524,9 @@ function buildPersonalPayload(state: any): object {
   return {
     labels: personalLabels,
     demos: Array.isArray(state?.demos) ? state.demos : [],
+    releases: Array.isArray(state?.releases) ? state.releases : [],
+    savedPitches: Array.isArray(state?.savedPitches) ? state.savedPitches : [],
+    sentCampaigns: Array.isArray(state?.sentCampaigns) ? state.sentCampaigns : [],
     userProfile: state?.userProfile || {},
     gmailAuth: state?.gmailAuth || null,
     locale: state?.locale || null,
@@ -620,6 +623,9 @@ export function mergeGlobalAndPersonalCloud(global: any, personal: any): any {
   return {
     labels: mergedLabels,
     demos: personal?.demos || [],
+    releases: personal?.releases || [],
+    savedPitches: personal?.savedPitches || [],
+    sentCampaigns: personal?.sentCampaigns || [],
     userProfile: personal?.userProfile || {},
     gmailAuth: personal?.gmailAuth || null,
     locale: personal?.locale || null,
