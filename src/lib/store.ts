@@ -4,7 +4,7 @@ import { create } from "zustand";
 import { persist, createJSONStorage, StateStorage } from "zustand/middleware";
 import type { Locale } from "./i18n";
 import labelData from "./labels-data.json";
-import { saveStateToCloud, loadStateFromCloud, isSupabaseConfigured, isApplyingRemoteUpdate } from "./supabase";
+import { saveStateToCloud, loadStateFromCloud, isSupabaseConfigured, isApplyingRemoteUpdate, markLocalProfileEdit } from "./supabase";
 import { saveArtistsToIDB, loadArtistsFromIDB } from "./artists-idb";
 
 // ==================== TYPES ====================
@@ -1536,6 +1536,12 @@ export const useAppStore = create<AppState>()(
       setLocale: (locale) => { set({ locale }); syncToCloud(); },
       setUserProfile: (profile) => {
         set((state) => ({ userProfile: { ...state.userProfile, ...profile }, lastSavedAt: new Date().toISOString() }));
+        // ⚠️ Mark that the user just edited their profile locally. This
+        // tells applyRemoteData (in supabase.ts) to preserve local profile
+        // fields for the next 5 seconds, even if a realtime cloud update
+        // arrives with a stale photoUrl/artistName/etc. Fixes the
+        // "photo reverts to old one on iPhone" bug.
+        try { markLocalProfileEdit(); } catch {}
         syncToCloud();
         // ⚠️ CRITICAL: also trigger an IMMEDIATE (non-debounced) cloud sync.
         // syncToCloud is debounced 3 seconds — if the user saves and closes

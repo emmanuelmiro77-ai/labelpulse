@@ -37,6 +37,39 @@ let _realtimeChannel: any = null;
 let _realtimeGlobalChannel: any = null; // GLOBAL row realtime subscription (admin updates)
 let _isApplyingRemoteUpdate: boolean = false; // evita loop di sync
 
+// ⚠️ Timestamp of the last local userProfile edit (set by setUserProfile
+// in store.ts via markLocalProfileEdit). Used by applyRemoteData to detect
+// race conditions: if a realtime cloud update arrives within
+// LOCAL_PROFILE_EDIT_GRACE_MS of a local edit, we preserve the local
+// profile fields instead of letting the cloud (which may have a stale
+// photoUrl from before the local edit) overwrite them.
+//
+// This fixes the bug where Lutenzo (iPhone) uploads a new profile photo,
+// sees it briefly, then it reverts to the old one because a realtime
+// update arrives with the stale cloud photoUrl before the local push
+// has propagated.
+let _lastLocalProfileEditAt: number = 0;
+const LOCAL_PROFILE_EDIT_GRACE_MS = 5000; // 5 seconds
+
+/**
+ * Called by store.ts:setUserProfile to record that the user just edited
+ * their profile locally. The next realtime update that arrives within
+ * LOCAL_PROFILE_EDIT_GRACE_MS will NOT overwrite profile fields.
+ */
+export function markLocalProfileEdit(): void {
+  _lastLocalProfileEditAt = Date.now();
+}
+
+/**
+ * Returns true if a local profile edit happened within the grace period.
+ * Used by applyRemoteData to decide whether to preserve local profile
+ * fields against a possibly-stale cloud update.
+ */
+export function isLocalProfileEditRecent(): boolean {
+  if (_lastLocalProfileEditAt === 0) return false;
+  return Date.now() - _lastLocalProfileEditAt < LOCAL_PROFILE_EDIT_GRACE_MS;
+}
+
 type Listener = () => void;
 const listeners = new Set<Listener>();
 
@@ -1212,6 +1245,52 @@ async function applyRemoteData(cloudData: any): Promise<void> {
       supabaseAnonKey: store.userProfile.supabaseAnonKey,
       cyaniteApiToken: store.userProfile.cyaniteApiToken,
     };
+
+    // ⚠️ BUG FIX (2026-06-25, "photo revert on iPhone"): if the user just
+    // edited their profile locally (within LOCAL_PROFILE_EDIT_GRACE_MS),
+    // preserve ALL local profile fields against the cloud update. This
+    // prevents a stale cloud row (e.g., photoUrl from before the user's
+    // new upload) from overwriting freshly-edited local fields when a
+    // realtime update arrives mid-push.
+    //
+    // Before this fix: Lutenzo uploads photo → state has new photo →
+    // realtime update arrives with old photo → mergeProfiles keeps new
+    // photo (because non-empty wins)... but if the local edit somehow
+    // didn't make it into store.userProfile yet (race with setState),
+    // mergeProfiles would take the cloud's old photo. This safety net
+    // guarantees the local profile wins unconditionally for 5 seconds
+    // after a local edit.
+    if (isLocalProfileEditRecent()) {
+      console.info(
+        "[LabelPulse Cloud] Realtime update arrived within local profile edit grace period — preserving local profile fields."
+      );
+      // Take local profile as base, only fill in fields that are EMPTY locally
+      // but NON-EMPTY in cloud (so we don't lose data the user doesn't have).
+      const localProfile = store.userProfile || {};
+      const cloudProfile = cloudData.userProfile || {};
+      const safeMerged: any = { ...localProfile };
+      for (const k of Object.keys(cloudProfile)) {
+        const lv = (localProfile as any)[k];
+        const cv = (cloudProfile as any)[k];
+        const localIsEmpty =
+          (typeof lv === "string" && lv.trim() === "") ||
+          (Array.isArray(lv) && lv.length === 0) ||
+          lv === undefined ||
+          lv === null;
+        const cloudHasData =
+          (typeof cv === "string" && cv.trim() !== "") ||
+          (Array.isArray(cv) && cv.length > 0) ||
+          (cv !== undefined && cv !== null && typeof cv !== "string" && !Array.isArray(cv));
+        if (localIsEmpty && cloudHasData) {
+          safeMerged[k] = cv;
+        }
+      }
+      // Always preserve BYOK credentials locally
+      safeMerged.supabaseUrl = localProfile.supabaseUrl;
+      safeMerged.supabaseAnonKey = localProfile.supabaseAnonKey;
+      safeMerged.cyaniteApiToken = localProfile.cyaniteApiToken;
+      merged.userProfile = safeMerged;
+    }
   }
   if (cloudData.gmailAuth) merged.gmailAuth = cloudData.gmailAuth;
   if (cloudData.rankingsUpdatedAt !== undefined) {
