@@ -297,3 +297,73 @@ Quando si indaga un nuovo bug:
 2. Se match → verificare che il fix sia ancora in produzione (git log, codebase)
 3. Se regression → investigare perché il fix è stato rimosso/rotto
 4. Se no match → procedere con indagine normale, poi aggiungere entry
+
+---
+
+## 🛡️ PROTOCOLLO ANTI-REGRESSIONE (OBBLIGATORIO)
+
+> **SCOPO**: Evitare che un fix fatto oggi venga rotto domani da un'altra
+> sessione che tocca gli stessi file. Questo protocollo è **obbligatorio**
+> per ogni fix che l'agente fa d'ora in poi.
+
+### Prima di iniziare a fixare (VERIFICA PRE-FIX)
+
+1. `grep -i "<parola_chiave_sintomo>" BUG_REGISTRY.md` — il bug è già stato risolto?
+2. Se sì → il fix è ancora nel codice? (`git log --oneline -- <file>` + leggi il file)
+3. Se il fix è presente ma il bug si ripresenta → **regressione**. Prima di fixare di nuovo:
+   - `git log --oneline -- <file>` per trovare commit recenti che lo hanno toccato
+   - `git diff <commit_fix>..HEAD -- <file>` per vedere cosa è cambiato dopo il fix
+   - Identifica ESATTAMENTE quale commit/numero di riga ha rotto il fix
+   - Il nuovo fix deve proteggere da quel tipo specifico di regressione, non solo ripristinare
+
+### Prima di committare (VERIFICA POST-FIX) — OBBLIGATORIA
+
+Per ogni file `F` modificato in questo commit:
+
+1. `grep -B 2 -A 4 "<path di F>" BUG_REGISTRY.md` — trova tutte le entry passate che toccano `F`
+2. Per ogni entry trovata:
+   - Apri il file `F` e verifica che il fix passato sia **ancora presente** nel codice
+   - Se NON è presente → **STOP, non committare**. La tua modifica ha rimosso un fix passato.
+   - Ripristina il fix passato dal suo commit originale prima di committare il tuo
+3. Solo quando tutti i fix passati sui file toccati sono verificati → commit
+
+### Esempio concreto
+
+Sto fixando un bug in `src/lib/gmail.ts`:
+
+```bash
+# 1. Prima del fix — il bug è già noto?
+grep -i "gmail\|email\|mime" BUG_REGISTRY.md
+# → trovo "Gmail invia spazzatura", commit 03f4d17
+
+# 2. Il fix è ancora in produzione?
+git log --oneline -- src/lib/gmail.ts
+# → vedo 03f4d17 in cima, ok
+
+# 3. Faccio il mio nuovo fix in gmail.ts
+# ... edit ...
+
+# 4. PRIMA di commit — verifico che il fix 03f4d17 sia ancora lì
+grep -n "non-empty\|filter.*line\|\\\\r\\\\n\\\\r\\\\n" src/lib/gmail.ts
+# → trovo ancora la logica di costruzione header sicura, ok
+
+# 5. Ora posso committare
+```
+
+### Cosa fare se scopro una regressione
+
+1. **NON limitarmi a ripristinare il vecchio fix** — verrebbe rimosso di nuovo dalla prossima sessione
+2. **Capire perché è stato rimosso**: conflitto con un'altra feature? Refactoring? Bug fixing parallelo?
+3. **Aggiungere protezione extra**:
+   - Se il fix era una guard `if (x) return` → aggiungere anche un test runtime che lanci errore se manca
+   - Se il fix era in una funzione pura → estrarla in un file separato che nessuno toccherà
+   - Se il fix era in un componente UI → aggiungere commento `// ⚠️ CRITICAL FIX — see BUG_REGISTRY.md "sintomo" — do not remove`
+4. **Documentare la regressione** in BUG_REGISTRY.md sotto la entry esistente, con data e causa
+
+### Impegno dell'agente
+
+Ogni volta che l'agente (io) fa un fix, dice esplicitamente all'utente:
+> "Verifica anti-regressione: ho controllato N fix passati sui file che ho toccato.
+> Tutti presenti: ✅. Nuova entry aggiunta a BUG_REGISTRY.md."
+
+Se non può dirlo → non ha seguito il protocollo → chiedere all'utente di pretenderlo.
