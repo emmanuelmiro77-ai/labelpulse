@@ -14,6 +14,7 @@ import {
 } from "@/components/ui/dialog";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
+import { clearAllLocalData } from "@/lib/store";
 
 /**
  * Auth button shown in the top-right of the header.
@@ -243,6 +244,19 @@ export function AuthButton() {
             <button
               onClick={() => {
                 setMenuOpen(false);
+                // ⚠️ CRITICAL — Multi-user isolation:
+                // Wipe ALL local data BEFORE signOut so the next user on
+                // this device starts fresh. Without this, user A's demos,
+                // profile, label emails, and saved pitches would leak into
+                // user B's session when they log in next.
+                // (useAuthEffect also clears on status→unauthenticated as a
+                // safety net, but doing it here ensures it happens even if
+                // the redirect races the effect.)
+                try {
+                  clearAllLocalData();
+                } catch (e) {
+                  console.warn("[AuthButton] Error clearing local data on logout:", e);
+                }
                 signOut({ callbackUrl: "/" });
               }}
               className="w-full flex items-center gap-2 px-3 py-2 rounded-md text-sm text-muted-foreground hover:text-foreground hover:bg-secondary/50 transition-colors"

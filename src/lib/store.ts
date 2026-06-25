@@ -5,7 +5,7 @@ import { persist, createJSONStorage, StateStorage } from "zustand/middleware";
 import type { Locale } from "./i18n";
 import labelData from "./labels-data.json";
 import { saveStateToCloud, loadStateFromCloud, isSupabaseConfigured, isApplyingRemoteUpdate, markLocalProfileEdit } from "./supabase";
-import { saveArtistsToIDB, loadArtistsFromIDB } from "./artists-idb";
+import { saveArtistsToIDB, loadArtistsFromIDB, clearArtistsIDB } from "./artists-idb";
 import type { PitchTrackEntry } from "./pitch-utils";
 
 // ==================== TYPES ====================
@@ -384,6 +384,161 @@ const SNAPSHOTS_BACKUP_KEY = "labelpulse-snapshots-backup";
 // Strategy: write on every setItem (merged, never overwrite), never clear
 // except via explicit reset.
 const PROFILE_BACKUP_KEY = "labelpulse-profile-backup";
+
+// ==================== MULTI-USER ISOLATION (2026-06-26) ====================
+// CRITICAL FIX: previously localStorage was GLOBAL — the same key
+// "labelpulse-storage" was used by ALL users on a given device. When user A
+// logged out, their data (demos, profile, label emails, saved pitches)
+// REMAINED in localStorage. When user B logged in on the same device,
+// Zustand persist rehydrated user A's data into user B's session. Worse,
+// the cloud-merge logic does UNION BY ID, so user A's data was kept and
+// merged with user B's (possibly empty) cloud data → user B saw user A's
+// demos, profile bio, label emails, saved pitches, etc.
+//
+// This was reported as a CRITICAL data isolation bug ("è tutto mischiato").
+//
+// FIX: track the "owner" of the current localStorage data in a separate
+// key. On login, if the current session's email doesn't match the owner,
+// WIPE all local data before rehydrating. On logout, also wipe so the
+// next user starts fresh. This ensures each user's data is strictly
+// isolated per-device, and cloud sync (which is already per-email on the
+// Supabase side) is the single source of truth across devices.
+const OWNER_KEY = "labelpulse-storage-owner";
+
+/**
+ * Returns the email of the user who owns the current localStorage data,
+ * or null if no owner is recorded (first-time user, or pre-fix data).
+ */
+export function getStorageOwner(): string | null {
+  try {
+    return localStorage.getItem(OWNER_KEY);
+  } catch {
+    return null;
+  }
+}
+
+/**
+ * Records the owner of the current localStorage data. Called after any
+ * successful rehydration or cloud load — the data currently in localStorage
+ * belongs to this user.
+ */
+export function setStorageOwner(email: string | null): void {
+  try {
+    if (email) {
+      localStorage.setItem(OWNER_KEY, email);
+    } else {
+      localStorage.removeItem(OWNER_KEY);
+    }
+  } catch {
+    // localStorage may be unavailable (private mode, quota) — non-fatal.
+  }
+}
+
+/**
+ * ⚠️ CRITICAL — Wipe ALL local user data.
+ *
+ * Called in two scenarios:
+ *   1. On login, when the session's email doesn't match the current owner
+ *      (different user logging in on the same device).
+ *   2. On explicit logout, so the next user starts fresh.
+ *
+ * Removes:
+ *   - Primary localStorage key (full Zustand state)
+ *   - Backup localStorage key
+ *   - Snapshots backup key
+ *   - Profile backup (sidecar) key
+ *   - Owner key itself
+ *   - IndexedDB artists store
+ *   - Zustand in-memory state (reset to seed defaults)
+ *
+ * After this, the app is in a "fresh install" state. The caller is
+ * responsible for triggering cloud sync (loadFromCloud) to repopulate
+ * the store for the new user.
+ */
+export function clearAllLocalData(): void {
+  console.info("[LabelPulse Storage] Clearing ALL local data (multi-user isolation)");
+  try {
+    localStorage.removeItem(PRIMARY_KEY);
+    localStorage.removeItem(BACKUP_KEY);
+    localStorage.removeItem(SNAPSHOTS_BACKUP_KEY);
+    localStorage.removeItem(PROFILE_BACKUP_KEY);
+    localStorage.removeItem(OWNER_KEY);
+  } catch (e) {
+    console.warn("[LabelPulse Storage] Error removing localStorage keys:", e);
+  }
+  // Clear IndexedDB (artists) — async but we don't wait
+  clearArtistsIDB().catch((e) =>
+    console.warn("[LabelPulse Storage] Error clearing artists IDB:", e)
+  );
+  // Reset the rehydration guard so the next persist cycle treats us as
+  // a fresh install (will re-seed from defaults).
+  _rehydrated = false;
+  // Reset the in-memory Zustand store to seed defaults. We mirror the
+  // exact same initial state shape used in create<AppState>()(persist(...))
+  // below — but only the data fields, NOT the action functions (those are
+  // preserved by setState's merge behavior when overwrite=false).
+  // We pass overwrite=false (default) so existing actions stay intact.
+  useAppStore.setState({
+    labels: buildLabelsFromData(),
+    demos: [],
+    artists: [],
+    selectedArtistId: null,
+    selectedLabelId: null,
+    navigationReturnTo: null,
+    activeTab: "dashboard",
+    locale: "it" as Locale,
+    userProfile: {
+      artistName: "", scLink: "", bio: "", email: "", photoUrl: "",
+      links: [], cyaniteApiToken: "", supabaseUrl: "", supabaseAnonKey: "",
+      notifications: { master: false, followUp: true, rankings: true, weeklyRecap: true },
+    } as UserProfile,
+    gmailAuth: { isConnected: false, email: "", accessToken: "", expiresAt: 0 } as GmailAuth,
+    releases: [],
+    savedPitches: [],
+    sentCampaigns: [],
+    lastReplyScanAt: null,
+    newRepliesCount: 0,
+    rankingsUpdatedAt: null,
+    lastSavedAt: null,
+    hasRehydrated: false,
+    hasCloudSynced: false,
+    rankingSnapshots: [],
+  }, false);
+}
+
+/**
+ * Verifies that the current localStorage data belongs to the given email.
+ * If it doesn't (different user), wipes all local data so the new user
+ * starts fresh and loads their own data from cloud.
+ *
+ * Called from useAuthEffect when the session's email is established.
+ * Returns true if data was cleared (caller should trigger cloud load).
+ */
+export function verifyStorageOwner(email: string | null): boolean {
+  if (!email) {
+    // No email (unauthenticated) — don't touch existing data. The user
+    // might be in the middle of a session that hasn't logged in yet.
+    return false;
+  }
+  const owner = getStorageOwner();
+  if (owner === email) {
+    // Same user — data is theirs, no action needed.
+    return false;
+  }
+  if (owner && owner !== email) {
+    // DIFFERENT user — wipe everything before they see the previous
+    // user's data. This is the critical multi-tenant isolation step.
+    console.info(
+      `[LabelPulse Storage] Owner mismatch (was "${owner}", now "${email}") — clearing local data`
+    );
+    clearAllLocalData();
+    setStorageOwner(email);
+    return true;
+  }
+  // No previous owner — first-time user on this device. Claim ownership.
+  setStorageOwner(email);
+  return false;
+}
 
 const SEED_LABEL_COUNT = labelData.labels.length;
 
