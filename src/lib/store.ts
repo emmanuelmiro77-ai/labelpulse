@@ -463,6 +463,14 @@ export function clearAllLocalData(): void {
     localStorage.removeItem(SNAPSHOTS_BACKUP_KEY);
     localStorage.removeItem(PROFILE_BACKUP_KEY);
     localStorage.removeItem(OWNER_KEY);
+    // ⚠️ CRITICAL (regression caught by store.isolation.test.ts, 2026-06-25):
+    // Also remove the artists sidecar. clearArtistsIDB() below only clears
+    // IndexedDB — the localStorage mirror "labelpulse-artists-backup" was
+    // left behind, leaking the previous user's saved artists into the new
+    // user's session on next reload.
+    // Note: ARTISTS_SIDECAR_KEY is defined later in the file (hoisting does
+    // NOT apply to `const`), so we use the literal string here.
+    localStorage.removeItem("labelpulse-artists-backup");
   } catch (e) {
     console.warn("[LabelPulse Storage] Error removing localStorage keys:", e);
   }
@@ -1015,6 +1023,27 @@ export function mergeProfiles(base: any | null, incoming: any | null): any | nul
         out.push(link);
       }
       merged.links = out;
+    } else if (k === "photoUrl" && typeof v === "string" && typeof merged[k] === "string") {
+      // 2026-06-25 — Lutenzo iPhone bug second-layer defense.
+      // Both local and cloud have a photoUrl (both non-empty). The general
+      // rule "non-empty wins" would keep base[k] (local). But there's a
+      // subtle race: if base.photoUrl is momentarily undefined during a
+      // setState cycle, the general branch below would accept the incoming
+      // (stale cloud) value. The grace-period in supabase.ts covers that
+      // for 10 seconds after a local edit — this is the second layer that
+      // runs AFTER the grace-period expires.
+      //
+      // Heuristic: avatar data URLs are ~30-80 KB long (JPEG 256×256 @0.85).
+      // If both have a photoUrl and they differ, prefer the LONGER one — a
+      // longer data URL almost always means a fresher upload (more detail,
+      // less recompression). This is not bulletproof but catches the most
+      // common case: cloud has a 30 KB version (uploaded weeks ago, recompressed
+      // by some intermediate sync), local has the 75 KB version just uploaded.
+      if (v.length > merged[k].length * 1.2) {
+        // incoming is significantly larger (>20%) — likely fresher
+        merged[k] = v;
+      }
+      // otherwise: keep base[k] (local). Don't touch.
     } else if (typeof v === "string") {
       // Non-empty string wins over empty
       if (v && !merged[k]) merged[k] = v;

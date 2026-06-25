@@ -48,8 +48,15 @@ let _isApplyingRemoteUpdate: boolean = false; // evita loop di sync
 // sees it briefly, then it reverts to the old one because a realtime
 // update arrives with the stale cloud photoUrl before the local push
 // has propagated.
+//
+// 2026-06-25 — bumped from 5000ms to 10000ms after reports of the bug
+// recurring on slow connections. The grace-period is the window during
+// which local edits are protected from realtime cloud overwrites. 5s
+// was too tight when the user's connection is slow and the cloud sync
+// takes longer to propagate the push. 10s gives more margin without
+// blocking legit multi-device edits for too long.
 let _lastLocalProfileEditAt: number = 0;
-const LOCAL_PROFILE_EDIT_GRACE_MS = 5000; // 5 seconds
+const LOCAL_PROFILE_EDIT_GRACE_MS = 10000; // 10 seconds (was 5s before 2026-06-25)
 
 /**
  * Called by store.ts:setUserProfile to record that the user just edited
@@ -1267,13 +1274,31 @@ async function applyRemoteData(cloudData: any): Promise<void> {
     // guarantees the local profile wins unconditionally for 5 seconds
     // after a local edit.
     if (isLocalProfileEditRecent()) {
+      // 2026-06-25 — structured logging for debugging avatar revert issues.
+      // Logs the field-by-field comparison so we can see exactly which
+      // fields differ between local and cloud when a realtime update
+      // arrives during the grace period. Especially useful for diagnosing
+      // the Lutenzo iPhone avatar bug if it recurs.
+      const localProfile = store.userProfile || {};
+      const cloudProfile = cloudData.userProfile || {};
+      const diffs: string[] = [];
+      for (const k of Object.keys(cloudProfile)) {
+        const lv = (localProfile as any)[k];
+        const cv = (cloudProfile as any)[k];
+        if (lv !== cv) {
+          // For long fields (photoUrl, bio), just log length to avoid
+          // dumping a 75KB data URL into the console.
+          const lvDesc = typeof lv === "string" && lv.length > 50 ? `<${lv.length} chars>` : JSON.stringify(lv);
+          const cvDesc = typeof cv === "string" && cv.length > 50 ? `<${cv.length} chars>` : JSON.stringify(cv);
+          diffs.push(`${k}: local=${lvDesc} cloud=${cvDesc}`);
+        }
+      }
       console.info(
-        "[LabelPulse Cloud] Realtime update arrived within local profile edit grace period — preserving local profile fields."
+        `[LabelPulse Cloud] Realtime update within grace period (10s) — preserving local profile.` +
+        (diffs.length > 0 ? ` Diffs: ${diffs.join(" | ")}` : " (no field diffs)")
       );
       // Take local profile as base, only fill in fields that are EMPTY locally
       // but NON-EMPTY in cloud (so we don't lose data the user doesn't have).
-      const localProfile = store.userProfile || {};
-      const cloudProfile = cloudData.userProfile || {};
       const safeMerged: any = { ...localProfile };
       for (const k of Object.keys(cloudProfile)) {
         const lv = (localProfile as any)[k];

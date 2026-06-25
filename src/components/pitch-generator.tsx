@@ -50,15 +50,19 @@ import {
 import { useToast } from "@/hooks/use-toast";
 import { SimilarSuggestions } from "@/components/similar-suggestions";
 import { Tabs, TabsList, TabsTrigger, TabsContent } from "@/components/ui/tabs";
-import { FileEdit, Inbox, Send as SendIcon, Trash2, RotateCcw, Eye } from "lucide-react";
+import { FileEdit, Inbox, Send as SendIcon, Trash2, RotateCcw, Eye, CheckCircle2 } from "lucide-react";
 
 export function PitchGenerator() {
   const { labels, demos, releases, addDemo, locale, userProfile, setUserProfile, getGenres, artists, setActiveTab, setSelectedLabelId, setSelectedArtistId, savedPitches, sentCampaigns, addSavedPitch, updateSavedPitch, deleteSavedPitch, addSentCampaign, deleteSentCampaign } = useAppStore();
   const { toast } = useToast();
   const genres = getGenres();
 
-  // Sub-tab state: "new" = pitch form, "drafts" = saved drafts list, "sent" = sent campaigns list
-  const [pitchSubTab, setPitchSubTab] = useState<"new" | "drafts" | "sent">("new");
+  // Sub-tab state: "new" = pitch form, "drafts" = draft list (status='draft'),
+  // "ready" = ready-to-send list (status='ready'), "sent" = sent campaigns.
+  // The "ready" sub-tab is a 2026-06-25 addition — previously, ready pitches
+  // were mixed into "drafts" with just a colored badge, which made them hard
+  // to spot. Now they get their own dedicated sub-tab with a purple badge.
+  const [pitchSubTab, setPitchSubTab] = useState<"new" | "drafts" | "ready" | "sent">("new");
   // When the user clicks "Riprendi" on a draft, we store the draft here
   // and a useEffect loads it into the form. (Direct setter calls during
   // the click handler would race with React's batching.)
@@ -114,6 +118,17 @@ export function PitchGenerator() {
   // adds/removes it from `selectedDemoIds`; with 2+ demos selected, the form
   // auto-builds an EP pitch (trackName = "EP (N tracce)", note = tracklist).
   const [epMode, setEpMode] = useState(false);
+  // Pitch workflow type — 2026-06-25 addition. Gives the user an explicit
+  // top-level choice instead of forcing them to discover the EP/single
+  // distinction by toggling buttons inside the demo picker.
+  //   "single"  → single-track pitch (default, backward compatible)
+  //   "ep"      → multi-track EP pitch (auto-enables epMode)
+  //   "manual"  → no demo picker, user fills the form by hand
+  // The selector only changes the demo picker UX; the underlying pitch
+  // shape is still derived from epMode + selectedDemoIds (see pitchShape
+  // memo below). This keeps backward compat with saved drafts, the resume
+  // flow, and the label-finder inline pitch form.
+  const [pitchWorkflow, setPitchWorkflow] = useState<"single" | "ep" | "manual">("single");
   const [selectedDemoIds, setSelectedDemoIds] = useState<Set<string>>(new Set());
   // EP link mode: "separate" (each track keeps its own SC link, body lists
   // them all with format left open) or "single" (one album/private set URL
@@ -383,6 +398,19 @@ export function PitchGenerator() {
   );
 
   // Get matching labels by genre, grouped by tier
+  // Counts for the sub-tab badges — split savedPitches by status so the
+  // "Bozze" badge shows only true drafts, and "Pronta per invio" shows
+  // only ready pitches. (Before this, the "Bozze" badge counted both,
+  // which was misleading once the dedicated ready sub-tab landed.)
+  const draftCount = useMemo(
+    () => savedPitches.filter((p) => p.status === "draft").length,
+    [savedPitches]
+  );
+  const readyCount = useMemo(
+    () => savedPitches.filter((p) => p.status === "ready").length,
+    [savedPitches]
+  );
+
   // Note: include both "open" (confirmed) AND "unknown" (default seed) labels.
   // Excluding "unknown" would hide every label the user hasn't manually
   // confirmed yet — which, after the 2026-06-25 fix, is the vast majority.
@@ -463,6 +491,33 @@ export function PitchGenerator() {
     () => selectedLabels.filter((l) => getLabelEmails(l).length === 0),
     [selectedLabels, getLabelEmails]
   );
+
+  // Switch the pitch workflow type. Side-effects on epMode keep the
+  // underlying state consistent with the user's choice:
+  //   "single" → epMode=false (single-track pick mode)
+  //   "ep"     → epMode=true (multi-select mode), clears any single-pick
+  //              state so the user starts the EP selection fresh
+  //   "manual" → epMode=false AND clears selectedDemoIds so the form
+  //              doesn't auto-fill from a previously-picked demo
+  // The demo picker UI is hidden entirely in "manual" mode (see JSX below).
+  const handleSetPitchWorkflow = useCallback((wf: "single" | "ep" | "manual") => {
+    setPitchWorkflow(wf);
+    if (wf === "single") {
+      setEpMode(false);
+    } else if (wf === "ep") {
+      setEpMode(true);
+    } else if (wf === "manual") {
+      setEpMode(false);
+      setSelectedDemoIds(new Set());
+      // Clear the auto-filled fields so the user truly starts from blank
+      setTrackName("");
+      setScLink("");
+      setTrackBpm("");
+      setTrackKey("");
+      setTrackAnalysis(null);
+      setCustomNote("");
+    }
+  }, []);
 
   // When the user toggles the EP link mode (separate ↔ single) after
   // selecting demos, recompute the note (single = names-only tracklist,
@@ -755,7 +810,10 @@ export function PitchGenerator() {
     setPitchSubTab("drafts");
   }, [trackName, draftName, buildSavedPitchSnapshot, addSavedPitch, locale, toast]);
 
-  // Save as ready-to-send (also surfaces in Demo section as "pronta per invio")
+  // Save as ready-to-send — pitch is complete and ready to fire, but the
+  // user doesn't want to send it just yet (e.g. waiting on a final master,
+  // or batching sends for a specific day). It lands in the new "ready"
+  // sub-tab so it's easy to find and resume when the time comes.
   const handleSaveReady = useCallback(() => {
     if (!trackName.trim()) {
       toast({
@@ -770,7 +828,7 @@ export function PitchGenerator() {
     toast({ title: t(locale, "pitch.readySaved") });
     setDraftName("");
     setShowDraftNameInput(false);
-    setPitchSubTab("drafts");
+    setPitchSubTab("ready");
   }, [trackName, draftName, buildSavedPitchSnapshot, addSavedPitch, locale, toast]);
 
   // Resume a saved draft — loads its snapshot back into the form state,
@@ -799,6 +857,15 @@ export function PitchGenerator() {
     setEpSingleLink(p.epSingleLink);
     setSelectedDemoIds(new Set(p.selectedDemoIds));
     setSelectedLabelIds(new Set(p.selectedLabelIds));
+    // Infer pitchWorkflow from the resumed draft state:
+    //   - epMode=true → "ep"
+    //   - selectedDemoIds has 1+ entries → "single" (single-track pick)
+    //   - otherwise → "manual"
+    // This makes the workflow selector reflect the draft's nature so the
+    // user sees the right demo picker UX after resume.
+    setPitchWorkflow(
+      p.epMode ? "ep" : (p.selectedDemoIds && p.selectedDemoIds.length > 0 ? "single" : "manual")
+    );
     setPendingResume(null);
     setPitchSubTab("new");
     setCampaignComplete(false);
@@ -842,7 +909,7 @@ export function PitchGenerator() {
   return (
     <div className="space-y-4">
       {/* Sub-tab switcher: Nuova Campagna | Bozze | Inviati */}
-      <Tabs value={pitchSubTab} onValueChange={(v) => setPitchSubTab(v as "new" | "drafts" | "sent")}>
+      <Tabs value={pitchSubTab} onValueChange={(v) => setPitchSubTab(v as "new" | "drafts" | "ready" | "sent")}>
         <TabsList className="bg-card/60 border border-border/30 h-auto py-1">
           <TabsTrigger value="new" className="gap-1.5">
             <SendIcon className="h-3.5 w-3.5" />
@@ -851,9 +918,18 @@ export function PitchGenerator() {
           <TabsTrigger value="drafts" className="gap-1.5">
             <FileEdit className="h-3.5 w-3.5" />
             {t(locale, "pitch.tab.drafts")}
-            {savedPitches.length > 0 && (
+            {draftCount > 0 && (
               <Badge variant="secondary" className="ml-1 h-4 px-1 text-[10px] bg-cyan-500/20 text-cyan-300 border-cyan-500/30">
-                {savedPitches.length}
+                {draftCount}
+              </Badge>
+            )}
+          </TabsTrigger>
+          <TabsTrigger value="ready" className="gap-1.5">
+            <CheckCircle2 className="h-3.5 w-3.5" />
+            {t(locale, "pitch.tab.ready")}
+            {readyCount > 0 && (
+              <Badge variant="secondary" className="ml-1 h-4 px-1 text-[10px] bg-purple-500/20 text-purple-300 border-purple-500/30">
+                {readyCount}
               </Badge>
             )}
           </TabsTrigger>
@@ -880,14 +956,82 @@ export function PitchGenerator() {
             </h3>
           </div>
 
-          {/* Demo picker — lets the user recall a saved demo (or build an EP
-              pitch from multiple demos) from their archive instead of
-              retyping everything. When a demo is picked, we auto-fill
-              trackName, artistName, scLink, genre, BPM, key (and for EPs,
-              the tracklist goes in the note). The user can still edit
-              anything afterwards. Same UX as the inline pitch form in the
-              label detail dialog (label-finder.tsx). */}
-          {demos.length > 0 && (
+          {/* ===== Pitch workflow selector — 2026-06-25 addition =====
+              Gives the user an explicit top-level choice between:
+                • Singola demo  → single-track pitch (default)
+                • EP            → multi-track EP pitch (auto-enables epMode)
+                • Manuale       → no demo picker, blank form
+              The selector only changes the demo picker UX; the underlying
+              pitch shape is still derived from epMode + selectedDemoIds,
+              so saved drafts and resume flow keep working. */}
+          <div className="mb-4">
+            <UILabel className="text-xs font-mono uppercase text-muted-foreground flex items-center gap-1.5 mb-2">
+              <Zap className="h-3 w-3" />
+              {locale === "it" ? "Tipo di pitch" : "Pitch type"}
+            </UILabel>
+            <div className="grid grid-cols-3 gap-2">
+              <button
+                type="button"
+                onClick={() => handleSetPitchWorkflow("single")}
+                className={`px-3 py-2 rounded-md text-xs font-medium border transition-colors flex items-center justify-center gap-1.5 ${
+                  pitchWorkflow === "single"
+                    ? "bg-primary/15 border-primary text-primary"
+                    : "bg-background/40 border-border/40 text-muted-foreground hover:text-foreground hover:border-border/60"
+                }`}
+              >
+                <Music2 className="h-3.5 w-3.5" />
+                {locale === "it" ? "Singola demo" : "Single demo"}
+              </button>
+              <button
+                type="button"
+                onClick={() => handleSetPitchWorkflow("ep")}
+                className={`px-3 py-2 rounded-md text-xs font-medium border transition-colors flex items-center justify-center gap-1.5 ${
+                  pitchWorkflow === "ep"
+                    ? "bg-purple-500/15 border-purple-500 text-purple-300"
+                    : "bg-background/40 border-border/40 text-muted-foreground hover:text-foreground hover:border-border/60"
+                }`}
+              >
+                <Disc3 className="h-3.5 w-3.5" />
+                {locale === "it" ? "EP multi-traccia" : "Multi-track EP"}
+              </button>
+              <button
+                type="button"
+                onClick={() => handleSetPitchWorkflow("manual")}
+                className={`px-3 py-2 rounded-md text-xs font-medium border transition-colors flex items-center justify-center gap-1.5 ${
+                  pitchWorkflow === "manual"
+                    ? "bg-amber-500/15 border-amber-500 text-amber-300"
+                    : "bg-background/40 border-border/40 text-muted-foreground hover:text-foreground hover:border-border/60"
+                }`}
+              >
+                <Eye className="h-3.5 w-3.5" />
+                {locale === "it" ? "Manuale" : "Manual"}
+              </button>
+            </div>
+            <p className="text-[10px] text-muted-foreground/70 mt-1.5">
+              {pitchWorkflow === "single" && (
+                locale === "it"
+                  ? "Scegli una demo salvata per precompilare i campi, oppure compila a mano."
+                  : "Pick a saved demo to auto-fill the form, or type everything manually."
+              )}
+              {pitchWorkflow === "ep" && (
+                locale === "it"
+                  ? "Seleziona 2+ demo per costruire un EP. Ogni traccia mantiene il proprio link SC."
+                  : "Select 2+ demos to build an EP. Each track keeps its own SC link."
+              )}
+              {pitchWorkflow === "manual" && (
+                locale === "it"
+                  ? "Nessun demo picker — compila manualmente tutti i campi."
+                  : "No demo picker — fill in all fields by hand."
+              )}
+            </p>
+          </div>
+
+          {/* Demo picker — hidden in "manual" mode. Lets the user recall a
+              saved demo (or build an EP pitch from multiple demos) from
+              their archive instead of retyping everything. When a demo is
+              picked, we auto-fill trackName, artistName, scLink, genre,
+              BPM, key (and for EPs, the tracklist goes in the note). */}
+          {pitchWorkflow !== "manual" && demos.length > 0 && (
             <div className="space-y-1.5 mb-3 rounded-md border border-primary/20 bg-primary/5 p-3">
               <div className="flex items-center justify-between gap-2 flex-wrap">
                 <UILabel className="text-xs font-mono uppercase text-primary flex items-center gap-1.5">
@@ -1605,111 +1749,35 @@ export function PitchGenerator() {
       </Card>
         </TabsContent>
 
-        {/* ===== TAB: Bozze (saved drafts) ===== */}
+        {/* ===== TAB: Bozze (saved drafts — status='draft' only) ===== */}
         <TabsContent value="drafts" className="mt-4">
-          <Card className="bg-card/60 border-border/30">
-            <CardContent className="p-4 sm:p-6">
-              <div className="flex items-center gap-2 mb-4">
-                <FileEdit className="h-4 w-4 text-cyan-400" />
-                <h3 className="text-sm font-mono uppercase tracking-wider text-muted-foreground">
-                  {t(locale, "pitch.tab.drafts")}
-                </h3>
-                {savedPitches.length > 0 && (
-                  <Badge variant="secondary" className="ml-auto bg-cyan-500/20 text-cyan-300 border-cyan-500/30">
-                    {savedPitches.length}
-                  </Badge>
-                )}
-              </div>
+          <PitchListCard
+            status="draft"
+            pitches={savedPitches}
+            labels={labels}
+            demos={demos}
+            locale={locale}
+            onResume={handleResumeDraft}
+            onDelete={handleDeleteDraft}
+            onGoNew={() => setPitchSubTab("new")}
+          />
+        </TabsContent>
 
-              {savedPitches.length === 0 ? (
-                <div className="flex flex-col items-center justify-center py-12 text-muted-foreground/40 text-center">
-                  <FileEdit className="h-10 w-10 mb-3" />
-                  <p className="text-sm font-medium">{t(locale, "pitch.draftsEmpty")}</p>
-                  <p className="text-xs mt-1 max-w-md">{t(locale, "pitch.draftsEmptyDesc")}</p>
-                  <Button
-                    variant="outline"
-                    className="mt-4"
-                    onClick={() => setPitchSubTab("new")}
-                  >
-                    <SendIcon className="h-4 w-4 mr-2" />
-                    {t(locale, "pitch.tab.new")}
-                  </Button>
-                </div>
-              ) : (
-                <div className="space-y-3">
-                  {[...savedPitches]
-                    .sort((a, b) => new Date(b.updatedAt || b.createdAt).getTime() - new Date(a.updatedAt || a.createdAt).getTime())
-                    .map((pitch) => {
-                      const validLabelCount = pitch.selectedLabelIds.filter((id) => labels.some((l) => l.id === id)).length;
-                      const validDemoCount = pitch.selectedDemoIds.filter((id) => demos.some((d) => d.id === id)).length;
-                      const hasMissingRefs = validLabelCount < pitch.selectedLabelIds.length || validDemoCount < pitch.selectedDemoIds.length;
-                      return (
-                        <div
-                          key={pitch.id}
-                          className="p-4 rounded-lg border border-border/30 bg-background/40 hover:border-border/50 transition-colors"
-                        >
-                          <div className="flex items-start justify-between gap-3 mb-2">
-                            <div className="flex-1 min-w-0">
-                              <div className="flex items-center gap-2 flex-wrap">
-                                <span className="text-sm font-medium text-foreground truncate">{pitch.name}</span>
-                                <Badge
-                                  variant="secondary"
-                                  className={`h-5 text-[10px] ${
-                                    pitch.status === "ready"
-                                      ? "bg-purple-500/20 text-purple-300 border-purple-500/30"
-                                      : "bg-cyan-500/20 text-cyan-300 border-cyan-500/30"
-                                  }`}
-                                >
-                                  {pitch.status === "ready" ? t(locale, "pitch.readyToSend") : t(locale, "pitch.draft")}
-                                </Badge>
-                                {hasMissingRefs && (
-                                  <Badge variant="secondary" className="h-5 text-[10px] bg-amber-500/20 text-amber-300 border-amber-500/30">
-                                    !
-                                  </Badge>
-                                )}
-                              </div>
-                              <p className="text-xs text-muted-foreground mt-1 truncate">
-                                {pitch.trackName || <em>(no name)</em>}
-                                {pitch.epMode && pitch.selectedDemoIds.length > 0 && (
-                                  <span className="ml-2 text-purple-300/70">
-                                    · {t(locale, "pitch.trackCount").replace("{count}", String(pitch.selectedDemoIds.length))}
-                                  </span>
-                                )}
-                                <span className="ml-2 text-cyan-300/70">
-                                  · {t(locale, "pitch.labelCount").replace("{count}", String(pitch.selectedLabelIds.length))}
-                                </span>
-                              </p>
-                              <p className="text-[10px] text-muted-foreground/60 mt-0.5">
-                                {new Date(pitch.updatedAt || pitch.createdAt).toLocaleString(locale)}
-                              </p>
-                            </div>
-                            <div className="flex items-center gap-1 shrink-0">
-                              <Button
-                                size="sm"
-                                variant="outline"
-                                onClick={() => handleResumeDraft(pitch)}
-                                className="h-8 border-border/50"
-                              >
-                                <RotateCcw className="h-3.5 w-3.5 mr-1" />
-                                {t(locale, "pitch.resume")}
-                              </Button>
-                              <Button
-                                size="sm"
-                                variant="ghost"
-                                onClick={() => handleDeleteDraft(pitch.id)}
-                                className="h-8 text-red-400 hover:text-red-300 hover:bg-red-500/10"
-                              >
-                                <Trash2 className="h-3.5 w-3.5" />
-                              </Button>
-                            </div>
-                          </div>
-                        </div>
-                      );
-                    })}
-                </div>
-              )}
-            </CardContent>
-          </Card>
+        {/* ===== TAB: Pronta per invio (saved pitches — status='ready' only) =====
+            2026-06-25 addition. Ready pitches used to be mixed into "Bozze"
+            with a colored badge — they now have their own dedicated sub-tab
+            so the user can find them at a glance and fire them off when ready. */}
+        <TabsContent value="ready" className="mt-4">
+          <PitchListCard
+            status="ready"
+            pitches={savedPitches}
+            labels={labels}
+            demos={demos}
+            locale={locale}
+            onResume={handleResumeDraft}
+            onDelete={handleDeleteDraft}
+            onGoNew={() => setPitchSubTab("new")}
+          />
         </TabsContent>
 
         {/* ===== TAB: Inviati (sent campaigns) ===== */}
@@ -1840,5 +1908,182 @@ export function PitchGenerator() {
         </TabsContent>
       </Tabs>
     </div>
+  );
+}
+
+// ============================================================================
+// PitchListCard — internal sub-component used by the "Bozze" and
+// "Pronta per invio" sub-tabs. Renders a list of SavedPitch items filtered
+// by status, with empty-state, badges, "Riprendi" and "Delete" actions.
+// Extracted from the inline JSX on 2026-06-25 to avoid duplicating ~100
+// lines when the dedicated "ready" sub-tab was added.
+// ============================================================================
+interface PitchListCardProps {
+  status: "draft" | "ready";
+  pitches: SavedPitch[];
+  labels: Label[];
+  demos: Demo[];
+  locale: Locale;
+  onResume: (pitch: SavedPitch) => void;
+  onDelete: (id: string) => void;
+  onGoNew: () => void;
+}
+
+function PitchListCard({
+  status,
+  pitches,
+  labels,
+  demos,
+  locale,
+  onResume,
+  onDelete,
+  onGoNew,
+}: PitchListCardProps) {
+  const filtered = useMemo(
+    () =>
+      pitches
+        .filter((p) => p.status === status)
+        .sort(
+          (a, b) =>
+            new Date(b.updatedAt || b.createdAt).getTime() -
+            new Date(a.updatedAt || a.createdAt).getTime()
+        ),
+    [pitches, status]
+  );
+
+  // Visual config per status
+  const config = {
+    draft: {
+      Icon: FileEdit,
+      iconColor: "text-cyan-400",
+      badgeClass: "bg-cyan-500/20 text-cyan-300 border-cyan-500/30",
+      emptyTitleKey: "pitch.draftsEmpty" as const,
+      emptyDescKey: "pitch.draftsEmptyDesc" as const,
+      emptyIcon: FileEdit,
+    },
+    ready: {
+      Icon: CheckCircle2,
+      iconColor: "text-purple-400",
+      badgeClass: "bg-purple-500/20 text-purple-300 border-purple-500/30",
+      emptyTitleKey: "pitch.readyEmpty" as const,
+      emptyDescKey: "pitch.readyEmptyDesc" as const,
+      emptyIcon: CheckCircle2,
+    },
+  }[status];
+
+  const EmptyIcon = config.emptyIcon;
+
+  return (
+    <Card className="bg-card/60 border-border/30">
+      <CardContent className="p-4 sm:p-6">
+        <div className="flex items-center gap-2 mb-4">
+          <config.Icon className={`h-4 w-4 ${config.iconColor}`} />
+          <h3 className="text-sm font-mono uppercase tracking-wider text-muted-foreground">
+            {t(locale, status === "draft" ? "pitch.tab.drafts" : "pitch.tab.ready")}
+          </h3>
+          {filtered.length > 0 && (
+            <Badge variant="secondary" className={`ml-auto ${config.badgeClass}`}>
+              {filtered.length}
+            </Badge>
+          )}
+        </div>
+
+        {filtered.length === 0 ? (
+          <div className="flex flex-col items-center justify-center py-12 text-muted-foreground/40 text-center">
+            <EmptyIcon className="h-10 w-10 mb-3" />
+            <p className="text-sm font-medium">{t(locale, config.emptyTitleKey)}</p>
+            <p className="text-xs mt-1 max-w-md">{t(locale, config.emptyDescKey)}</p>
+            <Button variant="outline" className="mt-4" onClick={onGoNew}>
+              <SendIcon className="h-4 w-4 mr-2" />
+              {t(locale, "pitch.tab.new")}
+            </Button>
+          </div>
+        ) : (
+          <div className="space-y-3">
+            {filtered.map((pitch) => {
+              const validLabelCount = pitch.selectedLabelIds.filter((id) =>
+                labels.some((l) => l.id === id)
+              ).length;
+              const validDemoCount = pitch.selectedDemoIds.filter((id) =>
+                demos.some((d) => d.id === id)
+              ).length;
+              const hasMissingRefs =
+                validLabelCount < pitch.selectedLabelIds.length ||
+                validDemoCount < pitch.selectedDemoIds.length;
+              return (
+                <div
+                  key={pitch.id}
+                  className="p-4 rounded-lg border border-border/30 bg-background/40 hover:border-border/50 transition-colors"
+                >
+                  <div className="flex items-start justify-between gap-3 mb-2">
+                    <div className="flex-1 min-w-0">
+                      <div className="flex items-center gap-2 flex-wrap">
+                        <span className="text-sm font-medium text-foreground truncate">
+                          {pitch.name}
+                        </span>
+                        <Badge variant="secondary" className={`h-5 text-[10px] ${config.badgeClass}`}>
+                          {pitch.status === "ready"
+                            ? t(locale, "pitch.readyToSend")
+                            : t(locale, "pitch.draft")}
+                        </Badge>
+                        {hasMissingRefs && (
+                          <Badge
+                            variant="secondary"
+                            className="h-5 text-[10px] bg-amber-500/20 text-amber-300 border-amber-500/30"
+                          >
+                            !
+                          </Badge>
+                        )}
+                      </div>
+                      <p className="text-xs text-muted-foreground mt-1 truncate">
+                        {pitch.trackName || <em>(no name)</em>}
+                        {pitch.epMode && pitch.selectedDemoIds.length > 0 && (
+                          <span className="ml-2 text-purple-300/70">
+                            ·{" "}
+                            {t(locale, "pitch.trackCount").replace(
+                              "{count}",
+                              String(pitch.selectedDemoIds.length)
+                            )}
+                          </span>
+                        )}
+                        <span className="ml-2 text-cyan-300/70">
+                          ·{" "}
+                          {t(locale, "pitch.labelCount").replace(
+                            "{count}",
+                            String(pitch.selectedLabelIds.length)
+                          )}
+                        </span>
+                      </p>
+                      <p className="text-[10px] text-muted-foreground/60 mt-0.5">
+                        {new Date(pitch.updatedAt || pitch.createdAt).toLocaleString(locale)}
+                      </p>
+                    </div>
+                    <div className="flex items-center gap-1 shrink-0">
+                      <Button
+                        size="sm"
+                        variant="outline"
+                        onClick={() => onResume(pitch)}
+                        className="h-8 border-border/50"
+                      >
+                        <RotateCcw className="h-3.5 w-3.5 mr-1" />
+                        {t(locale, "pitch.resume")}
+                      </Button>
+                      <Button
+                        size="sm"
+                        variant="ghost"
+                        onClick={() => onDelete(pitch.id)}
+                        className="h-8 text-red-400 hover:text-red-300 hover:bg-red-500/10"
+                      >
+                        <Trash2 className="h-3.5 w-3.5" />
+                      </Button>
+                    </div>
+                  </div>
+                </div>
+              );
+            })}
+          </div>
+        )}
+      </CardContent>
+    </Card>
   );
 }

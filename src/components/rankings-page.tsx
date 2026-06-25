@@ -216,7 +216,7 @@ function LabelDiscoveryIcons({
  * tab. LabelFinder has a useEffect that watches selectedLabelId and
  * auto-opens its detail dialog.
  */
-function ClickableLabelName({
+export function ClickableLabelName({
   label,
   className = "",
   onOpen,

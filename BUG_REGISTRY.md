@@ -25,11 +25,22 @@
   5. Persist version 15→16 con migrazione che pulisce sidecar
 - **File**: `src/lib/supabase.ts`, `src/lib/store.ts`, `src/lib/use-auth.ts`, `src/components/cloud-recovery.tsx`, `supabase-schema.sql`
 
-### Foto profilo torna vecchia su iPhone dopo upload
-- **Sintomo**: Su iPhone (PWA), dopo aver caricato una nuova foto profilo, riaprendo l'app torna la vecchia
-- **Causa**: Cache iOS dell'URL immagine — non veniva invalidata
-- **Fix**: commit `52a2254` (2026-06-24)
-- **File**: `src/components/producer-profile.tsx`
+### Foto profilo torna vecchia su iPhone dopo upload (Lutenzo)
+- **Sintomo**: Su iPhone (PWA), dopo aver caricato una nuova foto profilo, l'immagine appare brevemente poi torna la vecchia. Riaprendo l'app torna sempre la vecchia. Segnalato da Lutenzo (e in seguito da Frank fonico con stessa sintomatologia).
+- **Causa**: Race condition tra `setUserProfile` (locale, in `store.ts`) e `applyRemoteData` (realtime cloud update, in `supabase.ts`). Quando l'utente carica una foto:
+  1. `setUserProfile` aggiorna lo store locale con la nuova `photoUrl` (data URL JPEG 256×256)
+  2. `markLocalProfileEdit()` registra il timestamp dell'edit locale
+  3. `forceCloudSync()` (immediata, non debounced) pusha il nuovo profilo al cloud
+  4. MA nel frattempo (entro 1-5 secondi) può arrivare un realtime update da Supabase con il VECCHIO `photoUrl` (perché il push non è ancora stato propagato a tutti i subscriber realtime)
+  5. Senza protezione, `mergeProfiles` potrebbe pickare il `photoUrl` cloud (vecchio) se quello locale è momentaneamente undefined durante un ciclo setState
+  - **NON era un problema di cache HTTP iOS** — il `photoUrl` è un data URL (base64 inline), non passa per la cache HTTP del browser.
+- **Fix multi-strato** (commit `52a2254` 2026-06-25 + hardening 2026-06-25):
+  1. **Grace-period 10s** (`LOCAL_PROFILE_EDIT_GRACE_MS`): nei 10 secondi dopo un edit locale, `applyRemoteData` preserva incondizionatamente tutti i campi del profilo locale. Solo i campi VUOTI localmente vengono riempiti dal cloud. (Originale: 5s, bumped a 10s dopo report di recidive su connessioni lente.)
+  2. **Last-write-wins su `photoUrl` in `mergeProfiles`**: se entrambi i lati hanno un `photoUrl` non-vuoto e diverso, vince quello con data URL più lungo (heuristica: upload più recente = meno recompressione = più dettaglio = più byte). Funziona come second-layer oltre il grace-period.
+  3. **`forceCloudSync()` immediata in `setUserProfile`**: non aspetta il debounce di 3s, ma pusha subito. Se l'utente chiude la finestra entro 3s, il cloud ha comunque il nuovo profilo.
+  4. **Logging strutturato** in `applyRemoteData` durante il grace-period: logga field-by-field diff tra locale e cloud per debug futuro.
+- **File toccati**: `src/lib/supabase.ts` (grace-period, logging, `markLocalProfileEdit`/`isLocalProfileEditRecent`), `src/lib/store.ts` (`mergeProfiles` con last-write-wins su `photoUrl`, `setUserProfile` con `forceCloudSync` immediata), `src/components/producer-profile.tsx` (handler `handlePhotoFileUpload` che chiama `setUserProfile`).
+- **Anti-regressione test**: nessun test automatico ancora (richiede mock realtime Supabase channels). Verificare manualmente caricando una foto e controllando in console che appaia il log "Realtime update within grace period" con i diff corretti.
 
 ### Dati utente (email, note, link) spariscono dopo reload
 - **Sintomo**: Si modificano email/notes/link di una label, si ricarica la pagina, tutto perso

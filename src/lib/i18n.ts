@@ -323,9 +323,10 @@ type TranslationKeys = {
   "campaign.copyAllEmails": string;
   "campaign.emailsCopied": string;
 
-  // Pitch tabs (Bozze / Inviati)
+  // Pitch tabs (Nuova / Bozze / Pronta per invio / Inviati)
   "pitch.tab.new": string;
   "pitch.tab.drafts": string;
+  "pitch.tab.ready": string;
   "pitch.tab.sent": string;
   "pitch.saveDraft": string;
   "pitch.saveReady": string;
@@ -335,6 +336,8 @@ type TranslationKeys = {
   "pitch.readySaved": string;
   "pitch.draftsEmpty": string;
   "pitch.draftsEmptyDesc": string;
+  "pitch.readyEmpty": string;
+  "pitch.readyEmptyDesc": string;
   "pitch.sentEmpty": string;
   "pitch.sentEmptyDesc": string;
   "pitch.resume": string;
@@ -747,6 +750,7 @@ const translations: Record<Locale, TranslationKeys> = {
     "campaign.emailsCopied": "Indirizzi email copiati!",
     "pitch.tab.new": "Nuova Campagna",
     "pitch.tab.drafts": "Bozze",
+    "pitch.tab.ready": "Pronta per invio",
     "pitch.tab.sent": "Inviati",
     "pitch.saveDraft": "Salva bozza",
     "pitch.saveReady": "Salva pronta per invio",
@@ -756,6 +760,8 @@ const translations: Record<Locale, TranslationKeys> = {
     "pitch.readySaved": "Campagna pronta per invio salvata",
     "pitch.draftsEmpty": "Nessuna bozza salvata",
     "pitch.draftsEmptyDesc": "Le bozze che salvi appariranno qui. Potrai riprenderle e inviarle quando vuoi.",
+    "pitch.readyEmpty": "Nessuna pitch pronta per l'invio",
+    "pitch.readyEmptyDesc": "Le pitch che sali come 'pronta per invio' appariranno qui, separate dalle bozze, così le trovi subito quando è il momento di inviare.",
     "pitch.sentEmpty": "Nessuna campagna inviata",
     "pitch.sentEmptyDesc": "Le campagne che invii vengono registrate qui con tutti i dettagli (label, oggetto, testo).",
     "pitch.resume": "Riprendi",
@@ -1153,6 +1159,7 @@ const translations: Record<Locale, TranslationKeys> = {
     "campaign.emailsCopied": "Email addresses copied!",
     "pitch.tab.new": "New Campaign",
     "pitch.tab.drafts": "Drafts",
+    "pitch.tab.ready": "Ready to send",
     "pitch.tab.sent": "Sent",
     "pitch.saveDraft": "Save draft",
     "pitch.saveReady": "Save ready-to-send",
@@ -1162,6 +1169,8 @@ const translations: Record<Locale, TranslationKeys> = {
     "pitch.readySaved": "Ready-to-send campaign saved",
     "pitch.draftsEmpty": "No saved drafts",
     "pitch.draftsEmptyDesc": "Drafts you save will appear here. You can resume and send them whenever you want.",
+    "pitch.readyEmpty": "No ready-to-send pitches",
+    "pitch.readyEmptyDesc": "Pitches you save as 'ready to send' appear here, separate from drafts, so you can find them quickly when it's time to send.",
     "pitch.sentEmpty": "No sent campaigns",
     "pitch.sentEmptyDesc": "Campaigns you send are recorded here with all details (labels, subject, body).",
     "pitch.resume": "Resume",
@@ -1559,6 +1568,7 @@ const translations: Record<Locale, TranslationKeys> = {
     "campaign.emailsCopied": "¡Direcciones de email copiadas!",
     "pitch.tab.new": "Nueva Campaña",
     "pitch.tab.drafts": "Borradores",
+    "pitch.tab.ready": "Lista para enviar",
     "pitch.tab.sent": "Enviados",
     "pitch.saveDraft": "Guardar borrador",
     "pitch.saveReady": "Guardar lista para enviar",
@@ -1568,6 +1578,8 @@ const translations: Record<Locale, TranslationKeys> = {
     "pitch.readySaved": "Campaña lista para enviar guardada",
     "pitch.draftsEmpty": "Sin borradores guardados",
     "pitch.draftsEmptyDesc": "Los borradores que guardes aparecerán aquí. Podrás retomarlos y enviarlos cuando quieras.",
+    "pitch.readyEmpty": "Ninguna pitch lista para enviar",
+    "pitch.readyEmptyDesc": "Las pitches que guardes como 'lista para enviar' aparecen aquí, separadas de los borradores, para encontrarlas rápido cuando llegue el momento de enviar.",
     "pitch.sentEmpty": "Sin campañas enviadas",
     "pitch.sentEmptyDesc": "Las campañas que envías se registran aquí con todos los detalles (labels, asunto, texto).",
     "pitch.resume": "Retomar",
@@ -1965,6 +1977,7 @@ const translations: Record<Locale, TranslationKeys> = {
     "campaign.emailsCopied": "Adresses email copiées !",
     "pitch.tab.new": "Nouvelle Campagne",
     "pitch.tab.drafts": "Brouillons",
+    "pitch.tab.ready": "Prête à envoyer",
     "pitch.tab.sent": "Envoyés",
     "pitch.saveDraft": "Enregistrer le brouillon",
     "pitch.saveReady": "Enregistrer prêt à envoyer",
@@ -1974,6 +1987,8 @@ const translations: Record<Locale, TranslationKeys> = {
     "pitch.readySaved": "Campagne prête à envoyer enregistrée",
     "pitch.draftsEmpty": "Aucun brouillon enregistré",
     "pitch.draftsEmptyDesc": "Les brouillons que vous enregistrez apparaîtront ici. Vous pourrez les reprendre et les envoyer quand vous le souhaitez.",
+    "pitch.readyEmpty": "Aucune pitch prête à envoyer",
+    "pitch.readyEmptyDesc": "Les pitches que vous enregistrez comme 'prête à envoyer' apparaissent ici, séparées des brouillons, pour les retrouver rapidement quand il est temps d'envoyer.",
     "pitch.sentEmpty": "Aucune campagne envoyée",
     "pitch.sentEmptyDesc": "Les campagnes que vous envoyez sont enregistrées ici avec tous les détails (labels, objet, texte).",
     "pitch.resume": "Reprendre",
@@ -2371,6 +2386,7 @@ const translations: Record<Locale, TranslationKeys> = {
     "campaign.emailsCopied": "E-Mail-Adressen kopiert!",
     "pitch.tab.new": "Neue Kampagne",
     "pitch.tab.drafts": "Entwürfe",
+    "pitch.tab.ready": "Sendebereit",
     "pitch.tab.sent": "Gesendet",
     "pitch.saveDraft": "Entwurf speichern",
     "pitch.saveReady": "Sendebereit speichern",
@@ -2380,6 +2396,8 @@ const translations: Record<Locale, TranslationKeys> = {
     "pitch.readySaved": "Sendebereite Kampagne gespeichert",
     "pitch.draftsEmpty": "Keine gespeicherten Entwürfe",
     "pitch.draftsEmptyDesc": "Von Ihnen gespeicherte Entwürfe erscheinen hier. Sie können diese fortsetzen und senden, wann immer Sie wollen.",
+    "pitch.readyEmpty": "Keine sendebereiten Pitches",
+    "pitch.readyEmptyDesc": "Pitches, die Sie als 'sendebereit' speichern, erscheinen hier, getrennt von Entwürfen, damit Sie sie schnell finden, wenn es Zeit zum Senden ist.",
     "pitch.sentEmpty": "Keine gesendeten Kampagnen",
     "pitch.sentEmptyDesc": "Von Ihnen gesendete Kampagnen werden hier mit allen Details (Labels, Betreff, Text) erfasst.",
     "pitch.resume": "Fortsetzen",
@@ -2777,6 +2795,7 @@ const translations: Record<Locale, TranslationKeys> = {
     "campaign.emailsCopied": "Endereços de email copiados!",
     "pitch.tab.new": "Nova Campanha",
     "pitch.tab.drafts": "Rascunhos",
+    "pitch.tab.ready": "Pronta para enviar",
     "pitch.tab.sent": "Enviados",
     "pitch.saveDraft": "Salvar rascunho",
     "pitch.saveReady": "Salvar pronto para enviar",
@@ -2786,6 +2805,8 @@ const translations: Record<Locale, TranslationKeys> = {
     "pitch.readySaved": "Campanha pronta para enviar salva",
     "pitch.draftsEmpty": "Nenhum rascunho salvo",
     "pitch.draftsEmptyDesc": "Os rascunhos que você salvar aparecerão aqui. Você poderá retomá-los e enviá-los quando quiser.",
+    "pitch.readyEmpty": "Nenhuma pitch pronta para enviar",
+    "pitch.readyEmptyDesc": "As pitches que você salvar como 'pronta para enviar' aparecem aqui, separadas dos rascunhos, para encontrá-las rapidamente quando for hora de enviar.",
     "pitch.sentEmpty": "Nenhuma campanha enviada",
     "pitch.sentEmptyDesc": "As campanhas que você envia são registradas aqui com todos os detalhes (labels, assunto, texto).",
     "pitch.resume": "Retomar",

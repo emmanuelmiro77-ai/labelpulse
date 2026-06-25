@@ -85,6 +85,7 @@ import {
 } from "@/lib/pitch-utils";
 import { useToast } from "@/hooks/use-toast";
 import { sendEmail, sendReplyInThread, ensureValidToken } from "@/lib/gmail";
+import { sendEmailInApp, isInAppEmailConfigured } from "@/lib/email";
 
 const STATUS_KEYS: DemoStatus[] = [
   "ready",
@@ -3671,7 +3672,20 @@ function DemoDetailDialog({
   const [sendingEmail, setSendingEmail] = useState(false);
   const [emailSent, setEmailSent] = useState(false);
   const [pitchSaved, setPitchSaved] = useState(false);
+  // 2026-06-25 — whether the in-app email service (Resend) is configured.
+  // Checked once on mount; the "Invia dall'app" button is shown only if true.
+  const [inAppEmailAvailable, setInAppEmailAvailable] = useState(false);
   const { toast } = useToast();
+
+  // Check on mount whether the in-app email service is available. We do this
+  // once per dialog open — cheap GET to /api/email/send.
+  useEffect(() => {
+    let cancelled = false;
+    isInAppEmailConfigured().then((cfg) => {
+      if (!cancelled) setInAppEmailAvailable(cfg.configured);
+    });
+    return () => { cancelled = true; };
+  }, []);
 
   // Resolve the full Label object for this demo — we need its emails,
   // submissionType, and name to generate the pitch and the mailto/gmail links.
@@ -3853,6 +3867,57 @@ function DemoDetailDialog({
       setSendingEmail(false);
     }
   }, [demo, gmailAuth, label, effectivePitchSubject, effectivePitchBody, displayPitchText, updateDemo, setGmailAuth, toast]);
+
+  // 2026-06-25 — in-app email sender via Resend (server-side). Fallback for
+  // users who haven't connected Gmail, or who prefer to send through the
+  // LabelPulse domain. The from address is fixed server-side (EMAIL_FROM).
+  const handleSendInApp = useCallback(async () => {
+    if (!demo) return;
+    if (!label?.emails?.length) {
+      toast({
+        title: "Nessun indirizzo email",
+        description: "Aggiungi almeno un indirizzo email a questa label prima di inviare.",
+        variant: "destructive",
+      });
+      return;
+    }
+    setSendingEmail(true);
+    setEmailSent(false);
+    try {
+      const result = await sendEmailInApp(
+        label.emails,
+        effectivePitchSubject,
+        effectivePitchBody
+      );
+      if (result.success) {
+        setEmailSent(true);
+        toast({
+          title: "Email inviata!",
+          description: `Demo inviato a ${label.name}${result.from ? ` (da ${result.from})` : ""}`,
+        });
+        updateDemo(demo.id, {
+          pitchText: displayPitchText,
+          status: "sent",
+          sentDate: new Date().toISOString().split("T")[0],
+        });
+        setTimeout(() => setEmailSent(false), 4000);
+      } else {
+        toast({
+          title: "Errore invio",
+          description: result.error || "Errore sconosciuto",
+          variant: "destructive",
+        });
+      }
+    } catch (err: any) {
+      toast({
+        title: "Errore invio",
+        description: err.message || "Errore di connessione",
+        variant: "destructive",
+      });
+    } finally {
+      setSendingEmail(false);
+    }
+  }, [demo, label, effectivePitchSubject, effectivePitchBody, displayPitchText, updateDemo, toast]);
 
   // ==================== MULTI-TRACK LINK RESOLUTION ====================
   // Resolves the list of tracks (with their per-track SoundCloud URLs) to
@@ -4231,6 +4296,34 @@ function DemoDetailDialog({
                       )}
                     </Button>
                   </div>
+
+                  {/* 2026-06-25 — In-app email sender (Resend). Shown only when:
+                        - The server reports it as configured (RESEND_API_KEY present)
+                        - The label has at least one email address
+                      This is a fallback for users who haven't connected Gmail.
+                      Gmail direct send above stays the primary path when connected. */}
+                  {inAppEmailAvailable && hasEmails && !gmailAuth?.isConnected && (
+                    <div className="pt-2 border-t border-border/30 mt-1">
+                      <p className="text-[10px] text-muted-foreground/70 mb-2 text-center">
+                        {locale === "it"
+                          ? "Oppure invia direttamente dall'app (via Resend):"
+                          : "Or send directly from the app (via Resend):"}
+                      </p>
+                      <Button
+                        onClick={handleSendInApp}
+                        className="w-full text-sm bg-indigo-600 hover:bg-indigo-500 text-white"
+                        disabled={sendingEmail}
+                      >
+                        {emailSent ? (
+                          <><CheckCircle2 className="h-3.5 w-3.5 mr-1.5" />Email inviata!</>
+                        ) : sendingEmail ? (
+                          <><Loader2 className="h-3.5 w-3.5 mr-1.5 animate-spin" />Invio in corso...</>
+                        ) : (
+                          <><SendHorizonal className="h-3.5 w-3.5 mr-1.5" />{locale === "it" ? "Invia dall'app" : "Send from app"}</>
+                        )}
+                      </Button>
+                    </div>
+                  )}
                 </div>
               </div>
             )}

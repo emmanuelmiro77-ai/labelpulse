@@ -12,3 +12,4 @@ upload/
 # Vercel auto-deploy credentials
 .env.deploy
 tool-results/
+tsconfig.tsbuildinfo

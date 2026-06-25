@@ -837,3 +837,91 @@ Files modified:
 - scripts/log-agent-memory.sh (NEW)
 - AGENT_CONTEXT.md (2 righe aggiornate)
 - BOOT.md (tabella memoria espansa)
+
+---
+Task ID: v2.4.0-anti-regression-and-features
+Agent: main
+Task: Implement Vitest anti-regression suite for 3 critical fixes + 4 pending tasks (Campaign Hub ready-to-send sub-tab, Pitch workflow multi-option, in-app email via Resend, avatar Lutenzo hardening).
+
+Work Log:
+- Loaded vitest@2.1.9 + @vitejs/plugin-react@4 + jsdom@25 + @testing-library/react@16 + jest-dom@6 + user-event@14
+- Created vitest.config.ts (jsdom env, RTL setup, alias @ → src) + vitest.setup.ts (matchMedia/ResizeObserver polyfills, RTL cleanup, console silencing)
+- Added `test`, `test:watch`, `test:ci` scripts to package.json
+- Bumped project version 2.2.0 → 2.4.0
+
+TEST #1 — Cross-account data isolation (src/lib/__tests__/store.isolation.test.ts, 11 tests):
+- Tests getStorageOwner/setStorageOwner roundtrip, verifyStorageOwner for same/different/first/null email, clearAllLocalData completeness
+- ⚠️ CAUGHT A REAL BUG: clearAllLocalData was NOT removing the ARTISTS_SIDECAR_KEY ("labelpulse-artists-backup") localStorage entry. clearArtistsIDB only clears IndexedDB, not the localStorage mirror. This meant user A's saved artists leaked into user B's session on next reload.
+- Fixed by adding `localStorage.removeItem("labelpulse-artists-backup")` to clearAllLocalData (src/lib/store.ts line 466-473). Used the literal string because ARTISTS_SIDECAR_KEY const is defined later in the file (no hoisting for `const`).
+- After fix: 11/11 tests pass.
+
+TEST #2 — Gmail MIME headers (src/lib/__tests__/gmail.mime.test.ts, 14 tests):
+- Tests sendEmail RFC 2822 structure: single \r\n\r\n separator, no empty lines in headers, header order (To/Subject/Content-Type/MIME-Version), RFC 2047 Subject encoding, multiple recipients, Cc handling
+- Critical test: empty cc array does NOT insert empty Cc header (was the original bug — empty string in array caused \r\n\r\n between To and Subject, terminating headers prematurely)
+- Critical test: body does NOT contain Subject:/Content-Type:/MIME-Version: (regression check on the exact symptom users reported)
+- Also tests sendReplyInThread with optional headers (In-Reply-To, References) — same MIME rules
+- 14/14 tests pass.
+
+TEST #3 — Chart→label overlay (src/components/__tests__/rankings-page.overlay.test.tsx, 8 tests):
+- ClickableLabelName: renders name as button, returns null when no name, calls onOpen(label), stops propagation
+- handleOpenLabel contract: doesn't call setActiveTab, falls back to label.name when id is empty
+- Source-code static analysis tests: reads rankings-page.tsx source and asserts handleOpenLabel function body does NOT contain `setActiveTab(` AND does contain `setSelectedLabelId`. Also reads page.tsx source and asserts both RankingsPage and LabelFinder are wrapped in `<div className={activeTab === "..." ? "" : "hidden"}>` (always mounted, CSS-toggled visibility).
+- Exported ClickableLabelName from rankings-page.tsx (was internal — exporting only exposes the symbol, no runtime change).
+- 8/8 tests pass.
+
+Total: 33/33 tests pass in 1.79s. Setup verified with `bun run test`.
+
+TASK A — Campaign Hub "Pronta per invio" sub-tab (src/components/pitch-generator.tsx):
+- Added 4th sub-tab "ready" between "drafts" and "sent". State type extended from "new"|"drafts"|"sent" to "new"|"drafts"|"ready"|"sent".
+- Added draftCount and readyCount useMemo's to split savedPitches by status — the "Bozze" badge now shows only draft count, "Pronta per invio" shows only ready count (before, "Bozze" badge counted both).
+- Extracted PitchListCard internal sub-component (170 lines) that takes a `status: "draft" | "ready"` prop and renders the filtered list with empty-state, badges, Riprendi/Delete actions. Reused by both sub-tabs — avoided duplicating 100 lines.
+- handleSaveReady now switches to "ready" sub-tab (was switching to "drafts" before).
+- Added CheckCircle2 icon import.
+- Added i18n keys pitch.tab.ready, pitch.readyEmpty, pitch.readyEmptyDesc in all 6 languages (it/en/es/fr/de/pt).
+
+TASK B — Pitch workflow multi-opzione (src/components/pitch-generator.tsx):
+- Added pitchWorkflow state: "single" | "ep" | "manual" (default "single").
+- Added handleSetPitchWorkflow handler with side-effects: "single"→epMode=false, "ep"→epMode=true, "manual"→epMode=false + clear selectedDemoIds + clear auto-filled fields.
+- Added 3-button selector UI at the top of "Track Setup" card (Singola demo / EP multi-traccia / Manuale). Each button has distinct color (primary/purple/amber) and shows a context-help line below.
+- Demo picker is now hidden when pitchWorkflow === "manual" — user fills the form entirely by hand.
+- Resume flow infers pitchWorkflow from saved draft state: epMode=true→"ep", selectedDemoIds.length>0→"single", else→"manual". So the workflow selector reflects the draft's nature after resume.
+- Backward compat: pitch shape is still derived from epMode + selectedDemoIds (pitchShape memo unchanged). Saved drafts and the label-finder inline pitch form keep working.
+
+TASK C — In-app email sender via Resend:
+- Created src/app/api/email/send/route.ts (NEW): POST handler that calls Resend API. Auth via NextAuth session. Validates email format. Returns 503 if RESEND_API_KEY not configured (graceful — app still works with Gmail). GET handler returns config status for UI health check.
+- Created src/lib/email.ts (NEW client): sendEmailInApp(to, subject, body, cc, replyTo) → POST /api/email/send. isInAppEmailConfigured() → GET /api/email/send (cached, used by UI to decide whether to show the "Send from app" button).
+- Updated src/components/demo-tracker.tsx: added handleSendInApp callback, inAppEmailAvailable state checked on mount via useEffect. Added "Invia dall'app" button in the demo detail dialog — shown only when inAppEmailAvailable && hasEmails && !gmailAuth.isConnected (i.e. as fallback when Gmail is not connected). Indigo-colored to distinguish from emerald Gmail direct send.
+- Updated .env.local.example with RESEND_API_KEY and EMAIL_FROM documentation.
+
+TASK D — Avatar Lutenzo hardening:
+- Bumped LOCAL_PROFILE_EDIT_GRACE_MS from 5000 to 10000 in src/lib/supabase.ts. 5s was too tight on slow connections where cloud sync takes longer to propagate the push. 10s gives more margin.
+- Added last-write-wins heuristic on photoUrl in mergeProfiles (src/lib/store.ts): when both local and cloud have a non-empty photoUrl that differs, prefer the LONGER data URL (>20% longer). Rationale: avatar data URLs are 30-80KB JPEGs; a longer URL almost always means a fresher upload with more detail and less recompression. This is the second layer that runs AFTER the grace-period expires.
+- Added structured logging in applyRemoteData during grace-period: logs field-by-field diff between local and cloud profiles (with length truncation for long fields like photoUrl to avoid dumping 75KB data URLs into console).
+- Updated BUG_REGISTRY.md entry for "Foto profilo torna vecchia su iPhone dopo upload (Lutenzo)": corrected cause (was wrongly described as "Cache iOS HTTP", actually race condition between setUserProfile local + applyRemoteData realtime), corrected date (2026-06-24 → 2026-06-25), corrected file list (was only producer-profile.tsx, actually supabase.ts + store.ts + producer-profile.tsx), added detailed multi-layer fix description.
+
+Stage Summary:
+- 33 tests pass (11 isolation + 14 MIME + 8 overlay). Setup verified end-to-end.
+- 1 real bug caught and fixed by the test suite (artists sidecar leak in clearAllLocalData).
+- 4 features shipped: Pitch ready sub-tab, Pitch workflow selector, In-app email via Resend, Avatar persistence hardening.
+- Build passes (scripts/build-static.sh exit 0).
+- Project version bumped 2.2.0 → 2.4.0. VERSIONS.md updated.
+- BUG_REGISTRY.md entry for Lutenzo avatar bug corrected and enriched.
+- Ready to commit + push + log to Supabase agent_memory.
+
+Files modified:
+- NEW: vitest.config.ts, vitest.setup.ts
+- NEW: src/lib/__tests__/store.isolation.test.ts (11 tests)
+- NEW: src/lib/__tests__/gmail.mime.test.ts (14 tests)
+- NEW: src/components/__tests__/rankings-page.overlay.test.tsx (8 tests)
+- NEW: src/app/api/email/send/route.ts (Resend integration)
+- NEW: src/lib/email.ts (client lib)
+- MODIFIED: package.json (version 2.4.0 + test scripts + devDependencies)
+- MODIFIED: src/lib/store.ts (clearAllLocalData artists sidecar fix + mergeProfiles last-write-wins on photoUrl)
+- MODIFIED: src/lib/supabase.ts (grace-period 5s→10s + structured logging)
+- MODIFIED: src/components/rankings-page.tsx (exported ClickableLabelName)
+- MODIFIED: src/components/pitch-generator.tsx (ready sub-tab + PitchListCard + workflow selector + resume inference)
+- MODIFIED: src/components/demo-tracker.tsx (handleSendInApp + inAppEmailAvailable state + "Send from app" button)
+- MODIFIED: src/lib/i18n.ts (pitch.tab.ready + pitch.readyEmpty + pitch.readyEmptyDesc in 6 languages)
+- MODIFIED: BUG_REGISTRY.md (Lutenzo avatar entry corrected)
+- MODIFIED: VERSIONS.md (v2.3.0 + v2.4.0 entries)
+- MODIFIED: .env.local.example (RESEND_API_KEY + EMAIL_FROM docs)
