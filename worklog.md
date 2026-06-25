@@ -857,3 +857,101 @@ Stage Summary:
 - Build successful (Next.js 16.2.9 Turbopack, 28 routes, no errors)
 - Pre-existing baseline TypeScript errors unchanged
 - Vercel deploy in progress
+
+---
+Task ID: 23
+Agent: Main Agent
+Task: Fix multi-track SoundCloud link rendering in demo detail dialog
+
+Work Log:
+- User feedback (screenshot): opened a multi-track demo "Define Ourself" in
+  the tracker, but the SoundCloud link field only showed ONE URL
+  (https://on.soundcloud.com/paDXju69mua5KsewNi — Night Shift's URL). The
+  pitchText in the same dialog correctly listed BOTH tracks with their
+  respective SC links (Night Shift + Define Ourself). The user identified
+  this as a bug.
+- ROOT CAUSE: DemoDetailDialog rendered only `demo.link` (single field).
+  In EP multi-select mode, handleSendCampaign's addDemo call set
+  `link: effectiveScLink.trim() || scLink.trim()` — in ep-multi mode,
+  effectiveScLink is "" (per-track links are in epTracks), so it fell back
+  to `scLink`, which in EP mode is set to the FIRST selected demo's link.
+  Result: the saved Demo record had only Night Shift's URL in demo.link,
+  even though the pitchText correctly contained both tracks.
+
+Changes to src/lib/store.ts:
+- Imported PitchTrackEntry type from pitch-utils
+- Added `pitchTracks?: PitchTrackEntry[]` field to Demo interface —
+  structured per-track info (trackName + artistName + scLink per entry)
+- Bumped persist version 17 → 18
+- Added v18 migration: backfill `pitchTracks: []` on all existing demos
+
+Changes to src/lib/pitch-utils.ts:
+- New `parseMultiTrackFromPitchText(text)` exported helper — extracts
+  multi-track entries from a pitchText body. Recognizes both formats
+  emitted by generatePitchBody:
+    ep-multi  → "1. TrackName (Artist)\n   https://soundcloud.com/..."
+    ep-single → "1. TrackName — Artist" (no per-track URL)
+  Returns PitchTrackEntry[] (possibly with empty scLink for ep-single
+  tracklist lines). Caller treats result as multi-track when length >= 2.
+
+Changes to src/components/demo-tracker.tsx:
+- Imported parseMultiTrackFromPitchText + PitchTrackEntry type
+- Added `releases: Release[]` prop to DemoDetailDialog (passed at both
+  render sites — Kanban view + Table view)
+- Added `displayTracks` useMemo inside DemoDetailDialog — resolves the
+  tracks to render in this order:
+    1. demo.pitchTracks (structured field — populated going forward)
+    2. demo.parentReleaseId → look up Release + its tracks (uses
+       release.epSoundCloudUrl if set → single EP album URL; else
+       builds per-track entries from the release's demos)
+    3. parseMultiTrackFromPitchText(demo.pitchText) — back-compat for
+       existing demos saved before pitchTracks was added
+    4. fallback: single-track display using demo.link + demo.trackName
+- Added `isMultiTrack` derived boolean (displayTracks.length >= 2)
+- Replaced the single-SC-link rendering with a multi-track-aware version:
+  * 1 track → same single anchor element as before (no visual change)
+  * 2+ tracks → numbered <ol> with each track as a <li>:
+    - track name (bold)
+    - artist credit (small muted text)
+    - clickable SC link (mono font, breaks-all)
+    - "Missing link" amber italic if scLink is empty (ep-single case
+      where the tracklist has names but no per-track URLs — the EP
+      album URL is shown as the single link above the list)
+  * Section label adapts: "Link SoundCloud — N tracce" (IT) /
+    "SoundCloud Links — N tracks" (EN) when multi-track, plain
+    "SoundCloud Link" when single
+
+Changes to src/components/pitch-generator.tsx (handleSendCampaign):
+- When in EP multi-track mode (epTracks.length >= 2), pass
+  `pitchTracks: epTracks` to addDemo so the new Demo record has the
+  structured per-track info from creation. In single-track mode,
+  pitchTracks stays undefined (backward compat).
+- Added epTracks to handleSendCampaign's useCallback dep array.
+
+Changes to src/components/label-finder.tsx:
+- Same fix applied to all 4 addDemo call sites:
+  * handleOpenGmail
+  * handleSendAndTrack
+  * handleDirectSend
+  * "Track Demo Only" button onClick
+- Each now passes `pitchTracks: pitchEpTracks.length >= 2 ? pitchEpTracks
+  : undefined` when creating the demo record
+- Added pitchEpTracks to the useCallback dep arrays of the 3 handler fns
+
+Stage Summary:
+- The demo detail dialog now correctly shows ALL SoundCloud links when a
+  demo is a multi-track / EP pitch, instead of just the first track's URL
+- The fix works for both NEW demos (saved going forward via the EP-mode
+  pitch flows, which now populate demo.pitchTracks) AND EXISTING demos
+  (the parseMultiTrackFromPitchText fallback extracts multi-track info
+  from the pitchText body)
+- For demos that belong to a saved Release (EP), the dialog also surfaces
+  the EP album URL if set (release.epSoundCloudUrl), or falls back to
+  listing each track's individual SC link
+- Single-track demos are unchanged (1 track → same single anchor as before)
+- Build successful (Next.js 16.2.9 Turbopack, 28 routes, no errors)
+- Pre-existing baseline TypeScript errors unchanged — the one
+  pitch-generator.tsx(617,26) error is the SAME pre-existing missing-
+  fields error (links/genre/bpm/key) that was already there before, just
+  shifted in line number due to the added pitchTracks line
+- Pushed to main (commit 19d0fc8)
