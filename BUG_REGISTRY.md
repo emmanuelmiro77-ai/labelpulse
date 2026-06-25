@@ -1,0 +1,299 @@
+# 🐛 BUG REGISTRY — LabelPulse
+
+> **SCOPO**: Memoria permanente dei bug già risolti, indicizzata per SINTOMO
+> (quello che vede l'utente) → CAUSA → FIX (commit + file).
+>
+> **COME USARLO**: Prima di investigare un bug, cerca in questo file con
+> Ctrl-F la parola chiave del sintomo. Se trovi un match, il fix è già stato
+> fatto — verifica che sia ancora in produzione e non sia regredito.
+>
+> **MANUTENZIONE**: Ogni volta che si risolve un bug, AGGIUNGERE UNA RIGA
+> in cima alla sezione corrispondente. Non cancellare mai entry esistenti.
+
+---
+
+## 🔥 CRITICI — Perdita dati / Sicurezza
+
+### Account diversi vedono i dati l'uno dell'altro (cross-account contamination)
+- **Sintomo**: L'utente A fa login sul telefono dell'utente B → vede i dati di A mischiati con i dati di B
+- **Causa**: 4 bug concatenati — RLS Supabase "Allow ALL TO EVERYONE", getCloudRowId() restituiva row "default" condivisa, PRIMARY_KEY globale non per-user, mergeCloudData faceva UNION-by-id senza mai ripulire
+- **Fix**: commit `f54bff8` (2026-06-25) — 5 strati di difesa:
+  1. RLS Supabase rafforzata (rimossa row "default")
+  2. `hardResetForUserSwitch()` in store.ts prima di loadFromCloud
+  3. use-auth.ts resetta su cambio email + logout
+  4. Disabilitato auto-upload del local su cloud fresco
+  5. Persist version 15→16 con migrazione che pulisce sidecar
+- **File**: `src/lib/supabase.ts`, `src/lib/store.ts`, `src/lib/use-auth.ts`, `src/components/cloud-recovery.tsx`, `supabase-schema.sql`
+
+### Foto profilo torna vecchia su iPhone dopo upload
+- **Sintomo**: Su iPhone (PWA), dopo aver caricato una nuova foto profilo, riaprendo l'app torna la vecchia
+- **Causa**: Cache iOS dell'URL immagine — non veniva invalidata
+- **Fix**: commit `52a2254` (2026-06-24)
+- **File**: `src/components/producer-profile.tsx`
+
+### Dati utente (email, note, link) spariscono dopo reload
+- **Sintomo**: Si modificano email/notes/link di una label, si ricarica la pagina, tutto perso
+- **Causa**: Race condition in Zustand persist rehydration — seed data sovrascriveva i dati utente prima che rehydration finisse
+- **Fix**: persist v9+ con flag `_rehydrated` che blocca setItem finché non finisce, merge semplice che NON tocca mai dati utente persistiti, backup debounced (60s) non mirrorato
+- **Stato**: Storico, risolto a v2.1.1. Persist ora a v18.
+- **File**: `src/lib/store.ts`
+
+### Profilo perso dopo re-login
+- **Sintomo**: Dopo logout + login, il profilo utente è vuoto
+- **Causa**: 3 bug — cloud merge non preservava profile, loadFromCloud sovrascriveva locale vuoto, saveFromLocal non caricava profile
+- **Fix**: commit `9880184` (persist aware merge) + `76a7a13` (content-aware merge)
+- **File**: `src/lib/store.ts`
+
+---
+
+## 📧 EMAIL / Gmail
+
+### Gmail invia spazzatura — "(nessun oggetto)" + header MIME nel body
+- **Sintomo**: Click su "Invia direttamente da Gmail" → arriva email con subject "(nessun oggetto)", body contiene `Content-Type: text/plain...` ecc.
+- **Causa**: Array di header MIME aveva elementi stringa vuota → creavano righe vuote → terminavano header section troppo presto
+- **Fix**: commit `03f4d17` (2026-06-25) — costruisci array solo con righe non vuote, join con `\r\n`, poi `\r\n\r\n` + body
+- **File**: `src/lib/gmail.ts` (`sendEmail`, `sendReplyInThread`)
+
+### Pitch inviato è quello sbagliato (single-track invece di multi-track EP)
+- **Sintomo**: Preview mostra multi-track, ma l'email inviata ha un solo link
+- **Causa**: `effectivePitchSubject`/`effectivePitchBody` ignoravano `demo.pitchText` e rigeneravano con `trackName="Demo"` + `link`
+- **Fix**: commit `03f4d17` — priorità a `demo.pitchText` quando esiste
+- **File**: `src/components/demo-tracker.tsx`
+
+### Dettaglio demo mostra un solo link SoundCloud per pitch multi-traccia
+- **Sintomo**: Demo EP con 3 tracce → dialog mostra solo 1 link SC
+- **Causa**: UI leggeva `demo.link` invece di `demo.pitchTracks[]`
+- **Fix**: commit `19d0fc8` (2026-06-25) — `displayTracks` memo con fallback chain a 4 livelli, UI render multi-traccia
+- **File**: `src/components/demo-tracker.tsx`, `src/lib/pitch-utils.ts`, `src/lib/store.ts` (campo `pitchTracks`)
+
+### iOS/PWA popup Gmail fallisce senza messaggio chiaro
+- **Sintomo**: Su iPhone PWA, click "Invia da Gmail" → fallisce silenziosamente
+- **Fix**: commit `cbe50ba` — messaggi di errore strutturati per iOS/PWA
+- **File**: `src/lib/gmail.ts`
+
+---
+
+## 🎵 NAVIGAZIONE / UX
+
+### Classifiche → label → perdi la classifica di partenza
+- **Sintomo**: Clicchi Classifiche → scegli genere → clicchi label → si apre scheda MA la classifica sottostante sparisce, vai su Label Finder
+- **Causa**: `handleOpenLabel` chiamava `setActiveTab("labels")` → unmountava RankingsPage → stato (genere, scroll) perso
+- **Fix**: commit `084bc37` (2026-06-25) — RankingsPage + LabelFinder sempre montati con CSS `hidden`, handleOpenLabel non cambia tab, dialog Radix portal si sovrappone
+- **File**: `src/app/page.tsx`, `src/components/rankings-page.tsx`
+
+### Nomi label invisibili su mobile nella tabella classifiche
+- **Sintomo**: Su mobile, tabella classifiche → nomi label non si vedono
+- **Fix**: commit `059d2d8` — layout mobile table
+- **File**: `src/components/rankings-page.tsx`
+
+### "NUOVA" mostrato per label già presenti (stable incumbents)
+- **Sintomo**: Label che erano #1 da sempre mostrate come "NUOVA"
+- **Causa**: prevRankByGenre veniva clobbered con rank identico
+- **Fix**: commit `70ec2e0` — mostra "—" invece di "NUOVA" per stable
+- **File**: `src/components/rankings-page.tsx`
+
+### "no history" alert mentre cloud sync sta caricando
+- **Sintomo**: Appena aperta app → "no ranking history" anche se c'è
+- **Causa**: Alert mostrato durante caricamento cloud sync
+- **Fix**: commit `f9781a8`
+- **File**: `src/components/rankings-page.tsx`
+
+### "Salva" ambiguo (Salva vs Scarica Backup vs Salva modifiche)
+- **Sintomo**: 3 pulsanti "Salva" diversi, l'utente non sa quale fa cosa
+- **Fix**: commit `61652dc` — etichette disambiguate
+- **File**: `src/components/label-finder.tsx`, `src/components/data-backup.tsx`
+
+### "Accedi" invisibile su mobile
+- **Sintomo**: Su mobile, bottone "Accedi" non visibile
+- **Fix**: commit `b78dfee` — bottone sempre visibile, utility in hamburger menu
+- **File**: `src/app/page.tsx`
+
+### Onboarding mostrato anche se profilo già compilato
+- **Fix**: commit `06a4fb6` — skip welcome modal se profilo ha già dati
+- **File**: `src/components/welcome-onboarding.tsx`
+
+### Link SoundCloud Privato precompilato col link del profilo
+- **Sintomo**: Campo "Link SC Privato" nel pitch form precompilato con il link del profilo utente — non deve
+- **Fix**: commit `e2539bc` (2026-06-24)
+- **File**: `src/components/pitch-generator.tsx`, `src/components/label-finder.tsx`
+
+---
+
+## 💥 CRASH / Stabilità
+
+### App crasha completamente (white screen)
+- **Sintomo**: App bianca, nessun errore visibile
+- **Fix**: commit `044669f` — ErrorBoundary + guard defensive
+- **File**: `src/components/error-boundary.tsx`, vari componenti
+
+### Crash su mobile aprendo scheda label con URL lunghi
+- **Sintomo**: Su mobile, apri dettaglio label con URL lungo → crash
+- **Causa**: URL lunghi causavano render thrashing
+- **Fix**: commit `34ecb67` — auto-shorten URL in display + throttle
+- **File**: `src/components/label-finder.tsx`
+
+### Crash su label con dati corrotti (toLowerCase su null)
+- **Sintomo**: Crash random navigando label
+- **Causa**: `toLowerCase()` su label.name/label.email nulli
+- **Fix**: commit `e322699` — guard toLowerCase + throttle backup quota
+- **File**: `src/lib/store.ts`, vari
+
+### Dialog "Aggiungi Demo" crasha
+- **Fix**: commit `795f613` + `73ce79a` (4 fix UX)
+- **File**: `src/components/demo-tracker.tsx`
+
+### Definizione duplicata di handleAnalyzeFile
+- **Sintomo**: Errore compile/runtime — funzione definita 2 volte
+- **Fix**: commit `c3eb4bd` + `d7ffb50`
+- **File**: `src/components/demo-tracker.tsx`
+
+---
+
+## ☁️ CLOUD / SYNC
+
+### Post-login "no charts" — dati Beatport spariti
+- **Sintomo**: Dopo login, rankings vuote
+- **Causa**: Cloud merge non preservava i campi Beatport (rankByGenre, pointsByGenre, etc.)
+- **Fix**: commit `50e74f1` — preserve Beatport data fields in cloud merge
+- **File**: `src/lib/store.ts`
+
+### Sync cloud perdeva dati tra dispositivi
+- **Sintomo**: Modifiche fatte su PC non apparivano sul telefono
+- **Causa**: Cloud merge sovrascriveva invece di unire
+- **Fix**: commit `0b0eed0` — union by id in cloud merge
+- **File**: `src/lib/store.ts`
+
+### Cloud sync sovrascriveva cloud con local vuoto
+- **Sintomo**: Login su device nuovo → cloud azzerato
+- **Fix**: commit `76a7a13` — content-aware merge, never overwrite cloud with empty local
+- **File**: `src/lib/store.ts`
+
+### Login Vercel rotto (force-static su [...nextauth])
+- **Sintomo**: Login Google non funziona su Vercel
+- **Causa**: `export const dynamic = "force-static"` su route nextauth — la rendeva 404 statica
+- **Fix**: commit `7942562` — rimosso force-static da [...nextauth]
+- **File**: `src/app/api/auth/[...nextauth]/route.ts`
+- **⚠️ LEZIONE**: NON aggiungere MAI `force-static` a [...nextauth]. Per build statiche, usare `scripts/build-static.sh` che muove `src/app/api/` fuori durante il build.
+
+### Cloud merge non includere imageUrl/slug/beatportId
+- **Sintomo**: Loghi label non apparivano dopo sync
+- **Fix**: commit `6915afc`
+- **File**: `src/lib/store.ts`
+
+### Auto-upload su cloud non funzionava (sync artisti)
+- **Fix**: commit `feecbf5` — sempre mergiare cloud+locale + sync artisti
+- **File**: `src/lib/store.ts`
+
+---
+
+## 🔊 AUDIO
+
+### Seek bar audio non funziona (Infinity duration)
+- **Sintomo**: La seek bar del player audio non si muove
+- **Causa**: `duration` tornava `Infinity` per stream senza metadata
+- **Fix**: commit `5d2e62a` — seekable.end() + drag + keyboard
+- **File**: `src/components/demo-tracker.tsx`, `src/components/label-finder.tsx`
+
+### Audio analysis sempre "Sconosciuta" + 100% Energy/Dance
+- **Sintomo**: Audio analysis dà key "Sconosciuta" e Energy/Danceability sempre 100%
+- **Causa**: essentia.js WASM non si caricava mai
+- **Fix**: commit `1711925` — load WASM properly
+- **File**: `src/lib/audio-analysis.ts`, `src/components/demo-tracker.tsx`
+
+---
+
+## 🔔 NOTIFICHE PUSH
+
+### UI push non sincronizzata con subscription reale
+- **Sintomo**: Toggle "notifiche attive" ON ma notifiche non arrivano
+- **Causa**: UI basata su stato locale, non su subscription effettiva
+- **Fix**: commit `281f24b` — use PushSubscription as source of truth
+- **File**: `src/components/notification-settings.tsx`
+
+---
+
+## 📦 PWA / Service Worker
+
+### Banner "Aggiorna" non funzionante
+- **Sintomo**: Click su "Aggiorna" per nuova versione → non fa nulla
+- **Fix**: commit `ec2454f` — refactor SWUpdater + sw v6
+- **File**: `src/components/sw-updater.tsx`, `public/sw.js`
+
+---
+
+## 🏷️ LABELS / DATI
+
+### Label seed mostrava "1976 accettano demo" falsamente
+- **Sintomo**: Label seed (400 labels) mostravano "accettano demo" anche se non lo sappiamo
+- **Causa**: Campo `status` defaultato a "open" per tutte le seed
+- **Fix**: commit `addbee3` (2026-06-24) — introdotto stato "unknown"
+- **File**: `src/lib/labels-data.json`, `src/lib/store.ts`, `src/components/label-finder.tsx`
+
+### Loghi label mancanti su scraper v2/v3
+- **Fix**: commit `499b72f` — explicit logo acquisition in scraper prompts
+- **File**: `scripts/beatport-scraper-v2.js`, `public/scraper-v3.js`
+
+### Import non passava artists[] e tracks[]
+- **Fix**: commit `296ad06`
+- **File**: `src/lib/store.ts`
+
+### Import defaultava isCustom=true per label Beatport
+- **Fix**: commit `5ffe975`
+- **File**: `src/lib/store.ts`
+
+---
+
+## 🎤 PITCH / CAMPAIGN
+
+### (vedi sopra: Link SC Privato precompilato, Pitch inviato sbagliato)
+
+### EP single-link vs multi-link mode
+- **Feature**: commit `76d3b12` — EP mode con link unico SC o link separati per traccia
+- **File**: `src/components/pitch-generator.tsx`, `src/lib/pitch-utils.ts`, `src/lib/store.ts`
+
+### Bozze/Inviati sub-tabs + save-as-draft
+- **Feature**: commit `8fc7630`
+- **File**: `src/components/pitch-generator.tsx`, `src/lib/store.ts`
+
+### Demo picker + EP multi-select in label detail
+- **Feature**: commit `aa7b0fe`
+- **File**: `src/components/label-finder.tsx`
+
+---
+
+## 🚀 DEPLOY
+
+### Deploy Vercel falliva con API body errato
+- **Fix**: commit `a7364c3` — use tested Vercel API body + poll by deployment ID
+- **File**: `scripts/deploy.sh`
+
+### Build statico fallisce su route API
+- **Sintomo**: `NEXT_EXPORT=true next build` → errore "force-static not configured on /api/..."
+- **Causa**: Next.js 16 richiede `force-static` su ogni route per `output: export`, MA metterlo su [...nextauth] rompe il login Vercel
+- **Fix**: usare `scripts/build-static.sh` che muove `src/app/api/` fuori durante il build, poi ripristina
+- **File**: `scripts/build-static.sh`
+- **⚠️ LEZIONE**: NON patchare le route API con `force-static`. Usare sempre `build-static.sh`.
+
+---
+
+## 📝 WORKFLOW — Come aggiornare questo file
+
+Quando si risolve un bug:
+
+1. **Durante il fix**: appunti su sintomo osservato dall'utente, causa tecnica, file toccati
+2. **Dopo il commit**: aggiungere una entry in cima alla sezione appropriata con formato:
+   ```
+   ### Titolo sintomo (lingua utente)
+   - **Sintomo**: cosa vede l'utente
+   - **Causa**: perché succedeva
+   - **Fix**: commit `abc1234` (data) — breve descrizione
+   - **File**: `path/file.tsx`
+   ```
+3. **Commit**: includere BUG_REGISTRY.md nello stesso commit del fix
+
+Quando si indaga un nuovo bug:
+
+1. **PRIMA cosa**: `grep -i "parola_chiave_sintomo" /home/z/my-project/BUG_REGISTRY.md`
+2. Se match → verificare che il fix sia ancora in produzione (git log, codebase)
+3. Se regression → investigare perché il fix è stato rimosso/rotto
+4. Se no match → procedere con indagine normale, poi aggiungere entry
