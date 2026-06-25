@@ -140,9 +140,13 @@ Stesso flusso dei bug, ma:
 | `worklog.md` | GitHub + filesystem | ✅ Sì | Log cronologico append-only di ogni task |
 | `VERSIONS.md` | GitHub + filesystem | ✅ Sì | Release version history |
 | `scripts/agent-boot.sh` | GitHub + filesystem | ✅ Sì | Script che stampa lo stato della memoria |
+| `scripts/seed-agent-memory.py` | GitHub + filesystem | ✅ Sì | Rigenera il seed SQL da BUG_REGISTRY.md |
+| `scripts/log-agent-memory.sh` | GitHub + filesystem | ✅ Sì | Logga un singolo nuovo bug → SQL + BUG_REGISTRY entry |
+| **Supabase `agent_memory`** | Cloud (Supabase) | ✅ Sì | Backup cloud query-able. **41 entry già popolate** il 2026-06-25 |
 | Git history | GitHub | ✅ Sì | Commit messages con convenzione `fix(scope):` / `feat(scope):` |
 
 **Tutti questi file sono su GitHub** → permanenti → accessibili da qualsiasi sessione futura.
+**La tabella Supabase è il mirror cloud query-able** → basta un `SELECT` per ritrovare qualsiasi bug passato.
 
 ---
 

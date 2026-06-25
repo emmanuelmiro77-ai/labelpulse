@@ -195,7 +195,7 @@ bash scripts/build-static.sh
 | **AGENT_CONTEXT.md** | `/home/z/my-project/AGENT_CONTEXT.md` | This file. Project overview + architecture + rules. |
 | **worklog.md** | `/home/z/my-project/worklog.md` | Chronological append-only log of every task. Read tail for recent activity. |
 | **VERSIONS.md** | `/home/z/my-project/VERSIONS.md` | Release version history. |
-| **Supabase `agent_memory` table** | Cloud (Supabase project) | Backup cloud query-able di BUG_REGISTRY. Vedi `supabase-schema-agent-memory.sql`. |
+| **Supabase `agent_memory` table** | Cloud (Supabase project) | Backup cloud query-able di BUG_REGISTRY. **POPOLATA** il 2026-06-25 con 41 entry (10 critical + 11 high + 16 medium + 4 feature). Vedi `supabase-schema-agent-memory.sql` (schema) + `scripts/seed-agent-memory.py` (rigenera seed) + `scripts/log-agent-memory.sh` (logga singolo bug). |
 | **Git history** | `git log --oneline` | Commit messages with `fix(scope):` convention. |
 | **Codebase** | `src/` | Source of truth. Always verify fixes are still in code. |
 
@@ -205,7 +205,7 @@ bash scripts/build-static.sh
 2. **Durante il lavoro**: quando fixo un bug o aggiungo feature, aggiungo entry in BUG_REGISTRY.md + worklog.md nello stesso commit
 3. **Prima di committare**: eseguo la verifica anti-regressione (vedi protocollo in BUG_REGISTRY.md)
 4. **Dopo il commit**: push su GitHub → memoria permanente ✅
-5. **Backup cloud opzionale**: per bug critici, loggo anche nella tabella Supabase `agent_memory` (se installata)
+5. **Backup cloud (ATTIVO)**: dopo ogni bug fix critico/high, logga anche nella tabella Supabase `agent_memory` usando `bash scripts/log-agent-memory.sh --type bug_fix --severity ... --title ... --description ...` → genera SQL pronto da incollare nel Supabase SQL Editor + aggiunge entry in BUG_REGISTRY.md. Tabella già popolata con 41 entry storiche (commit `80f786b`).
 
 ## Version History
 - **v1**: Initial app with labels, demos, pitch

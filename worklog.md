@@ -794,3 +794,46 @@ Stage Summary:
 Files modified:
 - src/app/page.tsx (RankingsPage + LabelFinder now always mounted with CSS-toggled visibility)
 - src/components/rankings-page.tsx (handleOpenLabel no longer switches tabs; removed unused setActiveTab)
+
+---
+Task ID: agent-memory-seed-populated
+Agent: main
+Task: Popolare la tabella Supabase `agent_memory` con i bug storici già risolti documentati in BUG_REGISTRY.md, e creare l'helper script `log-agent-memory.sh` per loggare singoli nuovi bug in futuro.
+
+Work Log:
+- Verificato che `scripts/seed-agent-memory.py` esiste (commit 80f786b) e genera `scripts/seed-agent-memory.sql` con 41 INSERT idempotenti (DELETE + reset sequence + INSERT multiplo).
+- Generato il file SQL finale: 41 entry totali così distribuite:
+  - bug_fix / critical: 10
+  - bug_fix / high: 11
+  - bug_fix / medium: 16
+  - feature / medium: 4
+- Utente ha incollato il SQL nel Supabase SQL Editor → esecuzione riuscita.
+- Verifica utente con `SELECT event_type, severity, count(*) FROM agent_memory GROUP BY event_type, severity` → confermato 41 righe distribuite come da seed.
+- Creato `scripts/log-agent-memory.sh` — helper per loggare UN singolo bug in futuro:
+  - Modalità interattiva (prompts) e non-interattiva (args `--type --severity --title --description --commit --files --keywords`)
+  - Genera INSERT SQL pronto da incollare nel Supabase SQL Editor (escape apostrofi, TEXT[] arrays, JSONB metadata)
+  - Append entry anche in BUG_REGISTRY.md (sezione "LOG CLOUD SYNC" creata al primo utilizzo)
+  - Stampa promemoria: incolla SQL → verifica count → commit BUG_REGISTRY → push
+  - Testato con dry-run: SQL generato è valido (apostrofi escapati, arrays ben formati, JSONB ben formatato)
+  - Revertito l'inserimento di test in BUG_REGISTRY.md dopo la verifica
+- Aggiornato `AGENT_CONTEXT.md` riga 198 (tabella memoria): ora indica "POPOLATA il 2026-06-25 con 41 entry" + riferimenti a seed-agent-memory.py e log-agent-memory.sh.
+- Aggiornato `AGENT_CONTEXT.md` riga 208 (flusso memoria): "Backup cloud opzionale" → "Backup cloud (ATTIVO)" con istruzioni d'uso del helper script.
+- Aggiornato `BOOT.md` sezione "STRUTTURA DELLA MEMORIA": aggiunte righe per seed-agent-memory.py, log-agent-memory.sh, e Supabase agent_memory (con stato "41 entry già popolate").
+
+Stage Summary:
+- Sistema di memoria permanente COMPLETO e OPERATIVO su 3 livelli:
+  1. **GitHub** (file): BOOT.md, AGENT_CONTEXT.md, BUG_REGISTRY.md, worklog.md, VERSIONS.md — sempre accessibili
+  2. **Filesystem locale** (script): agent-boot.sh (stato), seed-agent-memory.py (seed), log-agent-memory.sh (log singolo)
+  3. **Cloud Supabase** (database): tabella `agent_memory` con 41 entry storiche, query-able con SQL
+- Workflow futuro per ogni nuovo bug fix critico/high:
+  a) Fix codice + commit + push (regolare)
+  b) `bash scripts/log-agent-memory.sh --type bug_fix --severity ... --title ...`
+  c) Copia SQL stampato → incolla in Supabase SQL Editor → Run
+  d) Commit BUG_REGISTRY.md (entry aggiunta in automatico) + push
+- Anti-regressione: BUG_REGISTRY.md + cloud Supabase sono entrambi indipendenti dal filesystem locale → anche se una sessione futura cancella/corrompe i file locali, il cloud rimane integro e viceversa.
+- Stato deploy: stesso di prima (nessun cambiamento codice runtime — solo documentazione + script). Deploy Vercel non richiesto per questo task.
+
+Files modified:
+- scripts/log-agent-memory.sh (NEW)
+- AGENT_CONTEXT.md (2 righe aggiornate)
+- BOOT.md (tabella memoria espansa)
