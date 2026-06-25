@@ -52,14 +52,22 @@ export function PitchGenerator() {
   const { toast } = useToast();
   const genres = getGenres();
 
-  // Pre-fill from user profile
+  // Pre-fill from user profile (artistName only — scLink is per-track, not
+  // a profile field, so it must NOT be pre-filled here. See bug fix below.)
   const initialArtistName = userProfile.artistName || "";
-  const initialScLink = userProfile.scLink || "";
 
   // Track setup state
+  // ⚠️ scLink is the SoundCloud link OF THE TRACK being pitched, NOT the
+  // user's profile SoundCloud link. Previously this was initialized from
+  // userProfile.scLink, which (combined with the onBlur handler that saved
+  // the field back to userProfile.scLink) caused the user's profile link
+  // to be silently overwritten with the link of whatever track they last
+  // pitched — and then re-displayed as a default on every subsequent
+  // visit. The field is now empty by default; it only fills when the user
+  // picks an existing demo (chip) or types a link manually.
   const [trackName, setTrackName] = useState("");
   const [artistName, setArtistName] = useState(initialArtistName);
-  const [scLink, setScLink] = useState(initialScLink);
+  const [scLink, setScLink] = useState("");
   const [tone, setTone] = useState<PitchTone>("professional");
   const [language, setLanguage] = useState<PitchLanguage>("en");
   const [customNote, setCustomNote] = useState("");
@@ -90,6 +98,8 @@ export function PitchGenerator() {
   const [campaignResults, setCampaignResults] = useState({ sent: 0, skipped: 0 });
 
   // Save profile fields on blur
+  // ⚠️ Only artistName is saved — scLink is per-track, not a profile field,
+  // so we don't persist it to userProfile. (See bug fix above.)
   const handleArtistBlur = () => {
     if (artistName.trim() && artistName.trim() !== userProfile.artistName) {
       setUserProfile({ artistName: artistName.trim() });
@@ -97,9 +107,11 @@ export function PitchGenerator() {
   };
 
   const handleScLinkBlur = () => {
-    if (scLink.trim() && scLink.trim() !== userProfile.scLink) {
-      setUserProfile({ scLink: scLink.trim() });
-    }
+    // Intentionally a no-op: scLink is the SoundCloud link of the track
+    // being pitched, not the user's profile SoundCloud link. Previously
+    // this saved the field to userProfile.scLink, which contaminated the
+    // profile with per-track links. The user's profile SoundCloud link
+    // is managed on the Profile page instead.
   };
 
   // Run audio analysis on the SoundCloud link OR a user-uploaded file.
