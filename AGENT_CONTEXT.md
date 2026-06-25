@@ -1,14 +1,15 @@
 # LabelPulse - AI Agent Context File
 
 > **PURPOSE**: This file allows any AI agent to resume work on this project in a new chat session.
-> When starting a new chat, tell the agent: *"Read AGENT_CONTEXT.md and BUG_REGISTRY.md in my repo, then continue"*
+> When starting a new chat, tell the agent: *"Read BOOT.md and follow it"*
 >
 > **⚠️ MANDATORY ON SESSION START**:
-> 1. Read this file completely
-> 2. Read `BUG_REGISTRY.md` completely — it's indexed by user-visible symptom
-> 3. Read `worklog.md` tail (last 200 lines) for recent activity
-> 4. Run `git log --oneline -20` to see recent commits
-> 5. ONLY THEN start investigating any reported bug — first grep BUG_REGISTRY.md for the symptom
+> 1. Read `BOOT.md` first (instructions for boot sequence)
+> 2. Run `bash scripts/agent-boot.sh` (prints memory state summary)
+> 3. Read this file (AGENT_CONTEXT.md) completely
+> 4. Read `BUG_REGISTRY.md` completely — indexed by user-visible symptom
+> 5. Read `worklog.md` tail (last 200 lines) for recent activity
+> 6. ONLY THEN start investigating any reported bug — first grep BUG_REGISTRY.md for the symptom
 
 **Last updated**: 2026-06-25
 
@@ -188,12 +189,23 @@ bash scripts/build-static.sh
 
 | Artifact | Path | Purpose |
 |----------|------|---------|
+| **BOOT.md** | `/home/z/my-project/BOOT.md` | Istruzioni per il boot. **PRIMO FILE DA LEGGERE** in ogni sessione. |
+| **scripts/agent-boot.sh** | `/home/z/my-project/scripts/agent-boot.sh` | Script che stampa stato completo della memoria. Eseguire all'inizio di ogni sessione. |
 | **BUG_REGISTRY.md** | `/home/z/my-project/BUG_REGISTRY.md` | Searchable by symptom → cause → fix → file. **READ FIRST** when investigating any bug. |
 | **AGENT_CONTEXT.md** | `/home/z/my-project/AGENT_CONTEXT.md` | This file. Project overview + architecture + rules. |
 | **worklog.md** | `/home/z/my-project/worklog.md` | Chronological append-only log of every task. Read tail for recent activity. |
 | **VERSIONS.md** | `/home/z/my-project/VERSIONS.md` | Release version history. |
+| **Supabase `agent_memory` table** | Cloud (Supabase project) | Backup cloud query-able di BUG_REGISTRY. Vedi `supabase-schema-agent-memory.sql`. |
 | **Git history** | `git log --oneline` | Commit messages with `fix(scope):` convention. |
 | **Codebase** | `src/` | Source of truth. Always verify fixes are still in code. |
+
+### Memoria permanente — flusso
+
+1. **All'inizio di ogni sessione**: l'utente dice "leggi BOOT.md" → io leggo BOOT.md → eseguo `scripts/agent-boot.sh` → leggo AGENT_CONTEXT.md + BUG_REGISTRY.md + worklog tail → sono pronto
+2. **Durante il lavoro**: quando fixo un bug o aggiungo feature, aggiungo entry in BUG_REGISTRY.md + worklog.md nello stesso commit
+3. **Prima di committare**: eseguo la verifica anti-regressione (vedi protocollo in BUG_REGISTRY.md)
+4. **Dopo il commit**: push su GitHub → memoria permanente ✅
+5. **Backup cloud opzionale**: per bug critici, loggo anche nella tabella Supabase `agent_memory` (se installata)
 
 ## Version History
 - **v1**: Initial app with labels, demos, pitch
