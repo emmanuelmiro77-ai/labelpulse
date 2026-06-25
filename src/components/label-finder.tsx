@@ -1,6 +1,6 @@
 "use client";
 
-import { useAppStore, getLabelTier, type Label, type Artist, type ArtistTrack } from "@/lib/store";
+import { useAppStore, getLabelTier, type Label, type Artist, type ArtistTrack, type Demo } from "@/lib/store";
 import { t } from "@/lib/i18n";
 import { getLabelDiscoveryUrls } from "@/lib/label-links";
 import React, { useState, useMemo, useCallback, useEffect, useRef } from "react";
@@ -449,7 +449,7 @@ function LabelDiscoveryIcons({
 }
 
 export function LabelFinder() {
-  const { labels, demos, addLabel, updateLabel, deleteLabel, addDemo, locale, getGenres, setActiveTab, userProfile, setUserProfile, gmailAuth, setGmailAuth, selectedLabelId, setSelectedLabelId, selectedArtistId, setSelectedArtistId, setNavigationReturnTo, artists } =
+  const { labels, demos, releases, addLabel, updateLabel, deleteLabel, addDemo, locale, getGenres, setActiveTab, userProfile, setUserProfile, gmailAuth, setGmailAuth, selectedLabelId, setSelectedLabelId, selectedArtistId, setSelectedArtistId, setNavigationReturnTo, artists } =
     useAppStore();
   const genres = getGenres();
   const { toast } = useToast();
@@ -474,6 +474,14 @@ export function LabelFinder() {
   const [detailStatus, setDetailStatus] = useState<"open" | "closed" | "unknown">("unknown");
   const [detailSubmissionType, setDetailSubmissionType] = useState<"email" | "webform" | "platform">("email");
   const [detailSaved, setDetailSaved] = useState(false);
+
+  // Inline pitch demo picker state
+  // pitchEpMode toggles between single-pick (click a chip → fills the form
+  // with that one demo) and EP-pick (click multiple chips → fills the form
+  // with an auto-generated EP title + tracklist in the note).
+  // pitchSelectedDemoIds holds the demos the user has clicked while in EP mode.
+  const [pitchEpMode, setPitchEpMode] = useState(false);
+  const [pitchSelectedDemoIds, setPitchSelectedDemoIds] = useState<Set<string>>(new Set());
 
   // Audio preview state — for the "Top tracks on Beatport" section in the
   // label detail dialog. We only play one sample at a time; clicking play
@@ -948,7 +956,16 @@ export function LabelFinder() {
     setShowPitch(false);
     setPitchTrackName("");
     setPitchArtistName(userProfile.artistName || "");
-    setPitchScLink(userProfile.scLink || "");
+    // ⚠️ scLink is the SoundCloud link OF THE TRACK being pitched, NOT the
+    // user's profile SoundCloud link. Previously this was initialized from
+    // userProfile.scLink, which (combined with the onBlur handler that saved
+    // the field back to userProfile.scLink) caused the user's profile link
+    // to be silently overwritten with the link of whatever track they last
+    // pitched — and then re-displayed as a default on every subsequent
+    // visit. The field is now empty by default; it only fills when the user
+    // picks an existing demo (chip) or types a link manually. Same fix as
+    // the standalone PitchGenerator component (pitch-generator.tsx).
+    setPitchScLink("");
     setPitchTone("professional");
     setPitchLanguage("en");
     setPitchNote("");
@@ -957,6 +974,10 @@ export function LabelFinder() {
     // Reset any manual edits from a previously-opened label so the user
     // starts fresh with the auto-generated pitch text for the new label.
     setPitchEditedText(null);
+    // Reset the demo picker state so a previously-built EP selection doesn't
+    // leak into the new label's pitch form.
+    setPitchEpMode(false);
+    setPitchSelectedDemoIds(new Set());
   }, [userProfile]);
 
   // Cross-tab navigation: if another tab (e.g. Artist Explorer) sets
@@ -1228,10 +1249,160 @@ export function LabelFinder() {
   }, [pitchArtistName, userProfile.artistName, setUserProfile]);
 
   const handlePitchScLinkBlur = useCallback(() => {
-    if (pitchScLink.trim() && pitchScLink.trim() !== userProfile.scLink) {
-      setUserProfile({ scLink: pitchScLink.trim() });
+    // Intentionally a no-op: scLink is the SoundCloud link of the track
+    // being pitched, not the user's profile SoundCloud link. Previously
+    // this saved the field to userProfile.scLink, which contaminated the
+    // profile with per-track links. The user's profile SoundCloud link
+    // is managed on the Profile page instead. Same fix as the standalone
+    // PitchGenerator component (pitch-generator.tsx).
+  }, []);
+
+  // Helper: extract the SoundCloud link from a Demo (prefers `link` field,
+  // falls back to the first soundcloud entry in `links[]`).
+  const getDemoScLink = useCallback((d: Demo): string => {
+    if (d.link) return d.link;
+    const sc = d.links?.find((l) => l.type === "soundcloud");
+    return sc?.value || "";
+  }, []);
+
+  // Helper: extract the primary artist from a Demo (first entry in `artists[]`
+  // if present, else the legacy `artistName` field).
+  const getDemoPrimaryArtist = useCallback((d: Demo): string => {
+    return d.artists?.[0] || d.artistName || "";
+  }, []);
+
+  // Helper: format the collaborator suffix for a Demo (e.g. " × Famin, Forhad Alavi").
+  const getDemoCollaborators = useCallback((d: Demo): string => {
+    if (d.artists && d.artists.length > 1) {
+      return ` × ${d.artists.slice(1).join(", ")}`;
     }
-  }, [pitchScLink, userProfile.scLink, setUserProfile]);
+    return "";
+  }, []);
+
+  // Demo picker handler — called when the user clicks a demo chip in the
+  // inline pitch form. Behavior depends on `pitchEpMode`:
+  //  • Single mode (default): clicking a chip fills the form with that one
+  //    demo. If the demo is part of a Release (EP), we instead fill the
+  //    form with the EP title (release.title) and put the full tracklist
+  //    in the note, so the email body lists every track.
+  //  • EP mode (toggle on): clicking chips adds/removes them from the
+  //    selection set. When 2+ demos are selected, the form auto-builds an
+  //    "EP (N tracce)" pitch with the tracklist in the note.
+  const handlePickDemoForPitch = useCallback((demo: Demo) => {
+    if (!pitchEpMode) {
+      // === Single-pick mode ===
+      const scLink = getDemoScLink(demo);
+      const primaryArtist = getDemoPrimaryArtist(demo);
+      setPitchTrackName(demo.trackName);
+      if (primaryArtist) setPitchArtistName(primaryArtist);
+      setPitchScLink(scLink);
+      setPitchDemoCreated(false);
+      setPitchEditedText(null);
+
+      // If this demo is part of a Release (EP), expand the form to pitch
+      // the whole EP: trackName = release.title, note = tracklist with
+      // every track's name + SoundCloud link so the label can preview all
+      // of them.
+      if (demo.parentReleaseId) {
+        const release = releases.find((r) => r.id === demo.parentReleaseId);
+        const epTracks = demos
+          .filter((d) => d.parentReleaseId === demo.parentReleaseId)
+          .sort((a, b) => new Date(a.createdAt).getTime() - new Date(b.createdAt).getTime());
+        if (release && epTracks.length > 1) {
+          setPitchTrackName(release.title);
+          const tracklist = epTracks
+            .map((t, i) => {
+              const tLink = getDemoScLink(t);
+              const collab = getDemoCollaborators(t);
+              return `${i + 1}. ${t.trackName}${collab}${tLink ? ` — ${tLink}` : ""}`;
+            })
+            .join("\n");
+          setPitchNote(tracklist);
+          toast({
+            title: locale === "it" ? "EP caricato" : "EP loaded",
+            description: `${release.title} (${epTracks.length} ${locale === "it" ? "tracce" : "tracks"})`,
+          });
+          return;
+        }
+      }
+
+      setPitchNote("");
+      toast({
+        title: locale === "it" ? "Demo caricata" : "Demo loaded",
+        description: `"${demo.trackName}"${getDemoCollaborators(demo)}`,
+      });
+      return;
+    }
+
+    // === EP multi-select mode ===
+    // Toggle this demo in the selection set, then rebuild the form based
+    // on the new selection.
+    const next = new Set(pitchSelectedDemoIds);
+    if (next.has(demo.id)) next.delete(demo.id);
+    else next.add(demo.id);
+    setPitchSelectedDemoIds(next);
+
+    const selectedDemos = demos
+      .filter((d) => next.has(d.id))
+      .sort((a, b) => new Date(a.createdAt).getTime() - new Date(b.createdAt).getTime());
+
+    setPitchDemoCreated(false);
+    setPitchEditedText(null);
+
+    if (selectedDemos.length === 0) {
+      // Nothing selected — clear the form
+      setPitchTrackName("");
+      setPitchScLink("");
+      setPitchNote("");
+      return;
+    }
+
+    if (selectedDemos.length === 1) {
+      // Only one demo selected in EP mode — behave like single-pick
+      const d = selectedDemos[0];
+      setPitchTrackName(d.trackName);
+      const primaryArtist = getDemoPrimaryArtist(d);
+      if (primaryArtist) setPitchArtistName(primaryArtist);
+      setPitchScLink(getDemoScLink(d));
+      setPitchNote("");
+      return;
+    }
+
+    // Multiple demos selected — build an EP form:
+    // • trackName = editable EP title (default = "EP (N tracce)")
+    // • artistName = primary artist of the first selected demo
+    // • scLink = first demo's link (still editable)
+    // • note = tracklist with all selected tracks + their SC links
+    const firstDemo = selectedDemos[0];
+    const primaryArtist = getDemoPrimaryArtist(firstDemo) || userProfile.artistName || "";
+    const firstScLink = getDemoScLink(firstDemo);
+    const tracklist = selectedDemos
+      .map((t, i) => {
+        const tLink = getDemoScLink(t);
+        const collab = getDemoCollaborators(t);
+        return `${i + 1}. ${t.trackName}${collab}${tLink ? ` — ${tLink}` : ""}`;
+      })
+      .join("\n");
+    setPitchTrackName(
+      locale === "it"
+        ? `EP (${selectedDemos.length} tracce)`
+        : `EP (${selectedDemos.length} tracks)`
+    );
+    if (primaryArtist) setPitchArtistName(primaryArtist);
+    setPitchScLink(firstScLink);
+    setPitchNote(tracklist);
+  }, [
+    pitchEpMode,
+    pitchSelectedDemoIds,
+    demos,
+    releases,
+    userProfile.artistName,
+    locale,
+    toast,
+    getDemoScLink,
+    getDemoPrimaryArtist,
+    getDemoCollaborators,
+  ]);
 
   // Open Gmail and auto-create demo. Uses the effective Gmail link +
   // displayPitchText so manual edits flow through to both the email
@@ -2176,6 +2347,126 @@ export function LabelFinder() {
 
                   {showPitch && (
                     <div className="space-y-3 mt-3">
+                      {/* Demo picker — lets the user recall a saved demo (or
+                          build an EP pitch from multiple demos) from their
+                          archive instead of retyping everything. When a demo
+                          is picked, we auto-fill trackName, artistName,
+                          scLink, and (for EPs) the tracklist in the note.
+                          The user can still edit anything afterwards. */}
+                      {demos.length > 0 && (
+                        <div className="space-y-1.5 rounded-md border border-primary/20 bg-primary/5 p-2.5">
+                          <div className="flex items-center justify-between gap-2 flex-wrap">
+                            <UILabel className="text-[10px] font-mono uppercase text-primary flex items-center gap-1.5">
+                              <Sparkles className="h-3 w-3" />
+                              {locale === "it" ? "Scegli demo salvata" : "Pick a saved demo"}
+                              <span className="ml-1 text-[9px] text-muted-foreground/60 normal-case font-sans">
+                                {locale === "it"
+                                  ? "(precompila i campi — modificabili dopo)"
+                                  : "(auto-fills the form — editable afterwards)"}
+                              </span>
+                            </UILabel>
+                            <button
+                              type="button"
+                              onClick={() => {
+                                const newMode = !pitchEpMode;
+                                setPitchEpMode(newMode);
+                                if (!newMode) {
+                                  // Exiting EP mode — clear the selection
+                                  setPitchSelectedDemoIds(new Set());
+                                } else {
+                                  // Entering EP mode — clear the current form
+                                  // so the user starts fresh
+                                  setPitchTrackName("");
+                                  setPitchScLink("");
+                                  setPitchNote("");
+                                  setPitchDemoCreated(false);
+                                  setPitchEditedText(null);
+                                }
+                              }}
+                              className={`text-[10px] font-medium px-2 py-0.5 rounded border transition-colors inline-flex items-center gap-1 ${
+                                pitchEpMode
+                                  ? "bg-purple-500/20 text-purple-300 border-purple-500/40"
+                                  : "bg-secondary/50 text-muted-foreground border-border/50 hover:border-purple-500/30 hover:text-purple-300"
+                              }`}
+                              title={locale === "it"
+                                ? "Modalità EP: seleziona più tracce per creare un pitch EP"
+                                : "EP mode: select multiple tracks to build an EP pitch"}
+                            >
+                              <Disc3 className="h-3 w-3" />
+                              {pitchEpMode
+                                ? (locale === "it"
+                                    ? `EP attivo (${pitchSelectedDemoIds.size})`
+                                    : `EP active (${pitchSelectedDemoIds.size})`)
+                                : (locale === "it" ? "Modalità EP" : "EP mode")}
+                            </button>
+                          </div>
+                          <div className="flex flex-wrap gap-1.5">
+                            {demos
+                              .slice()
+                              .sort((a, b) => new Date(b.createdAt).getTime() - new Date(a.createdAt).getTime())
+                              .slice(0, 50)
+                              .map((d) => {
+                                const isSelected = pitchEpMode
+                                  ? pitchSelectedDemoIds.has(d.id)
+                                  : (pitchTrackName === d.trackName &&
+                                      (d.artists?.[0] || d.artistName) === pitchArtistName);
+                                const otherArtists = getDemoCollaborators(d);
+                                return (
+                                  <button
+                                    key={d.id}
+                                    type="button"
+                                    onClick={() => handlePickDemoForPitch(d)}
+                                    className={`inline-flex items-center gap-1.5 rounded-md border px-2 py-1 text-[11px] font-medium transition-colors ${
+                                      isSelected
+                                        ? "bg-primary text-primary-foreground border-primary"
+                                        : "bg-secondary/50 text-foreground border-border/50 hover:border-primary/30 hover:bg-primary/10"
+                                    }`}
+                                  >
+                                    <Music2 className="h-3 w-3" />
+                                    {d.trackName}
+                                    {otherArtists && (
+                                      <span className="text-[9px] opacity-70 truncate max-w-[120px]">{otherArtists}</span>
+                                    )}
+                                    {d.parentReleaseId && (
+                                      <span className="text-[9px] opacity-60 border border-current/30 rounded px-0.5">EP</span>
+                                    )}
+                                  </button>
+                                );
+                              })}
+                            {demos.length > 50 && (
+                              <span className="text-[10px] text-muted-foreground/60 self-center">
+                                {locale === "it"
+                                  ? `+${demos.length - 50} altre demo…`
+                                  : `+${demos.length - 50} more demos…`}
+                              </span>
+                            )}
+                          </div>
+                          {pitchEpMode && pitchSelectedDemoIds.size > 0 && (
+                            <button
+                              type="button"
+                              onClick={() => {
+                                setPitchSelectedDemoIds(new Set());
+                                setPitchTrackName("");
+                                setPitchScLink("");
+                                setPitchNote("");
+                                setPitchDemoCreated(false);
+                                setPitchEditedText(null);
+                              }}
+                              className="text-[10px] text-muted-foreground hover:text-foreground underline"
+                            >
+                              {locale === "it" ? "Cancella selezione EP" : "Clear EP selection"}
+                            </button>
+                          )}
+                          {pitchEpMode && pitchSelectedDemoIds.size === 1 && (
+                            <p className="text-[10px] text-amber-400/70">
+                              {locale === "it"
+                                ? "Seleziona almeno 2 tracce per creare un pitch EP."
+                                : "Select at least 2 tracks to build an EP pitch."}
+                            </p>
+                          )}
+                        </div>
+                      )}
+
                       <div className="grid grid-cols-2 gap-3">
                         <div className="space-y-1.5">
                           <UILabel className="text-xs font-mono uppercase text-muted-foreground">{t(locale, "pitch.trackName")}</UILabel>

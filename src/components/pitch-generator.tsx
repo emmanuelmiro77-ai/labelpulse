@@ -1,6 +1,6 @@
 "use client";
 
-import { useAppStore, getLabelTier, type Label } from "@/lib/store";
+import { useAppStore, getLabelTier, type Label, type Demo } from "@/lib/store";
 import { t, type Locale } from "@/lib/i18n";
 import { useState, useMemo, useCallback } from "react";
 import {
@@ -20,6 +20,7 @@ import {
   Upload,
   Loader2,
   Sparkles,
+  Disc3,
 } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent } from "@/components/ui/card";
@@ -48,7 +49,7 @@ import { useToast } from "@/hooks/use-toast";
 import { SimilarSuggestions } from "@/components/similar-suggestions";
 
 export function PitchGenerator() {
-  const { labels, demos, addDemo, locale, userProfile, setUserProfile, getGenres, artists, setActiveTab, setSelectedLabelId, setSelectedArtistId } = useAppStore();
+  const { labels, demos, releases, addDemo, locale, userProfile, setUserProfile, getGenres, artists, setActiveTab, setSelectedLabelId, setSelectedArtistId } = useAppStore();
   const { toast } = useToast();
   const genres = getGenres();
 
@@ -96,6 +97,155 @@ export function PitchGenerator() {
   const [sendProgress, setSendProgress] = useState({ current: 0, total: 0 });
   const [campaignComplete, setCampaignComplete] = useState(false);
   const [campaignResults, setCampaignResults] = useState({ sent: 0, skipped: 0 });
+
+  // Demo picker EP mode state — mirrors the same feature in the label detail
+  // dialog (label-finder.tsx). When `epMode` is on, clicking a demo chip
+  // adds/removes it from `selectedDemoIds`; with 2+ demos selected, the form
+  // auto-builds an EP pitch (trackName = "EP (N tracce)", note = tracklist).
+  const [epMode, setEpMode] = useState(false);
+  const [selectedDemoIds, setSelectedDemoIds] = useState<Set<string>>(new Set());
+
+  // Helper: extract the SoundCloud link from a Demo.
+  const getDemoScLink = useCallback((d: Demo): string => {
+    if (d.link) return d.link;
+    const sc = d.links?.find((l) => l.type === "soundcloud");
+    return sc?.value || "";
+  }, []);
+
+  // Helper: extract the primary artist from a Demo.
+  const getDemoPrimaryArtist = useCallback((d: Demo): string => {
+    return d.artists?.[0] || d.artistName || "";
+  }, []);
+
+  // Helper: format the collaborator suffix for a Demo.
+  const getDemoCollaborators = useCallback((d: Demo): string => {
+    if (d.artists && d.artists.length > 1) {
+      return ` × ${d.artists.slice(1).join(", ")}`;
+    }
+    return "";
+  }, []);
+
+  // Demo picker handler — same UX as the label detail dialog.
+  // See handlePickDemoForPitch in label-finder.tsx for the full design.
+  const handlePickDemo = useCallback((demo: Demo) => {
+    if (!epMode) {
+      // === Single-pick mode ===
+      setTrackName(demo.trackName);
+      const primaryArtist = getDemoPrimaryArtist(demo);
+      if (primaryArtist) setArtistName(primaryArtist);
+      const scLinkValue = getDemoScLink(demo);
+      setScLink(scLinkValue);
+      if (demo.genre) setSelectedGenre(demo.genre);
+      if (demo.bpm) setTrackBpm(demo.bpm);
+      if (demo.key) setTrackKey(demo.key);
+      if (demo.analysis) {
+        setTrackAnalysis({
+          bpm: demo.analysis.bpm,
+          bpmConfidence: demo.analysis.bpmConfidence,
+          key: {
+            camelot: demo.analysis.key.camelot,
+            confidence: demo.analysis.key.confidence,
+          },
+        });
+      } else {
+        setTrackAnalysis(null);
+      }
+
+      // If this demo is part of a Release (EP), expand the form to pitch
+      // the whole EP: trackName = release.title, note = tracklist with
+      // every track's name + SoundCloud link.
+      if (demo.parentReleaseId) {
+        const release = releases.find((r) => r.id === demo.parentReleaseId);
+        const epTracks = demos
+          .filter((d) => d.parentReleaseId === demo.parentReleaseId)
+          .sort((a, b) => new Date(a.createdAt).getTime() - new Date(b.createdAt).getTime());
+        if (release && epTracks.length > 1) {
+          setTrackName(release.title);
+          const tracklist = epTracks
+            .map((t, i) => {
+              const tLink = getDemoScLink(t);
+              const collab = getDemoCollaborators(t);
+              return `${i + 1}. ${t.trackName}${collab}${tLink ? ` — ${tLink}` : ""}`;
+            })
+            .join("\n");
+          setCustomNote(tracklist);
+          toast({
+            title: locale === "it" ? "EP caricato" : "EP loaded",
+            description: `${release.title} (${epTracks.length} ${locale === "it" ? "tracce" : "tracks"})`,
+          });
+          return;
+        }
+      }
+
+      setCustomNote("");
+      toast({
+        title: locale === "it" ? "Demo caricata" : "Demo loaded",
+        description: `"${demo.trackName}"${getDemoCollaborators(demo)}`,
+      });
+      return;
+    }
+
+    // === EP multi-select mode ===
+    const next = new Set(selectedDemoIds);
+    if (next.has(demo.id)) next.delete(demo.id);
+    else next.add(demo.id);
+    setSelectedDemoIds(next);
+
+    const selectedDemos = demos
+      .filter((d) => next.has(d.id))
+      .sort((a, b) => new Date(a.createdAt).getTime() - new Date(b.createdAt).getTime());
+
+    if (selectedDemos.length === 0) {
+      setTrackName("");
+      setScLink("");
+      setCustomNote("");
+      setTrackAnalysis(null);
+      return;
+    }
+
+    if (selectedDemos.length === 1) {
+      const d = selectedDemos[0];
+      setTrackName(d.trackName);
+      const primaryArtist = getDemoPrimaryArtist(d);
+      if (primaryArtist) setArtistName(primaryArtist);
+      setScLink(getDemoScLink(d));
+      setCustomNote("");
+      setTrackAnalysis(null);
+      return;
+    }
+
+    // Multiple demos — build an EP form
+    const firstDemo = selectedDemos[0];
+    const primaryArtist = getDemoPrimaryArtist(firstDemo) || userProfile.artistName || "";
+    const firstScLink = getDemoScLink(firstDemo);
+    const tracklist = selectedDemos
+      .map((t, i) => {
+        const tLink = getDemoScLink(t);
+        const collab = getDemoCollaborators(t);
+        return `${i + 1}. ${t.trackName}${collab}${tLink ? ` — ${tLink}` : ""}`;
+      })
+      .join("\n");
+    setTrackName(
+      locale === "it"
+        ? `EP (${selectedDemos.length} tracce)`
+        : `EP (${selectedDemos.length} tracks)`
+    );
+    if (primaryArtist) setArtistName(primaryArtist);
+    setScLink(firstScLink);
+    setCustomNote(tracklist);
+    setTrackAnalysis(null);
+  }, [
+    epMode,
+    selectedDemoIds,
+    demos,
+    releases,
+    userProfile.artistName,
+    locale,
+    toast,
+    getDemoScLink,
+    getDemoPrimaryArtist,
+    getDemoCollaborators,
+  ]);
 
   // Save profile fields on blur
   // ⚠️ Only artistName is saved — scLink is per-track, not a profile field,
@@ -393,63 +543,74 @@ export function PitchGenerator() {
             </h3>
           </div>
 
-          {/* Demo picker — lets the user recall a saved demo (or EP track)
-              from their archive instead of retyping everything. When a demo
-              is picked, we auto-fill trackName, artistName, scLink, genre,
-              BPM, key. The user can still edit anything afterwards. */}
+          {/* Demo picker — lets the user recall a saved demo (or build an EP
+              pitch from multiple demos) from their archive instead of
+              retyping everything. When a demo is picked, we auto-fill
+              trackName, artistName, scLink, genre, BPM, key (and for EPs,
+              the tracklist goes in the note). The user can still edit
+              anything afterwards. Same UX as the inline pitch form in the
+              label detail dialog (label-finder.tsx). */}
           {demos.length > 0 && (
             <div className="space-y-1.5 mb-3 rounded-md border border-primary/20 bg-primary/5 p-3">
-              <UILabel className="text-xs font-mono uppercase text-primary flex items-center gap-1.5">
-                <Sparkles className="h-3 w-3" />
-                {locale === "it" ? "Scegli demo salvata" : "Pick a saved demo"}
-                <span className="ml-1 text-[10px] text-muted-foreground/60 normal-case font-sans">
-                  {locale === "it"
-                    ? "(precompila i campi — modificabili dopo)"
-                    : "(auto-fills the form — editable afterwards)"}
-                </span>
-              </UILabel>
+              <div className="flex items-center justify-between gap-2 flex-wrap">
+                <UILabel className="text-xs font-mono uppercase text-primary flex items-center gap-1.5">
+                  <Sparkles className="h-3 w-3" />
+                  {locale === "it" ? "Scegli demo salvata" : "Pick a saved demo"}
+                  <span className="ml-1 text-[10px] text-muted-foreground/60 normal-case font-sans">
+                    {locale === "it"
+                      ? "(precompila i campi — modificabili dopo)"
+                      : "(auto-fills the form — editable afterwards)"}
+                  </span>
+                </UILabel>
+                <button
+                  type="button"
+                  onClick={() => {
+                    const newMode = !epMode;
+                    setEpMode(newMode);
+                    if (!newMode) {
+                      setSelectedDemoIds(new Set());
+                    } else {
+                      // Entering EP mode — clear the current form so the
+                      // user starts fresh
+                      setTrackName("");
+                      setScLink("");
+                      setCustomNote("");
+                      setTrackAnalysis(null);
+                    }
+                  }}
+                  className={`text-[10px] font-medium px-2 py-0.5 rounded border transition-colors inline-flex items-center gap-1 ${
+                    epMode
+                      ? "bg-purple-500/20 text-purple-300 border-purple-500/40"
+                      : "bg-secondary/50 text-muted-foreground border-border/50 hover:border-purple-500/30 hover:text-purple-300"
+                  }`}
+                  title={locale === "it"
+                    ? "Modalità EP: seleziona più tracce per creare un pitch EP"
+                    : "EP mode: select multiple tracks to build an EP pitch"}
+                >
+                  <Disc3 className="h-3 w-3" />
+                  {epMode
+                    ? (locale === "it"
+                        ? `EP attivo (${selectedDemoIds.size})`
+                        : `EP active (${selectedDemoIds.size})`)
+                    : (locale === "it" ? "Modalità EP" : "EP mode")}
+                </button>
+              </div>
               <div className="flex flex-wrap gap-1.5">
                 {demos
                   .slice()
                   .sort((a, b) => new Date(b.createdAt).getTime() - new Date(a.createdAt).getTime())
                   .slice(0, 50)
                   .map((d) => {
-                    const isActive = trackName === d.trackName && (d.artists?.[0] || d.artistName) === artistName;
-                    const otherArtists = (d.artists && d.artists.length > 1)
-                      ? ` × ${d.artists.slice(1).join(", ")}`
-                      : "";
+                    const isActive = epMode
+                      ? selectedDemoIds.has(d.id)
+                      : (trackName === d.trackName &&
+                          (d.artists?.[0] || d.artistName) === artistName);
+                    const otherArtists = getDemoCollaborators(d);
                     return (
                       <button
                         key={d.id}
                         type="button"
-                        onClick={() => {
-                          setTrackName(d.trackName);
-                          const primaryArtist = d.artists?.[0] || d.artistName || "";
-                          if (primaryArtist) setArtistName(primaryArtist);
-                          if (d.link) setScLink(d.link);
-                          else if (d.links?.find(l => l.type === "soundcloud")) {
-                            setScLink(d.links.find(l => l.type === "soundcloud")!.value);
-                          }
-                          if (d.genre) setSelectedGenre(d.genre);
-                          if (d.bpm) setTrackBpm(d.bpm);
-                          if (d.key) setTrackKey(d.key);
-                          if (d.analysis) {
-                            setTrackAnalysis({
-                              bpm: d.analysis.bpm,
-                              bpmConfidence: d.analysis.bpmConfidence,
-                              key: {
-                                camelot: d.analysis.key.camelot,
-                                confidence: d.analysis.key.confidence,
-                              },
-                            });
-                          } else {
-                            setTrackAnalysis(null);
-                          }
-                          toast({
-                            title: locale === "it" ? "Demo caricata" : "Demo loaded",
-                            description: `"${d.trackName}"${otherArtists}`,
-                          });
-                        }}
+                        onClick={() => handlePickDemo(d)}
                         className={`inline-flex items-center gap-1.5 rounded-md border px-2 py-1 text-[11px] font-medium transition-colors ${
                           isActive
                             ? "bg-primary text-primary-foreground border-primary"
@@ -475,6 +636,28 @@ export function PitchGenerator() {
                   </span>
                 )}
               </div>
+              {epMode && selectedDemoIds.size > 0 && (
+                <button
+                  type="button"
+                  onClick={() => {
+                    setSelectedDemoIds(new Set());
+                    setTrackName("");
+                    setScLink("");
+                    setCustomNote("");
+                    setTrackAnalysis(null);
+                  }}
+                  className="text-[10px] text-muted-foreground hover:text-foreground underline"
+                >
+                  {locale === "it" ? "Cancella selezione EP" : "Clear EP selection"}
+                </button>
+              )}
+              {epMode && selectedDemoIds.size === 1 && (
+                <p className="text-[10px] text-amber-400/70">
+                  {locale === "it"
+                    ? "Seleziona almeno 2 tracce per creare un pitch EP."
+                    : "Select at least 2 tracks to build an EP pitch."}
+                </p>
+              )}
             </div>
           )}
 

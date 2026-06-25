@@ -644,3 +644,98 @@ Stage Summary:
 - Vercel deploy in progress
 - If the error happens again, the inline card will show the actual error message
   so we can identify the exact throw site and fix it definitively
+
+---
+Task ID: 21
+Agent: Main Agent
+Task: Add demo picker (with EP multi-select) to inline label detail pitch form
+
+Work Log:
+- User report: opens KOSMOS label detail dialog, fills contact data, clicks
+  "Genera Pitch" — the inline pitch form has EMPTY trackName / scLink /
+  artistName fields even though the user has 2 demos in the DB (Define
+  Ourself, Night Shift). User expects a "menu a tendina" to pick an existing
+  demo with one click, and to optionally build an EP pitch from multiple
+  demos. Quote: "a cosa serve aver la pagina Demo con l'apposito aggiungi
+  demo?"
+- ROOT CAUSE: the label detail dialog has its OWN inline pitch form
+  (pitchTrackName / pitchScLink / pitchArtistName / pitchNote state),
+  completely separate from the standalone PitchGenerator component. The
+  standalone PitchGenerator already had a chip-based demo picker (added in
+  a previous task), but the dialog's inline form had NO demo picker at
+  all — the user had to retype everything.
+- BONUS BUG FOUND: the dialog's openDetail was pre-filling scLink from
+  userProfile.scLink (the user's profile SoundCloud link), and the
+  handlePitchScLinkBlur handler was saving the field back to
+  userProfile.scLink — same contamination bug we already fixed in the
+  standalone PitchGenerator in a previous session, but the same fix had
+  not been applied to label-finder.tsx. The user's screenshot showed
+  "https://on.soundcloud.com/CqzaM3JgWrWENvbXsN" (their profile link) in
+  the scLink field — that was this bug.
+- Changes to src/components/label-finder.tsx:
+  * Added `releases` and `type Demo` to the destructure / imports
+  * Added state: `pitchEpMode` (boolean), `pitchSelectedDemoIds` (Set<string>)
+  * openDetail: removed `setPitchScLink(userProfile.scLink || "")`,
+    now sets "" (matches the pitch-generator.tsx fix). Also resets
+    pitchEpMode + pitchSelectedDemoIds when opening a new label.
+  * handlePitchScLinkBlur: now a no-op (matches the pitch-generator.tsx
+    fix). The user's profile SoundCloud link is managed on the Profile
+    page, not silently overwritten by per-track pitch forms.
+  * Added helpers: getDemoScLink, getDemoPrimaryArtist, getDemoCollaborators
+  * Added handlePickDemoForPitch(demo):
+    - Single mode (default): clicking a chip fills trackName, artistName,
+      scLink from the demo. If the demo is part of a Release (EP), it
+      instead fills the form with the EP title (release.title) and puts
+      the full tracklist (1. Track A — scLink\n2. Track B — scLink) in
+      the note, so the email body lists every track.
+    - EP mode (toggle on): clicking chips adds/removes them from
+      pitchSelectedDemoIds. With 0 or 1 selected, behaves like single.
+      With 2+ selected, auto-builds an EP form: trackName = "EP (N tracce)",
+      scLink = first demo's link, note = tracklist.
+  * Rendered a demo picker UI at the top of the inline pitch form
+    (only when demos.length > 0):
+    - Header with "Scegli demo salvata" label + EP mode toggle button
+      (Disc3 icon, purple when active)
+    - Chip list (up to 50 demos, sorted by createdAt desc), each chip:
+      Music2 icon + trackName + collaborator suffix + "EP" badge if
+      parentReleaseId is set
+    - "Cancella selezione EP" button when EP mode is on and selection
+      is non-empty
+    - Amber hint when EP mode is on and exactly 1 demo is selected
+      ("Seleziona almeno 2 tracce per creare un pitch EP")
+- Changes to src/components/pitch-generator.tsx (consistency):
+  * Added `releases` and `type Demo` to imports
+  * Added Disc3 to lucide-react imports
+  * Added state: `epMode` (boolean), `selectedDemoIds` (Set<string>)
+  * Added the same helpers (getDemoScLink, getDemoPrimaryArtist,
+    getDemoCollaborators) and the same handlePickDemo callback
+    (with the additional behavior of also filling genre / BPM / key /
+    trackAnalysis from the demo — the standalone PitchGenerator has
+    those fields, the dialog's inline form doesn't)
+  * Replaced the inline onClick handler in the existing chip UI with
+    onClick={() => handlePickDemo(d)} (was a 30-line inline block that
+    only handled single-pick)
+  * Added the same EP mode toggle button + multi-select chip behavior
+    + "Cancella selezione EP" + amber hint as the dialog version
+- Build successful (Next.js 16.2.9 Turbopack, 28 routes, no errors)
+- Pre-existing baseline TypeScript errors (41) unchanged — the one new
+  line-number shift on pitch-generator.tsx(480,17) is the same
+  addDemo call that was already missing genre/links/bpm/key before
+
+Stage Summary:
+- The label detail dialog inline pitch form now has the same demo picker
+  UX as the standalone Pitch tab
+- Single click on a demo chip fills the entire pitch form (trackName,
+  artistName, scLink) — no more retyping
+- If the demo is part of a saved EP, clicking its chip auto-fills the
+  pitch with the EP title + a numbered tracklist in the note
+- New "Modalità EP" toggle button lets the user multi-select demos to
+  build an ad-hoc EP pitch on the fly (trackName = "EP (N tracce)",
+  note = tracklist with all selected tracks + their SC links)
+- Same scLink contamination bug from the previous PitchGenerator fix
+  is now also fixed in the label detail dialog (openDetail no longer
+  pre-fills from userProfile.scLink; onBlur no longer saves to
+  userProfile.scLink)
+- Both pitch UIs (standalone Pitch tab + label detail dialog) now have
+  consistent demo picker UX with EP multi-select
+- Vercel deploy in progress
