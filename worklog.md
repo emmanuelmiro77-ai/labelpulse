@@ -646,413 +646,151 @@ Stage Summary:
   so we can identify the exact throw site and fix it definitively
 
 ---
-Task ID: 21
+Task ID: cross-account-isolation-fix
 Agent: Main Agent
-Task: Add demo picker (with EP multi-select) to inline label detail pitch form
+Task: 🚨 CRITICAL — Fix cross-account data leak (multi-user isolation)
 
 Work Log:
-- User report: opens KOSMOS label detail dialog, fills contact data, clicks
-  "Genera Pitch" — the inline pitch form has EMPTY trackName / scLink /
-  artistName fields even though the user has 2 demos in the DB (Define
-  Ourself, Night Shift). User expects a "menu a tendina" to pick an existing
-  demo with one click, and to optionally build an EP pitch from multiple
-  demos. Quote: "a cosa serve aver la pagina Demo con l'apposito aggiungi
-  demo?"
-- ROOT CAUSE: the label detail dialog has its OWN inline pitch form
-  (pitchTrackName / pitchScLink / pitchArtistName / pitchNote state),
-  completely separate from the standalone PitchGenerator component. The
-  standalone PitchGenerator already had a chip-based demo picker (added in
-  a previous task), but the dialog's inline form had NO demo picker at
-  all — the user had to retype everything.
-- BONUS BUG FOUND: the dialog's openDetail was pre-filling scLink from
-  userProfile.scLink (the user's profile SoundCloud link), and the
-  handlePitchScLinkBlur handler was saving the field back to
-  userProfile.scLink — same contamination bug we already fixed in the
-  standalone PitchGenerator in a previous session, but the same fix had
-  not been applied to label-finder.tsx. The user's screenshot showed
-  "https://on.soundcloud.com/CqzaM3JgWrWENvbXsN" (their profile link) in
-  the scLink field — that was this bug.
-- Changes to src/components/label-finder.tsx:
-  * Added `releases` and `type Demo` to the destructure / imports
-  * Added state: `pitchEpMode` (boolean), `pitchSelectedDemoIds` (Set<string>)
-  * openDetail: removed `setPitchScLink(userProfile.scLink || "")`,
-    now sets "" (matches the pitch-generator.tsx fix). Also resets
-    pitchEpMode + pitchSelectedDemoIds when opening a new label.
-  * handlePitchScLinkBlur: now a no-op (matches the pitch-generator.tsx
-    fix). The user's profile SoundCloud link is managed on the Profile
-    page, not silently overwritten by per-track pitch forms.
-  * Added helpers: getDemoScLink, getDemoPrimaryArtist, getDemoCollaborators
-  * Added handlePickDemoForPitch(demo):
-    - Single mode (default): clicking a chip fills trackName, artistName,
-      scLink from the demo. If the demo is part of a Release (EP), it
-      instead fills the form with the EP title (release.title) and puts
-      the full tracklist (1. Track A — scLink\n2. Track B — scLink) in
-      the note, so the email body lists every track.
-    - EP mode (toggle on): clicking chips adds/removes them from
-      pitchSelectedDemoIds. With 0 or 1 selected, behaves like single.
-      With 2+ selected, auto-builds an EP form: trackName = "EP (N tracce)",
-      scLink = first demo's link, note = tracklist.
-  * Rendered a demo picker UI at the top of the inline pitch form
-    (only when demos.length > 0):
-    - Header with "Scegli demo salvata" label + EP mode toggle button
-      (Disc3 icon, purple when active)
-    - Chip list (up to 50 demos, sorted by createdAt desc), each chip:
-      Music2 icon + trackName + collaborator suffix + "EP" badge if
-      parentReleaseId is set
-    - "Cancella selezione EP" button when EP mode is on and selection
-      is non-empty
-    - Amber hint when EP mode is on and exactly 1 demo is selected
-      ("Seleziona almeno 2 tracce per creare un pitch EP")
-- Changes to src/components/pitch-generator.tsx (consistency):
-  * Added `releases` and `type Demo` to imports
-  * Added Disc3 to lucide-react imports
-  * Added state: `epMode` (boolean), `selectedDemoIds` (Set<string>)
-  * Added the same helpers (getDemoScLink, getDemoPrimaryArtist,
-    getDemoCollaborators) and the same handlePickDemo callback
-    (with the additional behavior of also filling genre / BPM / key /
-    trackAnalysis from the demo — the standalone PitchGenerator has
-    those fields, the dialog's inline form doesn't)
-  * Replaced the inline onClick handler in the existing chip UI with
-    onClick={() => handlePickDemo(d)} (was a 30-line inline block that
-    only handled single-pick)
-  * Added the same EP mode toggle button + multi-select chip behavior
-    + "Cancella selezione EP" + amber hint as the dialog version
-- Build successful (Next.js 16.2.9 Turbopack, 28 routes, no errors)
-- Pre-existing baseline TypeScript errors (41) unchanged — the one new
-  line-number shift on pitch-generator.tsx(480,17) is the same
-  addDemo call that was already missing genre/links/bpm/key before
+- Diagnosed root cause of cross-account data contamination (user's friend
+  saw user's data on friend's own phone, logged in with friend's own email)
+- Found 4 chained bugs:
+  1. supabase-schema.sql:54 — RLS was "Allow ALL TO EVERYONE" (USING (true) WITH CHECK (true))
+  2. supabase.ts:287 — getCloudRowId() returned shared "default" row when email was null
+     (during session loading, logout, expired session) → users in transitional state
+     would read/write the SAME shared row → contamination
+  3. store.ts:246 — PRIMARY_KEY = "labelpulse-storage" (global, not per-user)
+  4. store.ts:2521 — mergeCloudData does UNION-by-id (never replaces), so once
+     contaminated, the bad data never gets cleaned up — it just merges with the
+     new user's data forever
+
+- Implemented 5-layer defense-in-depth fix:
+
+  Fix #1 — Eliminate "default" row fallback (supabase.ts):
+    - Removed DEFAULT_CLOUD_ROW_ID constant
+    - getCloudRowId() returns null if no email
+    - saveStateToCloud / loadStateFromCloud / setupRealtimeSubscription /
+      saveArtistsToCloud / getArtistsCloudSyncInfo / getMainCloudSyncInfo /
+      forcePushLocalToCloud / forcePushArtistsToCloud all check for null
+      rowId and SKIP the operation with a warning
+    - Added getCurrentUserEmail() exported function
+    - Added deleteCurrentUserCloudRow() + currentUserHasCloudData() helpers
+
+  Fix #2 — hardResetForUserSwitch() store action (store.ts):
+    - Added new action that wipes ALL user-owned data (labels→seed, demos→[],
+      releases→[], artists→[], userProfile→empty, gmailAuth→disconnected,
+      rankingSnapshots→[], etc.) but preserves system state (hasRehydrated,
+      hasCloudSynced, locale, activeTab)
+    - ALSO clears sidecar backups (PROFILE_BACKUP_KEY, SNAPSHOTS_BACKUP_KEY,
+      ARTISTS_SIDECAR_KEY) so the post-merge sidecar restore step doesn't
+      splice the previous user's profile/snapshots back in
+
+  Fix #3 — use-auth.ts hard reset on email change + clear on logout:
+    - When authenticated email CHANGES (login, switch user) or first login on
+      page load: call hardResetForUserSwitch() BEFORE loadFromCloud()
+    - When status === "unauthenticated" (logout): call hardResetForUserSwitch()
+      AND setCurrentUserEmail(null) so any pending debounced save is skipped
+    - Comprehensive comment block documenting all 4 contamination vectors
+      and how each is fixed
+
+  Fix #4 — Disable auto-upload of local data on first cloud sync (store.ts):
+    - Removed the `if (localHasRealData) await forceCloudSync();` block in
+      loadFromCloud() that would upload contaminated local data to a fresh
+      user's cloud row
+    - Now: if cloud is empty, user gets empty store (just seed labels). They
+      can import a backup manually if they have one
+    - Defensive log warning if localHasRealData is true (shouldn't happen
+      after hardResetForUserSwitch)
+
+  Fix #5 — Server-side DELETE endpoint + tightened RLS docs:
+    - Created /api/cloud/user-data DELETE route (route.ts) that:
+        * Authenticates via NextAuth server-side session (httpOnly cookie)
+        * Extracts email from session (NOT from user input)
+        * Uses SUPABASE_SERVICE_ROLE_KEY (server-only, never in client bundle)
+        * Deletes ONLY the user's own row (id = email) + their artists row
+        * A malicious user with the anon key CANNOT delete another user's row
+          via this endpoint
+    - Also added GET /api/cloud/user-data for checking if user has cloud data
+    - Updated supabase-schema.sql with:
+        * Removed `id='default'` row from initial INSERT (no more default)
+        * Added `DELETE FROM app_state WHERE id = 'default';` cleanup
+        * Comprehensive comment block documenting why RLS is permissive
+          (NextAuth, not Supabase Auth) and what defense-in-depth is in place
+        * "Production Hardening" section at bottom: instructions for routing
+          all writes through API endpoints + removing write perms from RLS
+
+  Cleanup feature — "Pulizia completa account" recovery button:
+    - Added to CloudRecovery component (src/components/cloud-recovery.tsx)
+    - Button is destructive (variant="destructive"), red
+    - AlertDialog with multi-paragraph warning explaining:
+        * Operation is IRREVERSIBLE
+        * What gets deleted (cloud row + local store + sidecars + IDB)
+        * Server-side authentication guarantees user can only delete their own row
+        * Suggestion to download backup first
+    - On confirm: calls DELETE /api/cloud/user-data → on success, calls
+      hardResetForUserSwitch() → toast notification → reload after 1.5s
+
+  Version bump:
+    - store.ts persist version 15 → 16
+    - Migration v16: clears sidecar backups (profile, snapshots, artists)
+      because they're per-device not per-user, could contain contaminated
+      data from any user who ever logged in on this device
+    - package.json version 2.2.0 → 2.3.0
+    - VERSIONS.md: added v2.3.0 entry with full description
 
 Stage Summary:
-- The label detail dialog inline pitch form now has the same demo picker
-  UX as the standalone Pitch tab
-- Single click on a demo chip fills the entire pitch form (trackName,
-  artistName, scLink) — no more retyping
-- If the demo is part of a saved EP, clicking its chip auto-fills the
-  pitch with the EP title + a numbered tracklist in the note
-- New "Modalità EP" toggle button lets the user multi-select demos to
-  build an ad-hoc EP pitch on the fly (trackName = "EP (N tracce)",
-  note = tracklist with all selected tracks + their SC links)
-- Same scLink contamination bug from the previous PitchGenerator fix
-  is now also fixed in the label detail dialog (openDetail no longer
-  pre-fills from userProfile.scLink; onBlur no longer saves to
-  userProfile.scLink)
-- Both pitch UIs (standalone Pitch tab + label detail dialog) now have
-  consistent demo picker UX with EP multi-select
-- Vercel deploy in progress
+- 5-layer defense-in-depth fix for cross-account data contamination
+- Bug #1 (default row): FIXED — no more shared row fallback
+- Bug #2 (no reset on user change): FIXED — hardResetForUserSwitch before
+  loadFromCloud
+- Bug #3 (no cleanup on logout): FIXED — hardReset on logout
+- Bug #4 (auto-upload contamination): FIXED — no more auto-upload
+- Bug #5 (permissive RLS): PARTIALLY FIXED — DELETE operations now go
+  through server-side API endpoint with NextAuth + service_role key.
+  Read/write operations still use anon key client-side (acceptable for
+  beta, but documented path to full production hardening in schema SQL)
+- For already-contaminated accounts: user can use "Pulizia completa
+  account" button in Profilo → Sincronizzazione Cloud → Diagnosi &
+  Ripristino to wipe their cloud + local data and start fresh
+- Existing contamination in cloud rows is NOT automatically cleaned —
+  users must click the "Pulizia completa account" button themselves
+- Production hardening path documented in supabase-schema.sql
+
+Files modified:
+- src/lib/supabase.ts (removed "default" row, null checks everywhere,
+  added deleteCurrentUserCloudRow + currentUserHasCloudData)
+- src/lib/store.ts (hardResetForUserSwitch action, version bump 15→16,
+  v16 migration clears sidecars, removed auto-upload in loadFromCloud)
+- src/lib/use-auth.ts (complete rewrite: hard reset before loadFromCloud,
+  hard reset on logout, comprehensive comment block)
+- src/components/cloud-recovery.tsx (added Trash2 icon, wipeAccount
+  action handler, "Pulizia completa account" button, AlertDialog
+  confirmation with red styling and full warning text)
+- src/app/api/cloud/user-data/route.ts (NEW — DELETE + GET endpoints,
+  NextAuth + service_role key, email from session not input)
+- supabase-schema.sql (removed default row, added cleanup DELETE,
+  comprehensive RLS documentation, production hardening section)
+- package.json (version 2.2.0 → 2.3.0)
+- VERSIONS.md (added v2.3.0 entry)
 
 ---
-Task ID: 22
-Agent: Main Agent
-Task: Implement EP single-link vs multi-link pitch modes + EP SoundCloud URL field on Release
+Task ID: chart-label-overlay
+Agent: main
+Task: Fix UX bug — clicking a label from the Rankings (Classifiche) page was switching tabs to Label Finder, losing the user's selected genre + scroll position. User wanted the label sheet to open as an overlay on top of the Rankings page, with the ranking still visible underneath so closing the sheet returns to the exact same view.
 
 Work Log:
-- User feedback: EP mode selects multiple tracks but the SoundCloud links
-  handling was confused — the body said "my latest track" (singular)
-  with only one SC link, while the note listed both tracks with their
-  own links (duplicating the first). User asked how to handle:
-  (a) EP vero with single SC album URL — user creates the EP on SC, gets
-  one link, pastes it in app
-  (b) Multi-traccia separata — each track keeps its own SC link, email
-  lists them all, format left open
-- User decision: "procedi lasciando spazio a tutte le possibilita" —
-  implement BOTH modes as a toggle, with the email body adapting to the
-  selected mode.
-
-Changes to src/lib/store.ts:
-- Added `epSoundCloudUrl?: string` to Release interface — optional
-  single SoundCloud URL for the whole EP (album/private set)
-- Bumped Zustand persist version 16 → 17
-- Added migration v17: backfill `epSoundCloudUrl: ""` on every existing
-  Release so the field is always present
-- addRelease/updateRelease automatically pick up the new field via
-  spread (no signature change needed)
-
-Changes to src/lib/pitch-utils.ts:
-- Added `PitchShape = "single" | "ep-single" | "ep-multi"` type
-- Added `PitchTrackEntry` interface (trackName + artistName + scLink)
-- generateBody now accepts `shape` and `epTracks` params (both optional,
-  default to "single" → backward compatible)
-- NEW ep-single template: "submit my latest EP 'XYZ'" + single link +
-  names-only tracklist section. IT + EN variants for all 4 tones.
-- NEW ep-multi template: "submit a selection of N tracks" + numbered
-  per-track list (each with attribution + own SC link) + explicit
-  "format left open to your preference (EP, separate singles, or
-  whichever track resonates)". IT + EN variants for all 4 tones.
-- generatePitch / generateSubject / generatePitchBody all extended with
-  shape + epTracks params. Subject adapts: "EP 'XYZ'" for ep-single,
-  "Selection of N tracks" for ep-multi, plain "Trackname" for single.
-
-Changes to src/components/label-finder.tsx (label detail dialog):
-- Imported PitchShape + PitchTrackEntry types
-- Added state: pitchEpLinkMode ("separate" | "single"), pitchEpSingleLink
-- openDetail resets both new states when opening a new label
-- handlePickDemoForPitch rewritten:
-  * Single-pick + demo in Release:
-    - If Release has epSoundCloudUrl → ep-single (use that URL,
-      names-only tracklist in note)
-    - Else → ep-multi (per-track SC links, empty note)
-  * EP multi-select + 2+ demos:
-    - separate mode → ep-multi (per-track links in body, empty note)
-    - single mode → ep-single (user-typed URL field, names-only note)
-- Added handleToggleEpLinkMode callback: switches between modes,
-  recomputes note (single = names-only tracklist, separate = empty)
-- Added derived memo `pitchEpTracks` (PitchTrackEntry[]) — computes the
-  track list from either the EP-mode selection set OR (in single-pick
-  mode) from the Release that the picked demo belongs to
-- Added derived memo `pitchShape` (PitchShape) — picks the right shape
-  based on pitchEpTracks.length + pitchEpLinkMode
-- Added derived memo `pitchEffectiveScLink` — single mode: pitchScLink;
-  ep-single: pitchEpSingleLink; ep-multi: "" (per-track links are in
-  pitchEpTracks)
-- Updated pitchText / pitchMailtoLink / pitchGmailLink / effectivePitchSubject
-  / effectivePitchBody useMemo to pass shape + epTracks + effectiveScLink
-- UI: added sub-toggle "Link separati" / "Link unico EP" (visible only
-  when EP mode is on AND 2+ demos are selected) with explanatory hint
-- UI: scLink field is now conditional on pitchShape:
-  * single → classic single-track SC link input (unchanged)
-  * ep-single → "Link EP SoundCloud" input bound to pitchEpSingleLink,
-    with placeholder "https://soundcloud.com/.../sets/ep-title" and
-    help text explaining it's the private album/set URL
-  * ep-multi → HIDDEN, replaced by an italic note explaining that
-    per-track links are baked into the email body
-
-Changes to src/components/pitch-generator.tsx (standalone Pitch tab):
-- Imported PitchShape + PitchTrackEntry types
-- Added state: epLinkMode, epSingleLink (mirrors label-finder.tsx)
-- handlePickDemo rewritten with the same logic as handlePickDemoForPitch
-- Added handleToggleEpLinkMode, epTracks, pitchShape, effectiveScLink
-  derived memos (same as label-finder.tsx)
-- getPitchForLabel now passes shape + epTracks + effectiveScLink
-- handleSendCampaign's addDemo call uses effectiveScLink instead of
-  raw scLink (so the demo record gets the right URL in EP modes)
-- UI: same sub-toggle + conditional scLink field as label-finder.tsx
-
-Changes to src/components/demo-tracker.tsx (Crea EP dialog):
-- Added state: epSoundCloudUrl
-- openAddEp resets epSoundCloudUrl to ""
-- openEditEp loads release.epSoundCloudUrl
-- handleSaveEp includes epSoundCloudUrl in releaseData
-- UI: added "Link EP SoundCloud" input field in the EP dialog, placed
-  between the track selector and the EP notes. Field is optional with
-  extensive help text explaining when to use it (private album/set)
-  vs leaving it empty (tracks are separate on SC).
+- Investigated navigation flow: `RankingsPage.handleOpenLabel()` was calling both `setSelectedLabelId(label.id)` and `setActiveTab("labels")`. The tab switch unmounted `RankingsPage`, wiping `selectedGenre` / `sortMode` / `movementFilter` / scroll position.
+- Confirmed the label detail dialog uses Radix `Dialog` → `DialogPortal`, which renders to `document.body` via a portal. This means the dialog is independent of where `LabelFinder` is mounted in the React tree.
+- Modified `src/app/page.tsx`: both `<RankingsPage />` and `<LabelFinder />` are now ALWAYS mounted, wrapped in a `<div className={activeTab === "..." ? "" : "hidden"}>`. The inactive one is hidden via CSS (`display: none`) but its React state is preserved across tab switches. Other tabs (dashboard, artists, demos, pitch, profile) remain conditionally rendered as before.
+- Modified `src/components/rankings-page.tsx`: `handleOpenLabel` no longer calls `setActiveTab("labels")`. It only sets `selectedLabelId`. The always-mounted `LabelFinder` (hidden behind `RankingsPage`) sees the `selectedLabelId` change in its existing `useEffect`, calls `openDetail(label)`, and the `<Dialog>` renders through the Radix portal on top of `RankingsPage`. Closing the dialog leaves the user on the Rankings tab with all state intact.
+- Removed unused `setActiveTab` from the `useAppStore()` destructure in `rankings-page.tsx`.
+- Built the static export via `scripts/build-static.sh` (moves `src/app/api/` out of the way during build, then restores it). Build succeeded. New chunk `0j9qoh3jx95ge.js` contains the new visibility logic (`rankings"===e?"":"hidden"` and `labels"===e?"":"hidden"`).
 
 Stage Summary:
-- Two distinct EP pitch workflows now supported:
-  1. EP vero (single link): user creates EP as private album/set on
-     SoundCloud → pastes URL in Crea EP dialog → picking any track of
-     that EP (or selecting multiple in EP mode + "Link unico EP")
-     produces an "ep-single" pitch with one URL + names-only tracklist
-  2. Multi-traccia separata: tracks stay separate on SC → picking an
-     EP without epSoundCloudUrl, or selecting multiple in EP mode +
-     "Link separati", produces an "ep-multi" pitch with per-track
-     links + "format left open" language
-- Subject line adapts: "Demo Submission: EP 'XYZ' — Artist" (ep-single),
-  "Demo Submission: Selection of N tracks — Artist" (ep-multi),
-  'Demo Submission: "Trackname" — Artist' (single)
-- Email body uses different templates per shape (4 tones × 2 langs ×
-  3 shapes = 24 base templates, plus per-tone variants)
-- The same UX is consistent between the label detail dialog inline
-  pitch form AND the standalone Pitch tab
-- Build successful (Next.js 16.2.9 Turbopack, 28 routes, no errors)
-- Pre-existing baseline TypeScript errors unchanged
-- Vercel deploy in progress
+- User flow now: click "Classifiche" → click genre → click label → label sheet opens as overlay → close sheet → back on the same rankings view with genre + scroll preserved.
+- Cross-tab navigation Rankings ↔ Labels via the nav buttons also preserves each page's state (both always mounted).
+- The artist-explorer → LabelFinder flow is unchanged: it still calls `setActiveTab("labels")` because the user is intentionally leaving the artist page.
+- No breaking changes to other tabs or to the Vercel deployment (API routes untouched).
 
----
-Task ID: 23
-Agent: Main Agent
-Task: Fix multi-track SoundCloud link rendering in demo detail dialog
-
-Work Log:
-- User feedback (screenshot): opened a multi-track demo "Define Ourself" in
-  the tracker, but the SoundCloud link field only showed ONE URL
-  (https://on.soundcloud.com/paDXju69mua5KsewNi — Night Shift's URL). The
-  pitchText in the same dialog correctly listed BOTH tracks with their
-  respective SC links (Night Shift + Define Ourself). The user identified
-  this as a bug.
-- ROOT CAUSE: DemoDetailDialog rendered only `demo.link` (single field).
-  In EP multi-select mode, handleSendCampaign's addDemo call set
-  `link: effectiveScLink.trim() || scLink.trim()` — in ep-multi mode,
-  effectiveScLink is "" (per-track links are in epTracks), so it fell back
-  to `scLink`, which in EP mode is set to the FIRST selected demo's link.
-  Result: the saved Demo record had only Night Shift's URL in demo.link,
-  even though the pitchText correctly contained both tracks.
-
-Changes to src/lib/store.ts:
-- Imported PitchTrackEntry type from pitch-utils
-- Added `pitchTracks?: PitchTrackEntry[]` field to Demo interface —
-  structured per-track info (trackName + artistName + scLink per entry)
-- Bumped persist version 17 → 18
-- Added v18 migration: backfill `pitchTracks: []` on all existing demos
-
-Changes to src/lib/pitch-utils.ts:
-- New `parseMultiTrackFromPitchText(text)` exported helper — extracts
-  multi-track entries from a pitchText body. Recognizes both formats
-  emitted by generatePitchBody:
-    ep-multi  → "1. TrackName (Artist)\n   https://soundcloud.com/..."
-    ep-single → "1. TrackName — Artist" (no per-track URL)
-  Returns PitchTrackEntry[] (possibly with empty scLink for ep-single
-  tracklist lines). Caller treats result as multi-track when length >= 2.
-
-Changes to src/components/demo-tracker.tsx:
-- Imported parseMultiTrackFromPitchText + PitchTrackEntry type
-- Added `releases: Release[]` prop to DemoDetailDialog (passed at both
-  render sites — Kanban view + Table view)
-- Added `displayTracks` useMemo inside DemoDetailDialog — resolves the
-  tracks to render in this order:
-    1. demo.pitchTracks (structured field — populated going forward)
-    2. demo.parentReleaseId → look up Release + its tracks (uses
-       release.epSoundCloudUrl if set → single EP album URL; else
-       builds per-track entries from the release's demos)
-    3. parseMultiTrackFromPitchText(demo.pitchText) — back-compat for
-       existing demos saved before pitchTracks was added
-    4. fallback: single-track display using demo.link + demo.trackName
-- Added `isMultiTrack` derived boolean (displayTracks.length >= 2)
-- Replaced the single-SC-link rendering with a multi-track-aware version:
-  * 1 track → same single anchor element as before (no visual change)
-  * 2+ tracks → numbered <ol> with each track as a <li>:
-    - track name (bold)
-    - artist credit (small muted text)
-    - clickable SC link (mono font, breaks-all)
-    - "Missing link" amber italic if scLink is empty (ep-single case
-      where the tracklist has names but no per-track URLs — the EP
-      album URL is shown as the single link above the list)
-  * Section label adapts: "Link SoundCloud — N tracce" (IT) /
-    "SoundCloud Links — N tracks" (EN) when multi-track, plain
-    "SoundCloud Link" when single
-
-Changes to src/components/pitch-generator.tsx (handleSendCampaign):
-- When in EP multi-track mode (epTracks.length >= 2), pass
-  `pitchTracks: epTracks` to addDemo so the new Demo record has the
-  structured per-track info from creation. In single-track mode,
-  pitchTracks stays undefined (backward compat).
-- Added epTracks to handleSendCampaign's useCallback dep array.
-
-Changes to src/components/label-finder.tsx:
-- Same fix applied to all 4 addDemo call sites:
-  * handleOpenGmail
-  * handleSendAndTrack
-  * handleDirectSend
-  * "Track Demo Only" button onClick
-- Each now passes `pitchTracks: pitchEpTracks.length >= 2 ? pitchEpTracks
-  : undefined` when creating the demo record
-- Added pitchEpTracks to the useCallback dep arrays of the 3 handler fns
-
-Stage Summary:
-- The demo detail dialog now correctly shows ALL SoundCloud links when a
-  demo is a multi-track / EP pitch, instead of just the first track's URL
-- The fix works for both NEW demos (saved going forward via the EP-mode
-  pitch flows, which now populate demo.pitchTracks) AND EXISTING demos
-  (the parseMultiTrackFromPitchText fallback extracts multi-track info
-  from the pitchText body)
-- For demos that belong to a saved Release (EP), the dialog also surfaces
-  the EP album URL if set (release.epSoundCloudUrl), or falls back to
-  listing each track's individual SC link
-- Single-track demos are unchanged (1 track → same single anchor as before)
-- Build successful (Next.js 16.2.9 Turbopack, 28 routes, no errors)
-- Pre-existing baseline TypeScript errors unchanged — the one
-  pitch-generator.tsx(617,26) error is the SAME pre-existing missing-
-  fields error (links/genre/bpm/key) that was already there before, just
-  shifted in line number due to the added pitchTracks line
-- Pushed to main (commit 19d0fc8)
-
----
-Task ID: 24
-Agent: Main Agent
-Task: Fix Gmail API sending garbage emails (no subject + MIME headers in body + wrong single-track content)
-
-Work Log:
-- User disaster report: clicked "Invia direttamente da Gmail" on the demo
-  detail dialog for "Define Ourself" (a multi-track EP pitch). The email
-  that was actually sent to info@alula-tunes.com had:
-    (a) Subject: "(nessun oggetto)" — NO subject
-    (b) Body started with raw MIME headers:
-        "Subject: =?utf-8?B?RGVtbyBTdWJtaXNzaW9uOiAiRGVtbyIg4oCUIEVtbWFudWVsIE1pcm8=?="
-        "Content-Type: text/plain; charset=utf-8"
-        "MIME-Version: 1.0"
-    (c) The actual body was a SINGLE-track pitch ("my latest track 'Demo'")
-        with only ONE SoundCloud link — NOT the multi-track pitch
-        ("Selection of 2 tracks" with both SC URLs) shown in the preview.
-
-- TWO distinct bugs identified:
-
-BUG 1 — MIME headers leaking into body
-ROOT CAUSE (src/lib/gmail.ts): sendEmail() and sendReplyInThread() built
-the raw email as an array joined with \r\n. The optional Cc/In-Reply-To/
-References headers used the pattern:
-    ccHeader = cc.length > 0 ? `Cc: ${cc.join(", ")}\r\n` : ""
-Two failure modes:
-  (a) When the header was absent → array element was "" → joined with
-      \r\n produced a blank line between surrounding headers → RFC 2822
-      §3.5 interprets blank line as end of headers section → Gmail
-      treated Subject/Content-Type/MIME-Version as body.
-  (b) When the header was present → had trailing \r\n inside string +
-      join added another \r\n → double \r\n → same blank-line termination.
-
-FIX: rewrote both functions to build a headers array containing only the
-lines that should actually appear (no trailing \r\n inside any element,
-no empty-string elements for missing optional headers). Then join with
-\r\n and append "\r\n\r\n" + body to mark the headers/body separator.
-
-BUG 2 — effectivePitch ignoring saved pitchText
-ROOT CAUSE (src/components/demo-tracker.tsx): the effectivePitchSubject
-and effectivePitchBody useMemo hooks had this logic:
-    if (pitchEditedText === null) {
-      // user hasn't manually typed → regenerate fresh from demo fields
-      return generateSubject(demo.trackName, demo.artistName, ...)
-      return generatePitchBody(label.name, demo.trackName, demo.link, ...)
-    }
-    return parsePitchText(displayPitchText).subject/body
-
-The problem: when the user opens an existing demo (not editing), they see
-the saved multi-track pitch in the textarea (displayPitchText falls back
-to demo.pitchText). But effectivePitchSubject/Body IGNORED demo.pitchText
-entirely and regenerated a fresh single-track pitch from demo.trackName
-(which was "Demo" — a placeholder) + demo.link (first track's SC URL only).
-Result: textarea showed the correct multi-track pitch, but the Gmail API
-send used the wrong single-track pitch.
-
-FIX: when pitchEditedText === null AND demo.pitchText exists, parse the
-subject/body FROM demo.pitchText. Only regenerate fresh when there's no
-saved pitchText at all.
-
-Applied the same fix to BOTH:
-  - DemoDetailDialog (line ~3724) — for demos opened from the tracker
-  - Add/Edit demo form (line ~354) — for demos being edited
-
-Changes to src/lib/gmail.ts:
-- sendEmail() rewritten: builds headers[] array with only the lines that
-  should appear (To, optional Cc, Subject, Content-Type, MIME-Version),
-  joins with \r\n, appends \r\n\r\n + body. No more empty-string array
-  elements, no more trailing \r\n inside string elements.
-- sendReplyInThread() rewritten with the same pattern (handles 3 optional
-  headers: Cc, In-Reply-To, References).
-
-Changes to src/components/demo-tracker.tsx:
-- effectivePitchSubject (DemoDetailDialog): added demo.pitchText
-  short-circuit before falling back to generateSubject()
-- effectivePitchBody (DemoDetailDialog): added demo.pitchText
-  short-circuit before falling back to generatePitchBody()
-- effectivePitchSubject (Add/Edit form): added editingDemo.pitchText
-  short-circuit before falling back to generateSubject()
-- effectivePitchBody (Add/Edit form): added editingDemo.pitchText
-  short-circuit before falling back to generatePitchBody()
-- Both fixes preserve backward compat: when there's no saved pitchText
-  (new demo), the fresh generation path is unchanged.
-
-/api/gmail/send/route.ts checked — it already used `if (cc) push()`
-conditional, so it didn't have Bug 1. No change needed there.
-
-Stage Summary:
-- Gmail API direct send now sends properly-structured MIME messages:
-  Subject appears as a real header (not base64-encoded text in the body),
-  body is just the message body, no MIME headers leak through.
-- "Invia direttamente da Gmail" now sends the SAME pitch text the user
-  sees in the preview textarea (including multi-track EP pitches with
-  all their SC links), instead of silently regenerating a single-track
-  pitch from demo.trackName + demo.link.
-- The bug was destructive: the email already went out to info@alula-tunes.com
-  with the wrong content and no subject. The user cannot un-send it. The
-  fix prevents this from happening again on future sends.
-- Build successful (Next.js 16.2.9 Turbopack, 28 routes, no new TS errors)
-- Pushed to main (commit 03f4d17)
+Files modified:
+- src/app/page.tsx (RankingsPage + LabelFinder now always mounted with CSS-toggled visibility)
+- src/components/rankings-page.tsx (handleOpenLabel no longer switches tabs; removed unused setActiveTab)

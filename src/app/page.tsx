@@ -396,12 +396,35 @@ export default function Home() {
         </div>
 
         {activeTab === "dashboard" && <Dashboard />}
-        {activeTab === "labels" && <LabelFinder />}
         {activeTab === "artists" && <ArtistExplorer />}
-        {activeTab === "rankings" && <RankingsPage />}
         {activeTab === "demos" && <DemoTracker />}
         {activeTab === "pitch" && <PitchGenerator />}
         {activeTab === "profile" && <ProducerProfile />}
+        {/*
+          Rankings + Labels are ALWAYS mounted (one visible, one hidden via
+          CSS) so that opening a label sheet FROM the Rankings page works as
+          an overlay rather than a tab switch.
+
+          WHY: When the user clicks a label name inside RankingsPage, we set
+          `selectedLabelId` in the store but DO NOT call setActiveTab("labels").
+          The always-mounted LabelFinder (hidden behind RankingsPage) sees
+          the selectedLabelId change, runs its useEffect, and opens the
+          detail <Dialog>. Because Radix Dialog renders through a portal at
+          document.body, the dialog appears on top of RankingsPage — exactly
+          what the user expects: the ranking (with selected genre + scroll
+          position) stays visible underneath, and closing the sheet returns
+          them to the exact same view.
+
+          Both components stay mounted across tab switches, so navigating
+          Rankings → Labels → Rankings preserves each page's state (filters,
+          scroll position, search query, etc.).
+        */}
+        <div className={activeTab === "rankings" ? "" : "hidden"}>
+          <RankingsPage />
+        </div>
+        <div className={activeTab === "labels" ? "" : "hidden"}>
+          <LabelFinder />
+        </div>
       </main>
 
       {/* Footer */}

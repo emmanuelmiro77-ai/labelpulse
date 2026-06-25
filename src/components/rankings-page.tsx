@@ -481,7 +481,7 @@ function buildRankedList(
 // ==================== COMPONENT ====================
 
 export function RankingsPage() {
-  const { labels, locale, rankingsUpdatedAt, rankingSnapshots, setActiveTab, setSelectedLabelId } = useAppStore();
+  const { labels, locale, rankingsUpdatedAt, rankingSnapshots, setSelectedLabelId } = useAppStore();
   const snapshots = rankingSnapshots || []; // defensive: might be undefined for existing users
   const [selectedGenre, setSelectedGenre] = useState<string | null>(null);
   const [sortMode, setSortMode] = useState<SortMode>("rank");
@@ -495,15 +495,29 @@ export function RankingsPage() {
   const [isRefreshing, setIsRefreshing] = useState(false);
   const [refreshFeedback, setRefreshFeedback] = useState<null | "done" | "error">(null);
 
-  // Click on a label name → navigate to the LabelFinder tab and auto-open
-  // the detail dialog for that label. Matches by id when possible, falls
-  // back to name (LabelFinder's useEffect handles both).
+  // Click on a label name → open the label detail dialog as an OVERLAY on
+  // top of the Rankings page, WITHOUT switching tabs.
+  //
+  // HOW: We set `selectedLabelId` in the store. LabelFinder is always
+  // mounted (see page.tsx — both RankingsPage and LabelFinder stay mounted,
+  // one visible, one hidden via CSS). When LabelFinder sees
+  // `selectedLabelId` change, its useEffect opens the detail <Dialog>. The
+  // Dialog renders through a Radix portal at document.body, so it appears
+  // on top of the Rankings page — the user sees the ranking (with their
+  // selected genre and scroll position) underneath the sheet.
+  //
+  // When the user closes the dialog, they're still on the Rankings tab —
+  // RankingsPage state (selectedGenre, sortMode, movementFilter, scroll
+  // position) is fully preserved because the component was never unmounted.
+  //
+  // We deliberately do NOT call setActiveTab("labels") here. Switching
+  // tabs would unmount RankingsPage and lose the user's place in the
+  // ranking — that was the original bug.
   const handleOpenLabel = useCallback(
     (label: Label) => {
       setSelectedLabelId?.(label.id || label.name);
-      setActiveTab("labels");
     },
-    [setActiveTab, setSelectedLabelId]
+    [setSelectedLabelId]
   );
 
   // Manual "refresh rankings" — pulls the latest global cloud data and
