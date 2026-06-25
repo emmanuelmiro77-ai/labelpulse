@@ -351,8 +351,19 @@ export function DemoTracker() {
 
   // Parse subject + body from the (possibly edited) pitch text — used by
   // mailto: and Gmail web links.
+  //
+  // Resolution order when user hasn't manually edited (pitchEditedText === null):
+  //   1. If editingDemo?.pitchText exists (saved pitch — possibly multi-track
+  //      EP), parse subject/body from it. Regenerating from formTrackName +
+  //      formLink would lose all EP multi-track info and produce a single-
+  //      track pitch with only the first SC link (same bug that was fixed
+  //      in DemoDetailDialog — see comment there for the full story).
+  //   2. Otherwise, freshly generate a single-track pitch from form fields.
   const effectivePitchSubject = useMemo(() => {
     if (pitchEditedText === null) {
+      if (editingDemo?.pitchText) {
+        return parsePitchText(editingDemo.pitchText).subject;
+      }
       return generateSubject(
         formTrackName.trim(),
         editingDemo?.artistName || userProfile.artistName || "",
@@ -364,6 +375,9 @@ export function DemoTracker() {
 
   const effectivePitchBody = useMemo(() => {
     if (pitchEditedText === null) {
+      if (editingDemo?.pitchText) {
+        return parsePitchText(editingDemo.pitchText).body;
+      }
       if (!formLabelObj || !formTrackName.trim()) return "";
       return generatePitchBody(
         formLabelObj.name,
@@ -3712,10 +3726,23 @@ function DemoDetailDialog({
 
   // Parse subject + body from the (possibly edited) pitch text. Used by
   // mailto:, Gmail web link, and Gmail API direct send.
+  //
+  // Resolution order when user hasn't manually edited (pitchEditedText === null):
+  //   1. If demo.pitchText exists (saved pitch — possibly multi-track EP),
+  //      parse subject/body from it. This is critical: regenerating from
+  //      demo.trackName + demo.link loses all EP multi-track info and
+  //      produces a single-track pitch with the wrong track name (e.g.
+  //      "Demo" placeholder) and only the first SC link.
+  //   2. Otherwise, freshly generate a single-track pitch from demo fields.
+  // When user HAS edited, parse from displayPitchText (which is pitchEditedText).
   const effectivePitchSubject = useMemo(() => {
-    // If user hasn't edited, prefer the canonical generated subject (cleaner
-    // than parsing it back out of the full text).
     if (pitchEditedText === null) {
+      // Prefer the saved pitchText — it's the source of truth for what
+      // the user actually wants to send (may be a multi-track EP pitch).
+      if (demo?.pitchText) {
+        return parsePitchText(demo.pitchText).subject;
+      }
+      // No saved pitch — generate a fresh single-track subject.
       return generateSubject(
         demo?.trackName?.trim() || "",
         demo?.artistName || userProfile.artistName || "",
@@ -3727,6 +3754,11 @@ function DemoDetailDialog({
 
   const effectivePitchBody = useMemo(() => {
     if (pitchEditedText === null) {
+      // Prefer the saved pitchText — same reasoning as above.
+      if (demo?.pitchText) {
+        return parsePitchText(demo.pitchText).body;
+      }
+      // No saved pitch — generate a fresh single-track body.
       if (!demo || !label) return "";
       return generatePitchBody(
         label.name,

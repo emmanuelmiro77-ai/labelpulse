@@ -344,19 +344,27 @@ export async function sendEmail(
   cc: string[] = []
 ): Promise<SendEmailResult> {
   try {
-    // Build RFC 2822 email
+    // Build RFC 2822 email — IMPORTANT: header lines must NOT contain a
+    // trailing \r\n themselves, and the array must NOT contain empty strings
+    // for missing optional headers. A blank line in the middle of the
+    // headers section terminates the headers prematurely (RFC 2822 §3.5),
+    // which causes Gmail to interpret everything after the blank line
+    // (Subject, Content-Type, MIME-Version, AND the body) as the message
+    // body. Result: the recipient sees "(no subject)" + raw MIME headers
+    // in the body. This was a real production bug — fixed by building the
+    // headers array with only the lines that should actually appear, then
+    // letting `.join("\r\n")` add the line endings.
     const toHeader = to.join(", ");
-    const ccHeader = cc.length > 0 ? `Cc: ${cc.join(", ")}\r\n` : "";
+    const headers: string[] = [`To: ${toHeader}`];
+    if (cc.length > 0) {
+      headers.push(`Cc: ${cc.join(", ")}`);
+    }
+    headers.push(`Subject: =?utf-8?B?${btoa(unescape(encodeURIComponent(subject)))}?=`);
+    headers.push("Content-Type: text/plain; charset=utf-8");
+    headers.push("MIME-Version: 1.0");
 
-    const rawEmail = [
-      `To: ${toHeader}`,
-      ccHeader,
-      `Subject: =?utf-8?B?${btoa(unescape(encodeURIComponent(subject)))}?=`,
-      "Content-Type: text/plain; charset=utf-8",
-      "MIME-Version: 1.0",
-      "",
-      body,
-    ].join("\r\n");
+    // Blank line separates headers from body (RFC 2822)
+    const rawEmail = headers.join("\r\n") + "\r\n\r\n" + body;
 
     const encodedEmail = btoa(unescape(encodeURIComponent(rawEmail)))
       .replace(/\+/g, "-")
@@ -416,27 +424,29 @@ export async function sendReplyInThread(
     const { to, subject, body, threadId, inReplyToMessageId, cc = [], references } = opts;
 
     const toHeader = to.join(", ");
-    const ccHeader = cc.length > 0 ? `Cc: ${cc.join(", ")}\r\n` : "";
-    const inReplyToHeader = inReplyToMessageId
-      ? `In-Reply-To: <${inReplyToMessageId}>\r\n`
-      : "";
-    const referencesHeader = references
-      ? `References: ${references}\r\n`
-      : inReplyToMessageId
-        ? `References: <${inReplyToMessageId}>\r\n`
-        : "";
 
-    const rawEmail = [
-      `To: ${toHeader}`,
-      ccHeader,
-      inReplyToHeader,
-      referencesHeader,
-      `Subject: =?utf-8?B?${btoa(unescape(encodeURIComponent(subject)))}?=`,
-      "Content-Type: text/plain; charset=utf-8",
-      "MIME-Version: 1.0",
-      "",
-      body,
-    ].join("\r\n");
+    // Build headers array — only include optional headers when they have a
+    // value. Empty strings in the array would create a blank line when
+    // joined with \r\n, terminating the headers section prematurely (see
+    // the matching fix in sendEmail above for the full story).
+    const headers: string[] = [`To: ${toHeader}`];
+    if (cc.length > 0) {
+      headers.push(`Cc: ${cc.join(", ")}`);
+    }
+    if (inReplyToMessageId) {
+      headers.push(`In-Reply-To: <${inReplyToMessageId}>`);
+    }
+    if (references) {
+      headers.push(`References: ${references}`);
+    } else if (inReplyToMessageId) {
+      headers.push(`References: <${inReplyToMessageId}>`);
+    }
+    headers.push(`Subject: =?utf-8?B?${btoa(unescape(encodeURIComponent(subject)))}?=`);
+    headers.push("Content-Type: text/plain; charset=utf-8");
+    headers.push("MIME-Version: 1.0");
+
+    // Blank line separates headers from body (RFC 2822)
+    const rawEmail = headers.join("\r\n") + "\r\n\r\n" + body;
 
     const encodedEmail = btoa(unescape(encodeURIComponent(rawEmail)))
       .replace(/\+/g, "-")
