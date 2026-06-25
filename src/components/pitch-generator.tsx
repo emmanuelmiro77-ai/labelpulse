@@ -609,6 +609,11 @@ export function PitchGenerator() {
         (d) => d.labelId === label.id && d.trackName.toLowerCase() === trackName.trim().toLowerCase()
       );
       if (!demoAlreadyExists) {
+        // In EP multi-track mode, capture the structured per-track list so
+        // the demo detail dialog can render every track's SoundCloud link
+        // (instead of just the first track's URL that ended up in `link`).
+        // epTracks is empty in single-track mode → pitchTracks stays undefined.
+        const pitchTracksForDemo = epTracks.length >= 2 ? epTracks : undefined;
         demoId = addDemo({
           trackName: trackName.trim(),
           labelId: label.id,
@@ -618,6 +623,7 @@ export function PitchGenerator() {
           notes: customNote.trim() ? `${customNote.trim()} (Campaign)` : "Campaign",
           pitchText: `Subject: ${subject}\n\n${body}`,
           artistName: artistName.trim(),
+          pitchTracks: pitchTracksForDemo,
         });
       }
 
@@ -685,7 +691,7 @@ export function PitchGenerator() {
       title: t(locale, "campaign.complete"),
       description: t(locale, "campaign.reviewAndSend").replace("{count}", String(sentCount)),
     });
-  }, [selectedWithEmail, selectedWithoutEmail, getLabelEmails, getPitchForLabel, demos, trackName, scLink, effectiveScLink, customNote, artistName, addDemo, locale, toast, draftName, tone, language, selectedGenre, epMode, epLinkMode, epSingleLink, selectedDemoIds, selectedLabelIds, addSentCampaign]);
+  }, [selectedWithEmail, selectedWithoutEmail, getLabelEmails, getPitchForLabel, demos, trackName, scLink, effectiveScLink, customNote, artistName, addDemo, locale, toast, draftName, tone, language, selectedGenre, epMode, epLinkMode, epSingleLink, selectedDemoIds, selectedLabelIds, addSentCampaign, epTracks]);
 
   // Copy all emails to clipboard
   const handleCopyEmails = useCallback(async () => {

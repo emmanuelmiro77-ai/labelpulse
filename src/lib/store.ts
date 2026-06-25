@@ -6,6 +6,7 @@ import type { Locale } from "./i18n";
 import labelData from "./labels-data.json";
 import { saveStateToCloud, loadStateFromCloud, isSupabaseConfigured, isApplyingRemoteUpdate, markLocalProfileEdit } from "./supabase";
 import { saveArtistsToIDB, loadArtistsFromIDB } from "./artists-idb";
+import type { PitchTrackEntry } from "./pitch-utils";
 
 // ==================== TYPES ====================
 
@@ -219,6 +220,18 @@ export interface Demo {
   // materials (WAV/stems/artwork), we record what was sent here.
   materialSentDate?: string | null;
   materialSentLinks?: string[]; // list of URLs sent to the label
+  /**
+   * Structured multi-track pitch info — populated when this Demo was saved
+   * from a multi-track (EP or "selection of N tracks") pitch. Each entry
+   * is one track with its own SoundCloud link, so the demo detail dialog
+   * can render every track's link instead of just the single `link` field
+   * (which only holds the first/primary track's URL in EP mode).
+   *
+   * Backward compat: existing demos (pre-v18) don't have this field. The
+   * detail dialog falls back to parsing `pitchText` for SoundCloud URLs,
+   * or just shows the single `link` as before.
+   */
+  pitchTracks?: PitchTrackEntry[];
 }
 
 // ==================== SAVED PITCHES (Bozze) ====================
@@ -2240,7 +2253,7 @@ export const useAppStore = create<AppState>()(
     }),
     {
       name: PRIMARY_KEY,
-      version: 17,
+      version: 18,
       storage: createJSONStorage(() => robustStorage),
       migrate: (persisted: any, version: number) => {
         if (version < 5) {
@@ -2459,6 +2472,22 @@ export const useAppStore = create<AppState>()(
                 ...r,
                 epSoundCloudUrl:
                   typeof r.epSoundCloudUrl === "string" ? r.epSoundCloudUrl : "",
+              };
+            });
+          }
+        }
+        if (version < 18) {
+          // Demo.pitchTracks — structured multi-track pitch info (trackName
+          // + artistName + scLink per track). Existing demos don't have it;
+          // backfill with empty array so the field always exists. The demo
+          // detail dialog will fall back to parsing pitchText for demos that
+          // actually contain a multi-track pitch but lack the structured data.
+          if (Array.isArray(persisted.demos)) {
+            persisted.demos = persisted.demos.map((d: any) => {
+              if (!d || typeof d !== "object") return d;
+              return {
+                ...d,
+                pitchTracks: Array.isArray(d.pitchTracks) ? d.pitchTracks : [],
               };
             });
           }

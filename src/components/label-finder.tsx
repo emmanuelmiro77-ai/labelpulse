@@ -1576,6 +1576,9 @@ export function LabelFinder() {
     if (!detailLabel || !pitchTrackName.trim()) return;
     window.open(effectiveGmailLink, "_blank");
     if (!demoAlreadyExists) {
+      // Capture structured per-track list for multi-track pitches so the
+      // demo detail dialog can render every track's SC link.
+      const pitchTracksForDemo = pitchEpTracks.length >= 2 ? pitchEpTracks : undefined;
       addDemo({
         trackName: pitchTrackName.trim(),
         labelId: detailLabel.id,
@@ -1589,10 +1592,11 @@ export function LabelFinder() {
         genre: "",
         bpm: "",
         key: "",
+        pitchTracks: pitchTracksForDemo,
       });
       setPitchDemoCreated(true);
     }
-  }, [detailLabel, pitchTrackName, pitchScLink, pitchNote, effectiveGmailLink, demoAlreadyExists, addDemo, displayPitchText, pitchArtistName]);
+  }, [detailLabel, pitchTrackName, pitchScLink, pitchNote, effectiveGmailLink, demoAlreadyExists, addDemo, displayPitchText, pitchArtistName, pitchEpTracks]);
 
   // Open email client (mailto:) and auto-create demo. Uses the effective
   // mailto link so the user's manual edits to subject/body are reflected.
@@ -1602,6 +1606,7 @@ export function LabelFinder() {
       window.open(effectiveMailtoLink, "_blank");
     }
     if (!demoAlreadyExists) {
+      const pitchTracksForDemo = pitchEpTracks.length >= 2 ? pitchEpTracks : undefined;
       addDemo({
         trackName: pitchTrackName.trim(),
         labelId: detailLabel.id,
@@ -1615,10 +1620,11 @@ export function LabelFinder() {
         genre: "",
         bpm: "",
         key: "",
+        pitchTracks: pitchTracksForDemo,
       });
       setPitchDemoCreated(true);
     }
-  }, [detailLabel, pitchTrackName, pitchScLink, pitchNote, effectiveMailtoLink, demoAlreadyExists, addDemo, displayPitchText, pitchArtistName]);
+  }, [detailLabel, pitchTrackName, pitchScLink, pitchNote, effectiveMailtoLink, demoAlreadyExists, addDemo, displayPitchText, pitchArtistName, pitchEpTracks]);
 
   // Send email directly via Gmail API. Uses the effective subject + body so
   // manual edits to the preview are honored when sending through the API.
@@ -1658,6 +1664,7 @@ export function LabelFinder() {
         toast({ title: "Email inviata! ✉️", description: `Demo inviato a ${detailLabel.name}` });
         // Auto-create demo tracking
         if (!demoAlreadyExists) {
+          const pitchTracksForDemo = pitchEpTracks.length >= 2 ? pitchEpTracks : undefined;
           addDemo({
             trackName: pitchTrackName.trim(),
             labelId: detailLabel.id,
@@ -1671,6 +1678,7 @@ export function LabelFinder() {
             genre: "",
             bpm: "",
             key: "",
+            pitchTracks: pitchTracksForDemo,
           });
           setPitchDemoCreated(true);
         }
@@ -1683,7 +1691,7 @@ export function LabelFinder() {
     } finally {
       setSendingEmail(false);
     }
-  }, [detailLabel, pitchTrackName, pitchScLink, pitchTone, pitchNote, pitchLanguage, detailEmails, gmailAuth, demoAlreadyExists, addDemo, displayPitchText, effectivePitchSubject, effectivePitchBody, setGmailAuth, toast]);
+  }, [detailLabel, pitchTrackName, pitchScLink, pitchTone, pitchNote, pitchLanguage, detailEmails, gmailAuth, demoAlreadyExists, addDemo, displayPitchText, effectivePitchSubject, effectivePitchBody, setGmailAuth, toast, pitchEpTracks]);
 
   const handlePitchCopy = async () => {
     try {
@@ -2876,6 +2884,7 @@ export function LabelFinder() {
                                   disabled={!pitchTrackName.trim()}
                                   onClick={() => {
                                     if (!detailLabel || !pitchTrackName.trim()) return;
+                                    const pitchTracksForDemo = pitchEpTracks.length >= 2 ? pitchEpTracks : undefined;
                                     addDemo({
                                       trackName: pitchTrackName.trim(),
                                       labelId: detailLabel.id,
@@ -2889,6 +2898,7 @@ export function LabelFinder() {
                                       genre: "",
                                       bpm: "",
                                       key: "",
+                                      pitchTracks: pitchTracksForDemo,
                                     });
                                     setPitchDemoCreated(true);
                                   }}

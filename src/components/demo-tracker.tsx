@@ -77,9 +77,11 @@ import {
   generateMailtoLink,
   generateGmailLink,
   parsePitchText,
+  parseMultiTrackFromPitchText,
   PITCH_LANGUAGES,
   type PitchTone,
   type PitchLanguage,
+  type PitchTrackEntry,
 } from "@/lib/pitch-utils";
 import { useToast } from "@/hooks/use-toast";
 import { sendEmail, sendReplyInThread, ensureValidToken } from "@/lib/gmail";
@@ -937,7 +939,7 @@ export function DemoTracker() {
         )}
 
         {/* Detail Dialog (reused) */}
-        <DemoDetailDialog demo={detailDemo} onClose={() => setDetailDemo(null)} locale={locale} getLabelName={getLabelName} labels={labels} updateDemo={updateDemo} userProfile={userProfile} gmailAuth={gmailAuth} setGmailAuth={setGmailAuth} demos={demos} />
+        <DemoDetailDialog demo={detailDemo} onClose={() => setDetailDemo(null)} locale={locale} getLabelName={getLabelName} labels={labels} updateDemo={updateDemo} userProfile={userProfile} gmailAuth={gmailAuth} setGmailAuth={setGmailAuth} demos={demos} releases={releases} />
       </div>
     );
   }
@@ -1325,7 +1327,7 @@ export function DemoTracker() {
       )}
 
       {/* Detail Dialog */}
-      <DemoDetailDialog demo={detailDemo} onClose={() => setDetailDemo(null)} locale={locale} getLabelName={getLabelName} labels={labels} updateDemo={updateDemo} userProfile={userProfile} gmailAuth={gmailAuth} setGmailAuth={setGmailAuth} demos={demos} />
+      <DemoDetailDialog demo={detailDemo} onClose={() => setDetailDemo(null)} locale={locale} getLabelName={getLabelName} labels={labels} updateDemo={updateDemo} userProfile={userProfile} gmailAuth={gmailAuth} setGmailAuth={setGmailAuth} demos={demos} releases={releases} />
 
       {/* Add/Edit Dialog */}
       <Dialog open={showAddDialog} onOpenChange={setShowAddDialog}>
@@ -3626,6 +3628,7 @@ function DemoDetailDialog({
   gmailAuth,
   setGmailAuth,
   demos,
+  releases,
 }: {
   demo: Demo | null;
   onClose: () => void;
@@ -3637,6 +3640,7 @@ function DemoDetailDialog({
   gmailAuth: any;
   setGmailAuth: (auth: any) => void;
   demos: Demo[];
+  releases: Release[];
 }) {
   // Pitch generator state — kept inside the dialog component so it persists
   // across re-renders while the dialog is open, and resets when the dialog
@@ -3818,6 +3822,78 @@ function DemoDetailDialog({
     }
   }, [demo, gmailAuth, label, effectivePitchSubject, effectivePitchBody, displayPitchText, updateDemo, setGmailAuth, toast]);
 
+  // ==================== MULTI-TRACK LINK RESOLUTION ====================
+  // Resolves the list of tracks (with their per-track SoundCloud URLs) to
+  // render in the dialog. The demo detail previously only showed ONE link
+  // (demo.link), which is wrong for multi-track pitches — the user might
+  // have sent an "ep-multi" pitch with 2+ tracks, each with its own SC URL,
+  // but demo.link only held the first track's URL.
+  //
+  // Resolution order:
+  //   1. demo.pitchTracks (structured field saved by the EP-mode pitch flows)
+  //   2. demo.parentReleaseId → look up the Release + its tracks
+  //   3. parse pitchText for numbered track entries (back-compat for demos
+  //      saved before pitchTracks was added)
+  //   4. fallback to single-track: just demo.link + demo.trackName
+  const displayTracks = useMemo<PitchTrackEntry[]>(() => {
+    if (!demo) return [];
+
+    // (1) Structured pitchTracks field
+    if (Array.isArray(demo.pitchTracks) && demo.pitchTracks.length >= 2) {
+      return demo.pitchTracks;
+    }
+
+    // (2) Belongs to a Release (EP) — look up release + its tracks
+    if (demo.parentReleaseId) {
+      const release = releases.find((r) => r.id === demo.parentReleaseId);
+      if (release && release.trackIds.length >= 2) {
+        // If the release has a single EP album URL, surface that (the whole
+        // EP is one continuous SoundCloud set, not per-track links).
+        if (release.epSoundCloudUrl && release.epSoundCloudUrl.trim()) {
+          return [{
+            trackName: release.title,
+            artistName: release.artists.join(" × "),
+            scLink: release.epSoundCloudUrl.trim(),
+          }];
+        }
+        // Otherwise build per-track entries from the release's demos
+        const tracksFromRelease: PitchTrackEntry[] = release.trackIds
+          .map((tid) => demos.find((d) => d.id === tid))
+          .filter((d): d is Demo => !!d)
+          .map((d) => ({
+            trackName: d.trackName,
+            artistName: d.artists && d.artists.length > 0
+              ? d.artists.join(" × ")
+              : (d.artistName || ""),
+            scLink: d.link || "",
+          }));
+        if (tracksFromRelease.length >= 2) return tracksFromRelease;
+      }
+    }
+
+    // (3) Parse pitchText for multi-track entries (back-compat)
+    if (demo.pitchText) {
+      const parsed = parseMultiTrackFromPitchText(demo.pitchText);
+      if (parsed.length >= 2) return parsed;
+    }
+
+    // (4) Fallback: single-track display
+    if (demo.link) {
+      return [{
+        trackName: demo.trackName,
+        artistName: demo.artists && demo.artists.length > 0
+          ? demo.artists.join(" × ")
+          : (demo.artistName || ""),
+        scLink: demo.link,
+      }];
+    }
+
+    return [];
+  }, [demo, releases, demos]);
+
+  // Whether the demo is being shown as a multi-track pitch in the dialog.
+  const isMultiTrack = displayTracks.length >= 2;
+
   if (!demo) return null;
 
   const config = STATUS_COLORS[demo.status];
@@ -3865,15 +3941,68 @@ function DemoDetailDialog({
             </div>
           </div>
 
-          {/* SoundCloud Link */}
-          {demo.link && (
+          {/* SoundCloud Link(s) — multi-track rendering when the demo is
+              actually a multi-track / EP pitch. Previously this only showed
+              demo.link (the first track's URL), which was misleading. */}
+          {displayTracks.length > 0 && (
             <div className="space-y-1.5">
               <UILabel className="text-xs font-mono uppercase text-muted-foreground flex items-center gap-1">
-                <Link2 className="h-3 w-3" /> {t(locale, "pitch.scLink")}
+                <Link2 className="h-3 w-3" />
+                {isMultiTrack
+                  ? (locale === "it"
+                      ? `Link SoundCloud — ${displayTracks.length} tracce`
+                      : `SoundCloud Links — ${displayTracks.length} tracks`)
+                  : t(locale, "pitch.scLink")}
               </UILabel>
-              <a href={demo.link} target="_blank" rel="noopener noreferrer" className="text-sm text-primary hover:underline font-mono break-all">
-                {demo.link}
-              </a>
+              {displayTracks.length === 1 ? (
+                <a
+                  href={displayTracks[0].scLink}
+                  target="_blank"
+                  rel="noopener noreferrer"
+                  className="text-sm text-primary hover:underline font-mono break-all"
+                >
+                  {displayTracks[0].scLink}
+                </a>
+              ) : (
+                <ol className="space-y-1.5">
+                  {displayTracks.map((track, idx) => (
+                    <li
+                      key={idx}
+                      className="bg-secondary/30 rounded-md p-2 border border-border/30"
+                    >
+                      <div className="flex items-baseline gap-2">
+                        <span className="text-xs font-mono text-muted-foreground shrink-0">
+                          {idx + 1}.
+                        </span>
+                        <div className="min-w-0 flex-1">
+                          <p className="text-sm font-semibold text-foreground truncate">
+                            {track.trackName}
+                          </p>
+                          {track.artistName && (
+                            <p className="text-[10px] text-muted-foreground truncate">
+                              {track.artistName}
+                            </p>
+                          )}
+                          {track.scLink ? (
+                            <a
+                              href={track.scLink}
+                              target="_blank"
+                              rel="noopener noreferrer"
+                              className="text-xs text-primary hover:underline font-mono break-all"
+                            >
+                              {track.scLink}
+                            </a>
+                          ) : (
+                            <p className="text-xs text-amber-500 italic">
+                              {locale === "it" ? "Link mancante" : "Missing link"}
+                            </p>
+                          )}
+                        </div>
+                      </div>
+                    </li>
+                  ))}
+                </ol>
+              )}
             </div>
           )}
 

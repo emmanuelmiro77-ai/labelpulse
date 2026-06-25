@@ -404,3 +404,89 @@ export function parsePitchText(text: string): { subject: string; body: string } 
   const body = lines.slice(i).join("\n").trim();
   return { subject, body };
 }
+
+/**
+ * Best-effort extraction of multi-track entries from a pitchText body.
+ *
+ * Used as a fallback for demos that were saved BEFORE the structured
+ * `Demo.pitchTracks` field existed — those demos only have the multi-track
+ * info baked into the pitchText as plain text, so to render every track's
+ * SoundCloud link in the demo detail dialog we parse it back out.
+ *
+ * Recognizes both formats emitted by generatePitchBody:
+ *   • ep-multi  → "1. TrackName (Artist)\n   https://soundcloud.com/..."
+ *   • ep-single → "1. TrackName — Artist" (no per-track URL — single EP link)
+ *
+ * Returns the parsed entries (possibly with empty scLink for ep-single
+ * tracklist lines). Caller should only treat the result as "multi-track"
+ * when length >= 2.
+ */
+export function parseMultiTrackFromPitchText(text: string): PitchTrackEntry[] {
+  if (!text) return [];
+  const lines = text.split("\n");
+  const tracks: PitchTrackEntry[] = [];
+  let pending: { trackName: string; artistName: string } | null = null;
+
+  for (const line of lines) {
+    const trimmed = line.trim();
+    if (!trimmed) continue;
+
+    // Skip the "You can listen to..." / "Potete ascoltare..." preamble lines
+    // — they precede the actual numbered track list but are not tracks.
+    // (Cheap filter: only treat a line as a track header if it starts with a
+    // digit + period + space + non-digit.)
+    const headerMatch = trimmed.match(/^(\d+)\.\s+([^\d].+)$/);
+    if (headerMatch) {
+      const rest = headerMatch[2].trim();
+      let trackName = rest;
+      let artistName = "";
+
+      // Format 1: "TrackName (Artist Credit)" — used by ep-multi template
+      const parenMatch = rest.match(/^(.+?)\s*\(([^)]+)\)\s*$/);
+      if (parenMatch) {
+        trackName = parenMatch[1].trim();
+        artistName = parenMatch[2].trim();
+      } else {
+        // Format 2: "TrackName — Artist" or "TrackName - Artist" or
+        // "TrackName – Artist" — used by ep-single tracklist
+        const dashMatch = rest.match(/^(.+?)\s+[—–-]\s+(.+)$/);
+        if (dashMatch) {
+          trackName = dashMatch[1].trim();
+          artistName = dashMatch[2].trim();
+        }
+      }
+
+      // Flush any previous pending track (ep-single case: track header
+      // with NO following URL line — just save it with empty scLink).
+      if (pending) {
+        tracks.push({ ...pending, scLink: "" });
+      }
+      pending = { trackName, artistName };
+      continue;
+    }
+
+    // URL line — typically the line right after the track header, indented
+    // with 3 spaces in the ep-multi template. Match any SC URL on the line.
+    const urlMatch = trimmed.match(/(https?:\/\/(?:on\.|www\.)?soundcloud\.com\/[^\s)]+)/i);
+    if (urlMatch) {
+      if (pending) {
+        tracks.push({
+          trackName: pending.trackName,
+          artistName: pending.artistName,
+          scLink: urlMatch[1],
+        });
+        pending = null;
+      }
+      // If no pending track, the URL is a standalone (e.g. the single EP
+      // album URL in ep-single mode) — we don't add it as a track entry.
+    }
+  }
+
+  // Flush final pending track (ep-single case where the tracklist had no
+  // per-track URLs — the only URL was the EP album URL at the top).
+  if (pending) {
+    tracks.push({ ...pending, scLink: "" });
+  }
+
+  return tracks;
+}
