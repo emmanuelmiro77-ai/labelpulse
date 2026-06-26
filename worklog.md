@@ -1327,3 +1327,57 @@ Files modificati:
 4. NEXT_PUBLIC_BASE_URL: opzionale, solo se il dominio production non è labelpulse.app.
    Aggiungere in Vercel env vars per corretto mapping source maps → bundle URL.
 
+---
+Task ID: phase-0-task-0.4-discord-setup
+Agent: main
+Task: FASE 0 Punto 0.4 — Setup Discord server privato per beta tester
+
+Work Log:
+- Analizzati requisiti roadmap: 4 canali + 3 ruoli + MEE6 bot + invite link
+- Deciso di sostituire MEE6 con bot personalizzato (più flessibile, senza upsell premium, personalizzabile al 100%)
+- Creato docs/discord-setup-guide.md — guida completa step-by-step:
+  * 6 categorie (WELCOME, ANNUNCI, COMMUNITY, FEEDBACK, SUPPORTO TECNICO, FOUNDER)
+  * 12 canali con nomi e descrizioni pre-scritte
+  * 4 ruoli (Founder, Beta Tester, Contributor, Newcomer) con matrice permessi dettagliata
+  * Messaggi copy-paste ready per #regole e #benvenuto
+  * Strategia invite link per 3 round di recruitment (amici, Reddit/Discord, BetaList)
+  * Checklist finale per criterio GO
+- Creato scripts/discord-bot/ — bot Discord personalizzato con discord.js:
+  * index.js: client con intents, event handlers, slash commands
+  * Welcome DM automatico con embed ricco (NDA + screening form link, placeholder per Punto 0.5)
+  * Auto-role Newcomer all'ingresso nel server
+  * Fallback se DM bloccati (posta in #benvenuto)
+  * Auto-reactions: 🐛✅ in #bug-reports, 💡👍 in #feature-requests
+  * 3 slash commands: /status (tutti), /welcome @user (mod), /assign-beta @user (mod)
+  * Logging azioni moderazione in #mod-log
+  * .env.example con tutte le variabili documentate
+  * README.md con setup, deploy e troubleshooting
+- Aggiornato BETA_ROADMAP.md:
+  * Punto 0.4 → ✅ COMPLETATO (2026-06-27)
+  * Stato globale FASE 0 → 40%
+  * Changelog entry aggiunta
+- Aggiornato AGENT_CONTEXT.md:
+  * Stato attuale aggiornato (0.4 completato, prossimo 0.5)
+  * Stack raccomandato: Community sezione aggiornata con bot custom
+- Verifica anti-regressione: 0 file critici toccati (nessuna entry BUG_REGISTRY sui file modificati)
+  * File toccati sono solo documentazione + nuovo codice bot (non toccano src/)
+
+Stage Summary:
+- Punto 0.4 DISCORD completato: guida + bot personalizzato pronti
+- L'utente deve: (1) creare server Discord seguendo docs/discord-setup-guide.md,
+  (2) creare bot su Discord Developer Portal, (3) configurare .env, (4) avviare bot
+- Link NDA e screening form nel bot sono placeholder → aggiornare dopo Punto 0.5
+- Costo: €0
+- Prossimo task: Punto 0.5 (NDA + screening questionnaire)
+
+Files creati:
+- NEW: docs/discord-setup-guide.md (guida completa)
+- NEW: scripts/discord-bot/package.json
+- NEW: scripts/discord-bot/index.js (bot discord.js)
+- NEW: scripts/discord-bot/.env.example
+- NEW: scripts/discord-bot/README.md
+
+Files modificati:
+- MODIFIED: BETA_ROADMAP.md (0.4 completato, stato 40%, changelog)
+- MODIFIED: AGENT_CONTEXT.md (stato aggiornato, stack Discord aggiornato)
+

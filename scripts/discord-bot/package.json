@@ -1,0 +1,17 @@
+{
+  "name": "labelpulse-discord-bot",
+  "version": "1.0.0",
+  "description": "LabelPulse Beta — Discord bot per welcome DM, auto-role e status comandi",
+  "main": "index.js",
+  "scripts": {
+    "start": "node index.js",
+    "dev": "node --watch index.js"
+  },
+  "dependencies": {
+    "discord.js": "^14.16.3",
+    "dotenv": "^16.4.7"
+  },
+  "engines": {
+    "node": ">=18.0.0"
+  }
+}

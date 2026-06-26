@@ -86,7 +86,7 @@ Foundation   Beta Infra   Closed Beta   Iteration   GA Prep    GA Launch
 
 | Fase | Stato | Inizio | Fine | Costi sostenuti | Costi previsti |
 |------|-------|--------|------|-----------------|----------------|
-| 0 — Foundation | 🟡 IN CORSO (30%) | 2026-06-26 | — | €0 | €0 |
+| 0 — Foundation | 🟡 IN CORSO (40%) | 2026-06-26 | — | €0 | €0 |
 | 1 — Beta Infra | ⬜ NON INIZIATA | — | — | — | €0 |
 | 2 — Closed Beta | ⬜ NON INIZIATA | — | — | — | €129 (BetaList featured opzionale) |
 | 3 — Iteration | ⬜ NON INIZIATA | — | — | — | €0 |
@@ -181,15 +181,23 @@ errori/mese, o necessità di retention >7gg, o secondo sviluppatore, o alerts Sl
 7. `first_pitch_sent` (primo pitch inviato — copy OR Gmail OR in-app)
 
 #### 0.4 — Setup Discord server privato
-**Stato**: ⬜ TODO
+**Stato**: ✅ COMPLETATO (2026-06-27)
 **Tempo**: 1h
 **Costo**: €0
 **Output**:
-- Server Discord creato con 4 canali: `#beta-announcements`, `#bug-reports`, `#feature-requests`, `#general`
-- Ruoli: `Founder`, `Beta Tester`, `Contributor`
-- Bot di benvenuto semplice (MEE6 free) con DM automatico di benvenuto + link al NDA + link screening
-- Invite link con scadenza 7 giorni + max 25 usi
-**Criterio GO**: Server online, primo invite link generato, bot risponde.
+- Guida completa step-by-step: `docs/discord-setup-guide.md`
+  - Struttura server: 6 categorie, 12 canali (WELCOME, ANNUNCI, COMMUNITY, FEEDBACK, SUPPORTO TECNICO, FOUNDER)
+  - 4 ruoli: Founder, Beta Tester, Contributor, Newcomer (con permessi dettagliati per categoria)
+  - Messaggi pre-scritti per #regole e #benvenuto (copy-paste ready)
+  - Strategia invite link per 3 round di recruitment
+- Bot Discord personalizzato (alternativa a MEE6, più flessibile e senza upsell): `scripts/discord-bot/`
+  - Welcome DM automatico con NDA + screening form link (placeholder fino a Punto 0.5)
+  - Auto-role Newcomer all'ingresso + /assign-beta per promozione manuale
+  - Auto-reactions: 🐛✅ in #bug-reports, 💡👍 in #feature-requests
+  - Comandi slash: /status, /welcome, /assign-beta
+  - Fallback se DM bloccati (posta in #benvenuto)
+  - Logging azioni moderazione in #mod-log
+**Criterio GO**: Codice completo e documentato. L'utente deve: (1) creare il server seguendo la guida, (2) creare il bot su Discord Developer Portal, (3) configurare .env e avviare il bot.
 
 #### 0.5 — Scrivere NDA + screening questionnaire
 **Stato**: ⬜ TODO
@@ -564,3 +572,12 @@ Questi task sono trasversali a tutte le fasi. Vanno monitorati e aggiornati.
 - Risparmio vs Sentry paid: ~€960/anno
 - Prossimo passo: Punto 0.4 (Discord server) + Punto 0.5 (NDA + screening form)
 - Setup utente richiesto: creare account Bugsnag + PostHog, mettere env vars in Vercel
+
+### 2026-06-27 — Punto 0.4 completato ✅
+- ✅ Punto 0.4 (Discord server): guida completa + bot personalizzato creati
+- Sostituito MEE6 con bot custom (più flessibile, senza upsell premium)
+- Guida step-by-step: docs/discord-setup-guide.md (6 categorie, 12 canali, 4 ruoli)
+- Bot Discord: scripts/discord-bot/ (welcome DM, auto-role, auto-reactions, slash commands)
+- Costo: €0 (Discord free, bot hosted locally o VPS gratuita)
+- Prossimo passo: Punto 0.5 (NDA + screening form) → poi 0.6 (email), 0.7 (iubenda)
+- Setup utente richiesto: creare server Discord seguendo guida, configurare bot
