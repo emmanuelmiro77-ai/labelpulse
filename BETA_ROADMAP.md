@@ -86,7 +86,7 @@ Foundation   Beta Infra   Closed Beta   Iteration   GA Prep    GA Launch
 
 | Fase | Stato | Inizio | Fine | Costi sostenuti | Costi previsti |
 |------|-------|--------|------|-----------------|----------------|
-| 0 — Foundation | 🟡 IN CORSO (40%) | 2026-06-26 | — | €0 | €0 |
+| 0 — Foundation | 🟡 IN CORSO (50%) | 2026-06-26 | — | €0 | €0 |
 | 1 — Beta Infra | ⬜ NON INIZIATA | — | — | — | €0 |
 | 2 — Closed Beta | ⬜ NON INIZIATA | — | — | — | €129 (BetaList featured opzionale) |
 | 3 — Iteration | ⬜ NON INIZIATA | — | — | — | €0 |
@@ -200,22 +200,24 @@ errori/mese, o necessità di retention >7gg, o secondo sviluppatore, o alerts Sl
 **Criterio GO**: Codice completo e documentato. L'utente deve: (1) creare il server seguendo la guida, (2) creare il bot su Discord Developer Portal, (3) configurare .env e avviare il bot.
 
 #### 0.5 — Scrivere NDA + screening questionnaire
-**Stato**: ⬜ TODO
+**Stato**: ✅ COMPLETATO (2026-06-27)
 **Tempo**: 3h
 **Costo**: €0
 **Output**:
-- `docs/NDA-beta-tester.md` (template adattato da Rocket Lawyer + aggiunte IT)
-- Form Tally.so con 8 domande screening:
-  1. Nome + email
-  2. Genere principale + sottogenere
-  3. Quanti demo invii/mese a label?
-  4. Quali label hai contattato negli ultimi 6 mesi? (text area)
-  5. Dispositivo principale (iOS/Android/desktop)
-  6. Disponibilità a 30 min call onboarding? (sì/no)
-  7. Discord attivo? (sì/no)
-  8. Accetti NDA + lifetime license solo se dai feedback entro 30gg? (sì/no)
-- Pagina di conferma con link Discord invite
-**Criterio GO**: NDA salvato in repo, form Tally pubblicato e linkato, primo test submission funziona.
+- `docs/NDA-beta-tester.md` — NDA completo con:
+  * 10 sezioni: Definizioni, Obblighi, Durata (24 mesi + 36 per sicurezza), Proprietà Intellettuale, Feedback, Sicurezza, Risoluzione, Risarcimento, Clausole IT specifiche (GDPR, recesso, foro Milano), Disposizioni finali
+  * Accettazione via checkbox nel form Tally.so
+  * Clausola feedback → licenza libera a LabelPulse (necessaria per poter implementare suggerimenti)
+  * Clausola anti-reverse engineering
+  * Giurisdizione italiana + GDPR compliant
+- `docs/screening-questionnaire.md` — Guida completa per setup form Tally.so:
+  * 8 domande con tipi, label, opzioni, placeholder dettagliati
+  * Pagina di conferma (Thank You) con CTA Discord
+  * Impostazioni Tally raccomandate
+  * Criteri di selezione (pesi per priorità)
+  * Target prima ondata: 5-10 tester con mix dispositivo/genere
+  * Flusso post-submission completo
+**Criterio GO**: NDA in repo ✅. Form Tally: da pubblicare da parte dell'utente (creare account Tally → seguire guida → pubblicare).
 
 #### 0.6 — Setup email professionale
 **Stato**: ⬜ TODO
@@ -581,3 +583,11 @@ Questi task sono trasversali a tutte le fasi. Vanno monitorati e aggiornati.
 - Costo: €0 (Discord free, bot hosted locally o VPS gratuita)
 - Prossimo passo: Punto 0.5 (NDA + screening form) → poi 0.6 (email), 0.7 (iubenda)
 - Setup utente richiesto: creare server Discord seguendo guida, configurare bot
+
+### 2026-06-27 — Punto 0.5 completato ✅
+- ✅ Punto 0.5 (NDA + screening): documenti completi creati
+- NDA in docs/NDA-beta-tester.md: 10 sezioni, giurisdizione italiana, GDPR, anti-reverse engineering
+- Screening form guide in docs/screening-questionnaire.md: 8 domande + Thank You page + criteri selezione
+- Costo: €0 (Tally.so free fino a 999 risposte/mese)
+- Prossimo passo: Punto 0.6 (email professionale) → poi 0.7 (iubenda privacy+cookie)
+- Setup utente richiesto: creare account Tally.so, pubblicare form seguendo guida

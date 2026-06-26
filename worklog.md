@@ -1381,3 +1381,53 @@ Files modificati:
 - MODIFIED: BETA_ROADMAP.md (0.4 completato, stato 40%, changelog)
 - MODIFIED: AGENT_CONTEXT.md (stato aggiornato, stack Discord aggiornato)
 
+---
+Task ID: phase-0-task-0.5-nda-screening
+Agent: main
+Task: FASE 0 Punto 0.5 — NDA beta tester + screening questionnaire per Tally.so
+
+Work Log:
+- Verificato BUG_REGISTRY: nessun fix passato su file correlati a NDA/screening
+- Creato docs/NDA-beta-tester.md — accordo di riservatezza completo:
+  * 10 sezioni: Definizioni, Obblighi del Ricevente, Durata (24 mesi + 36 per security), Proprietà Intellettuale, Feedback e Partecipazione, Sicurezza e Data Breach, Risoluzione, Risarcimento, Clausole IT specifiche, Disposizioni Finali
+  * Definizione ampia di "Informazioni Riservate" (codice, design, dati commerciali, bug, screenshot)
+  * Eccezioni ben definite (public domain, pre-existing, indipendent development)
+  * Clausola anti-reverse engineering
+  * Clausola feedback → licenza libera a LabelPulse (necessaria per implementare suggerimenti)
+  * Obbligo di partecipazione attiva (30 giorni inattività = revoca)
+  * Lifetime Early Adopter €149 come incentivo per feedback entro 30gg
+  * Giurisdizione italiana: D.Lgs. 196/2003, GDPR, Codice Consumo, Foro Milano
+  * Accettazione via checkbox nel form Tally.so
+- Creato docs/screening-questionnaire.md — guida completa per form Tally.so:
+  * 8 domande con tipi, label, opzioni, placeholder (nome/email, genere, volume demo, label, dispositivo, call, Discord, NDA)
+  * 14 opzioni genere musicale (copre 35+ generi del database label)
+  * Pagina conferma (Thank You) con CTA Discord e istruzioni post-accettazione
+  * Impostazioni Tally raccomandate (privacy, notifiche, progress bar)
+  * Criteri di selezione con pesi: invia demo (alto), genere nel DB (medio), mobile (medio)
+  * Target prima ondata: 5-10 tester con mix dispositivo/genere/geografia
+  * Flusso post-submission completo (valutazione → DM Discord → codice beta)
+- Aggiornato BETA_ROADMAP.md:
+  * Punto 0.5 → ✅ COMPLETATO (2026-06-27)
+  * Stato globale FASE 0 → 50%
+  * Changelog entry aggiunta
+- Aggiornato AGENT_CONTEXT.md:
+  * Stato aggiornato (0.5 completato, prossimo 0.6)
+  * Stack: aggiunta sezione Legal (NDA + screening)
+- Verifica anti-regressione: 0 file critici toccati (solo documentazione)
+
+Stage Summary:
+- Punto 0.5 NDA + SCREENING completato: documenti legali + guida form pronti
+- L'utente deve: (1) creare account Tally.so, (2) pubblicare form seguendo docs/screening-questionnaire.md,
+  (3) copiare URL form e aggiornare Discord bot .env (SCREENING_FORM_URL)
+- Link NDA nel form punta al file su GitHub (permanente)
+- Costo: €0 (Tally.so free)
+- Prossimo task: Punto 0.6 (email professionale)
+
+Files creati:
+- NEW: docs/NDA-beta-tester.md (NDA completo 10 sezioni)
+- NEW: docs/screening-questionnaire.md (guida form Tally.so)
+
+Files modificati:
+- MODIFIED: BETA_ROADMAP.md (0.5 completato, stato 50%, changelog)
+- MODIFIED: AGENT_CONTEXT.md (stato aggiornato, stack Legal aggiunto)
+
