@@ -1181,3 +1181,71 @@ Files modificati:
 - MODIFIED: .env.local.example (Sentry vars → Bugsnag vars)
 - MODIFIED: BETA_ROADMAP.md (sezione 0.2 + changelog)
 - MODIFIED: package.json (@sentry/nextjs rimosso, @bugsnag/js aggiunto)
+
+---
+Task ID: phase-0-task-1-bugsnag-integration
+Agent: main
+Task: FASE 0 Punto 1 — Completare integrazione Bugsnag: installare plugin React + browser-performance, fixare bug API key check, aggiungere ErrorBoundary, salvare API key in .env.local
+
+Work Log:
+- Installati pacchetti: @bugsnag/plugin-react + @bugsnag/browser-performance (5 packages aggiunti)
+- BUG FIX CRITICO in src/lib/bugsnag.ts riga 50: il check `apiKey.startsWith("y")` era errato
+  * Le API key Bugsnag sono 32-char hex (es. "1fa4d8a88468f9c892f1c59e9305cd2c"), NON iniziano con "y"
+  * Quel check bloccava l'init di Bugsnag completamente
+  * Sostituito con isValidApiKey() che accetta: 32-char hex, formato "y"-prefisso (newer), fallback >=20 char
+- Riscritto src/lib/bugsnag.ts:
+  * Aggiunto import di BugsnagPluginReact + BugsnagPerformance
+  * Aggiunto plugins: [new BugsnagPluginReact()] in Bugsnag.start()
+  * Aggiunto BugsnagPerformance.start() con stessa API key + enabledReleaseStages
+  * Aggiunta funzione export getErrorBoundary() con caching lazy
+  * Aggiunta resolveApiKey() che distingue client/server (client usa NEXT_PUBLIC_*, server prova BUGSNAG_API_KEY poi fallback a NEXT_PUBLIC_*)
+  * Aggiunto try/catch attorno a BugsnagPerformance.start() (può fallire in env non-browser)
+  * cachedErrorBoundary tipizzato come any per evitare conflitti di tipi complessi tra versioni plugin
+- Creato src/components/bugsnag-error-boundary.tsx (client component):
+  * Wrapper attorno a getErrorBoundary()
+  * Se Bugsnag non configurato (dev senza API key), render Fragment (no overhead)
+  * Se configurato, render ErrorBoundary con FallbackComponent custom (dark theme, reload button, messaggio user-friendly in inglese)
+- Aggiornato src/app/layout.tsx: wrap children con <BugsnagErrorBoundary> dentro <PostHogProvider>
+  * Posizione strategicamente corretta: cattura errori da tutta l'app MA dentro AuthProvider/PostHogProvider così non perde contesto auth/analytics
+- Creato /home/z/my-project/.env.local con la API key reale dell'utente:
+  * NEXT_PUBLIC_BUGSNAG_API_KEY=1fa4d8a88468f9c892f1c59e9305cd2c
+  * BUGSNAG_API_KEY=1fa4d8a88468f9c892f1c59e9305cd2c (stessa chiave, single-project setup)
+  * File gitignored (non entra in commit)
+- Aggiornato .env.local.example:
+  * Corretto commento "inizia con la lettera y" → "32 caratteri hex, es. 1fa4d8a8..."
+  * Aggiunto nota: usiamo STESSA chiave per client e server (single-project)
+- Typecheck tsc --noEmit: 0 errori nei file Bugsnag (bugsnag.ts, bugsnag-error-boundary.tsx, analytics.ts)
+  * Gli altri errori TS nel progetto sono pre-esistenti (auth-page.tsx, store.ts, db.ts, notification-settings.tsx) e non sono stati toccati
+- Build Next.js (npx next build): SUCCESSO
+  * "[bugsnag] Loaded!" appare 2 volte (client + server bundle) → init funziona correttamente
+  * Tutte le 29 route compilate senza errori
+  * Static pages generate (267ms)
+- Smoke test runtime (scripts/test-bugsnag-init.mjs): PASSED
+  * Verificato: Bugsnag.start(), Bugsnag.notify(), getPlugin('react'), BugsnagPerformance.start() tutti funzionanti
+  * Bugsnag.notify(new Error('Test')) non throws
+  * _client presente dopo start
+
+Stage Summary:
+- Bugsnag pienamente operativo: error tracking + performance monitoring + React ErrorBoundary
+- API key salvata in .env.local (gitignored) → testing in dev ora possibile abilitando releaseStage development
+- Costo: €0 (free tier: 7.5K errori/mese + 7.5K performance spans/mese)
+- Anti-regressione: 0 file toccati critici (nessuna entry in BUG_REGISTRY), 33 test Vitest non toccati, 7 eventi funnel PostHog ancora tracciati
+- Pronto per: utente clicca "Continue" su Bugsnag dashboard, poi fa commit + push per deploy Vercel
+
+Files modificati:
+- MODIFIED: src/lib/bugsnag.ts (plugin React + Performance + getErrorBoundary + fix API key check)
+- NEW: src/components/bugsnag-error-boundary.tsx (ErrorBoundary wrapper client)
+- MODIFIED: src/app/layout.tsx (BugsnagErrorBoundary in tree)
+- NEW: .env.local (API key reale, gitignored)
+- MODIFIED: .env.local.example (corretto commento API key format)
+- NEW: scripts/test-bugsnag-init.mjs (smoke test runtime, riusabile)
+- MODIFIED: package.json + package-lock.json (@bugsnag/plugin-react + @bugsnag/browser-performance aggiunti)
+
+Next steps for user:
+1. Cliccare "Continue" sul wizard Bugsnag per chiudere il setup
+2. Opzionale: testare l'ErrorBoundary in dev lanciando un errore sintetico (es. button che throws) — dovrebbe apparire il fallback UI "Something went wrong"
+3. Aggiungere le stesse env vars in Vercel (Project Settings → Environment Variables):
+   - NEXT_PUBLIC_BUGSNAG_API_KEY = 1fa4d8a88468f9c892f1c59e9305cd2c
+   - BUGSNAG_API_KEY = 1fa4d8a88468f9c892f1c59e9305cd2c
+4. Commit + push → deploy Vercel → primo errore production apparirà in Bugsnag dashboard
+5. Per testare in dev: cambiare temporaneamente enabledReleaseStages in src/lib/bugsnag.ts aggiungendo 'development'
