@@ -211,6 +211,16 @@ bash scripts/build-static.sh
 
 ## BETA LAUNCH STRATEGY (aggiunto 2026-06-26)
 
+### 📋 ROADMAP UFFICIALE — `/home/z/my-project/BETA_ROADMAP.md`
+Documento permanente su GitHub che traccia la sequenza di lavoro dalla fase amatoriale
+alla fase SaaS commerciale profittevole. Contiene:
+- **6 fasi numerate** (Foundation → Beta Infra → Closed Beta → Iteration → GA Prep → GA Launch)
+- **Unit economics**: costi per fase, break-even a 50 utenti, proiezioni anno 1 (€4.800-6.800 netto)
+- **Criteri GO/NO-GO** espliciti per passare da una fase alla successiva
+- **Stato avanzamento** aggiornato dopo ogni task completato
+
+🟡 **Stato attuale**: FASE 0 — Foundation in corso (Punto 0.2 + 0.3: Sentry + PostHog)
+
 ### Documenti di riferimento
 - **PDF strategico integrato**: `/home/z/my-project/download/labelpulse-beta-strategy.pdf` (~18 pagine, 35KB)
 - **Report beta testing dettagliato**: `/home/z/my-project/research-output/report-beta-testing.md` (383 righe)
