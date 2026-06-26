@@ -61,9 +61,12 @@ console.log(`  source:     ${staticDir}`);
 try {
   // Use npx to ensure we get the right binary even if PATH is weird.
   // CLI command is `upload-browser` (not `upload`) for browser JS source maps.
-  // --base-url is required for directory upload: tells Bugsnag the public URL
-  // prefix where the JS bundles are served. Next.js serves .next/static/ at /_next/static/.
-  const baseUrl = process.env.NEXT_PUBLIC_BASE_URL || "https://labelpulse.app";
+  //
+  // --base-url supports `*` as a wildcard. We use `*/_next/static/` so Bugsnag
+  // matches source maps across ALL deployment URLs (production domain + Vercel
+  // preview URLs like labelpulse-abc123.vercel.app). Without the wildcard,
+  // source maps uploaded with a fixed base-url don't match events from
+  // different deployment URLs → "Source mapping failed" in dashboard.
   const cmd = [
     "npx",
     "--no-install",
@@ -73,7 +76,7 @@ try {
     "--app-version", appVersion,
     "--directory", staticDir,
     "--project-root", process.cwd(),
-    "--base-url", `${baseUrl}/_next/static/`,
+    "--base-url", "*/_next/static/",
     "--overwrite",
   ].join(" ");
 
