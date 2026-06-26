@@ -1,7 +1,7 @@
 # 📋 Screening Questionnaire — LabelPulse Beta Testing Program
 
 > **Task BETA_ROADMAP Punto 0.5** — Screening form per selezionare beta tester
-> **Piattaforma**: Tally.so (free, fino a 999 risposte/mese)
+> **URL del form pubblicato**: https://tally.so/r/WOg86L
 > **Tempo stimato setup**: 30 min
 
 ---

@@ -31,8 +31,8 @@ const WELCOME_CHANNEL_ID = process.env.WELCOME_CHANNEL_ID;
 const BETA_TESTER_ROLE_ID = process.env.BETA_TESTER_ROLE_ID;
 const NEWCOMER_ROLE_ID = process.env.NEWCOMER_ROLE_ID;
 const FOUNDER_ROLE_ID = process.env.FOUNDER_ROLE_ID;
-const SCREENING_FORM_URL = process.env.SCREENING_FORM_URL || 'https://tally.so/r/PENDING';
-const NDA_URL = process.env.NDA_URL || 'https://labelpulse.vercel.app/legal/nda';
+const SCREENING_FORM_URL = process.env.SCREENING_FORM_URL || 'https://tally.so/r/WOg86L';
+const NDA_URL = process.env.NDA_URL || 'https://github.com/emmanuelmiro77-ai/labelpulse/blob/main/docs/NDA-beta-tester.md';
 const APP_VERSION = process.env.APP_VERSION || '2.4.0';
 
 if (!TOKEN) {
