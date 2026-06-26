@@ -11,6 +11,7 @@ import {
   clearAllLocalData,
   setStorageOwner,
 } from "./store";
+import { identifyUser, clearUser, trackEvent } from "./analytics";
 
 /**
  * Hook that bridges NextAuth session ↔ LabelPulse cloud sync.
@@ -92,6 +93,17 @@ export function useAuthEffect(): void {
     console.info(
       `[LabelPulse Auth] User authenticated (${email}). Loading from cloud...`
     );
+
+    // Track login event for funnel analytics (PostHog + Sentry breadcrumb)
+    identifyUser({
+      email,
+      artistName: session?.user?.name ?? undefined,
+      isBetaTester: true, // TODO: check against beta_access_codes table
+    });
+    trackEvent("signup_completed", {
+      login_method: "google", // TODO: detect beta-code login vs google
+    });
+
     loadFromCloud().then(() => {
       loadArtistsOnBoot().catch((e) =>
         console.warn("[LabelPulse Auth] loadArtistsOnBoot failed:", e)
@@ -108,6 +120,8 @@ export function useAuthEffect(): void {
   useEffect(() => {
     if (status === "unauthenticated") {
       lastActedEmailRef.current = null;
+      // Clear analytics identity on logout
+      clearUser();
       // Clear local data on logout. We do this in a microtask to avoid
       // race conditions with NextAuth's session-clearing redirect.
       // The clear is idempotent — if the user logs back in as the same

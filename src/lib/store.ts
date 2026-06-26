@@ -1717,6 +1717,16 @@ export const useAppStore = create<AppState>()(
           lastSavedAt: new Date().toISOString(),
         }));
         syncToCloud();
+        // Track first label added (only once per user — checked client-side via flag)
+        if (typeof window !== "undefined") {
+          const firstLabelKey = "lp_first_label_tracked";
+          if (!localStorage.getItem(firstLabelKey)) {
+            localStorage.setItem(firstLabelKey, new Date().toISOString());
+            void import("./analytics").then(({ trackEvent }) => {
+              trackEvent("first_label_added", { label_name: label.name, genre: label.genre });
+            });
+          }
+        }
       },
 
       updateLabel: (id, updates) => {
@@ -1747,6 +1757,16 @@ export const useAppStore = create<AppState>()(
           lastSavedAt: new Date().toISOString(),
         }));
         syncToCloud();
+        // Track first demo added (only once per user)
+        if (typeof window !== "undefined") {
+          const firstDemoKey = "lp_first_demo_tracked";
+          if (!localStorage.getItem(firstDemoKey)) {
+            localStorage.setItem(firstDemoKey, new Date().toISOString());
+            void import("./analytics").then(({ trackEvent }) => {
+              trackEvent("first_demo_added", { track_name: demo.trackName, label_id: demo.labelId });
+            });
+          }
+        }
         return id;
       },
 

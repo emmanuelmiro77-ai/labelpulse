@@ -209,6 +209,13 @@ export function ProducerProfile() {
       if (userProfile[field] !== value) {
         setUserProfile({ [field]: value });
         triggerSaved();
+        // Track profile completion on first meaningful field save
+        // (artistName is the strongest signal of "user is using the app")
+        if (field === "artistName" && value && !userProfile.artistName) {
+          void import("@/lib/analytics").then(({ trackEvent }) => {
+            trackEvent("profile_completed", { field });
+          });
+        }
       }
     },
     [userProfile, setUserProfile, triggerSaved]

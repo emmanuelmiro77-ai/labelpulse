@@ -1662,6 +1662,11 @@ export function LabelFinder() {
       if (result.success) {
         setEmailSent(true);
         toast({ title: "Email inviata! ✉️", description: `Demo inviato a ${detailLabel.name}` });
+        // Track pitch sent via Gmail (funnel event)
+        void import("@/lib/analytics").then(({ trackEvent }) => {
+          trackEvent("pitch_sent_via_gmail", { label_id: detailLabel.id, label_name: detailLabel.name });
+          trackEvent("first_pitch_sent", { method: "gmail" });
+        });
         // Auto-create demo tracking
         if (!demoAlreadyExists) {
           const pitchTracksForDemo = pitchEpTracks.length >= 2 ? pitchEpTracks : undefined;
@@ -1698,6 +1703,10 @@ export function LabelFinder() {
       await navigator.clipboard.writeText(displayPitchText);
       setPitchCopied(true);
       setTimeout(() => setPitchCopied(false), 2000);
+      void import("@/lib/analytics").then(({ trackEvent }) => {
+        trackEvent("pitch_copied_to_clipboard", { label_id: detailLabel?.id });
+        trackEvent("first_pitch_sent", { method: "clipboard" });
+      });
     } catch {
       const textarea = document.createElement("textarea");
       textarea.value = displayPitchText;
@@ -1707,6 +1716,10 @@ export function LabelFinder() {
       document.body.removeChild(textarea);
       setPitchCopied(true);
       setTimeout(() => setPitchCopied(false), 2000);
+      void import("@/lib/analytics").then(({ trackEvent }) => {
+        trackEvent("pitch_copied_to_clipboard", { label_id: detailLabel?.id });
+        trackEvent("first_pitch_sent", { method: "clipboard" });
+      });
     }
   };
 

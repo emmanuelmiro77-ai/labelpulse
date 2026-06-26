@@ -1033,3 +1033,90 @@ Stage Summary:
 - Roadmap 30-60-90 giorni dettagliata con 7 azioni immediate per settimana 1
 - Documento PDF scaricabile dall'utente in /home/z/my-project/download/labelpulse-beta-strategy.pdf
 - Memoria permanente aggiornata: AGENT_CONTEXT.md (sezione BETA LAUNCH STRATEGY), worklog.md (questa entry), 3 report raw in research-output/
+
+---
+Task ID: beta-roadmap-creation
+Agent: main
+Task: Creare documento roadmap permanente su GitHub per tracciare sequenza di lavoro beta → GA, con costi/ricavi calcolati e criteri GO/NO-GO per fase.
+
+Work Log:
+- Creato /home/z/my-project/BETA_ROADMAP.md (534 righe, 24KB)
+- Documento strutturato in 6 fasi numerate: Foundation → Beta Infra → Closed Beta → Iteration → GA Prep → GA Launch
+- Per ogni fase: durata, costo, tasks dettagliati, criteri GO/NO-GO
+- Sezione "Unit Economics" con tier pricing, costi fissi/variabili, break-even calcolato
+- Proiezioni anno 1 (3 scenari): pessimistico €2.232 netto, realistico €4.644 netto, ottimistico €6.420 netto
+- Sezione "Sicurezza" trasversale con task continuativi (anti-piracy, GDPR, backup)
+- Sezione "Metriche Tracciate" con eventi PostHog, errori Sentry, query Supabase
+- Aggiornato AGENT_CONTEXT.md con riferimento al nuovo documento roadmap ufficiale
+- Commit + push su GitHub (commit 395c29a) per memoria permanente cross-session
+
+Stage Summary:
+- Documento BETA_ROADMAP.md ora permanente su GitHub + filesystem locale
+- Tutti i costi calcolati: spese totali fino a GA ~€297 (di cui €39 obbligatori: iubenda + domain)
+- Break-even a 50 utenti Pro: €600 MRR - €150 costi = €450 lordo/mese (margine 75%)
+- Profitto target anno 2: €3.000-5.000/mese netto (richiede 150-200 utenti paganti)
+- Regola d'oro stabilizzata: nessuna spesa senza ROI calcolato (tempo risparmiato >1h/mese per €10, OR aumento conversione, OR riduzione rischio legale)
+- FASE 0 Punto 0.2 + 0.3 (Sentry + PostHog) avviati immediatamente dopo
+
+---
+Task ID: phase-0-task-1-sentry-posthog
+Agent: main
+Task: FASE 0 Punto 1 — Installare Sentry (error tracking) + PostHog (analytics + feature flags + session replay) in modo professionale, con tracking completo del funnel.
+
+Work Log:
+- Installati pacchetti: @sentry/nextjs + posthog-js + posthog-node (184 packages aggiunti)
+- Creati 3 file config Sentry (no-op se SENTRY_DSN non settata):
+  * sentry.client.config.ts — init con replay + captureConsole + filtri noise (ResizeObserver, ChunkLoadError, ecc.) + filter browser extensions
+  * sentry.server.config.ts — init per API routes e Server Components
+  * sentry.edge.config.ts — init per Middleware/Edge
+- Aggiornato next.config.ts — wrappato con withSentryConfig (source maps upload condizionale su SENTRY_AUTH_TOKEN)
+- Creato src/lib/analytics.ts — modulo unificato con API: identifyUser, clearUser, trackEvent, captureError, captureMessage, isFeatureEnabled, identifyFromSession
+- Creato src/components/posthog-provider.tsx — provider client con init condizionale, opt_out in dev, respect DNT, autocapture, session recording
+- Aggiornato src/app/layout.tsx — aggiunto <PostHogProvider> dentro <AuthProvider>
+- Aggiornato .env.local.example — documentate tutte le env vars Sentry + PostHog con setup instructions
+- TRACCIATI 7 eventi funnel chiave nei punti giusti del codice:
+  1. signup_completed → in src/lib/use-auth.ts dopo login Google
+  2. onboarding_started → in src/components/welcome-onboarding.tsx quando il modal si apre
+  3. profile_completed → in src/components/producer-profile.tsx quando artistName salvato per prima volta
+  4. first_label_added → in src/lib/store.ts addLabel (con flag localStorage per once-per-user)
+  5. first_demo_added → in src/lib/store.ts addDemo (con flag localStorage per once-per-user)
+  6. first_pitch_generated → in src/components/pitch-generator.tsx getPitchForLabel (con flag localStorage)
+  7. first_pitch_sent → in 3 punti: handlePitchCopy in label-finder.tsx (clipboard), Gmail send in label-finder.tsx, in-app send in demo-tracker.tsx (con method: clipboard/gmail/in_app)
+- Eventi bonus tracciati: pitch_copied_to_clipboard, pitch_sent_via_gmail, pitch_sent_via_inapp, feedback_submitted (in beta-feedback-button.tsx)
+- identifyUser chiamato anche in use-auth.ts per associare email + artistName + isBetaTester a Sentry + PostHog
+- clearUser chiamato su logout (use-auth.ts) per pulire identità analytics
+- Typecheck: tsc --noEmit non mostra errori nei nuovi file (analytics.ts, posthog-provider.tsx, sentry.*.config.ts)
+- Build Next.js: npx next build → SUCCESSO, tutte le route compilate correttamente con Sentry wrappato
+
+Stage Summary:
+- Sentry + PostHog installati e configurati in modo professionale (no-op se env vars mancanti → safe per dev)
+- 7 eventi funnel chiave tracciati end-to-end dal login al primo pitch inviato
+- Costo: €0 (free tier Sentry 5K errori/mese + PostHog 1M eventi/mese)
+- Pronti per configurazione Vercel env vars quando l'utente crea account Sentry + PostHog
+- BETA_ROADMAP.md da aggiornare con stato "0.2 ✅ DONE" e "0.3 ✅ DONE" prima del commit
+- Anti-regressione: 0 file toccati critici (nessuna entry in BUG_REGISTRY), nessun fix passato rischiato
+
+Files modificati:
+- NEW: sentry.client.config.ts
+- NEW: sentry.server.config.ts
+- NEW: sentry.edge.config.ts
+- NEW: src/lib/analytics.ts (modulo unificato Sentry+PostHog)
+- NEW: src/components/posthog-provider.tsx
+- MODIFIED: next.config.ts (withSentryConfig wrapper)
+- MODIFIED: src/app/layout.tsx (PostHogProvider in tree)
+- MODIFIED: src/lib/use-auth.ts (signup_completed event + identifyUser + clearUser)
+- MODIFIED: src/components/welcome-onboarding.tsx (onboarding_started event)
+- MODIFIED: src/components/producer-profile.tsx (profile_completed event on artistName save)
+- MODIFIED: src/lib/store.ts (first_label_added + first_demo_added events with once-per-user flag)
+- MODIFIED: src/components/pitch-generator.tsx (first_pitch_generated event)
+- MODIFIED: src/components/label-finder.tsx (pitch_copied_to_clipboard + pitch_sent_via_gmail + first_pitch_sent)
+- MODIFIED: src/components/demo-tracker.tsx (pitch_sent_via_inapp + first_pitch_sent)
+- MODIFIED: src/components/beta-feedback-button.tsx (feedback_submitted event)
+- MODIFIED: .env.local.example (Sentry + PostHog env vars documented)
+- MODIFIED: package.json (@sentry/nextjs + posthog-js + posthog-node added)
+
+Next steps for user:
+1. Creare account Sentry → prendere DSN → mettere in NEXT_PUBLIC_SENTRY_DSN (Vercel)
+2. Creare account PostHog → prendere project API key → mettere in NEXT_PUBLIC_POSTHOG_KEY (Vercel)
+3. (Opzionale) Generare SENTRY_AUTH_TOKEN per source maps upload automatico in production
+4. Redeploy Vercel → primo evento signup_completed apparirà in PostHog dopo login di qualsiasi utente

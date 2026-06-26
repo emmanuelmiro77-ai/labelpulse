@@ -3900,6 +3900,11 @@ function DemoDetailDialog({
           status: "sent",
           sentDate: new Date().toISOString().split("T")[0],
         });
+        // Track pitch sent via in-app email (Resend)
+        void import("@/lib/analytics").then(({ trackEvent }) => {
+          trackEvent("pitch_sent_via_inapp", { label_id: label.id, label_name: label.name });
+          trackEvent("first_pitch_sent", { method: "in_app" });
+        });
         setTimeout(() => setEmailSent(false), 4000);
       } else {
         toast({

@@ -606,6 +606,20 @@ export function PitchGenerator() {
       if (!trackName.trim()) return { subject: "", body: "" };
       const subject = generateSubject(trackName.trim(), artistName, language, pitchShape, epTracks.length);
       const body = generatePitchBody(label.name, trackName.trim(), artistName, effectiveScLink, tone, customNote, language, pitchShape, epTracks);
+      // Track first pitch generated (only once per user)
+      if (typeof window !== "undefined") {
+        const firstPitchKey = "lp_first_pitch_tracked";
+        if (!localStorage.getItem(firstPitchKey)) {
+          localStorage.setItem(firstPitchKey, new Date().toISOString());
+          void import("@/lib/analytics").then(({ trackEvent }) => {
+            trackEvent("first_pitch_generated", {
+              label_name: label.name,
+              pitch_shape: pitchShape,
+              is_ep: pitchShape !== "single",
+            });
+          });
+        }
+      }
       return { subject, body };
     },
     [trackName, artistName, effectiveScLink, tone, customNote, language, pitchShape, epTracks]

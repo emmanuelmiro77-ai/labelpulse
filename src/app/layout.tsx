@@ -5,6 +5,7 @@ import { Toaster } from "@/components/ui/toaster";
 import { PWAInstall } from "@/components/pwa-install";
 import { SWUpdater } from "@/components/sw-updater";
 import { AuthProvider } from "@/components/auth-provider";
+import { PostHogProvider } from "@/components/posthog-provider";
 
 const geistSans = localFont({
   src: [
@@ -83,7 +84,9 @@ export default function RootLayout({
         className={`${geistSans.variable} ${geistMono.variable} antialiased bg-background text-foreground`}
       >
         <AuthProvider>
-          {children}
+          <PostHogProvider>
+            {children}
+          </PostHogProvider>
         </AuthProvider>
         <Toaster />
         <PWAInstall />

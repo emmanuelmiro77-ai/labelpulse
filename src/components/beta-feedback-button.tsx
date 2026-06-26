@@ -167,6 +167,10 @@ export function BetaFeedbackButton() {
             ? "Grazie. Lo esamineremo il prima possibile."
             : "Thank you. We'll review it as soon as possible.",
       });
+      // Track feedback submitted for funnel analytics
+      void import("@/lib/analytics").then(({ trackEvent }) => {
+        trackEvent("feedback_submitted", { category });
+      });
       setSubject("");
       setMessage("");
       setCategory("bug");

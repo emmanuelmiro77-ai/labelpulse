@@ -114,6 +114,10 @@ export function WelcomeOnboarding() {
         return;
       }
       setOpen(true);
+      // Track onboarding shown for funnel analytics
+      void import("@/lib/analytics").then(({ trackEvent }) => {
+        trackEvent("onboarding_started");
+      });
     }, 1500);
     return () => clearTimeout(timer);
   }, [status, session?.user?.email, userProfile?.artistName, userProfile?.bio, userProfile?.email, userProfile?.scLink, userProfile?.photoUrl, userProfile?.links]);

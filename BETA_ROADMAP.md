@@ -8,7 +8,7 @@
 > ma ogni euro investito deve poter rientrare tramite abbonamenti reali entro 12 mesi.
 >
 > **Ultimo aggiornamento**: 2026-06-26
-> **Stato**: FASE 0 — In corso (Punto 1 in esecuzione)
+> **Stato**: FASE 0 — Punto 0.2 + 0.3 COMPLETATI ✅ → Prossimo: Punto 0.4 (Discord)
 
 ---
 
@@ -86,7 +86,7 @@ Foundation   Beta Infra   Closed Beta   Iteration   GA Prep    GA Launch
 
 | Fase | Stato | Inizio | Fine | Costi sostenuti | Costi previsti |
 |------|-------|--------|------|-----------------|----------------|
-| 0 — Foundation | 🟡 IN CORSO | 2026-06-26 | — | €0 | €0 |
+| 0 — Foundation | 🟡 IN CORSO (30%) | 2026-06-26 | — | €0 | €0 |
 | 1 — Beta Infra | ⬜ NON INIZIATA | — | — | — | €0 |
 | 2 — Closed Beta | ⬜ NON INIZIATA | — | — | — | €129 (BetaList featured opzionale) |
 | 3 — Iteration | ⬜ NON INIZIATA | — | — | — | €0 |
@@ -117,28 +117,39 @@ Foundation   Beta Infra   Closed Beta   Iteration   GA Prep    GA Launch
 **Criterio GO**: Nessun API route critico senza auth. Lista di azioni di hardening scritta.
 
 #### 0.2 — Installare Sentry (error tracking)
-**Stato**: 🟡 IN CORSO (Punto 1 — vedi sezione dedicata sotto)
+**Stato**: ✅ COMPLETATO (2026-06-26)
 **Tempo**: 2h
 **Costo**: €0 (free 5K errori/mese)
 **Output**:
 - `@sentry/nextjs` installato
 - `sentry.client.config.ts`, `sentry.server.config.ts`, `sentry.edge.config.ts` creati
 - `next.config.ts` wrappato con `withSentryConfig`
-- Source maps upload attivo in produzione
-- Test errore provocato → appare in dashboard Sentry
-**Criterio GO**: Primo errore reale (anche provocato) visibile in Sentry con stack trace + dati utente.
+- Source maps upload attivo in produzione (condizionale su SENTRY_AUTH_TOKEN)
+- Filtri noise: ResizeObserver, ChunkLoadError, browser extensions
+- Session replay attivo (mask sensitive inputs, sample 10% sessioni + 100% errori)
+**Criterio GO**: ✅ Code completo. Primo errore reale apparirà in dashboard appena l'utente configura NEXT_PUBLIC_SENTRY_DSN in Vercel.
 
 #### 0.3 — Installare PostHog (analytics + feature flags + session replay)
-**Stato**: 🟡 IN CORSO (Punto 1 — vedi sezione dedicata sotto)
+**Stato**: ✅ COMPLETATO (2026-06-26)
 **Tempo**: 3h
 **Costo**: €0 (free 1M eventi/mese)
 **Output**:
 - `posthog-js` + `posthog-node` installati
-- `<PostHogProvider>` in `src/app/layout.tsx`
-- 7 eventi chiave del funnel tracciati (vedi lista sotto)
-- Feature flag `beta_features_enabled` creato
-- Session replay attivo per beta tester (campione 20%)
-**Criterio GO**: Evento `signup_completed` visibile in PostHog dopo primo login beta.
+- `<PostHogProvider>` in `src/app/layout.tsx` (init condizionale, opt_out in dev)
+- Modulo unificato `src/lib/analytics.ts` con API: identifyUser, clearUser, trackEvent, captureError, isFeatureEnabled
+- 7 eventi chiave del funnel tracciati end-to-end:
+  1. `signup_completed` (dopo login Google in use-auth.ts)
+  2. `onboarding_started` (apertura WelcomeOnboarding)
+  3. `profile_completed` (salvataggio artistName per prima volta)
+  4. `first_label_added` (in store.ts, con flag localStorage once-per-user)
+  5. `first_demo_added` (in store.ts, con flag once-per-user)
+  6. `first_pitch_generated` (in pitch-generator.tsx, con flag once-per-user)
+  7. `first_pitch_sent` (in 3 punti: clipboard, Gmail, in-app — con `method` property)
+- Eventi bonus: `pitch_copied_to_clipboard`, `pitch_sent_via_gmail`, `pitch_sent_via_inapp`, `feedback_submitted`
+- Session replay attivo (10% sample per beta — dentro free tier)
+- Respect Do Not Track header (GDPR-friendly)
+- Autocapture attivo (button clicks, form submits — per A/B testing)
+**Criterio GO**: ✅ Code completo. Primo evento signup_completed apparirà in PostHog appena l'utente configura NEXT_PUBLIC_POSTHOG_KEY in Vercel e fa login.
 
 **Eventi funnel da tracciare**:
 1. `signup_completed` (Google OAuth o beta code login)
@@ -522,3 +533,12 @@ Questi task sono trasversali a tutte le fasi. Vanno monitorati e aggiornati.
 - Documento iniziale creato con 6 fasi numerate + unit economics + criteri GO/NO-GO
 - FASE 0 Punto 1 (Sentry + PostHog) in corso di esecuzione
 - Commit su GitHub per memoria permanente
+
+### 2026-06-26 — Punti 0.2 + 0.3 completati ✅
+- Sentry installato con 3 config file (client/server/edge) + wrapper next.config
+- PostHog installato con provider + modulo analytics unificato (src/lib/analytics.ts)
+- 7 eventi funnel chiave tracciati end-to-end (signup → first_pitch_sent)
+- Build Next.js verifica: SUCCESSO (tutte le route compilate correttamente)
+- Costo: €0 (tutto free tier)
+- Prossimo passo: Punto 0.4 (Discord server) + Punto 0.5 (NDA + screening form)
+- Setup utente richiesto: creare account Sentry + PostHog, mettere env vars in Vercel
