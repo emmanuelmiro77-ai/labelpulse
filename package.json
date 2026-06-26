@@ -5,6 +5,7 @@
   "scripts": {
     "dev": "node server.mjs",
     "build": "next build",
+    "postbuild": "node scripts/bugsnag-upload-sourcemaps.mjs",
     "build:static": "NEXT_EXPORT=true next build",
     "prebuild-local": "NEXT_EXPORT=true next build",
     "start": "node server.mjs",
@@ -70,6 +71,7 @@
     "zustand": "^5.0.6"
   },
   "devDependencies": {
+    "@bugsnag/source-maps": "^2.3.3",
     "@tailwindcss/postcss": "^4",
     "@testing-library/jest-dom": "^6",
     "@testing-library/react": "^16",

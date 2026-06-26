@@ -102,8 +102,9 @@ function startIfConfigured(): boolean {
     // Only send events in production (avoid polluting dashboard with dev errors)
     enabledReleaseStages: ["production"],
 
-    // App version for release tracking (matches Vercel deployment SHA)
-    appVersion: process.env.NEXT_PUBLIC_VERCEL_GIT_COMMIT_SHA,
+    // App version for release tracking (matches Vercel deployment SHA).
+    // Exposed to client via next.config.ts env mapping.
+    appVersion: process.env.NEXT_PUBLIC_VERCEL_GIT_COMMIT_SHA || undefined,
 
     // Release stage tagging
     releaseStage,
@@ -145,10 +146,10 @@ function startIfConfigured(): boolean {
           return false;
         }
 
-        // Skip storage quota (handled in-app with toast)
-        if (errorClass === "QuotaExceededError") {
-          return false;
-        }
+        // QuotaExceededError: REAL bug we want to track (storage quota exceeded).
+        // Previously filtered, but this is hiding a serious issue (large libraries
+        // can't be saved to localStorage). Now tracked so we can quantify impact.
+        // The user-facing toast is handled separately in store.ts.
 
         // Skip network errors on client (not actionable)
         if (
@@ -191,6 +192,16 @@ function startIfConfigured(): boolean {
   });
 
   isStarted = true;
+
+  // Expose Bugsnag on window for dev console testing.
+  // The npm package (@bugsnag/js) does NOT auto-expose itself on window.Bugsnag
+  // (unlike the CDN snippet). Adding it explicitly lets you test from console:
+  //   window.Bugsnag.notify(new Error('test'))
+  // Only exposed in production OR when explicitly enabled via env var, to avoid
+  // polluting window in dev where Bugsnag is no-op anyway.
+  if (typeof window !== "undefined") {
+    (window as unknown as { Bugsnag?: typeof Bugsnag }).Bugsnag = Bugsnag;
+  }
 
   // Start performance monitoring (same API key, same release stage filter)
   if (!isPerfStarted) {

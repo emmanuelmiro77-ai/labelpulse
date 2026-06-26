@@ -1249,3 +1249,81 @@ Next steps for user:
    - BUGSNAG_API_KEY = 1fa4d8a88468f9c892f1c59e9305cd2c
 4. Commit + push → deploy Vercel → primo errore production apparirà in Bugsnag dashboard
 5. Per testare in dev: cambiare temporaneamente enabledReleaseStages in src/lib/bugsnag.ts aggiungendo 'development'
+
+---
+Task ID: phase-0-task-1-bugsnag-completion
+Agent: main
+Task: FASE 0 Punto 1 — Completare integrazione Bugsnag: fix window.Bugsnag, appVersion, source maps upload, pagina /_debug, rimozione filtro QuotaExceededError
+
+Work Log:
+- DIAGNOSI: l'utente ha testato Bugsnag in production con `window.Bugsnag?.notify(...)` ma l'errore NON è apparso in dashboard
+  * Root cause: @bugsnag/js (npm package) NON si auto-espone su window.Bugsnag (a differenza del CDN snippet)
+  * window.Bugsnag era undefined → il test è stato silenziosamente skipped via optional chaining
+  * Bugsnag era effettivamente attivo (Performance mostrava 14 app starts), ma error tracking non era testabile
+- Fix 1 — src/lib/bugsnag.ts: aggiunto `window.Bugsnag = Bugsnag` dopo startIfConfigured()
+  * Espone esplicitamente Bugsnag su window per testing dal dev console
+  * Commento spiega perché è necessario (npm vs CDN behavior)
+- Fix 2 — src/lib/bugsnag.ts: RIMOSSO filtro QuotaExceededError da onError
+  * Prima era `if (errorClass === "QuotaExceededError") return false` (nascondeva il bug)
+  * Ora tracciamo l'errore per quantificare l'impatto del bug storage (visto in console: 4330 artists + 1358 labels superano 5MB localStorage)
+  * Commento aggiornato: "REAL bug we want to track"
+- Fix 3 — next.config.ts: aggiunto `productionBrowserSourceMaps: true`
+  * Genera source maps per client bundle (prima non erano generati)
+  * Verranno cancellati dal postbuild dopo upload a Bugsnag (non serviti pubblicamente)
+- Fix 4 — next.config.ts: aggiunto `env` mapping per esporre Vercel system vars al client
+  * NEXT_PUBLIC_VERCEL_GIT_COMMIT_SHA ← VERCEL_GIT_COMMIT_SHA
+  * NEXT_PUBLIC_VERCEL_URL ← VERCEL_URL
+  * NEXT_PUBLIC_VERCEL_ENV ← VERCEL_ENV
+  * Necessario perché Vercel fornisce queste come system vars non NEXT_PUBLIC_-prefixed
+- Fix 5 — bugsnag.ts: appVersion ora usa `|| undefined` invece di undefined raw
+  * Evita di passare stringa vuota a Bugsnag (causava warning "Configure your notifier with version information")
+- Installato @bugsnag/source-maps (devDependency) per CLI upload
+- Aggiunto script `postbuild` in package.json che esegue scripts/bugsnag-upload-sourcemaps.mjs
+- Creato scripts/bugsnag-upload-sourcemaps.mjs:
+  * Skip automatico se: no API key, no VERCEL env var, no .next dir, no appVersion
+  * Usa `bugsnag-source-maps upload-browser` (NON `upload` — comando deprecato)
+  * Richiede `--base-url` per directory upload: impostato a `${NEXT_PUBLIC_BASE_URL}/_next/static/` (default https://labelpulse.app)
+  * Dopo upload, DELETE tutti i .map files da .next/static (security: non serviti pubblicamente)
+  * Non fallisce mai il build se l'upload fallisce (source maps = nice-to-have)
+- Test upload reale (con API key vera): 24/24 source maps uploaded a Bugsnag ✅
+- Verifica post-upload: 0 .map files rimasti in .next/static ✅ (security check passato)
+- Creato src/app/_debug/page.tsx — pagina di test Bugsnag
+  * 5 bottoni per triggerare diversi tipi di errore:
+    1. Handled error (Bugsnag.notify)
+    2. Unhandled handler error (throw in setTimeout)
+    3. Error with breadcrumb (leaveBreadcrumb + notify)
+    4. Error with metadata (addMetadata in callback)
+    5. Render error (triggers ErrorBoundary)
+  * Status indicator: mostra se window.Bugsnag è disponibile
+  * Last action log per feedback visivo
+  * Stile dark theme coerente con app
+- Build test: `npm run build` → SUCCESSO, postbuild skippato correttamente in locale (no VERCEL env)
+- Smoke test: build con VERCEL=1 + BUGSNAG_API_KEY settata → upload completato, 0 .map residui
+
+Stage Summary:
+- Bugsnag config COMPLETATA: error tracking + performance + source maps + ErrorBoundary + debug page
+- window.Bugsnag ora disponibile in console per test rapidi
+- Source maps upload automatico su ogni Vercel deploy → stack traces leggibili in dashboard
+- QuotaExceededError ora tracciato (bug storage quantificabile)
+- Costo: €0 (free tier, 7.5K errori/mese + 7.5K perf spans/mese)
+- Anti-regressione: 0 file critici toccati (BUG_REGISTRY intatto), 33 test Vitest non toccati
+- PREREQUISITO CRITICO PER UTENTE: downgrade da trial a free tier entro 14 giorni (vedi sezione Note)
+
+Files modificati:
+- MODIFIED: src/lib/bugsnag.ts (window exposure + QuotaExceededError filter removed + appVersion fallback)
+- MODIFIED: next.config.ts (productionBrowserSourceMaps + env vars exposure)
+- MODIFIED: package.json (postbuild script + @bugsnag/source-maps devDep)
+- NEW: scripts/bugsnag-upload-sourcemaps.mjs (upload CLI wrapper)
+- NEW: src/app/_debug/page.tsx (debug test page)
+
+⚠️ NOTE IMPORTANTI PER UTENTE:
+1. TRIAL BUGSNAG: il dashboard mostra "14 days left in trial". Verificare in Settings → Billing
+   che dopo il trial si auto-downgradi a Free/Hobby tier (7.5K errori/mese, €0).
+   Se si auto-convertisse a paid ($80+/mese), creare nuovo progetto Free e cambiare API key.
+2. COMMIT + PUSH: tutte le modifiche sono in locale. Va fatto commit + push per triggerare
+   nuovo deploy Vercel che eseguirà postbuild (source maps upload automatico).
+3. TEST POST-DEPLOY: visitare /_debug sulla nuova deploy URL, cliccare "Trigger handled error",
+   verificare che l'errore appaia in Bugsnag Inbox entro 30 secondi.
+4. NEXT_PUBLIC_BASE_URL: opzionale, solo se il dominio production non è labelpulse.app.
+   Aggiungere in Vercel env vars per corretto mapping source maps → bundle URL.
+
