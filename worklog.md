@@ -925,3 +925,111 @@ Files modified:
 - MODIFIED: BUG_REGISTRY.md (Lutenzo avatar entry corrected)
 - MODIFIED: VERSIONS.md (v2.3.0 + v2.4.0 entries)
 - MODIFIED: .env.local.example (RESEND_API_KEY + EMAIL_FROM docs)
+
+---
+Task ID: research-1-beta-testing
+Agent: general-purpose
+Task: Ricerca beta testing best practices
+
+Work Log:
+- Read worklog.md per contesto LabelPulse (Next.js 16 + Supabase SaaS, beta_feedback system, Web Push, WelcomeOnboarding, admin token già esistenti)
+- Eseguite 20 ricerche web via z-ai web_search su: piattaforme beta (Betalist/BetaFamily/Erli Bird/UserTesting/UserCrowd/Centercode), feature flag (LaunchDarkly/PostHog/GrowthBook/Statsig/Vercel Flags), session replay (LogRocket/FullStory/OpenReplay), error tracking (Sentry/Rollbar/Bugsnag), analytics (Mixpanel/Amplitude/PostHog/Plausible), in-app feedback (Hotjar/Usersnap), community musicali (Reddit/Discord/FB/Forum), metriche SaaS (activation/retention/NPS), template onboarding/NDA/screening, case study (Notion/Superhuman/Linear/Splice)
+- Risultati salvati in /home/z/my-project/research-output/s1.json ... s20.json
+- Compilato report finale in /home/z/my-project/research-output/report-beta-testing.md (~3180 parole, in italiano, con URL reali, costi USD 2025-2026, 5 sezioni + roadmap 30gg + gaps)
+- Verificate corrispondenze con stato attuale LabelPulse: ha già beta-feedback-button + WelcomeOnboarding + Web Push + admin token; MANCA Sentry + PostHog (raccomandati nel report)
+- Identificate 10 metriche evento da tracciare in PostHog per funnel LabelPulse (signup → onboarding → profile → first_label → first_demo → first_pitch → demo_sent)
+- Definiti criteri oggettivi beta→GA (bug rate <1/100, NPS ≥30, activation ≥40%, D7 retention ≥25%)
+
+Stage Summary:
+- STRUMENTI CONSIGLIATI (free per bootstrap): PostHog (analytics+flags+replay in 1 SDK, free 1M eventi/mese), Sentry (5K errori/mese free), Canny (100 MAU free), Discord (free) per community beta
+- STRUMENTI DA EVITARE: UserTesting ($40K/anno out-of-scale), UserVoice ($16K/anno), Centercode ($2K-$10K/anno overkill sotto 50 tester)
+- RECLUTAMENTO: BetaList featured $129 + subreddit r/WeAreTheMusicMakers + r/edmproduction + Discord Splice/Output/Audius + forum Gearspace/KVR + FB group Electronic Music Producers. Strategia "value-first" (no "test my app")
+- STRUTTURA BETA: 4-8 settimane, 15-25 tester closed beta → 50-200 open beta. Incentivi top: free lifetime Pro license + access diretto founder
+- METRICHE TARGET GA: Activation ≥35%, TTV <30min, D7 retention ≥15%, NPS ≥30, bug rate <1/100 tester attivi
+- ROADMAP 30GG: W1 setup tecnico (Sentry+PostHog+Discord+Canny), W2 recruitment (BetaList+Reddit+DM), W3-4 closed beta 15-25 tester, W5-6 decisione GA
+- GAPS IDENTIFICATI: nessun tool specifico per music-SaaS beta; costi BetaList/UserVoice da verificare al checkout; conversion rate Discord music→beta signup non documentato pubblicamente
+- Report completo: /home/z/my-project/research-output/report-beta-testing.md
+
+---
+Task ID: research-2-licensing-security
+Agent: general-purpose
+Task: Ricerca licensing + anti-piracy SaaS
+
+Work Log:
+- Letto worklog.md (927 righe) per capire contesto LabelPulse: SaaS Next.js 16 + Supabase + PWA, beta attiva, repo GitHub pubblico, v2.4.0 con RLS Supabase + NextAuth già presenti
+- Eseguite 20 ricerche web parallele via z-ai web_search CLI su: billing providers (Stripe/Paddle/Lemon Squeezy/Chargebee), Next.js code protection, Supabase RLS patterns, SaaS music cracks reali (Splice/LANDR/Output Arcade), Stripe subscription states, FingerprintJS, iubenda GDPR, EULA EU vs US, PWA SW auth restriction, Upstash rate limiting, PostHog feature flags, JS obfuscation effectiveness, licensing models reali (LANDR/Splice rent-to-own), Lemon Squeezy pricing 5%+50¢, NDA beta tester template, Chargebee pricing, watermarking per-user, anti-debugging JS, diritto recesso 14gg IT, EU withdrawal button June 2026
+- Analizzate ~160 snippet di risultati web + estratte URL reali, costi USD/EUR, casi concreti
+- Identificato caso reale Output Arcade craccato da team FLARE (Reddit r/Piracy): crack bypassa client, ma libreria online resta server-side → conferma anti-piracy via server-side data
+- Verificato che obfuscation JS client-side è crackable in ore (fonte Eresus Security + Mozilla dev.to)
+- Verificato Next.js disabilita source maps in production di default (nextjs.org/docs)
+- Redatto report italiano strutturato 6 sezioni + roadmap 14 azioni + costo mensile stimato (~$127 per 50 utenti paganti)
+- Salvato report completo in /home/z/my-project/research-output/licensing-security-report.md (4192 parole, oltre 35 fonti URL reali)
+
+Stage Summary:
+- Stack raccomandato LabelPulse: NextAuth+Supabase Auth (esistente) + Lemon Squeezy billing (5%+50¢, MoR, VAT EU) + PostHog feature flag + Upstash Redis rate limit + iubenda legale (€29/mese)
+- Billing: Lemon Squeezy in fase beta/early (MoR + VAT EU), migrazione a Stripe Billing+Tax > $5k MRR
+- Anti-piracy efficace = spostare logica ranking/scoring label database dietro API routes server-side + RLS Supabase (la value sta nei DATI non nel codice)
+- NON fare: obfuscation JS client-side (crackable ore), anti-debugging (bypassabile), HWID hard binding (false positività+GDPR), repo pubblico con algoritmi, EULA per SaaS web (serve SaaS Agreement)
+- Subscription states: trialing→active→past_due (7gg grace)→canceled/unpaid. Webhook LS/Stripe aggiorna tabella subscriptions, Middleware Next.js verifica JWT signed server-side
+- Device limit: 3 device Pro, 10 Label, fingerprinting FingerprintJS open-source SOLO per audit log (no gating)
+- Offline grace: 7 giorni con JWT firmato server salvato in IndexedDB
+- Legale EU: iubenda Pro €29/mese (privacy+terms+cookie+consent records), NDA beta tester template Rocket Lawyer free + checkbox primo login, checkbox rinuncia recesso 14gg art.59 lett.i Codice Consumo, PULSANTE DI RECESSO ELETTRONICO OBBLIGATORIO DAL 19 GIUGNO 2026 (fonte potomaclaw.com)
+- Costo totale mensile fase 50 utenti paganti: ~$127/mese (Vercel Pro $20 + Supabase Pro $25 + iubenda €29 + LS fees ~$50 + free tiers Upstash/PostHog/Sentry)
+- Implementazione completa: 7-9 giorni di sviluppo (14 azioni priorizzate in roadmap)
+- Report dettagliato disponibile in /home/z/my-project/research-output/licensing-security-report.md con 35+ URL reali verificati
+
+---
+Task ID: research-3-pricing-models
+Agent: general-purpose
+Task: Ricerca pricing competitor SaaS music/creator tool
+
+Work Log:
+- Letto worklog.md (979 righe) per allineamento con research-1 (beta testing) e research-2 (licensing/security) già completati
+- Eseguite 10 ricerche web parallele via z-ai web_search CLI su: SubmitHub, Groover, LANDR, DistroKid, Splice, Output Arcade, Beatport, TuneCore, CD Baby, Bandcamp Pro
+- 2 ricerche fallite per rate limit 429 (Beatport, TuneCore) → retry sequenziale con sleep 5-8s → completate
+- Risultati salvati in /home/z/my-project/research-output/pricing-cache-fresh/*.json (10 file)
+- Cross-verifica con cache esistente /pricing-cache/ (submithub2.json, landr.json) per coerenza storica
+- Estratti per ogni tool: modello, tier, prezzo mensile EUR/USD, prezzo annuo, free trial, limiti free
+- Compilata tabella comparativa 10 righe × 6 colonne
+- Definite 3 strategie pricing per LabelPulse con EUR concreti, tier, limiti, revenue projection a 100/500/1000 utenti
+- Proiezioni revenue calcolate con mix assunzioni: freemium 80/15/5, trial conversion 30%, early adopter 10% + 25% activation post-beta
+- Salvato report in /home/z/my-project/research-output/pricing-models-report.md (1341 parole, <1500 limite)
+
+Stage Summary:
+- COMPETITOR DIRETTI: SubmitHub (crediti ~$1/invio, bulk $0.80) e Groover (€2/invio, 1 Grooviz=€1) — entrambi pay-as-you-go, NESSUN abbonamento illimitato. OPPORTUNITÀ LabelPulse: subscription illimitata per producer attivi 50+ demo/mese = 5-10x più economica
+- ALTRI 8 TOOL: LANDR $11.99/mo Studio, DistroKid $24.99/anno Musician (solo annuale), Splice $12.99-$39.99/mo, Output Arcade $14.99/mo, Beatport $9.99-$29.99/mo, TuneCore $14.99-$54.99/anno, CD Baby $9.99 singolo (una tantum + 9% royalties), Bandcamp Pro $10/mo
+- MODELLO DOMINANTE: subscription mensile/annuale ($10-$30/mese range sweet spot per music SaaS)
+- FREE TRIAL STANDARD: 14-30gg (Beatport 30, Output 14, LANDR 30 mastering)
+- FREE TIER PERMANENTE: raro (solo TuneCore New Artist molto limitato dal maggio 2025, Bandcamp Base)
+- STRATEGIA RACCOMANDATA LABELPULSE: Strategia C (beta 6mesi + lifetime EA €149) per primi 500 signup, poi transizione a Strategia A (freemium Free + Pro €12 + Studio €29) al GA
+- REVENUE PROJECTION STRATEGIA A (raccomandata GA): 1000 utenti = €3.250/mese (€39K/anno)
+- REVENUE PROJECTION STRATEGIA B (trial + paid €19): 1000 utenti = €5.700/mese (€68K/anno) ma funnel stretto
+- REVENUE PROJECTION STRATEGIA C (beta + lifetime): 500 EA × €149 = €74.500 una tantum + €1.750/mese ricorrente a 1000 utenti
+- COSTI OPERATIVI BENCHMARK (da report licensing-security research-2): ~$127/mese per 50 utenti paganti → break-even a ~10 utenti Pro (Strategia A) o 7 utenti (Strategia B)
+- Report completo: /home/z/my-project/research-output/pricing-models-report.md (1341 parole, 10 tool × 6 dimensioni + 3 strategie con revenue projection)
+
+---
+Task ID: beta-launch-strategy
+Agent: main
+Task: Ricerca + documentazione strategia beta test, licensing/anti-piracy, pricing per trasformare LabelPulse da progetto personale a SaaS commerciale
+
+Work Log:
+- Lanciati 3 subagent Task in parallelo per ricerca web approfondita su: (1) beta testing best practices SaaS 2025-2026, (2) licensing + anti-piracy SaaS, (3) pricing models competitor
+- Ricerca #1 completata: report-beta-testing.md (383 righe) salvato in /home/z/my-project/research-output/
+- Ricerca #2 completata: licensing-security-report.md (541 righe) salvato in /home/z/my-project/research-output/
+- Ricerca #3 fallita per rate limit API, rilanciata con model=haiku → pricing-models-report.md salvato
+- Generato PDF strategico integrato (18 pagine, 35KB) in /home/z/my-project/download/labelpulse-beta-strategy.pdf
+- PDF creato con script Python ReportLab persistente in /home/z/my-project/scripts/generate-beta-strategy-pdf.py
+- Aggiornato AGENT_CONTEXT.md con nuova sezione "BETA LAUNCH STRATEGY" (righe 210-268) contenente: stack raccomandato, metriche di graduation, pricing, roadmap, cosa NON fare (verificato da casi reali), cosa FUNZIONA davvero
+- 3 subagent hanno già loggato i propri work record (Task ID: research-1-beta-testing, research-2-licensing-security, research-3-pricing-models)
+
+Stage Summary:
+- Strategia completa 4-fasi definita: Beta Test (4-6 sett) → Licensing (2 sett) → Pricing (1 sett) → Legale (1 sett)
+- Stack tecnico raccomandato: NextAuth (esistente) + Lemon Squeezy (MoR, 5%+50¢, VAT EU auto) + Sentry (free) + PostHog (free 1M eventi) + Canny + Discord + iubenda Pro (€29/mese)
+- Costo totale infrastruttura: ~$127/mese per 50 utenti paganti
+- Pricing raccomandato: Strategia C (Beta free 6 mesi + Lifetime EA €149) per primi 500 signup → Strategia A (Freemium + Pro €12 + Studio €29) al GA
+- Revenue projection anno 1: €74.500 una tantum + ~€35K MRR cumulato = ~€110K total
+- Cosa NON fare (verificato da Output Arcade craccato): obfuscation JS client-side, anti-debugging devtools, HWID hard binding, EULA classica (serve SaaS Agreement)
+- Roadmap 30-60-90 giorni dettagliata con 7 azioni immediate per settimana 1
+- Documento PDF scaricabile dall'utente in /home/z/my-project/download/labelpulse-beta-strategy.pdf
+- Memoria permanente aggiornata: AGENT_CONTEXT.md (sezione BETA LAUNCH STRATEGY), worklog.md (questa entry), 3 report raw in research-output/

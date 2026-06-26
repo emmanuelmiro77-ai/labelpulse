@@ -207,6 +207,66 @@ bash scripts/build-static.sh
 4. **Dopo il commit**: push su GitHub → memoria permanente ✅
 5. **Backup cloud (ATTIVO)**: dopo ogni bug fix critico/high, logga anche nella tabella Supabase `agent_memory` usando `bash scripts/log-agent-memory.sh --type bug_fix --severity ... --title ... --description ...` → genera SQL pronto da incollare nel Supabase SQL Editor + aggiunge entry in BUG_REGISTRY.md. Tabella già popolata con 41 entry storiche (commit `80f786b`).
 
+---
+
+## BETA LAUNCH STRATEGY (aggiunto 2026-06-26)
+
+### Documenti di riferimento
+- **PDF strategico integrato**: `/home/z/my-project/download/labelpulse-beta-strategy.pdf` (~18 pagine, 35KB)
+- **Report beta testing dettagliato**: `/home/z/my-project/research-output/report-beta-testing.md` (383 righe)
+- **Report licensing/anti-piracy dettagliato**: `/home/z/my-project/research-output/licensing-security-report.md` (541 righe)
+- **Report pricing competitor**: `/home/z/my-project/research-output/pricing-models-report.md`
+
+### Stack raccomandato (completo)
+- **Auth**: NextAuth + Supabase Auth (già presente)
+- **Billing**: Lemon Squeezy (MoR, 5% + 50¢, VAT EU automatico) → migrazione a Stripe Billing sopra $5K MRR
+- **License check**: API route `/api/license/verify` + Supabase `subscriptions` table + RLS
+- **Device binding**: 3 device Pro / 10 device Label, FingerprintJS open-source solo per audit log
+- **Error tracking**: Sentry free tier (5K errori/mese) — DA INSTALLARE
+- **Analytics + Feature Flag + Session Replay**: PostHog (1 SDK, free 1M eventi/mese) — DA INSTALLARE
+- **Community**: Discord server privato (canali #beta-announcements, #bug-reports, #feature-requests, #general)
+- **Feature request board**: Canny free (fino a 100 MAU)
+- **Legale**: iubenda Pro €29/mese (privacy + cookie + terms GDPR)
+- **Costo totale**: ~$127/mese per 50 utenti paganti
+
+### Metriche di graduation (beta → GA)
+- Activation rate ≥ 35% (signup → primo pitch entro 7gg)
+- TTV < 30 min
+- D1 retention ≥ 30%, D7 retention ≥ 15%
+- NPS ≥ 30
+- Bug rate critici < 1/100 tester-attivi
+- CSAT ≥ 80%
+
+### Pricing raccomandato (strategia C → A)
+- **Fase 1 (beta, primi 500 signup)**: Beta free 6 mesi + Lifetime Early Adopter €149
+- **Fase 2 (GA)**: Freemium (Free 5 demo/mese) + Pro €12/mese + Studio €29/mese
+- **Revenue projection anno 1**: €74.500 una tantum (500 EA) + ~€35K MRR cumulato = ~€110K total
+
+### Roadmap sintesi
+- **Sett. 1**: Setup tecnico (Sentry + PostHog + Discord + Canny + iubenda + Supabase subscriptions)
+- **Sett. 2**: Recruitment (BetaList $129 + 20 DM Reddit/Discord + screening questionnaire)
+- **Sett. 3-4**: Closed beta 15-25 tester selezionati
+- **Sett. 5-8**: Iterazione + validazione metriche → decisione GO/NO-GO per GA
+- **Sett. 9-12**: GA + monetizzazione + public launch (Product Hunt, BetaList featured)
+
+### Cosa NON fare (verificato da casi reali)
+- ❌ Obfuscation JS client-side (crackable in ore — Output Arcade craccato da team FLARE)
+- ❌ Anti-debugging devtools (bypassato con "Search in folders")
+- ❌ HWID hard binding (GDPR issues, false positività)
+- ❌ EULA classica per SaaS (serve SaaS Agreement)
+- ❌ Client-side license check only (bypassabile modificando JS bundle)
+- ❌ UserTesting ($40K/anno — out of scale)
+- ❌ Centercode ($2K-$10K/anno — overkill sotto 50 tester)
+- ❌ Chargebee in beta ($599/mese dopo $50K MRR-free)
+
+### Cosa FUNZIONA davvero
+- ✅ Spostare logica critica server-side (API routes Next.js)
+- ✅ Licensing server-checked (JWT firmato server, refresh ogni 24h)
+- ✅ Account-bound features (dati label/ranking accessibili solo via RLS Supabase)
+- ✅ Watermarking per identificare leak (hash user_id in bundle)
+- ✅ Rate limiting API routes (Upstash Redis)
+- ✅ Lemon Squeezy come MoR (gestisce VAT EU automaticamente)
+
 ## Version History
 - **v1**: Initial app with labels, demos, pitch
 - **v2.0**: Gmail integration, PWA support, auto-save

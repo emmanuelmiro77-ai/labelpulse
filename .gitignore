@@ -13,3 +13,8 @@ upload/
 .env.deploy
 tool-results/
 tsconfig.tsbuildinfo
+
+# Research raw cache (keep reports .md, ignore raw JSON)
+research-output/s*.json
+research-output/pricing-cache/
+research-output/pricing-cache-fresh/
