@@ -1,7 +1,7 @@
 "use client";
 
 /**
- * /_debug page — Bugsnag integration testing.
+ * /debug page — Bugsnag integration testing.
  *
  * Available in ALL environments (including production) so we can verify
  * Bugsnag is receiving events from production deploys.
@@ -10,11 +10,11 @@
  * can access it. No sensitive data is exposed — these buttons just throw
  * synthetic errors.
  *
- * Usage: visit /_debug in production, click buttons, verify events appear
+ * Usage: visit /debug in production, click buttons, verify events appear
  * in Bugsnag dashboard within ~30 seconds.
  */
 
-import { useState } from "react";
+import { useEffect, useState } from "react";
 import Bugsnag from "@/lib/bugsnag";
 
 type EventType = "handled" | "unhandled-render" | "unhandled-handler" | "breadcrumb" | "metadata";
@@ -30,21 +30,32 @@ const EVENT_DESCRIPTIONS: Record<EventType, string> = {
 export default function DebugPage() {
   const [lastAction, setLastAction] = useState<string>("Ready.");
   const [throwInRender, setThrowInRender] = useState(false);
+  // Track whether Bugsnag is active on the CLIENT only.
+  // SSR returns false (no window), client returns true after hydration.
+  // Using useEffect + setState avoids React hydration mismatch (#418).
+  const [bugsnagActive, setBugsnagActive] = useState<boolean | null>(null);
+
+  useEffect(() => {
+    setBugsnagActive(
+      typeof window !== "undefined" &&
+        !!(window as unknown as { Bugsnag?: unknown }).Bugsnag
+    );
+  }, []);
 
   if (throwInRender) {
     // This will trigger the ErrorBoundary
-    throw new Error("Synthetic render error from /_debug (test ErrorBoundary)");
+    throw new Error("Synthetic render error from /debug (test ErrorBoundary)");
   }
 
   const triggerHandled = () => {
-    Bugsnag.notify(new Error("Test handled error from /_debug"));
+    Bugsnag.notify(new Error("Test handled error from /debug"));
     setLastAction("✅ Handled error sent. Check Bugsnag Inbox.");
   };
 
   const triggerUnhandledHandler = () => {
     // Throw inside async callback — Bugsnag's global handler catches this
     setTimeout(() => {
-      throw new Error("Synthetic unhandled error from /_debug setTimeout handler");
+      throw new Error("Synthetic unhandled error from /debug setTimeout handler");
     }, 0);
     setLastAction("✅ Unhandled handler error queued. Check Bugsnag Inbox.");
   };
@@ -59,7 +70,7 @@ export default function DebugPage() {
     Bugsnag.notify(new Error("Test error with custom metadata"), (event) => {
       event.addMetadata("debug", {
         testId: `debug-${Date.now()}`,
-        source: "/_debug page",
+        source: "/debug page",
         triggeredBy: "manual button click",
       });
     });
@@ -108,9 +119,11 @@ export default function DebugPage() {
         }}
       >
         <strong style={{ color: "#a855f7" }}>Bugsnag status:</strong>{" "}
-        {typeof window !== "undefined" && (window as unknown as { Bugsnag?: unknown }).Bugsnag
-          ? "✅ Active (window.Bugsnag available)"
-          : "❌ Not active (window.Bugsnag undefined)"}
+        {bugsnagActive === null
+          ? "⏳ Checking..."
+          : bugsnagActive
+            ? "✅ Active (window.Bugsnag available)"
+            : "❌ Not active (window.Bugsnag undefined)"}
       </div>
 
       <div style={{ display: "flex", flexDirection: "column", gap: "1rem", maxWidth: "40rem" }}>
