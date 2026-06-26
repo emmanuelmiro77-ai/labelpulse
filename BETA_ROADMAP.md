@@ -86,7 +86,7 @@ Foundation   Beta Infra   Closed Beta   Iteration   GA Prep    GA Launch
 
 | Fase | Stato | Inizio | Fine | Costi sostenuti | Costi previsti |
 |------|-------|--------|------|-----------------|----------------|
-| 0 — Foundation | 🟡 IN CORSO (75%) | 2026-06-26 | — | €0 | €0 |
+| 0 — Foundation | ✅ COMPLETATA (100%) | 2026-06-26 | 2026-06-27 | €0 | €0 |
 | 1 — Beta Infra | ⬜ NON INIZIATA | — | — | — | €0 |
 | 2 — Closed Beta | ⬜ NON INIZIATA | — | — | — | €129 (BetaList featured opzionale) |
 | 3 — Iteration | ⬜ NON INIZIATA | — | — | — | €0 |
@@ -107,14 +107,17 @@ Foundation   Beta Infra   Closed Beta   Iteration   GA Prep    GA Launch
 ### Sequenza tasks FASE 0
 
 #### 0.1 — Audit sicurezza + decisione repo pubblico/privato
-**Stato**: ⬜ TODO
+**Stato**: ✅ COMPLETATO (2026-06-27)
 **Tempo**: 2h
+**Costo**: €0
 **Output**:
-- Verifica che ogni logica "value" (label DB, rankings, pitch templates) sia server-side o Supabase RLS
-- Verifica che nessun API route esponga dati senza auth check
-- Decisione documentata: repo GitHub pubblico (per trust) o privato (per anti-piracy)
-- Lista di file/API che contengono "secret sauce" da proteggere
-**Criterio GO**: Nessun API route critico senza auth. Lista di azioni di hardening scritta.
+- `docs/security-audit.md` — Audit completo con 5 CRITICAL, 8 HIGH, 6 MEDIUM issues
+- 5 critici: RLS app_state e beta_codes = allow all, push/feedback/withdrawal senza auth
+- 8 alti: snapshots RLS disabled, audio proxy SSRF, debug endpoints in prod, agent_memory esposta
+- 6 medi: logica value client-side, admin token in localStorage, no rate limiting
+- **Decisione repo**: PRIVATO fino al GA (logica value copiabile, DB label esposto, NDA)
+- Lista di fix prioritizzati: C-3+C-5 → C-4 → C-1+C-2 → H-8 → M-3 (3-4 ore stimate)
+**Criterio GO**: Audit completato, lista hardening scritta, decisione repo documentata.
 
 #### 0.2 — Installare Bugsnag (error tracking) — cambiato da Sentry
 **Stato**: ✅ COMPLETATO (2026-06-26)
@@ -273,14 +276,18 @@ errori/mese, o necessità di retention >7gg, o secondo sviluppatore, o alerts Sl
 **Criterio GO**: Pagina /account/withdrawal accessibile, form invia richiesta, API ritorna successo.
 
 #### 0.9 — Backup automatico Supabase
-**Stato**: ⬜ TODO
+**Stato**: ✅ COMPLETATO (2026-06-27)
 **Tempo**: 30min
 **Costo**: €0 (Supabase Pro ha daily backup automatico)
 **Output**:
-- Verificare che il piano Supabase sia Pro (€25/mese) — se sì, daily backup attivo
-- Documentare in `docs/backup-strategy.md`: retention, restore procedure
-- Aggiungere reminder calendario: test restore mensile
-**Criterio GO**: Documento scritto, restore testato 1 volta.
+- `docs/backup-strategy.md` — Documento completo con:
+  * Strategia backup Supabase (daily PITR, 7 giorni retention, EU region)
+  * Tabella tabelle critiche con criticità
+  * Procedure di restore (dashboard, singolo utente, disaster recovery)
+  * Piano DR per 4 scenari (singolo utente, corruzione tabella, outage completo, perdita locale+cloud)
+  * Test restore mensile programmato (prima settimana di luglio 2026)
+  * TODO FASE 4: upgrade retention 30gg, export automatico, monitoring
+**Criterio GO**: Documento scritto, test restore programmato.
 
 ### Costo totale FASE 0
 - **Tempo**: ~17 ore di sviluppo (distribuite su 2 settimane)

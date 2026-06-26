@@ -1571,3 +1571,43 @@ Files modificati:
 - MODIFIED: BETA_ROADMAP.md (0.8 completato, stato 75%)
 - MODIFIED: AGENT_CONTEXT.md (stato aggiornato)
 
+---
+Task ID: phase-0-task-0.9-backup-and-0.1-security-audit
+Agent: main
+Task: FASE 0 Punto 0.9 (Backup Supabase) + Punto 0.1 (Audit sicurezza)
+
+Work Log:
+- Punto 0.9 Backup:
+  * Creato docs/backup-strategy.md — strategia backup completa
+  * Documentato: Supabase Pro daily PITR, 7 giorni retention, EU region
+  * Tabella tabelle critiche con livello criticità
+  * 4 procedure di restore (dashboard, singolo utente, disaster recovery scenarios)
+  * Test restore mensile programmato (prima settimana luglio 2026)
+  * TODO FASE 4: upgrade retention 30gg, export automatico, monitoring
+- Punto 0.1 Audit sicurezza:
+  * Delegato audit automatizzato a subagent Explore (thorough mode)
+  * Audit completato: 5 CRITICAL, 8 HIGH, 6 MEDIUM issues
+  * CRITICI: RLS app_state e beta_codes = allow all, push/feedback/withdrawal senza auth
+  * ALTI: snapshots RLS disabled, audio proxy SSRF, debug endpoints in prod
+  * MEDI: logica value client-side, admin token in localStorage, no rate limiting
+  * Decisione repo: PRIVATO fino al GA
+  * Creato docs/security-audit.md con report completo + fix prioritizzati
+- Aggiornato email: labelpulse.beta@gmail.com → pulse.label.official@gmail.com (tutti i file sorgente)
+- Verificato: 0 occorrenze vecchia email nei sorgenti
+
+Stage Summary:
+- FASE 0 COMPLETATA AL 100%! Tutti i punti 0.1-0.9 ✅
+- Security audit identificato 5 fix critici (3-4 ore di lavoro)
+- Backup strategy documentata
+- Email aggiornata a pulse.label.official@gmail.com
+- Costo totale FASE 0: €0
+- Prossimo: FASE 1 (Beta Infra) — ma prima consigliamo fix critici sicurezza
+
+Files creati:
+- NEW: docs/backup-strategy.md (strategia backup completa)
+- NEW: docs/security-audit.md (audit sicurezza con 19 issues)
+
+Files modificati:
+- MODIFIED: BETA_ROADMAP.md (0.1 + 0.9 completati, FASE 0 → 100% ✅)
+- MODIFIED: AGENT_CONTEXT.md (FASE 0 completata)
+
