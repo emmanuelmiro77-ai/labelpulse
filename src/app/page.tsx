@@ -437,6 +437,7 @@ export default function Home() {
             <a href="/legal" className="hover:text-muted-foreground transition-colors">Privacy</a>
             <a href="/legal" className="hover:text-muted-foreground transition-colors">Termini</a>
             <a href="/legal" className="hover:text-muted-foreground transition-colors">Cookie</a>
+            <a href="/account/withdrawal" className="hover:text-muted-foreground transition-colors">Recesso</a>
           </div>
           <p className="text-[10px] text-muted-foreground/30 font-mono">
             {t(locale, "footer.dataStored")}

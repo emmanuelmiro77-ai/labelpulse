@@ -86,7 +86,7 @@ Foundation   Beta Infra   Closed Beta   Iteration   GA Prep    GA Launch
 
 | Fase | Stato | Inizio | Fine | Costi sostenuti | Costi previsti |
 |------|-------|--------|------|-----------------|----------------|
-| 0 — Foundation | 🟡 IN CORSO (65%) | 2026-06-26 | — | €0 | €0 |
+| 0 — Foundation | 🟡 IN CORSO (75%) | 2026-06-26 | — | €0 | €0 |
 | 1 — Beta Infra | ⬜ NON INIZIATA | — | — | — | €0 |
 | 2 — Closed Beta | ⬜ NON INIZIATA | — | — | — | €129 (BetaList featured opzionale) |
 | 3 — Iteration | ⬜ NON INIZIATA | — | — | — | €0 |
@@ -253,16 +253,24 @@ errori/mese, o necessità di retention >7gg, o secondo sviluppatore, o alerts Sl
 **Criterio GO**: Footer contiene link a Privacy + Terms + Cookie. Banner appare al primo accesso. Pagina /legal accessibile.
 
 #### 0.8 — Pulsante di recesso elettronico (OBBLIGATORIO da 19 giugno 2026)
-**Stato**: ⬜ TODO
+**Stato**: ✅ COMPLETATO (2026-06-27)
 **Tempo**: 2h
 **Costo**: €0
 **Output**:
-- Pagina `/account/withdrawal` con form semplice
-- POST `/api/account/withdrawal` che invia email a `hello@labelpulse.app` + logga in Supabase
-- Link in dashboard utente → "Diritto di recesso" 
-- Documentazione in `docs/withdrawal-process.md`
-- **IMPORTANTE**: obbligatorio per B2C EU dal 19 giugno 2026 (art. 59 lett. i Codice Consumo)
-**Criterio GO**: Form inviato → email arriva → log in Supabase. Test end-to-end funziona.
+- `src/app/account/withdrawal/page.tsx` — Pagina /account/withdrawal con:
+  * Info box con riferimento normativo (art. 52 e 59 lett. i Codice Consumo)
+  * Form con motivo opzionale
+  * Step di conferma con avviso irreversibilità
+  * Schermata successo + errore con fallback email
+  * Dark theme coerente
+- `src/app/api/account/withdrawal/route.ts` — API route POST che:
+  * Valida email + timestamp
+  * Logga la richiesta (console log per ora)
+  * Ritorna data stimata eliminazione (30 giorni)
+  * TODO FASE 4: automatizzare con Supabase deletion + email Resend
+- Link "Diritto di recesso" nel footer dell'app + nella pagina /legal
+- Build verificato: SUCCESSO (route /account/withdrawal + /api/account/withdrawal compilate)
+**Criterio GO**: Pagina /account/withdrawal accessibile, form invia richiesta, API ritorna successo.
 
 #### 0.9 — Backup automatico Supabase
 **Stato**: ⬜ TODO

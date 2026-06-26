@@ -73,9 +73,13 @@ export default function LegalPage() {
 
       {/* Footer */}
       <footer className="border-t border-border mt-12">
-        <div className="max-w-3xl mx-auto px-4 py-4 text-xs text-muted-foreground flex items-center gap-1">
+        <div className="max-w-3xl mx-auto px-4 py-4 text-xs text-muted-foreground flex items-center gap-1 flex-wrap">
           <Scale className="h-3 w-3" />
           Ultimo aggiornamento: 27 Giugno 2026 · Contatto: labelpulse.beta@gmail.com
+          <span className="text-muted-foreground/20">·</span>
+          <a href="/account/withdrawal" className="underline hover:text-foreground transition-colors">
+            Diritto di recesso
+          </a>
         </div>
       </footer>
     </div>

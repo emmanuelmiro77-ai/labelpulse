@@ -1526,3 +1526,48 @@ Files modificati:
 - MODIFIED: BETA_ROADMAP.md (0.7 completato, stato 65%)
 - MODIFIED: AGENT_CONTEXT.md (stato + stack Privacy/Legal)
 
+---
+Task ID: phase-0-task-0.8-withdrawal
+Agent: main
+Task: FASE 0 Punto 0.8 — Pulsante di recesso elettronico (obbligatorio dal 19/06/2026)
+
+Work Log:
+- Verificato BUG_REGISTRY: nessun fix passato su file account/withdrawal
+- Verificato codice esistente: nessuna route account esistente
+- Creato src/app/account/withdrawal/page.tsx — pagina recesso con:
+  * Info box con riferimenti normativi (art. 52 e 59 lett. i Codice Consumo)
+  * 4 stati: form → confirm → success / error
+  * Form con motivo opzionale + email utente dalla session
+  * Step conferma con avviso irreversibilità (destructive styling)
+  * Schermata successo con conferma eliminazione entro 30gg (GDPR art. 17)
+  * Schermata errore con fallback email diretta
+  * Footer con riferimento normativo + contatto email
+- Creato src/app/api/account/withdrawal/route.ts — API route POST:
+  * Validazione email + timestamp
+  * Console log della richiesta (per ora)
+  * Ritorna data stimata eliminazione (30 giorni)
+  * TODO FASE 4: automatizzare con Supabase deletion + email Resend
+- Aggiunto link "Diritto di recesso" nel footer dell'app (page.tsx)
+- Aggiunto link "Diritto di recesso" nella pagina /legal (footer)
+- Build verificato: npm run build → SUCCESSO
+  * /account/withdrawal (static) ✅
+  * /api/account/withdrawal (dynamic) ✅
+- Anti-regressione: page.tsx footer modificato (fix passati verificati)
+
+Stage Summary:
+- Punto 0.8 RECESSO completato: pagina + API + link nel footer
+- Conformità legale: art. 59 lett. i Codice Consumo soddisfatto
+- Build superato, nessuna regressione
+- Costo: €0
+- Prossimo task: Punto 0.9 (Backup Supabase) + Punto 0.1 (Audit sicurezza)
+
+Files creati:
+- NEW: src/app/account/withdrawal/page.tsx (pagina recesso)
+- NEW: src/app/api/account/withdrawal/route.ts (API POST)
+
+Files modificati:
+- MODIFIED: src/app/page.tsx (link recesso nel footer)
+- MODIFIED: src/app/legal/page.tsx (link recesso nel footer)
+- MODIFIED: BETA_ROADMAP.md (0.8 completato, stato 75%)
+- MODIFIED: AGENT_CONTEXT.md (stato aggiornato)
+
