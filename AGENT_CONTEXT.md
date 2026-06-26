@@ -11,15 +11,15 @@
 > 5. Read `worklog.md` tail (last 200 lines) for recent activity
 > 6. ONLY THEN start investigating any reported bug — first grep BUG_REGISTRY.md for the symptom
 
-**Last updated**: 2026-06-25
+**Last updated**: 2026-06-27
 
 ## Project Overview
 
 **LabelPulse** is a PWA (Progressive Web App) for DJs and music producers to manage demo submissions to electronic music labels. It tracks labels, their Beatport rankings, demo submissions, and generates pitch emails.
 
 - **Live URL**: https://labelpulse.vercel.app
-- **Tech Stack**: Next.js 16.2.9 (Turbopack), React, TypeScript, Zustand 5.x, Tailwind CSS 4, shadcn/ui, Supabase, Prisma (unused — was for earlier schema)
-- **Deployment**: Vercel (auto-deploy via GitHub push to `main` branch)
+- **Tech Stack**: Next.js 16.2.9 (Turbopack in dev, **webpack in production** per source maps complete), React, TypeScript, Zustand 5.x, Tailwind CSS 4, shadcn/ui, Supabase, Prisma (unused — was for earlier schema)
+- **Deployment**: Vercel (auto-deploy via GitHub push to `main` branch, build command `npm run build` che forza `next build --webpack`)
 - **Repo**: https://github.com/emmanuelmiro77-ai/labelpulse
 - **Data Storage**: **Cloud-first via Supabase** — client-side localStorage (Zustand persist v18) as cache + Supabase table `user_data` for cloud sync. Multi-user isolation enforced (see `BUG_REGISTRY.md` → "cross-account contamination")
 - **Local dev server**: `node server.mjs` on port 3000 (serves `/out/` static export)
@@ -219,7 +219,10 @@ alla fase SaaS commerciale profittevole. Contiene:
 - **Criteri GO/NO-GO** espliciti per passare da una fase alla successiva
 - **Stato avanzamento** aggiornato dopo ogni task completato
 
-🟡 **Stato attuale**: FASE 0 — Foundation in corso (Punto 0.2 + 0.3: Sentry + PostHog)
+🟡 **Stato attuale**: FASE 0 — Foundation in corso. Punto 0.2 (Bugsnag) ✅ COMPLETATO. Punto 0.3 (PostHog) codice pronto, manca solo API key. Prossimo: Punto 0.4 (iubenda privacy + cookie banner).
+
+### ⚠️ TODO CRITICO UTENTE (entro 14 giorni dal 2026-06-26)
+- **Bugsnag Trial 14 giorni**: verificare in Settings → Billing che dopo il trial si auto-downgradi a Free (€0). Se auto-converte a paid ($80+/mese), creare nuovo progetto Free + cambiare API key in Vercel env vars (`NEXT_PUBLIC_BUGSNAG_API_KEY` + `BUGSNAG_API_KEY`).
 
 ### Documenti di riferimento
 - **PDF strategico integrato**: `/home/z/my-project/download/labelpulse-beta-strategy.pdf` (~18 pagine, 35KB)
@@ -232,8 +235,8 @@ alla fase SaaS commerciale profittevole. Contiene:
 - **Billing**: Lemon Squeezy (MoR, 5% + 50¢, VAT EU automatico) → migrazione a Stripe Billing sopra $5K MRR
 - **License check**: API route `/api/license/verify` + Supabase `subscriptions` table + RLS
 - **Device binding**: 3 device Pro / 10 device Label, FingerprintJS open-source solo per audit log
-- **Error tracking**: Sentry free tier (5K errori/mese) — DA INSTALLARE
-- **Analytics + Feature Flag + Session Replay**: PostHog (1 SDK, free 1M eventi/mese) — DA INSTALLARE
+- **Error tracking**: ✅ Bugsnag installato e operativo (free tier, 7.5K errori/mese + 7.5K perf spans/mese). Vedere `src/lib/bugsnag.ts` + `src/components/bugsnag-error-boundary.tsx`. Pagina test: `/debug`.
+- **Analytics + Feature Flag + Session Replay**: ✅ PostHog installato (codice completo) — manca solo API key in Vercel env vars. Vedere `src/components/posthog-provider.tsx` + `src/lib/analytics.ts`.
 - **Community**: Discord server privato (canali #beta-announcements, #bug-reports, #feature-requests, #general)
 - **Feature request board**: Canny free (fino a 100 MAU)
 - **Legale**: iubenda Pro €29/mese (privacy + cookie + terms GDPR)
@@ -277,10 +280,46 @@ alla fase SaaS commerciale profittevole. Contiene:
 - ✅ Rate limiting API routes (Upstash Redis)
 - ✅ Lemon Squeezy come MoR (gestisce VAT EU automaticamente)
 
+## BUGSNAG — Setup definitivo (completato 2026-06-27)
+
+### File chiave
+- `src/lib/bugsnag.ts` — init con plugin React + BugsnagPerformance, filtri noise, redactedKeys GDPR, `window.Bugsnag` exposure
+- `src/components/bugsnag-error-boundary.tsx` — ErrorBoundary client con Fallback UI dark theme
+- `src/app/layout.tsx` — App wrappata con `<BugsnagErrorBoundary>` dentro `<PostHogProvider>`
+- `src/app/debug/page.tsx` — Pagina test (5 bottoni: handled, unhandled handler, breadcrumb, metadata, render error)
+- `scripts/bugsnag-upload-sourcemaps.mjs` — Upload source maps a Bugsnag ad ogni build (con wildcard `*/_next/static/`)
+- `scripts/test-bugsnag-init.mjs` — Smoke test runtime
+- `next.config.ts` — `productionBrowserSourceMaps: true` + env vars exposure (`VERCEL_GIT_COMMIT_SHA` → `NEXT_PUBLIC_VERCEL_GIT_COMMIT_SHA`)
+- `vercel.json` — `buildCommand: "npm run build"` (forza Vercel a usare npm invece di `next build` diretto, così il postbuild hook gira)
+- `package.json` — `build: "next build --webpack && node scripts/bugsnag-upload-sourcemaps.mjs"` (**webpack obbligatorio**, Turbopack non genera source maps complete)
+
+### Env vars Vercel (già configurate)
+- `NEXT_PUBLIC_BUGSNAG_API_KEY` = `1fa4d8a88468f9c892f1c59e9305cd2c`
+- `BUGSNAG_API_KEY` = `1fa4d8a88468f9c892f1c59e9305cd2c` (stessa, single-project setup)
+
+### Limiti free tier (verificati 2026-06-26)
+- 7.500 errori/mese → sufficiente per ~75-100 beta tester attivi
+- 7.500 performance spans/mese
+- 1 user seat
+- 7 giorni retention → check dashboard weekly
+- No Slack/Discord alerts (upgrade $23/mese per quello)
+
+### Verifica post-deploy
+1. Apri `https://[vercel-domain]/debug`
+2. Status deve dire "✅ Active"
+3. Clicca "Trigger handled error"
+4. Bugsnag Inbox → deve apparire entro 30 secondi con stack trace leggibile (es. `src/app/debug/page.tsx:51`)
+
+### Cosa NON toccare
+- ⚠️ Non rimuovere `--webpack` dal build script — Turbopack non genera source maps complete in Next.js 16
+- ⚠️ Non rimuovere `buildCommand` da `vercel.json` — altrimenti Vercel bypassa il postbuild
+- ⚠️ Non riattivare filtro `QuotaExceededError` in bugsnag.ts onError — stiamo tracciando quel bug reale
+
 ## Version History
 - **v1**: Initial app with labels, demos, pitch
 - **v2.0**: Gmail integration, PWA support, auto-save
 - **v2.1**: Rankings import, smart merge, robust storage
 - **v2.1.x**: Data persistence bug fix (persist v9+)
 - **v2.2.0**: Web Push notifications, follow-up reminders, weekly recap
-- **v2.3.0** (current): Multi-user isolation, cloud-first safety gate, EP pitch multi-track, label logos, scraper v3
+- **v2.3.0**: Multi-user isolation, cloud-first safety gate, EP pitch multi-track, label logos, scraper v3
+- **v2.4.0** (current): Bugsnag integration completa (error tracking + performance + source maps + ErrorBoundary + /debug page)
