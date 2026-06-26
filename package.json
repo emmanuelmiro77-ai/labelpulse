@@ -4,7 +4,7 @@
   "private": true,
   "scripts": {
     "dev": "node server.mjs",
-    "build": "next build && node scripts/bugsnag-upload-sourcemaps.mjs",
+    "build": "next build --webpack && node scripts/bugsnag-upload-sourcemaps.mjs",
     "build:static": "NEXT_EXPORT=true next build",
     "prebuild-local": "NEXT_EXPORT=true next build",
     "start": "node server.mjs",
