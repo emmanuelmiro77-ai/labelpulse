@@ -1,19 +1,27 @@
 /**
  * Unified analytics + error tracking module.
  *
- * Wraps Sentry (errors + session replay) and PostHog (analytics + feature flags + funnel events).
- * Exposes ONE simple API for the rest of the app — components never import Sentry/PostHog directly.
+ * Wraps Bugsnag (errors + breadcrumbs) and PostHog (analytics + feature flags + funnel events).
+ * Exposes ONE simple API for the rest of the app — components never import Bugsnag/PostHog directly.
  *
  * Configuration:
- *   - NEXT_PUBLIC_SENTRY_DSN: Sentry DSN (client)
- *   - SENTRY_DSN: Sentry DSN (server, optional fallback)
+ *   - NEXT_PUBLIC_BUGSNAG_API_KEY: Bugsnag API key (client-side, visible in bundle)
+ *   - BUGSNAG_API_KEY: Bugsnag API key (server-side, private — optional, falls back to public)
  *   - NEXT_PUBLIC_POSTHOG_KEY: PostHog project API key
  *   - NEXT_PUBLIC_POSTHOG_HOST: PostHog host (default: https://us.i.posthog.com)
  *
  * All tracking is no-op if env vars are missing → safe for local dev without setup.
+ *
+ * Bugsnag free tier: 7,500 errors/month, 1 seat, 7-day retention.
+ * PostHog free tier: 1M events/month, 5K session replays/month.
+ *
+ * Migration 2026-06-26: switched from Sentry to Bugsnag because Sentry
+ * removed free forever tier (now trial-only → $80+/month).
+ * See BETA_ROADMAP.md changelog for full justification.
  */
 
-import * as Sentry from "@sentry/nextjs";
+import Bugsnag from "./bugsnag";
+import { isBugsnagActive } from "./bugsnag";
 import type { User } from "next-auth";
 
 // ============================================================================
@@ -47,21 +55,24 @@ export interface UserProfile {
 // ============================================================================
 
 /**
- * Identify user in both Sentry and PostHog.
+ * Identify user in both Bugsnag and PostHog.
  * Call after successful login (Google OAuth or beta code) and after profile changes.
- *
- * On server-side calls (API routes), only Sentry is updated.
- * On client-side calls, both Sentry and PostHog are updated.
  */
 export function identifyUser(user: UserProfile): void {
-  // Sentry: set user tag
-  Sentry.setUser({
-    email: user.email ?? undefined,
-    username: user.artistName,
-    // Custom properties
-    plan: user.plan ?? "free",
-    isBetaTester: user.isBetaTester ?? false,
-  });
+  // Bugsnag: set user (id = email to allow searching across sessions)
+  // Note: Bugsnag.setUser requires (id, email, name)
+  if (isBugsnagActive()) {
+    Bugsnag.setUser(
+      user.email ?? "anonymous",
+      user.email ?? undefined,
+      user.artistName ?? undefined,
+    );
+    // Add custom metadata for filtering in dashboard
+    Bugsnag.addMetadata("user", {
+      plan: user.plan ?? "free",
+      isBetaTester: user.isBetaTester ?? false,
+    });
+  }
 
   // PostHog: identify (client-side only — posthog-js is loaded client-side)
   if (typeof window !== "undefined") {
@@ -82,8 +93,13 @@ export function identifyUser(user: UserProfile): void {
  * Clear user identification (call on logout).
  */
 export function clearUser(): void {
-  Sentry.setUser(null);
+  // Bugsnag: clear user
+  if (isBugsnagActive()) {
+    Bugsnag.setUser(undefined, undefined, undefined);
+    Bugsnag.clearMetadata("user");
+  }
 
+  // PostHog: reset
   if (typeof window !== "undefined") {
     void import("posthog-js").then(({ default: posthog }) => {
       if (posthog.__loaded) {
@@ -104,7 +120,7 @@ export function clearUser(): void {
  *   trackEvent("signup_completed");
  *   trackEvent("first_pitch_sent", { method: "gmail", labelGenre: "techno" });
  *
- * Sentry also receives this as a breadcrumb (for context in error reports).
+ * Bugsnag also receives this as a breadcrumb (for context in error reports).
  */
 export function trackEvent(
   event: FunnelEvent,
@@ -140,13 +156,10 @@ export function trackEvent(
     });
   }
 
-  // Sentry: add breadcrumb (will appear in next error report)
-  Sentry.addBreadcrumb({
-    category: "funnel",
-    message: event,
-    level: "info",
-    data: properties,
-  });
+  // Bugsnag: leave breadcrumb (will appear in next error report)
+  if (isBugsnagActive()) {
+    Bugsnag.leaveBreadcrumb(event, properties || {}, "state");
+  }
 }
 
 // ============================================================================
@@ -159,18 +172,36 @@ export function trackEvent(
  *
  * Usage:
  *   captureError(err, { context: "Saving label", labelId: id });
+ *
+ * NOTE: Bugsnag only sends events in production (enabledReleaseStages config).
+ * In development, errors are logged to console but not sent.
  */
 export function captureError(
   error: unknown,
   context?: Record<string, string | number | boolean | null | undefined>,
 ): void {
-  Sentry.captureException(error, {
-    extra: context,
+  if (!isBugsnagActive()) {
+    // Fallback to console if Bugsnag not configured
+    console.error("[captureError]", error, context);
+    return;
+  }
+
+  // Convert non-Error to Error (Bugsnag prefers Error instances)
+  const errorToReport =
+    error instanceof Error ? error : new Error(String(error));
+
+  Bugsnag.notify(errorToReport, (event) => {
+    if (context) {
+      event.addMetadata("context", context);
+    }
+    // Mark as handled (we're intentionally capturing, not crashing)
+    event.unhandled = false;
+    event.severity = "error";
   });
 }
 
 /**
- * Capture a custom message (for non-error events worth tracking).
+ * Capture a custom message with severity level.
  *
  * Usage:
  *   captureMessage("Beta code login failed", "warning", { email });
@@ -180,19 +211,27 @@ export function captureMessage(
   level: "info" | "warning" | "error" | "fatal" = "info",
   context?: Record<string, string | number | boolean | null | undefined>,
 ): void {
-  Sentry.captureMessage(message, level);
-  if (context) {
-    Sentry.addBreadcrumb({
-      category: "message",
-      message,
-      level: level === "fatal" ? "error" : level,
-      data: context,
-    });
+  if (!isBugsnagActive()) {
+    // Fallback to console
+    const fn = level === "error" || level === "fatal" ? console.error : console.warn;
+    fn(`[captureMessage:${level}]`, message, context);
+    return;
   }
+
+  // Bugsnag severity mapping: info → info, warning → warning, error/fatal → error
+  const severity = level === "fatal" ? "error" : level;
+
+  Bugsnag.notify(new Error(message), (event) => {
+    event.severity = severity as "info" | "warning" | "error";
+    event.unhandled = false;
+    if (context) {
+      event.addMetadata("context", context);
+    }
+  });
 }
 
 // ============================================================================
-// FEATURE FLAGS (PostHog)
+// FEATURE FLAGS (PostHog only)
 // ============================================================================
 
 /**
@@ -201,20 +240,14 @@ export function captureMessage(
  *
  * Usage:
  *   if (isFeatureEnabled("beta_scraper_v3")) { ... }
- *
- * For server-side flag checks, use checkFeatureFlagServer().
  */
 export function isFeatureEnabled(flag: string): boolean {
   if (typeof window === "undefined") return false;
-  // Synchronous check after posthog has loaded
-  let enabled = false;
-  // We can't synchronously import here because posthog is dynamically loaded
-  // Instead, expose posthog on window for direct access
   const w = window as unknown as { posthog?: { isFeatureEnabled: (f: string) => boolean } };
   if (w.posthog?.isFeatureEnabled) {
-    enabled = w.posthog.isFeatureEnabled(flag) ?? false;
+    return w.posthog.isFeatureEnabled(flag) ?? false;
   }
-  return enabled;
+  return false;
 }
 
 // ============================================================================

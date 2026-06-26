@@ -1120,3 +1120,64 @@ Next steps for user:
 2. Creare account PostHog → prendere project API key → mettere in NEXT_PUBLIC_POSTHOG_KEY (Vercel)
 3. (Opzionale) Generare SENTRY_AUTH_TOKEN per source maps upload automatico in production
 4. Redeploy Vercel → primo evento signup_completed apparirà in PostHog dopo login di qualsiasi utente
+
+---
+Task ID: phase-0-task-1-sentry-to-bugsnag-migration
+Agent: main
+Task: FASE 0 Punto 1 — Migrare error tracking da Sentry a Bugsnag dopo verifica che Sentry non ha più free forever tier (solo trial 14gg → $80+/mese).
+
+Work Log:
+- Verificato Sentry pricing 2026-06-26: piano free forever RIMOSSO. Solo Business Trial 14gg, poi $80+/mese.
+- Analizzate alternative realmente free forever: Bugsnag (7.5K errori/mese, 1 seat, 7-day retention), Rollbar (5K errori/mese), GlitchTip self-host su Oracle Cloud Always Free.
+- Decisione: Bugsnag free plan (sufficiente per 75-100 beta tester attivi, ROI 4-6 mesi setup vs 2h Bugsnag).
+- Disinstallato @sentry/nextjs (npm uninstall)
+- Rimossi sentry.client.config.ts, sentry.server.config.ts, sentry.edge.config.ts
+- Ripristinato next.config.ts allo stato originale (rimosso withSentryConfig wrapper)
+- Installato @bugsnag/js (pacchetto universal, auto-detect client/server)
+- Creato src/lib/bugsnag.ts:
+  * Init condizionale con guard isStarted
+  * Helper hasClient() per accedere a _client non tipizzato
+  * API key: BUGSNAG_API_KEY (server) con fallback a NEXT_PUBLIC_BUGSNAG_API_KEY (client)
+  * enabledReleaseStages: ['production'] → no eventi in dev
+  * Filtri onError: ResizeObserver, ChunkLoadError, AbortError, QuotaExceededError, browser extensions, network errors client, ECONNRESET/ETIMEDOUT server
+  * redactedKeys: password, token, authorization, cookie, secret, api_key, apikey, access_token, refresh_token, private_key, photoUrl (GDPR PII protection)
+  * Export default Bugsnag + isBugsnagActive() helper
+- Riscritto src/lib/analytics.ts:
+  * Importa Bugsnag + isBugsnagActive da ./bugsnag
+  * Sostituito tutti Bugsnag._client con isBugsnagActive() (5 punti)
+  * identifyUser: usa Bugsnag.setUser(id, email, name) + addMetadata('user', { plan, isBetaTester })
+  * clearUser: usa Bugsnag.setUser(undefined x3) + clearMetadata('user')
+  * captureError: usa Bugsnag.notify(error, callback) con addMetadata('context', ctx) + unhandled=false + severity='error'
+  * captureMessage: usa Bugsnag.notify(new Error(msg)) con severity mapping (info/warning/error, fatal→error)
+  * trackEvent: lascia Bugsnag.leaveBreadcrumb(event, properties, 'state') come contesto per errori
+  * API pubblica IDENTICA a prima (stessi tipi, stessi nomi funzioni) → 0 modifiche nei componenti che la usano
+- Aggiornato .env.local.example:
+  * Rimosse NEXT_PUBLIC_SENTRY_DSN, SENTRY_AUTH_TOKEN, SENTRY_ORG, SENTRY_PROJECT
+  * Aggiunte NEXT_PUBLIC_BUGSNAG_API_KEY, BUGSNAG_API_KEY con documentazione completa
+- Aggiornato BETA_ROADMAP.md:
+  * Sezione 0.2 riscritta con Bugsnag + change log Sentry→Bugsnag
+  * Aggiunti limiti free tier (7-day retention, 1 seat, no Slack alerts)
+  * Aggiunto trigger upgrade ($23/mese quando >6K errori/mese)
+  * Changelog entry aggiornata con risparmio €960/anno vs Sentry paid
+- Typecheck: tsc --noEmit pulito per i nostri file (analytics.ts, bugsnag.ts)
+- Build Next.js: SUCCESSO (tutte le route compilate, nessun wrapper richiesto in next.config)
+
+Stage Summary:
+- Codice in stato consistente: Sentry completamente rimosso, Bugsnag completamente installato
+- API pubblica del modulo analytics invariata → tutti i componenti (welcome-onboarding, producer-profile, store, pitch-generator, label-finder, demo-tracker, beta-feedback-button, use-auth) continuano a funzionare senza modifiche
+- 7 eventi funnel ancora tracciati (nessuna regressione)
+- Costo: €0 (Bugsnag free forever)
+- Risparmio vs Sentry paid: ~€960/anno
+- Anti-regressione: 0 file toccati critici (nessuna entry in BUG_REGISTRY), 33 test Vitest non toccati
+- Pronto per: utente crea account Bugsnag, prende API key, mette in Vercel env vars
+
+Files modificati:
+- REMOVED: sentry.client.config.ts
+- REMOVED: sentry.server.config.ts
+- REMOVED: sentry.edge.config.ts
+- NEW: src/lib/bugsnag.ts
+- MODIFIED: src/lib/analytics.ts (Sentry API → Bugsnag API, stessa interfaccia pubblica)
+- MODIFIED: next.config.ts (rimosso withSentryConfig wrapper)
+- MODIFIED: .env.local.example (Sentry vars → Bugsnag vars)
+- MODIFIED: BETA_ROADMAP.md (sezione 0.2 + changelog)
+- MODIFIED: package.json (@sentry/nextjs rimosso, @bugsnag/js aggiunto)

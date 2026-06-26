@@ -116,18 +116,38 @@ Foundation   Beta Infra   Closed Beta   Iteration   GA Prep    GA Launch
 - Lista di file/API che contengono "secret sauce" da proteggere
 **Criterio GO**: Nessun API route critico senza auth. Lista di azioni di hardening scritta.
 
-#### 0.2 — Installare Sentry (error tracking)
+#### 0.2 — Installare Bugsnag (error tracking) — cambiato da Sentry
 **Stato**: ✅ COMPLETATO (2026-06-26)
-**Tempo**: 2h
-**Costo**: €0 (free 5K errori/mese)
+**Tempo**: 3h (refactor incluso)
+**Costo**: €0 (free 7.500 errori/mese forever, 1 seat, 7-day retention)
+
+**⚠️ Change log**: originariamente previsto Sentry, ma verificato il 2026-06-26 che Sentry
+**non ha più free forever tier** (solo trial 14gg → $80+/mese). Switchato a Bugsnag che mantiene
+free forever. Risparmio stimato: ~€960 nel primo anno vs Sentry paid.
+
 **Output**:
-- `@sentry/nextjs` installato
-- `sentry.client.config.ts`, `sentry.server.config.ts`, `sentry.edge.config.ts` creati
-- `next.config.ts` wrappato con `withSentryConfig`
-- Source maps upload attivo in produzione (condizionale su SENTRY_AUTH_TOKEN)
-- Filtri noise: ResizeObserver, ChunkLoadError, browser extensions
-- Session replay attivo (mask sensitive inputs, sample 10% sessioni + 100% errori)
-**Criterio GO**: ✅ Code completo. Primo errore reale apparirà in dashboard appena l'utente configura NEXT_PUBLIC_SENTRY_DSN in Vercel.
+- `@bugsnag/js` installato (pacchetto universal, auto-detect client/server)
+- `src/lib/bugsnag.ts` creato — init condizionale con filtri noise personalizzati
+- `next.config.ts` ripristinato allo stato originale (nessun wrapper richiesto)
+- `src/lib/analytics.ts` aggiornato per usare Bugsnag con stessa API pubblica
+  (identifyUser, clearUser, trackEvent, captureError, captureMessage, isFeatureEnabled)
+- Filtri noise: ResizeObserver, ChunkLoadError, AbortError, QuotaExceededError,
+  browser extensions, network errors (client-side), ECONNRESET/ETIMEDOUT (server-side)
+- PII redaction attiva: password, token, authorization, cookie, secret, api_key,
+  access_token, refresh_token, private_key, photoUrl
+- Breadcrumbs automatici: error, log, navigation, request, user, manual, state
+- `enabledReleaseStages: ['production']` → no inquinamento dashboard in dev
+- `.env.local.example` aggiornato con BUGSNAG_API_KEY + NEXT_PUBLIC_BUGSNAG_API_KEY
+
+**Limiti free tier** (da tenere a mente):
+- 7 giorni retention → controllare dashboard almeno 1-2 volte/settimana
+- 1 seat (solo tu sviluppatore) → ok per beta, da rivalutare in GA
+- No Slack/Discord alerts → controllo manuale + PostHog events come segnali
+- No email reports → export CSV manuale settimanale
+
+**Criterio GO**: ✅ Code completo. Primo errore reale apparirà in dashboard appena l'utente
+configura NEXT_PUBLIC_BUGSNAG_API_KEY in Vercel. Trigger upgrade a $23/mese: superare 6K
+errori/mese, o necessità di retention >7gg, o secondo sviluppatore, o alerts Slack.
 
 #### 0.3 — Installare PostHog (analytics + feature flags + session replay)
 **Stato**: ✅ COMPLETATO (2026-06-26)
@@ -535,10 +555,12 @@ Questi task sono trasversali a tutte le fasi. Vanno monitorati e aggiornati.
 - Commit su GitHub per memoria permanente
 
 ### 2026-06-26 — Punti 0.2 + 0.3 completati ✅
-- Sentry installato con 3 config file (client/server/edge) + wrapper next.config
+- ✅ Punto 0.2 (error tracking): Bugsnag installato (originariamente previsto Sentry,
+  switchato dopo verifica Sentry non ha più free forever)
 - PostHog installato con provider + modulo analytics unificato (src/lib/analytics.ts)
 - 7 eventi funnel chiave tracciati end-to-end (signup → first_pitch_sent)
 - Build Next.js verifica: SUCCESSO (tutte le route compilate correttamente)
-- Costo: €0 (tutto free tier)
+- Costo: €0 (tutto free tier — Bugsnag 7.5K errori/mese + PostHog 1M eventi/mese)
+- Risparmio vs Sentry paid: ~€960/anno
 - Prossimo passo: Punto 0.4 (Discord server) + Punto 0.5 (NDA + screening form)
-- Setup utente richiesto: creare account Sentry + PostHog, mettere env vars in Vercel
+- Setup utente richiesto: creare account Bugsnag + PostHog, mettere env vars in Vercel
