@@ -432,7 +432,11 @@ export default function Home() {
         <div className="max-w-7xl mx-auto flex items-center justify-between">
           <div className="flex items-center gap-2 text-xs text-muted-foreground/50">
             <Disc3 className="h-3.5 w-3.5" />
-            <span className="font-mono">LabelPulse v2.1</span>
+            <span className="font-mono">LabelPulse v2.4</span>
+            <span className="text-muted-foreground/20">·</span>
+            <a href="/legal" className="hover:text-muted-foreground transition-colors">Privacy</a>
+            <a href="/legal" className="hover:text-muted-foreground transition-colors">Termini</a>
+            <a href="/legal" className="hover:text-muted-foreground transition-colors">Cookie</a>
           </div>
           <p className="text-[10px] text-muted-foreground/30 font-mono">
             {t(locale, "footer.dataStored")}

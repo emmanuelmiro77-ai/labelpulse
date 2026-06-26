@@ -86,7 +86,7 @@ Foundation   Beta Infra   Closed Beta   Iteration   GA Prep    GA Launch
 
 | Fase | Stato | Inizio | Fine | Costi sostenuti | Costi previsti |
 |------|-------|--------|------|-----------------|----------------|
-| 0 — Foundation | 🟡 IN CORSO (55%) | 2026-06-26 | — | €0 | €0 |
+| 0 — Foundation | 🟡 IN CORSO (65%) | 2026-06-26 | — | €0 | €0 |
 | 1 — Beta Infra | ⬜ NON INIZIATA | — | — | — | €0 |
 | 2 — Closed Beta | ⬜ NON INIZIATA | — | — | — | €129 (BetaList featured opzionale) |
 | 3 — Iteration | ⬜ NON INIZIATA | — | — | — | €0 |
@@ -234,16 +234,23 @@ errori/mese, o necessità di retention >7gg, o secondo sviluppatore, o alerts Sl
 **Criterio GO**: Account Gmail labelpulse.beta@gmail.com esistente e accessibile. Dominio professionale deferito a FASE 4.
 
 #### 0.7 — Privacy + Terms + Cookie banner (base free)
-**Stato**: ⬜ TODO
+**Stato**: ✅ COMPLETATO (2026-06-27)
 **Tempo**: 3h
-**Costo**: €0 (iubenda free base + Termly free)
+**Costo**: €0 (documenti custom + cookie banner custom, senza iubenda/Termly)
 **Output**:
-- Privacy Policy generata con iubenda free (linkato nella footer)
-- Terms of Service adattati da Termly template SaaS
-- Cookie banner semplice (solo se PostHog attivo — è)
-- Documenti linkati in footer dell'app + pagina `/legal`
-- Data processing agreement (DPA) bozza — servirà quando inviterai aziende come tester
-**Criterio GO**: Footer contiene link a Privacy + Terms + Cookie. Banner appare al primo accesso.
+- `docs/privacy-policy.md` — Privacy Policy completa GDPR (13 sezioni)
+- `docs/terms-of-service.md` — Termini di Servizio con clausole IT (15 sezioni)
+- `src/components/cookie-consent.tsx` — Cookie banner con:
+  * Accetta / Rifiuta / Preferenze dettagliate
+  * Integrazione PostHog opt-in/out
+  * Versioning per re-show su policy update
+  * localStorage invece di cookie (privacy-friendly)
+  * Dark theme coerente con l'app
+- `src/app/legal/page.tsx` — Pagina /legal con 3 tab (Privacy, Termini, Cookie)
+- Footer aggiornato: link Privacy + Termini + Cookie + versione corretta (v2.4)
+- PostHog provider aggiornato: rispetta consenso cookie all'init
+- Build verificato: SUCCESSO (tutte le route compilate, /legal presente)
+**Criterio GO**: Footer contiene link a Privacy + Terms + Cookie. Banner appare al primo accesso. Pagina /legal accessibile.
 
 #### 0.8 — Pulsante di recesso elettronico (OBBLIGATORIO da 19 giugno 2026)
 **Stato**: ⬜ TODO

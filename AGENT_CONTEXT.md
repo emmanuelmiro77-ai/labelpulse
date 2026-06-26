@@ -219,7 +219,7 @@ alla fase SaaS commerciale profittevole. Contiene:
 - **Criteri GO/NO-GO** espliciti per passare da una fase alla successiva
 - **Stato avanzamento** aggiornato dopo ogni task completato
 
-🟡 **Stato attuale**: FASE 0 — Foundation in corso (55%). Punto 0.2-0.6 ✅. Prossimo: Punto 0.7 (Privacy + Terms + Cookie banner).
+🟡 **Stato attuale**: FASE 0 — Foundation in corso (65%). Punto 0.2-0.7 ✅. Prossimo: Punto 0.8 (Pulsante recesso elettronico).
 
 ### ⚠️ TODO CRITICO UTENTE (entro 14 giorni dal 2026-06-26)
 - **Bugsnag Trial 14 giorni**: verificare in Settings → Billing che dopo il trial si auto-downgradi a Free (€0). Se auto-converte a paid ($80+/mese), creare nuovo progetto Free + cambiare API key in Vercel env vars (`NEXT_PUBLIC_BUGSNAG_API_KEY` + `BUGSNAG_API_KEY`).
@@ -238,7 +238,8 @@ alla fase SaaS commerciale profittevole. Contiene:
 - **Error tracking**: ✅ Bugsnag installato e operativo (free tier, 7.5K errori/mese + 7.5K perf spans/mese). Vedere `src/lib/bugsnag.ts` + `src/components/bugsnag-error-boundary.tsx`. Pagina test: `/debug`.
 - **Analytics + Feature Flag + Session Replay**: ✅ PostHog installato (codice completo) — manca solo API key in Vercel env vars. Vedere `src/components/posthog-provider.tsx` + `src/lib/analytics.ts`.
 - **Community**: ✅ Discord server setup guidato (guida: `docs/discord-setup-guide.md`, bot: `scripts/discord-bot/`). Bot personalizzato con welcome DM, auto-role, auto-reactions, slash commands /status /welcome /assign-beta.
-- **Legal**: ✅ NDA beta tester (`docs/NDA-beta-tester.md`) + screening questionnaire guide (`docs/screening-questionnaire.md`). NDA con giurisdizione IT + GDPR + anti-reverse engineering. Form su Tally.so (da pubblicare).
+- **Legale**: ✅ NDA beta tester (`docs/NDA-beta-tester.md`) + screening questionnaire guide (`docs/screening-questionnaire.md`). NDA con giurisdizione IT + GDPR + anti-reverse engineering. Form su Tally.so: https://tally.so/r/WOg86L
+- **Privacy/Legal**: ✅ Privacy Policy (`docs/privacy-policy.md`) + Terms of Service (`docs/terms-of-service.md`) + Cookie banner (`src/components/cookie-consent.tsx`) + Pagina /legal (`src/app/legal/page.tsx`). GDPR compliant, PostHog opt-in/out integrato.
 - **Feature request board**: Canny free (fino a 100 MAU)
 - **Legale**: iubenda Pro €29/mese (privacy + cookie + terms GDPR)
 - **Costo totale**: ~$127/mese per 50 utenti paganti

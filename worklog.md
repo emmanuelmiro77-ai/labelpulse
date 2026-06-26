@@ -1463,3 +1463,66 @@ Files modificati:
 - MODIFIED: BETA_ROADMAP.md (0.6 completato, stato 55%, changelog)
 - MODIFIED: AGENT_CONTEXT.md (stato aggiornato)
 
+---
+Task ID: phase-0-task-0.7-privacy-terms-cookie
+Agent: main
+Task: FASE 0 Punto 0.7 — Privacy Policy + Terms of Service + Cookie banner + pagina /legal
+
+Work Log:
+- Verificato BUG_REGISTRY: nessun fix passato su file footer/privacy/cookie
+- Verificato codice esistente: nessun componente privacy/cookie, nessuna pagina /legal
+- Creato docs/privacy-policy.md — Privacy Policy completa GDPR:
+  * 13 sezioni: Chi siamo, Dati raccolti, Come utilizziamo, Dove conserviamo, Cookie, Condivisione, Diritti GDPR, Sicurezza, Conservazione, Minori, Trasferimenti, Modifiche, Contatti
+  * Tabella base giuridica per ogni finalità (art. 6 GDPR)
+  * Tabella servizi terzi con regione
+  * Cookie table con tipi, nomi, durata, opt-out
+  * Sezione diritti GDPR completa con istruzioni per esercitarli
+- Creato docs/terms-of-service.md — Termini di Servizio:
+  * 15 sezioni: Accettazione, Descrizione, Requisiti, Account, Contenuti, Condotta, Privacy, Disponibilità, Proprietà intellettuale, Limitazione responsabilità, Risoluzione, Modifiche, Legge applicabile, Recesso, Disposizioni finali
+  * Clausola beta "così com'è" senza garanzie
+  * Diritto di recesso (art. 52 Codice Consumo)
+  * Foro competente Milano + legge italiana
+- Creato src/components/cookie-consent.tsx — Cookie banner React:
+  * 3 opzioni: Accetta / Rifiuta / Preferenze dettagliate
+  * Integrazione PostHog: opt_in_capturing / opt_out_capturing
+  * Versioning (version=1) per re-show su policy update
+  * localStorage key: "labelpulse-cookie-consent"
+  * Dark theme coerente con l'app (card/95 backdrop-blur)
+  * Link a /legal nel banner
+  * Dettagli: mostra cookie necessari (sempre attivi) + analitici (opt-in) + errori (opt-in)
+- Creato src/app/legal/page.tsx — Pagina /legal con:
+  * 3 tab: Privacy, Termini, Cookie (con icone Shield, FileText, Cookie)
+  * Contenuto renderizzato inline (privacy summary + terms summary + cookie policy)
+  * Link a documenti completi su GitHub
+  * Bottone "Torna all'app"
+  * Footer con data aggiornamento e email contatto
+- Aggiornato src/app/layout.tsx: importato + renderizzato <CookieConsent /> dopo <SWUpdater />
+- Aggiornato src/app/page.tsx: footer con link Privacy + Termini + Cookie + versione v2.4 (era v2.1)
+- Aggiornato src/components/posthog-provider.tsx: loaded callback rispetta cookie consent (opt_out se "rejected")
+- Build verificato: npm run build → SUCCESSO (tutte le route compilate, /legal presente)
+- Anti-regressione: verificati BUG_REGISTRY entries su file toccati
+  * page.tsx: 4 entry (classifica sparisce, NUOVA mostrato, label finder overlay, Accedi invisibile) → fix ancora presenti
+  * layout.tsx: 1 entry (login Vercel rotto) → fix ancora presente (nessun force-static aggiunto)
+  * posthog-provider.tsx: nessuna entry → ok
+
+Stage Summary:
+- Punto 0.7 PRIVACY + TERMS + COOKIE completato: documenti legali + cookie banner + pagina /legal
+- Build superato, nessuna regressione
+- Cookie banner rispetta consenso e integra PostHog opt-in/out
+- Footer aggiornato con link legali
+- Costo: €0 (tutto custom, senza iubenda/Termly)
+- Prossimo task: Punto 0.8 (Pulsante recesso elettronico)
+
+Files creati:
+- NEW: docs/privacy-policy.md (Privacy Policy GDPR completa)
+- NEW: docs/terms-of-service.md (Termini di Servizio IT)
+- NEW: src/components/cookie-consent.tsx (Cookie banner React)
+- NEW: src/app/legal/page.tsx (Pagina /legal con 3 tab)
+
+Files modificati:
+- MODIFIED: src/app/layout.tsx (aggiunto CookieConsent)
+- MODIFIED: src/app/page.tsx (footer link legali + versione v2.4)
+- MODIFIED: src/components/posthog-provider.tsx (cookie consent check)
+- MODIFIED: BETA_ROADMAP.md (0.7 completato, stato 65%)
+- MODIFIED: AGENT_CONTEXT.md (stato + stack Privacy/Legal)
+

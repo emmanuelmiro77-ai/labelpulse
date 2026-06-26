@@ -38,6 +38,19 @@ export function PostHogProvider({ children }: { children: React.ReactNode }) {
       // Override with NEXT_PUBLIC_POSTHOG_FORCE=true to enable in dev
       loaded: (ph) => {
         ph.__loaded = true;
+
+        // Respect cookie consent — opt out if user rejected analytics cookies
+        try {
+          const consentRaw = localStorage.getItem("labelpulse-cookie-consent");
+          if (consentRaw) {
+            const consent = JSON.parse(consentRaw);
+            if (consent.status === "rejected") {
+              ph.opt_out_capturing();
+            }
+          }
+        } catch {
+          // Ignore parse errors
+        }
       },
       // Capture page views automatically
       capture_pageview: true,
