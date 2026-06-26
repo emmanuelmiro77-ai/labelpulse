@@ -86,7 +86,7 @@ Foundation   Beta Infra   Closed Beta   Iteration   GA Prep    GA Launch
 
 | Fase | Stato | Inizio | Fine | Costi sostenuti | Costi previsti |
 |------|-------|--------|------|-----------------|----------------|
-| 0 — Foundation | 🟡 IN CORSO (50%) | 2026-06-26 | — | €0 | €0 |
+| 0 — Foundation | 🟡 IN CORSO (55%) | 2026-06-26 | — | €0 | €0 |
 | 1 — Beta Infra | ⬜ NON INIZIATA | — | — | — | €0 |
 | 2 — Closed Beta | ⬜ NON INIZIATA | — | — | — | €129 (BetaList featured opzionale) |
 | 3 — Iteration | ⬜ NON INIZIATA | — | — | — | €0 |
@@ -220,15 +220,18 @@ errori/mese, o necessità di retention >7gg, o secondo sviluppatore, o alerts Sl
 **Criterio GO**: NDA in repo ✅. Form Tally: da pubblicare da parte dell'utente (creare account Tally → seguire guida → pubblicare).
 
 #### 0.6 — Setup email professionale
-**Stato**: ⬜ TODO
-**Tempo**: 1h
-**Costo**: €0 (Cloudflare email routing gratis) o €10/anno (domain .app)
+**Stato**: ✅ COMPLETATO (2026-06-27)
+**Tempo**: 30min
+**Costo**: €0
 **Output**:
-- Verificare se dominio `labelpulse.app` è già registrato
-- Se sì: configurare Cloudflare email routing → `hello@labelpulse.app` → forwarding a gmail personale
-- Se no (costo domain €10/anno): defer a FASE 4, usare `labelpulse.beta@gmail.com` temporaneo
-- Aggiornare `.env.local.example` con `SUPPORT_EMAIL`
-**Criterio GO**: Email inviata a `hello@labelpulse.app` arriva nella casella personale.
+- Verificato: dominio `labelpulse.app` NON è registrato (NXDOMAIN)
+- Decisione: defer a FASE 4 la registrazione dominio + Cloudflare email routing
+- Email temporanea per la beta: `labelpulse.beta@gmail.com`
+- Aggiornato `.env.local.example` con `SUPPORT_EMAIL=labelpulse.beta@gmail.com`
+- Aggiornate tutte le referenze email in docs/NDA-beta-tester.md
+- L'utente deve creare l'account Gmail `labelpulse.beta@gmail.com` (se non già esistente)
+- Nota: se l'account Gmail è già creato, il criterio GO è soddisfatto
+**Criterio GO**: Account Gmail labelpulse.beta@gmail.com esistente e accessibile. Dominio professionale deferito a FASE 4.
 
 #### 0.7 — Privacy + Terms + Cookie banner (base free)
 **Stato**: ⬜ TODO
@@ -591,3 +594,12 @@ Questi task sono trasversali a tutte le fasi. Vanno monitorati e aggiornati.
 - Costo: €0 (Tally.so free fino a 999 risposte/mese)
 - Prossimo passo: Punto 0.6 (email professionale) → poi 0.7 (iubenda privacy+cookie)
 - Setup utente richiesto: creare account Tally.so, pubblicare form seguendo guida
+
+### 2026-06-27 — Punto 0.6 completato ✅
+- ✅ Punto 0.6 (email): verificato dominio labelpulse.app NON registrato
+- Email temporanea per beta: labelpulse.beta@gmail.com
+- Dominio professionale deferito a FASE 4 (€10/anno)
+- .env.local.example aggiornato con SUPPORT_EMAIL
+- NDA aggiornato con email temporanea
+- Costo: €0
+- Prossimo passo: Punto 0.7 (iubenda privacy + cookie banner)

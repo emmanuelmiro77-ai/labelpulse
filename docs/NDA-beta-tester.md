@@ -11,7 +11,7 @@
 
 **Disclosing Party (Rivelante)**:
 Emmanuel Miro, fondatore di LabelPulse  
-Email: hello@labelpulse.app (o email temporanea: labelpulse.beta@gmail.com)  
+Email: labelpulse.beta@gmail.com (temporanea, sarà hello@labelpulse.app dopo registrazione dominio)  
 P.IVA / CF: [da compilare al momento della registrazione d'impresa]
 
 **Receiving Party (Ricevente)**:
@@ -97,7 +97,7 @@ La Receiving Party si impegna a:
 
 ## 6. SICUREZZA E DATA BREACH
 
-6.1 La Receiving Party deve notificare tempestivamente (entro 48 ore) qualsiasi accesso non autorizzato, perdita o divulgazione accidentale di Informazioni Riservate all'indirizzo hello@labelpulse.app.
+6.1 La Receiving Party deve notificare tempestivamente (entro 48 ore) qualsiasi accesso non autorizzato, perdita o divulgazione accidentale di Informazioni Riservate all'indirizzo labelpulse.beta@gmail.com.
 
 6.2 In caso di data breach, la Receiving Party collaborerà con la Disclosing Party per contenere l'incidente e minimizzare i danni.
 
@@ -128,7 +128,7 @@ La Receiving Party si impegna a:
 
 9.1 **Trattamento dati personali** — Le informazioni personali del beta tester raccolte durante il programma sono trattate nel rispetto del D.Lgs. 196/2003 e del GDPR (Regolamento UE 2016/679). Per dettagli, consultare la Privacy Policy disponibile su labelpulse.vercel.app.
 
-9.2 **Diritto di recesso** — Ai sensi dell'art. 52 e ss. del Codice del Consumo (D.Lgs. 206/2005), il beta tester ha diritto di recedere dal presente accordo entro 14 giorni dalla accettazione, inviando comunicazione a hello@labelpulse.app.
+9.2 **Diritto di recesso** — Ai sensi dell'art. 52 e ss. del Codice del Consumo (D.Lgs. 206/2005), il beta tester ha diritto di recedere dal presente accordo entro 14 giorni dalla accettazione, inviando comunicazione a labelpulse.beta@gmail.com.
 
 9.3 **Foro competente** — Per qualsiasi controversia derivante dal presente accordo, è competente il Foro di Milano, salva la competenza del Giudice di Pace o del Giudice Unico in base al valore della controversia.
 

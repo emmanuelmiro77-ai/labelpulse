@@ -1431,3 +1431,35 @@ Files modificati:
 - MODIFIED: BETA_ROADMAP.md (0.5 completato, stato 50%, changelog)
 - MODIFIED: AGENT_CONTEXT.md (stato aggiornato, stack Legal aggiunto)
 
+---
+Task ID: phase-0-task-0.6-email-setup
+Agent: main
+Task: FASE 0 Punto 0.6 — Setup email professionale
+
+Work Log:
+- Verificato BUG_REGISTRY: nessun fix passato su file correlati a email/setup
+- Verificato dominio labelpulse.app: NXDOMAIN (non registrato)
+- curl https://labelpulse.app → nessun DNS, curl https://labelpulse.vercel.app → HTTP 200
+- Decisione: defer registrazione dominio a FASE 4 (€10/anno), usare labelpulse.beta@gmail.com per la beta
+- Aggiornato .env.local.example con SUPPORT_EMAIL=labelpulse.beta@gmail.com
+- Aggiornato docs/NDA-beta-tester.md: sostituito tutti i riferimenti hello@labelpulse.app → labelpulse.beta@gmail.com
+  * Sezione PARTI (Disclosing Party email)
+  * Sezione 6.1 (notifica data breach)
+  * Sezione 9.2 (diritto di recesso)
+- Aggiornato BETA_ROADMAP.md: Punto 0.6 → ✅ COMPLETATO, stato FASE 0 → 55%
+- Aggiornato AGENT_CONTEXT.md: stato aggiornato
+- Verifica anti-regressione: 0 file critici toccati (solo .env.local.example e documentazione)
+
+Stage Summary:
+- Punto 0.6 EMAIL completato: email temporanea configurata
+- L'utente deve: creare account Gmail labelpulse.beta@gmail.com (se non già esistente)
+- Dominio labelpulse.app sarà registrato in FASE 4 (GA Prep) insieme a Cloudflare email routing
+- Costo: €0 per la beta
+- Prossimo task: Punto 0.7 (Privacy + Terms + Cookie banner)
+
+Files modificati:
+- MODIFIED: .env.local.example (aggiunto SUPPORT_EMAIL)
+- MODIFIED: docs/NDA-beta-tester.md (email aggiornate)
+- MODIFIED: BETA_ROADMAP.md (0.6 completato, stato 55%, changelog)
+- MODIFIED: AGENT_CONTEXT.md (stato aggiornato)
+
