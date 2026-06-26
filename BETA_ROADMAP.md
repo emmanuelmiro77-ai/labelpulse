@@ -226,12 +226,12 @@ errori/mese, o necessità di retention >7gg, o secondo sviluppatore, o alerts Sl
 **Output**:
 - Verificato: dominio `labelpulse.app` NON è registrato (NXDOMAIN)
 - Decisione: defer a FASE 4 la registrazione dominio + Cloudflare email routing
-- Email temporanea per la beta: `labelpulse.beta@gmail.com`
-- Aggiornato `.env.local.example` con `SUPPORT_EMAIL=labelpulse.beta@gmail.com`
+- Email temporanea per la beta: `pulse.label.official@gmail.com`
+- Aggiornato `.env.local.example` con `SUPPORT_EMAIL=pulse.label.official@gmail.com`
 - Aggiornate tutte le referenze email in docs/NDA-beta-tester.md
-- L'utente deve creare l'account Gmail `labelpulse.beta@gmail.com` (se non già esistente)
+- L'utente deve creare l'account Gmail `pulse.label.official@gmail.com` (se non già esistente)
 - Nota: se l'account Gmail è già creato, il criterio GO è soddisfatto
-**Criterio GO**: Account Gmail labelpulse.beta@gmail.com esistente e accessibile. Dominio professionale deferito a FASE 4.
+**Criterio GO**: Account Gmail pulse.label.official@gmail.com esistente e accessibile. Dominio professionale deferito a FASE 4.
 
 #### 0.7 — Privacy + Terms + Cookie banner (base free)
 **Stato**: ✅ COMPLETATO (2026-06-27)
@@ -612,7 +612,7 @@ Questi task sono trasversali a tutte le fasi. Vanno monitorati e aggiornati.
 
 ### 2026-06-27 — Punto 0.6 completato ✅
 - ✅ Punto 0.6 (email): verificato dominio labelpulse.app NON registrato
-- Email temporanea per beta: labelpulse.beta@gmail.com
+- Email temporanea per beta: pulse.label.official@gmail.com
 - Dominio professionale deferito a FASE 4 (€10/anno)
 - .env.local.example aggiornato con SUPPORT_EMAIL
 - NDA aggiornato con email temporanea

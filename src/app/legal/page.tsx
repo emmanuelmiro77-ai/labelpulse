@@ -75,7 +75,7 @@ export default function LegalPage() {
       <footer className="border-t border-border mt-12">
         <div className="max-w-3xl mx-auto px-4 py-4 text-xs text-muted-foreground flex items-center gap-1 flex-wrap">
           <Scale className="h-3 w-3" />
-          Ultimo aggiornamento: 27 Giugno 2026 · Contatto: labelpulse.beta@gmail.com
+          Ultimo aggiornamento: 27 Giugno 2026 · Contatto: pulse.label.official@gmail.com
           <span className="text-muted-foreground/20">·</span>
           <a href="/account/withdrawal" className="underline hover:text-foreground transition-colors">
             Diritto di recesso
@@ -91,7 +91,7 @@ function PrivacyContent() {
     <div className="prose prose-sm prose-invert max-w-none">
       <h2>Privacy Policy</h2>
       <p><strong>Titolare del trattamento</strong>: Emmanuel Miro — LabelPulse</p>
-      <p><strong>Email</strong>: labelpulse.beta@gmail.com</p>
+      <p><strong>Email</strong>: pulse.label.official@gmail.com</p>
       <p><strong>Sito web</strong>: https://labelpulse.vercel.app</p>
 
       <h3>1. Chi siamo</h3>
@@ -151,7 +151,7 @@ function PrivacyContent() {
         <li><strong>Opposizione</strong> (art. 21): opporsi al trattamento</li>
         <li><strong>Recesso consenso</strong> (art. 7(3)): revocare il consenso in qualsiasi momento</li>
       </ul>
-      <p>Tempo di risposta: entro 30 giorni. Contatta: labelpulse.beta@gmail.com</p>
+      <p>Tempo di risposta: entro 30 giorni. Contatta: pulse.label.official@gmail.com</p>
 
       <h3>6. Sicurezza</h3>
       <ul>
@@ -173,7 +173,7 @@ function PrivacyContent() {
       <p>Alcuni fornitori (Vercel, PostHog, Bugsnag, Google) si trovano negli Stati Uniti. I trasferimenti sono regolati da Standard Contractual Clauses e EU-US Data Privacy Framework.</p>
 
       <h3>9. Contatti</h3>
-      <p>Email: labelpulse.beta@gmail.com</p>
+      <p>Email: pulse.label.official@gmail.com</p>
 
       <p className="text-xs text-muted-foreground mt-6">
         Questa Privacy Policy è redatta in conformità con il Regolamento (UE) 2016/679 (GDPR) e il D.Lgs. 196/2003.
@@ -187,7 +187,7 @@ function TermsContent() {
     <div className="prose prose-sm prose-invert max-w-none">
       <h2>Termini di Servizio</h2>
       <p><strong>Operatore</strong>: Emmanuel Miro — LabelPulse</p>
-      <p><strong>Email</strong>: labelpulse.beta@gmail.com</p>
+      <p><strong>Email</strong>: pulse.label.official@gmail.com</p>
 
       <h3>1. Accettazione dei termini</h3>
       <p>Utilizzando LabelPulse, accetti di essere vincolato da questi Termini. L&apos;utilizzo durante la beta è soggetto anche al NDA firmato durante lo screening.</p>
@@ -220,10 +220,10 @@ function TermsContent() {
       <p>IL SERVIZIO È FORNITO &quot;COSÌ COM&apos;È&quot; SENZA ALCUNA GARANZIA. LabelPulse non è responsabile per perdita di dati, mancato invio di pitch o errori nelle classifiche. Sei responsabile dei tuoi backup.</p>
 
       <h3>7. Risoluzione</h3>
-      <p>Puoi smettere di utilizzare il Servizio in qualsiasi momento. Per eliminare il tuo account: email a labelpulse.beta@gmail.com. I dati saranno eliminati entro 30 giorni (GDPR art. 17).</p>
+      <p>Puoi smettere di utilizzare il Servizio in qualsiasi momento. Per eliminare il tuo account: email a pulse.label.official@gmail.com. I dati saranno eliminati entro 30 giorni (GDPR art. 17).</p>
 
       <h3>8. Diritto di recesso</h3>
-      <p>Ai sensi dell&apos;art. 52 del Codice del Consumo, hai diritto di recedere da questi Termini entro 14 giorni senza motivazione. Email: labelpulse.beta@gmail.com.</p>
+      <p>Ai sensi dell&apos;art. 52 del Codice del Consumo, hai diritto di recedere da questi Termini entro 14 giorni senza motivazione. Email: pulse.label.official@gmail.com.</p>
 
       <h3>9. Legge applicabile</h3>
       <p>Questi Termini sono regolati dalla legge italiana. Foro competente: Milano.</p>
@@ -292,7 +292,7 @@ function CookiesContent() {
       <p>Se aggiungiamo nuovi cookie o modifichiamo le nostre pratiche, aggiorneremo questa pagina e ti mostreremo nuovamente il banner di consenso.</p>
 
       <h3>Contatti</h3>
-      <p>Per domande sui cookie: labelpulse.beta@gmail.com</p>
+      <p>Per domande sui cookie: pulse.label.official@gmail.com</p>
     </div>
   );
 }

@@ -12,7 +12,7 @@ import { NextRequest, NextResponse } from "next/server";
  * 3. In production, this would trigger an email + Supabase cleanup
  */
 
-const SUPPORT_EMAIL = process.env.SUPPORT_EMAIL || "labelpulse.beta@gmail.com";
+const SUPPORT_EMAIL = process.env.SUPPORT_EMAIL || "pulse.label.official@gmail.com";
 
 export async function POST(request: NextRequest) {
   try {

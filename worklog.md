@@ -1440,9 +1440,9 @@ Work Log:
 - Verificato BUG_REGISTRY: nessun fix passato su file correlati a email/setup
 - Verificato dominio labelpulse.app: NXDOMAIN (non registrato)
 - curl https://labelpulse.app → nessun DNS, curl https://labelpulse.vercel.app → HTTP 200
-- Decisione: defer registrazione dominio a FASE 4 (€10/anno), usare labelpulse.beta@gmail.com per la beta
-- Aggiornato .env.local.example con SUPPORT_EMAIL=labelpulse.beta@gmail.com
-- Aggiornato docs/NDA-beta-tester.md: sostituito tutti i riferimenti hello@labelpulse.app → labelpulse.beta@gmail.com
+- Decisione: defer registrazione dominio a FASE 4 (€10/anno), usare pulse.label.official@gmail.com per la beta
+- Aggiornato .env.local.example con SUPPORT_EMAIL=pulse.label.official@gmail.com
+- Aggiornato docs/NDA-beta-tester.md: sostituito tutti i riferimenti hello@labelpulse.app → pulse.label.official@gmail.com
   * Sezione PARTI (Disclosing Party email)
   * Sezione 6.1 (notifica data breach)
   * Sezione 9.2 (diritto di recesso)
@@ -1452,7 +1452,7 @@ Work Log:
 
 Stage Summary:
 - Punto 0.6 EMAIL completato: email temporanea configurata
-- L'utente deve: creare account Gmail labelpulse.beta@gmail.com (se non già esistente)
+- L'utente deve: creare account Gmail pulse.label.official@gmail.com (se non già esistente)
 - Dominio labelpulse.app sarà registrato in FASE 4 (GA Prep) insieme a Cloudflare email routing
 - Costo: €0 per la beta
 - Prossimo task: Punto 0.7 (Privacy + Terms + Cookie banner)

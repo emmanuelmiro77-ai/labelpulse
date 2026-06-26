@@ -2,7 +2,7 @@
 
 > **Ultimo aggiornamento**: 27 Giugno 2026  
 > **Operatore**: Emmanuel Miro — LabelPulse  
-> **Email contatto**: labelpulse.beta@gmail.com  
+> **Email contatto**: pulse.label.official@gmail.com  
 > **Sito web**: https://labelpulse.vercel.app
 
 ---
@@ -140,7 +140,7 @@ La responsabilità totale di LabelPulse nei tuoi confronti non supererà l'impor
 
 ### 11.1 Da parte dell'utente
 Puoi smettere di utilizzare il Servizio in qualsiasi momento. Per eliminare il tuo account e i tuoi dati:
-- Invia un'email a labelpulse.beta@gmail.com con oggetto "Cancellazione account"
+- Invia un'email a pulse.label.official@gmail.com con oggetto "Cancellazione account"
 - I tuoi dati saranno eliminati entro 30 giorni (come richiesto dal GDPR art. 17)
 
 ### 11.2 Da parte di LabelPulse
@@ -179,7 +179,7 @@ Se sei un consumatore ai sensi del Codice del Consumo (D.Lgs. 206/2005), resti s
 
 Ai sensi dell'art. 52 e ss. del Codice del Consumo (D.Lgs. 206/2005), se sei un consumatore hai diritto di recedere da questi Termini entro 14 giorni dalla loro accettazione, senza dover fornire una motivazione.
 
-Per esercitare il diritto di recesso, invia una comunicazione a labelpulse.beta@gmail.com indicando la tua volontà di recedere.
+Per esercitare il diritto di recesso, invia una comunicazione a pulse.label.official@gmail.com indicando la tua volontà di recedere.
 
 ## 15. Disposizioni finali
 
@@ -191,7 +191,7 @@ Per esercitare il diritto di recesso, invia una comunicazione a labelpulse.beta@
 
 15.4 **Cessione**: Non puoi cedere i tuoi diritti o obblighi ai sensi di questi Termini senza il nostro consenso scritto.
 
-15.5 **Comunicazioni**: Tutte le comunicazioni vanno inviate a labelpulse.beta@gmail.com.
+15.5 **Comunicazioni**: Tutte le comunicazioni vanno inviate a pulse.label.official@gmail.com.
 
 ---
 

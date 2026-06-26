@@ -181,14 +181,14 @@ export default function WithdrawalPage() {
               <h2 className="text-xl font-semibold mb-2">Errore</h2>
               <p className="text-sm text-muted-foreground max-w-md mx-auto">
                 Si è verificato un errore nella registrazione del recesso.
-                Riprova o contatta direttamente labelpulse.beta@gmail.com.
+                Riprova o contatta direttamente pulse.label.official@gmail.com.
               </p>
             </div>
             <div className="flex gap-3 justify-center">
               <Button variant="outline" onClick={() => setState("form")}>
                 Riprova
               </Button>
-              <a href="mailto:labelpulse.beta@gmail.com?subject=Diritto di recesso">
+              <a href="mailto:pulse.label.official@gmail.com?subject=Diritto di recesso">
                 <Button>Invia email</Button>
               </a>
             </div>
@@ -201,7 +201,7 @@ export default function WithdrawalPage() {
         <div className="max-w-2xl mx-auto px-4 py-4 text-xs text-muted-foreground">
           Riferimento normativo: D.Lgs. 206/2005 (Codice del Consumo), art. 52 e ss. e art. 59 lett. i.
           <br />
-          Contatto: labelpulse.beta@gmail.com
+          Contatto: pulse.label.official@gmail.com
         </div>
       </footer>
     </div>

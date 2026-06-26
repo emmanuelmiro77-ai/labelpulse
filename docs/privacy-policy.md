@@ -2,7 +2,7 @@
 
 > **Ultimo aggiornamento**: 27 Giugno 2026  
 > **Titolare del trattamento**: Emmanuel Miro — LabelPulse  
-> **Email contatto**: labelpulse.beta@gmail.com  
+> **Email contatto**: pulse.label.official@gmail.com  
 > **Sito web**: https://labelpulse.vercel.app
 
 ---
@@ -105,12 +105,12 @@ Come utente dell'UE, hai i seguenti diritti:
 
 | Diritto | Descrizione | Come esercitarlo |
 |---------|-------------|-----------------|
-| **Accesso** (art. 15) | Ottenere una copia dei tuoi dati | Email a labelpulse.beta@gmail.com |
+| **Accesso** (art. 15) | Ottenere una copia dei tuoi dati | Email a pulse.label.official@gmail.com |
 | **Rettifica** (art. 16) | Correggere dati inesatti | Direttamente nell'app (profilo) |
-| **Cancellazione** (art. 17) | Richiedere l'eliminazione dei dati | Email a labelpulse.beta@gmail.com |
-| **Limitazione** (art. 18) | Limitare il trattamento in certi casi | Email a labelpulse.beta@gmail.com |
+| **Cancellazione** (art. 17) | Richiedere l'eliminazione dei dati | Email a pulse.label.official@gmail.com |
+| **Limitazione** (art. 18) | Limitare il trattamento in certi casi | Email a pulse.label.official@gmail.com |
 | **Portabilità** (art. 20) | Ricevere i dati in formato portabile | Funzione Export nell'app |
-| **Opposizione** (art. 21) | Opporsi al trattamento per interesse legittimo | Email a labelpulse.beta@gmail.com |
+| **Opposizione** (art. 21) | Opporsi al trattamento per interesse legittimo | Email a pulse.label.official@gmail.com |
 | **Recesso** (art. 7(3)) | Revocare il consenso in qualsiasi momento | Banner cookie o email |
 
 Tempo di risposta: entro 30 giorni (come richiesto dal GDPR).
@@ -169,7 +169,7 @@ L'uso continuato dell'applicazione dopo le modifiche costituisce accettazione de
 
 Per qualsiasi domanda relativa a questa Privacy Policy o al trattamento dei tuoi dati personali:
 
-- **Email**: labelpulse.beta@gmail.com
+- **Email**: pulse.label.official@gmail.com
 - **Indirizzo**: disponibile su richiesta via email
 - **DPO**: non ancora nominato (obbligatorio sopra 250 dipendenti o trattamento su larga scala di dati sensibili — verrà nominato prima del lancio GA)
 
