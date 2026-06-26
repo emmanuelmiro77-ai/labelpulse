@@ -478,9 +478,19 @@ export function clearAllLocalData(): void {
   clearArtistsIDB().catch((e) =>
     console.warn("[LabelPulse Storage] Error clearing artists IDB:", e)
   );
-  // Reset the rehydration guard so the next persist cycle treats us as
-  // a fresh install (will re-seed from defaults).
-  _rehydrated = false;
+  // ⚠️ CRITICAL FIX (2026-06-26, login-blocked-after-logout bug):
+  // DO NOT reset _rehydrated or hasRehydrated to false here.
+  //
+  // The Zustand persist onRehydrateStorage callback (which sets these
+  // flags back to true) fires ONLY ONCE at the initial app mount. If
+  // we set them to false here (e.g. on logout), NOTHING will ever flip
+  // them back — page.tsx will show "Loading LabelPulse..." forever and
+  // the user is locked out of the app, unable to even see the login
+  // button.
+  //
+  // After explicit clear, the store is in a fresh-seed state with no
+  // user data to protect — so writes can safely proceed immediately.
+  _rehydrated = true;
   // Reset the in-memory Zustand store to seed defaults. We mirror the
   // exact same initial state shape used in create<AppState>()(persist(...))
   // below — but only the data fields, NOT the action functions (those are
@@ -508,7 +518,10 @@ export function clearAllLocalData(): void {
     newRepliesCount: 0,
     rankingsUpdatedAt: null,
     lastSavedAt: null,
-    hasRehydrated: false,
+    // ⚠️ Keep hasRehydrated=true (do NOT reset to false here).
+    // See comment above — resetting it would lock the user out of the app
+    // because onRehydrateStorage only fires once at initial mount.
+    hasRehydrated: true,
     hasCloudSynced: false,
     rankingSnapshots: [],
   }, false);

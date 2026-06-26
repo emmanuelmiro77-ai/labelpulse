@@ -34,7 +34,17 @@ import {
   setStorageOwner,
   verifyStorageOwner,
   clearAllLocalData,
+  useAppStore,
 } from "@/lib/store";
+
+function safeJsonParse(str: string | null): any | null {
+  if (!str) return null;
+  try {
+    return JSON.parse(str);
+  } catch {
+    return null;
+  }
+}
 
 describe("Cross-account data isolation (fix f54bff8)", () => {
   beforeEach(() => {
@@ -79,7 +89,7 @@ describe("Cross-account data isolation (fix f54bff8)", () => {
   });
 
   describe("verifyStorageOwner — different user (CRITICAL — must clear)", () => {
-    it("returns true AND wipes ALL known localStorage keys when owner differs", () => {
+    it("returns true AND wipes ALL known USER-DATA localStorage keys when owner differs", () => {
       setStorageOwner("userA@example.com");
       localStorage.setItem(PRIMARY_KEY, JSON.stringify({ demos: ["A-secret"] }));
       localStorage.setItem(BACKUP_KEY, "backup-A");
@@ -92,8 +102,17 @@ describe("Cross-account data isolation (fix f54bff8)", () => {
 
       expect(wasCleared).toBe(true);
 
-      // CRITICAL — every known key must be gone so user B can't see user A's data
-      expect(localStorage.getItem(PRIMARY_KEY)).toBeNull();
+      // CRITICAL — every known USER-DATA key must be gone so user B can't
+      // see user A's data.
+      // NOTE (2026-06-26 login-blocked-after-logout fix): after clear,
+      // the store re-seeds itself (writes fresh seed labels to PRIMARY_KEY).
+      // We only assert that the OLD user data (the "A-secret" demos blob)
+      // is gone — PRIMARY_KEY may be repopulated with seed defaults.
+      const primaryAfter = localStorage.getItem(PRIMARY_KEY);
+      const parsed = primaryAfter ? safeJsonParse(primaryAfter) : null;
+      const demosAfter = parsed?.state?.demos ?? parsed?.demos;
+      expect(demosAfter ?? []).toEqual([]); // user A's "A-secret" is gone
+
       expect(localStorage.getItem(BACKUP_KEY)).toBeNull();
       expect(localStorage.getItem(SNAPSHOTS_BACKUP_KEY)).toBeNull();
       expect(localStorage.getItem(PROFILE_BACKUP_KEY)).toBeNull();
@@ -130,8 +149,8 @@ describe("Cross-account data isolation (fix f54bff8)", () => {
   });
 
   describe("clearAllLocalData — explicit wipe", () => {
-    it("removes every known localStorage key", () => {
-      localStorage.setItem(PRIMARY_KEY, "data");
+    it("removes every known USER-DATA localStorage key (PRIMARY_KEY may be re-seeded)", () => {
+      localStorage.setItem(PRIMARY_KEY, "user-data-A");
       localStorage.setItem(BACKUP_KEY, "backup");
       localStorage.setItem(SNAPSHOTS_BACKUP_KEY, "snap");
       localStorage.setItem(PROFILE_BACKUP_KEY, "profile");
@@ -140,7 +159,12 @@ describe("Cross-account data isolation (fix f54bff8)", () => {
 
       clearAllLocalData();
 
-      expect(localStorage.getItem(PRIMARY_KEY)).toBeNull();
+      // After clear (2026-06-26 fix), the store immediately re-seeds itself
+      // and writes fresh seed labels to PRIMARY_KEY. This is correct
+      // behavior — the OLD user data ("user-data-A") must be gone.
+      const primaryAfter = localStorage.getItem(PRIMARY_KEY);
+      expect(primaryAfter).not.toBe("user-data-A");
+
       expect(localStorage.getItem(BACKUP_KEY)).toBeNull();
       expect(localStorage.getItem(SNAPSHOTS_BACKUP_KEY)).toBeNull();
       expect(localStorage.getItem(PROFILE_BACKUP_KEY)).toBeNull();
@@ -160,6 +184,25 @@ describe("Cross-account data isolation (fix f54bff8)", () => {
 
       expect(localStorage.getItem("labelpulse-theme")).toBe("dark");
       expect(localStorage.getItem("other-app-data")).toBe("keep me");
+    });
+  });
+
+  // ⚠️ Anti-regression: login-blocked-after-logout bug (2026-06-26)
+  // After clearAllLocalData(), hasRehydrated MUST stay true. Resetting it
+  // to false locks the user out of the app — page.tsx shows the loading
+  // spinner forever because onRehydrateStorage only fires once at the
+  // initial app mount, so nothing would ever flip it back to true.
+  describe("clearAllLocalData — hasRehydrated invariant (login-blocked-after-logout)", () => {
+    it("keeps hasRehydrated=true after clear (CRITICAL — never reset to false)", () => {
+      // Simulate the post-rehydration state
+      useAppStore.setState({ hasRehydrated: true });
+      expect(useAppStore.getState().hasRehydrated).toBe(true);
+
+      clearAllLocalData();
+
+      // MUST still be true — if this fails, someone reintroduced the bug
+      // where logout locks the user out with an infinite "Loading LabelPulse..." spinner.
+      expect(useAppStore.getState().hasRehydrated).toBe(true);
     });
   });
 });
