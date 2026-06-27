@@ -26,6 +26,14 @@
 - **File**: `src/app/api/push/subscribe/route.ts`, `src/app/api/push/unsubscribe/route.ts`, `src/app/api/push/update-prefs/route.ts`, `src/app/api/push/test/route.ts`, `src/app/api/account/withdrawal/route.ts`, `src/app/api/beta-feedback/route.ts`, `src/app/api/auth/beta-verify/route.ts`, `src/app/api/admin/generate-beta-code/route.ts`, `supabase-schema.sql`, `supabase-schema-beta-codes.sql`
 - **⚠️ AZIONE MANUALE RICHIESTA**: Le nuove RLS su `beta_access_codes` e `app_state` devono essere applicate sul database Supabase eseguendo il SQL aggiornato nel SQL Editor. Vedi sezione "Post-deploy" sotto.
 
+### 🔒 Security Audit: H-8 + M-3 fixes (debug endpoints + NextAuth debug)
+- **Sintomo**: Debug endpoints accessibili senza auth + NextAuth debug:true in production
+- **Causa**: Endpoints diagnostici (auth-debug, cloud-debug, /debug) senza auth check; NextAuth `debug: true` attivo in production → leak di dati sensibili nei log server
+- **Fix**:
+  - H-8: Aggiunto `getServerSession(authOptions)` a `/api/auth-debug` e `/api/cloud-debug` (401 se non autenticato). Aggiunto `useSession()` check alla pagina `/debug` (mostra "Login richiesto" se non autenticato).
+  - M-3: Cambiato `debug: true` in `debug: process.env.NODE_ENV === "development"` in auth-options.ts. Debug logging ora attivo solo in dev.
+- **File**: `src/app/api/auth-debug/route.ts`, `src/app/api/cloud-debug/route.ts`, `src/app/debug/page.tsx`, `src/lib/auth-options.ts`
+
 ### Account diversi vedono i dati l'uno dell'altro (cross-account contamination)
 - **Sintomo**: L'utente A fa login sul telefono dell'utente B → vede i dati di A mischiati con i dati di B
 - **Causa**: 4 bug concatenati — RLS Supabase "Allow ALL TO EVERYONE", getCloudRowId() restituiva row "default" condivisa, PRIMARY_KEY globale non per-user, mergeCloudData faceva UNION-by-id senza mai ripulire

@@ -1,4 +1,6 @@
 import { NextResponse } from "next/server";
+import { getServerSession } from "next-auth";
+import { authOptions } from "@/lib/auth-options";
 
 /**
  * GET /api/auth-debug
@@ -6,25 +8,15 @@ import { NextResponse } from "next/server";
  * Diagnostic endpoint that shows EXACTLY which redirect_uri NextAuth will
  * send to Google when the user clicks "Login" from this device/browser.
  *
- * Why this exists: if the user opens the app from an old PWA icon cached on
- * a different domain (e.g. space-z.ai, or an old vercel preview URL),
- * NextAuth with `trustHost: true` builds the redirect_uri from the Host
- * header of the incoming request — which can be a URL that is NOT in the
- * Google Cloud Console's "Authorized redirect URIs" list. Result:
- * `400: redirect_uri_mismatch` from Google.
- *
- * Usage from the phone:
- *   1. Open the PWA icon → navigate inside the app → visit
- *      https://<current-host>/api/auth-debug
- *   2. Also try opening https://labelpulse.vercel.app/api/auth-debug
- *      directly from Chrome/Safari (NOT the PWA icon).
- *   3. Compare the `computedCallbackUrl` field in the two responses.
- *      The one that is NOT in the Google Console authorized list is
- *      the culprit.
- *
- * Safe to leave deployed — only echoes non-secret request metadata.
+ * 🔒 H-8 FIX: Auth-protected — only authenticated users can access.
+ * Unauthorized users get 401.
  */
 export async function GET(request: Request) {
+  // 🔒 H-8: Require authentication for debug endpoints in production
+  const session = await getServerSession(authOptions as any);
+  if (!session?.user?.email) {
+    return NextResponse.json({ error: "Not authenticated" }, { status: 401 });
+  }
   const url = new URL(request.url);
 
   // NextAuth v4 with `trustHost: true` derives the callback URL from these

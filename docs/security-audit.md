@@ -51,29 +51,29 @@
 
 ## 🟠 ALTI — Fix prima del GA
 
-| ID | Issue | File |
-|----|-------|------|
-| H-1 | Tabelle snapshots RLS DISABLED | supabase-schema-snapshots.sql |
-| H-2 | Tabella agent_memory accessibile anon | supabase-schema-agent-memory.sql |
-| H-3 | SoundCloud client IDs hardcoded | src/app/api/audio-proxy/route.ts |
-| H-4 | Audio proxy = SSRF vector | src/app/api/audio-proxy/route.ts |
-| H-5 | `/api/snapshots/save` senza auth | src/app/api/snapshots/save/route.ts |
-| H-6 | Snapshots endpoints pubblici | src/app/api/snapshots/latest, diff |
-| H-7 | RLS push_subscriptions broken | supabase-schema-push.sql |
-| H-8 | Debug endpoints in production | auth-debug, cloud-debug, /debug |
+| ID | Issue | File | Status |
+|----|-------|------|--------|
+| H-1 | Tabelle snapshots RLS DISABLED | supabase-schema-snapshots.sql | 🔴 Open |
+| H-2 | Tabella agent_memory accessibile anon | supabase-schema-agent-memory.sql | 🔴 Open |
+| H-3 | SoundCloud client IDs hardcoded | src/app/api/audio-proxy/route.ts | 🔴 Open |
+| H-4 | Audio proxy = SSRF vector | src/app/api/audio-proxy/route.ts | 🔴 Open |
+| H-5 | `/api/snapshots/save` senza auth | src/app/api/snapshots/save/route.ts | 🔴 Open |
+| H-6 | Snapshots endpoints pubblici | src/app/api/snapshots/latest, diff | 🔴 Open |
+| H-7 | RLS push_subscriptions broken | supabase-schema-push.sql | 🔴 Open |
+| H-8 | Debug endpoints in production | auth-debug, cloud-debug, /debug | ✅ Fixato |
 
 ---
 
 ## 🟡 MEDI
 
-| ID | Issue |
-|----|-------|
-| M-1 | Logica "value" (demo matcher, pitch) tutta client-side → reverse-engineerable |
-| M-2 | BETA_ADMIN_TOKEN in localStorage (XSS risk) |
-| M-3 | NextAuth debug:true in production |
-| M-4 | /api/email/send GET senza auth |
-| M-5 | Nessun rate limiting su nessun endpoint |
-| M-6 | NEXT_PUBLIC_SUPABASE_ANON_KEY accettabile SOLO con RLS corretto |
+| ID | Issue | Status |
+|----|-------|--------|
+| M-1 | Logica "value" (demo matcher, pitch) tutta client-side → reverse-engineerable | 🔴 Open |
+| M-2 | BETA_ADMIN_TOKEN in localStorage (XSS risk) | 🔴 Open |
+| M-3 | NextAuth debug:true in production | ✅ Fixato |
+| M-4 | /api/email/send GET senza auth | 🔴 Open |
+| M-5 | Nessun rate limiting su nessun endpoint | 🔴 Open |
+| M-6 | NEXT_PUBLIC_SUPABASE_ANON_KEY accettabile SOLO con RLS corretto | ⚠️ Mitigato (C-1/C-2) |
 
 ---
 

@@ -161,14 +161,18 @@ export const authOptions: AuthOptions = {
     },
   },
   pages: { error: "/auth/error" },
-  debug: true,
+  // 🔒 M-3 FIX: Disable debug logging in production — leaks sensitive auth data in server logs
+  debug: process.env.NODE_ENV === "development",
   logger: {
     error(code, metadata) {
       console.error(`[NextAuth][error] ${code}:`, JSON.stringify(metadata, null, 2));
     },
     warn(code) { console.warn(`[NextAuth][warn] ${code}`); },
     debug(code, metadata) {
-      console.log(`[NextAuth][debug] ${code}`, metadata ? JSON.stringify(metadata, null, 2) : "");
+      // Only log debug messages in development
+      if (process.env.NODE_ENV === "development") {
+        console.log(`[NextAuth][debug] ${code}`, metadata ? JSON.stringify(metadata, null, 2) : "");
+      }
     },
   },
 };

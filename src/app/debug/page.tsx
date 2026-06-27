@@ -3,18 +3,12 @@
 /**
  * /debug page — Bugsnag integration testing.
  *
- * Available in ALL environments (including production) so we can verify
- * Bugsnag is receiving events from production deploys.
- *
- * Security: page is unlinked from the UI. Only someone who knows the URL
- * can access it. No sensitive data is exposed — these buttons just throw
- * synthetic errors.
- *
- * Usage: visit /debug in production, click buttons, verify events appear
- * in Bugsnag dashboard within ~30 seconds.
+ * 🔒 H-8 FIX: Auth-protected — only authenticated users can access.
+ * Unauthenticated users see a "login required" message with a link to the app.
  */
 
 import { useEffect, useState } from "react";
+import { useSession } from "next-auth/react";
 import Bugsnag from "@/lib/bugsnag";
 
 type EventType = "handled" | "unhandled-render" | "unhandled-handler" | "breadcrumb" | "metadata";
@@ -28,6 +22,7 @@ const EVENT_DESCRIPTIONS: Record<EventType, string> = {
 };
 
 export default function DebugPage() {
+  const { data: session, status } = useSession();
   const [lastAction, setLastAction] = useState<string>("Ready.");
   const [throwInRender, setThrowInRender] = useState(false);
   // Track whether Bugsnag is active on the CLIENT only.
@@ -41,6 +36,25 @@ export default function DebugPage() {
         !!(window as unknown as { Bugsnag?: unknown }).Bugsnag
     );
   }, []);
+
+  // 🔒 H-8: Require authentication for debug page
+  if (status === "loading") {
+    return (
+      <main style={{ minHeight: "100vh", padding: "2rem", background: "#0a0a0a", color: "#e5e7eb", fontFamily: "system-ui, -apple-system, sans-serif" }}>
+        <p>Loading...</p>
+      </main>
+    );
+  }
+
+  if (!session?.user?.email) {
+    return (
+      <main style={{ minHeight: "100vh", padding: "2rem", background: "#0a0a0a", color: "#e5e7eb", fontFamily: "system-ui, -apple-system, sans-serif" }}>
+        <h1 style={{ fontSize: "1.5rem", fontWeight: 600, marginBottom: "1rem", color: "#fafafa" }}>🔒 Login richiesto</h1>
+        <p style={{ color: "#a1a1aa" }}>Questa pagina è riservata agli utenti autenticati.</p>
+        <a href="/" style={{ color: "#a855f7", textDecoration: "underline" }}>Torna all&apos;app</a>
+      </main>
+    );
+  }
 
   if (throwInRender) {
     // This will trigger the ErrorBoundary

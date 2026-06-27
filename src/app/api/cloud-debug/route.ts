@@ -1,29 +1,21 @@
 import { NextResponse } from "next/server";
+import { getServerSession } from "next-auth";
+import { authOptions } from "@/lib/auth-options";
 
 /**
  * GET /api/cloud-debug
  *
- * Diagnostic endpoint that surfaces which Supabase credentials are present
- * in the request's cookies (via the BYOK profile stored in localStorage
- * and synced via cookies). Returns whether cloud sync is reachable.
+ * Diagnostic endpoint for cloud sync debugging.
  *
- * IMPORTANT: This is a SERVER route. The user's BYOK Supabase credentials
- * live in browser localStorage (NOT in cookies), so this endpoint can't
- * see them directly. What it CAN do is:
- *   - Confirm whether the route is reachable from the user's device
- *   - Show the request headers (host, user-agent) so we can verify the
- *     device/network is correct
- *   - Echo back the env vars (NEXT_PUBLIC_SUPABASE_URL etc.) that may be
- *     set on Vercel for legacy fallback
- *
- * For client-side cloud state diagnosis, the user should:
- *   - Open browser DevTools console on the app
- *   - Run: `useAppStore.getState()` to see the live state
- *   - Run: `loadStateFromCloud()` to see what's in cloud
- *
- * Safe to leave deployed — only echoes non-secret request metadata.
+ * 🔒 H-8 FIX: Auth-protected — only authenticated users can access.
+ * Unauthorized users get 401.
  */
 export async function GET(request: Request) {
+  // 🔒 H-8: Require authentication for debug endpoints in production
+  const session = await getServerSession(authOptions as any);
+  if (!session?.user?.email) {
+    return NextResponse.json({ error: "Not authenticated" }, { status: 401 });
+  }
   const url = new URL(request.url);
 
   const envSupabaseUrl = process.env.NEXT_PUBLIC_SUPABASE_URL ?? null;
