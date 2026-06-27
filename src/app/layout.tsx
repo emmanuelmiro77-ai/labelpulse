@@ -35,7 +35,7 @@ export const viewport: Viewport = {
 };
 
 export const metadata: Metadata = {
-  title: "LabelPulse — DJ & Producer Demo Manager",
+  title: "LabelPulse — Demo Manager for DJs & Producers",
   description:
     "Track your demo submissions, manage label contacts, and generate professional A&R pitch emails. Built for DJs and producers.",
   keywords: [
