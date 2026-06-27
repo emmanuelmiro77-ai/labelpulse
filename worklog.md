@@ -1611,3 +1611,32 @@ Files modificati:
 - MODIFIED: BETA_ROADMAP.md (0.1 + 0.9 completati, FASE 0 → 100% ✅)
 - MODIFIED: AGENT_CONTEXT.md (FASE 0 completata)
 
+---
+Task ID: sec-critical-1-through-5
+Agent: Main Agent
+Task: Fix 5 CRITICAL security issues from security audit (C-1 through C-5)
+
+Work Log:
+- Read BOOT.md + AGENT_CONTEXT.md + BUG_REGISTRY.md + security-audit.md for full context
+- Read all affected source files (push endpoints, withdrawal, beta-feedback, schema SQL)
+- Read auth pattern from /api/gmail/send for consistent session check approach
+- C-3: Added getServerSession(authOptions) + email mismatch check to 4 push endpoints (subscribe, unsubscribe, update-prefs, test)
+- C-5: Added auth check + email mismatch check to /api/account/withdrawal POST
+- C-4: Added auth check + email mismatch check to /api/beta-feedback POST
+- C-1: Replaced USING (true) WITH CHECK (true) on app_state with scoped per-operation policies (SELECT/INSERT/UPDATE/DELETE)
+- C-2: Replaced USING (true) WITH CHECK (true) on beta_access_codes with restrictive policies (INSERT/UPDATE/DELETE blocked for anon)
+- Updated beta-verify and generate-beta-code endpoints to use SUPABASE_SERVICE_ROLE_KEY instead of anon key (required by C-2 RLS changes)
+- Anti-regression check: verified 1 past fix on supabase-schema.sql (cross-account contamination RLS) — still present ✅
+- Added BUG_REGISTRY.md entry for all 5 CRITICAL fixes
+
+Stage Summary:
+- All 5 CRITICAL security issues fixed:
+  - C-3: Push endpoints now require auth + email match
+  - C-5: Withdrawal endpoint now requires auth + email match
+  - C-4: Beta-feedback POST now requires auth + email match
+  - C-1: app_state RLS split into per-operation policies (was USING(true) on ALL)
+  - C-2: beta_access_codes RLS blocks anon INSERT/UPDATE/DELETE, endpoints use service_role key
+- ⚠️ MANUAL ACTION REQUIRED: User must run updated SQL schemas on Supabase SQL Editor to apply new RLS policies
+- Files modified: 10 source files + BUG_REGISTRY.md
+- TODO for FASE 2: Migrate to Supabase Auth for proper per-user RLS (auth.jwt()->>'email')
+

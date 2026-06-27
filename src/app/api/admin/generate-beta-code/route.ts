@@ -16,6 +16,9 @@ import { createClient } from "@supabase/supabase-js";
  *   { code: string, email: string, expires_at: string }
  *
  * The code is 8 chars, alphanumeric (no ambiguous chars like 0/O, 1/I).
+ *
+ * 🔒 Uses SERVICE_ROLE key (not anon) to bypass RLS — the C-2 fix
+ * restricts INSERT/UPDATE/DELETE to service_role only.
  */
 export async function POST(req: NextRequest) {
   try {
@@ -32,12 +35,15 @@ export async function POST(req: NextRequest) {
     }
 
     const supabaseUrl = process.env.NEXT_PUBLIC_SUPABASE_URL;
-    const supabaseAnonKey = process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY;
-    if (!supabaseUrl || !supabaseAnonKey) {
+    // 🔒 CRITICAL FIX (C-2): Use SERVICE_ROLE key to bypass RLS
+    const supabaseKey =
+      process.env.SUPABASE_SERVICE_ROLE_KEY ||
+      process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY;
+    if (!supabaseUrl || !supabaseKey) {
       return NextResponse.json({ error: "server_config" }, { status: 500 });
     }
 
-    const supabase = createClient(supabaseUrl, supabaseAnonKey);
+    const supabase = createClient(supabaseUrl, supabaseKey);
     const normalizedEmail = email.toLowerCase().trim();
 
     // Generate code: 8 chars from safe alphabet
@@ -88,11 +94,14 @@ export async function GET(req: NextRequest) {
     }
 
     const supabaseUrl = process.env.NEXT_PUBLIC_SUPABASE_URL;
-    const supabaseAnonKey = process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY;
-    if (!supabaseUrl || !supabaseAnonKey) {
+    // 🔒 CRITICAL FIX (C-2): Use SERVICE_ROLE key to bypass RLS
+    const supabaseKey =
+      process.env.SUPABASE_SERVICE_ROLE_KEY ||
+      process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY;
+    if (!supabaseUrl || !supabaseKey) {
       return NextResponse.json({ error: "server_config" }, { status: 500 });
     }
-    const supabase = createClient(supabaseUrl, supabaseAnonKey);
+    const supabase = createClient(supabaseUrl, supabaseKey);
 
     const { data, error } = await supabase
       .from("beta_access_codes")

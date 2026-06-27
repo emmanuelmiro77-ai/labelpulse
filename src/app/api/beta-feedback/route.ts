@@ -1,4 +1,6 @@
 import { NextRequest, NextResponse } from "next/server";
+import { getServerSession } from "next-auth";
+import { authOptions } from "@/lib/auth-options";
 import { createClient } from "@supabase/supabase-js";
 import { sendPushToUser } from "@/lib/push";
 
@@ -30,6 +32,12 @@ import { sendPushToUser } from "@/lib/push";
  */
 export async function POST(req: NextRequest) {
   try {
+    // 🔒 CRITICAL FIX (C-4): Auth check — only authenticated users can submit feedback
+    const session = await getServerSession(authOptions as any);
+    if (!session?.user?.email) {
+      return NextResponse.json({ error: "Not authenticated" }, { status: 401 });
+    }
+
     const body = await req.json();
     const {
       email,
@@ -50,6 +58,11 @@ export async function POST(req: NextRequest) {
         { error: "Missing email" },
         { status: 400 }
       );
+    }
+
+    // Verify the email in the body matches the authenticated session
+    if (email.toLowerCase().trim() !== session.user.email.toLowerCase().trim()) {
+      return NextResponse.json({ error: "Email mismatch with authenticated session" }, { status: 403 });
     }
     if (!message || typeof message !== "string" || message.trim().length === 0) {
       return NextResponse.json(

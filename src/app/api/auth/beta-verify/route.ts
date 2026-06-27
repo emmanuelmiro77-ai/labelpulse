@@ -12,6 +12,9 @@ import { createClient } from "@supabase/supabase-js";
  *
  * On success, marks the code as used (used_at = NOW()).
  * A code can be used only ONCE.
+ *
+ * 🔒 Uses SERVICE_ROLE key (not anon) to bypass RLS — the C-2 fix
+ * restricts INSERT/UPDATE/DELETE to service_role only.
  */
 export async function POST(req: NextRequest) {
   try {
@@ -21,13 +24,17 @@ export async function POST(req: NextRequest) {
     }
 
     const supabaseUrl = process.env.NEXT_PUBLIC_SUPABASE_URL;
-    const supabaseAnonKey = process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY;
-    if (!supabaseUrl || !supabaseAnonKey) {
+    // 🔒 CRITICAL FIX (C-2): Use SERVICE_ROLE key to bypass RLS
+    // The beta_access_codes table now blocks anon INSERT/UPDATE/DELETE.
+    const supabaseKey =
+      process.env.SUPABASE_SERVICE_ROLE_KEY ||
+      process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY;
+    if (!supabaseUrl || !supabaseKey) {
       console.error("[beta-verify] Supabase env vars not set");
       return NextResponse.json({ valid: false, error: "server_config" }, { status: 500 });
     }
 
-    const supabase = createClient(supabaseUrl, supabaseAnonKey);
+    const supabase = createClient(supabaseUrl, supabaseKey);
 
     const normalizedEmail = String(email).toLowerCase().trim();
     const normalizedCode = String(code).toUpperCase().trim();

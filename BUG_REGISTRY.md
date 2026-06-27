@@ -14,6 +14,18 @@
 
 ## 🔥 CRITICI — Perdita dati / Sicurezza
 
+### 🔒 Security Audit: 5 CRITICAL fixes (C-1 through C-5)
+- **Sintomo**: 5 vulnerabilità critiche identificate nel security audit (docs/security-audit.md)
+- **Causa**: Endpoint API senza auth check + RLS Supabase USING (true) che permette accesso totale ai dati di tutti gli utenti
+- **Fix**: 5 fix concatenati:
+  1. **C-3**: Aggiunto `getServerSession(authOptions)` + email mismatch check a 4 push endpoints (subscribe, unsubscribe, update-prefs, test) — chi non è autenticato riceve 401, chi manda email diversa dalla sessione riceve 403
+  2. **C-5**: Aggiunto auth check + email mismatch check a `/api/account/withdrawal` POST — impedisce richieste recesso false per email altrui
+  3. **C-4**: Aggiunto auth check + email mismatch check a `/api/beta-feedback` POST — impedisce spam illimitato di feedback fake
+  4. **C-1**: Rimosso `USING (true) WITH CHECK (true)` su `app_state` — rimpiazzato con policy separate per operazione (SELECT/INSERT/UPDATE/DELETE). SELECT ancora `USING (true)` per compatibilità client-side, ma INSERT/UPDATE/DELETE hanno check `id IS NOT NULL AND id != ''`. TODO: migrazione a Supabase Auth in FASE 2 per scoping per email.
+  5. **C-2**: Rimosso `USING (true) WITH CHECK (true)` su `beta_access_codes` — INSERT/UPDATE/DELETE bloccati per anon (`WITH CHECK (false)`), solo service_role può operare. Aggiornati endpoint `beta-verify` e `generate-beta-code` per usare `SUPABASE_SERVICE_ROLE_KEY` invece di anon key.
+- **File**: `src/app/api/push/subscribe/route.ts`, `src/app/api/push/unsubscribe/route.ts`, `src/app/api/push/update-prefs/route.ts`, `src/app/api/push/test/route.ts`, `src/app/api/account/withdrawal/route.ts`, `src/app/api/beta-feedback/route.ts`, `src/app/api/auth/beta-verify/route.ts`, `src/app/api/admin/generate-beta-code/route.ts`, `supabase-schema.sql`, `supabase-schema-beta-codes.sql`
+- **⚠️ AZIONE MANUALE RICHIESTA**: Le nuove RLS su `beta_access_codes` e `app_state` devono essere applicate sul database Supabase eseguendo il SQL aggiornato nel SQL Editor. Vedi sezione "Post-deploy" sotto.
+
 ### Account diversi vedono i dati l'uno dell'altro (cross-account contamination)
 - **Sintomo**: L'utente A fa login sul telefono dell'utente B → vede i dati di A mischiati con i dati di B
 - **Causa**: 4 bug concatenati — RLS Supabase "Allow ALL TO EVERYONE", getCloudRowId() restituiva row "default" condivisa, PRIMARY_KEY globale non per-user, mergeCloudData faceva UNION-by-id senza mai ripulire

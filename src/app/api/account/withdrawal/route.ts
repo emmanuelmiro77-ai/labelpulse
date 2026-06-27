@@ -1,4 +1,6 @@
 import { NextRequest, NextResponse } from "next/server";
+import { getServerSession } from "next-auth";
+import { authOptions } from "@/lib/auth-options";
 
 /**
  * POST /api/account/withdrawal
@@ -16,8 +18,19 @@ const SUPPORT_EMAIL = process.env.SUPPORT_EMAIL || "pulse.label.official@gmail.c
 
 export async function POST(request: NextRequest) {
   try {
+    // 🔒 CRITICAL FIX (C-5): Auth check — only authenticated users can request withdrawal
+    const session = await getServerSession(authOptions as any);
+    if (!session?.user?.email) {
+      return NextResponse.json({ error: "Not authenticated" }, { status: 401 });
+    }
+
     const body = await request.json();
     const { email, reason, timestamp } = body;
+
+    // Verify the email in the body matches the authenticated session
+    if (!email || email.toLowerCase().trim() !== session.user.email.toLowerCase().trim()) {
+      return NextResponse.json({ error: "Email mismatch with authenticated session" }, { status: 403 });
+    }
 
     if (!email || !timestamp) {
       return NextResponse.json(

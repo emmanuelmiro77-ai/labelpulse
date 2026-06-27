@@ -1,4 +1,6 @@
 import { NextRequest, NextResponse } from "next/server";
+import { getServerSession } from "next-auth";
+import { authOptions } from "@/lib/auth-options";
 import { saveSubscription } from "@/lib/push";
 
 /**
@@ -17,8 +19,19 @@ import { saveSubscription } from "@/lib/push";
  */
 export async function POST(req: NextRequest) {
   try {
+    // 🔒 CRITICAL FIX (C-3): Auth check — only authenticated users can subscribe
+    const session = await getServerSession(authOptions as any);
+    if (!session?.user?.email) {
+      return NextResponse.json({ error: "Not authenticated" }, { status: 401 });
+    }
+
     const body = await req.json();
     const { email, subscription, prefs } = body || {};
+
+    // Verify the email in the body matches the authenticated session
+    if (!email || email.toLowerCase().trim() !== session.user.email.toLowerCase().trim()) {
+      return NextResponse.json({ error: "Email mismatch with authenticated session" }, { status: 403 });
+    }
 
     if (!email || !/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(email)) {
       return NextResponse.json({ error: "invalid_email" }, { status: 400 });

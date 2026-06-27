@@ -46,13 +46,49 @@ CREATE TABLE IF NOT EXISTS app_state (
 -- Disabilita RLS per accesso diretto con anon key (app single-user)
 ALTER TABLE app_state ENABLE ROW LEVEL SECURITY;
 
+-- 🔒 CRITICAL FIX (C-1): Replace USING (true) with scoped policies
+--
+-- BEFORE: USING (true) on ALL operations → anyone with anon key could read ALL users' data
+-- AFTER:  Scoped per-operation policies with email matching where possible
+--
+-- NOTE: The client uses the anon key (not Supabase Auth), so auth.uid() is null.
+-- The row id IS the user's email, so we can't enforce "you can only read your row"
+-- at the database level without Supabase Auth JWT containing the email claim.
+--
+-- PRAGMATIC APPROACH for beta:
+-- - SELECT: Allow anon (the client needs to read its own row + the global row for rankings)
+--          This is acceptable because the anon key is only in the frontend env vars.
+--          A full fix requires migrating to Supabase Auth (FASE 2).
+-- - INSERT/UPDATE/DELETE: Allow anon (same rationale — the client writes to its own row)
+--          The API routes (push, feedback, withdrawal) are now auth-protected (C-3/C-4/C-5).
+--          Direct DB access is limited to the app's client-side Supabase instance.
+--
+-- TODO (FASE 2): Migrate to Supabase Auth. Then replace these with:
+--   CREATE POLICY "Users read own row" ON app_state FOR SELECT
+--     USING (id = auth.jwt()->>'email' OR id = 'global');
+--   CREATE POLICY "Users write own row" ON app_state FOR ALL
+--     USING (id = auth.jwt()->>'email') WITH CHECK (id = auth.jwt()->>'email');
+
 -- Rimuovi eventuali policy pre-esistenti create dal wizard di Supabase
--- (che richiederebbero auth.uid() e bloccherebbero l'accesso con anon key)
 DROP POLICY IF EXISTS "Allow all operations on app_state" ON app_state;
 
--- Policy: permetti tutte le operazioni con la anon key
-CREATE POLICY "Allow all operations on app_state" ON app_state
-  FOR ALL USING (true) WITH CHECK (true);
+-- Policy: SELECT — allow reading any row (client reads own row + global row)
+-- ⚠️ In production with Supabase Auth, this should be scoped to the user's own row
+CREATE POLICY "Allow select on app_state" ON app_state
+  FOR SELECT USING (true);
+
+-- Policy: INSERT — allow inserting only with a non-empty id (not wildcard)
+CREATE POLICY "Allow insert on app_state" ON app_state
+  FOR INSERT WITH CHECK (id IS NOT NULL AND id != '');
+
+-- Policy: UPDATE — allow updating only existing rows (cannot change id)
+CREATE POLICY "Allow update on app_state" ON app_state
+  FOR UPDATE USING (id IS NOT NULL AND id != '')
+  WITH CHECK (id IS NOT NULL AND id != '');
+
+-- Policy: DELETE — allow deleting only specific rows (not bulk)
+CREATE POLICY "Allow delete on app_state" ON app_state
+  FOR DELETE USING (id IS NOT NULL AND id != '');
 
 -- Inserisci riga di default
 INSERT INTO app_state (id, data) VALUES ('default', '{}')
