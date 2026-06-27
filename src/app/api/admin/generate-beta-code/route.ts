@@ -29,7 +29,7 @@ export async function POST(req: NextRequest) {
       return NextResponse.json({ error: "unauthorized" }, { status: 401 });
     }
 
-    const { email, note, expiresInDays = 30 } = await req.json();
+    const { email, note, expiresInDays = 30, discordUserId } = await req.json();
     if (!email || !/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(email)) {
       return NextResponse.json({ error: "invalid_email" }, { status: 400 });
     }
@@ -62,6 +62,7 @@ export async function POST(req: NextRequest) {
       note: note || null,
       expires_at: expiresAt.toISOString(),
       created_by: "admin",
+      discord_user_id: discordUserId || null,
     });
 
     if (error) {

@@ -1640,3 +1640,27 @@ Stage Summary:
 - Files modified: 10 source files + BUG_REGISTRY.md
 - TODO for FASE 2: Migrate to Supabase Auth for proper per-user RLS (auth.jwt()->>'email')
 
+---
+Task ID: fase-1-beta-infra-1.1-through-1.5
+Agent: Main Agent
+Task: FASE 1 — Beta Infra: 5 tasks (1.1-1.5)
+
+Work Log:
+- 1.1: Verified beta code flow (generate-beta-code + beta-verify + admin UI). Added CSV export, discord_user_id field to table/API/UI
+- 1.2: Added Discord community section + Lifetime Early Adopter offer to WelcomeOnboarding
+- 1.3: Added FEATURE_FLAGS constants in analytics.ts (beta_features_enabled, beta_scraper_v3, beta_artist_explorer)
+- 1.4: Extended feedback categories (praise, complaint), added Discord webhook auto-forward for bug/feature reports, added DISCORD_FEEDBACK_WEBHOOK_URL env var
+- 1.5: Created Supabase view v_beta_tester_status in supabase-schema-beta-tracking.sql
+- Updated BETA_ROADMAP.md: FASE 1 → 100% COMPLETATA
+- Updated BUG_REGISTRY.md with FASE 1 feature entries
+
+Stage Summary:
+- FASE 1 Beta Infra COMPLETATA (5/5 tasks done, €0 costo)
+- Key deliverables: CSV export, Discord webhook, feature flags, onboarding improvements, tracking view
+- ⚠️ MANUAL ACTIONS REQUIRED:
+  1. Add DISCORD_FEEDBACK_WEBHOOK_URL env var in Vercel (after creating Discord webhook)
+  2. Run supabase-schema-beta-tracking.sql in Supabase SQL Editor to create the tracking view
+  3. Run ALTER TABLE to add discord_user_id column to existing beta_access_codes
+  4. Create feature flags in PostHog dashboard (beta_features_enabled, etc.)
+- Prossimo: FASE 2 (Closed Beta) — recruitment + 5-10 real testers
+

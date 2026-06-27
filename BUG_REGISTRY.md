@@ -34,6 +34,16 @@
   - M-3: Cambiato `debug: true` in `debug: process.env.NODE_ENV === "development"` in auth-options.ts. Debug logging ora attivo solo in dev.
 - **File**: `src/app/api/auth-debug/route.ts`, `src/app/api/cloud-debug/route.ts`, `src/app/debug/page.tsx`, `src/lib/auth-options.ts`
 
+### 🔒 FASE 1: Beta Infra (1.1-1.5)
+- **Sintomo**: N/A — feature nuove, non bug
+- **Fix**: 5 task completati per FASE 1:
+  1. **1.1**: Beta code flow verificato + export CSV aggiunto alla pagina admin + campo `discord_user_id` aggiunto a tabella e form
+  2. **1.2**: Onboarding migliorato con sezione Discord community + offerta Lifetime Early Adopter
+  3. **1.3**: Feature flags PostHog con costanti `FEATURE_FLAGS` (beta_features_enabled, beta_scraper_v3, beta_artist_explorer)
+  4. **1.4**: Categorie feedback estese (praise, complaint) + Discord webhook auto-forward per bug/feature request + env var `DISCORD_FEEDBACK_WEBHOOK_URL`
+  5. **1.5**: Supabase view `v_beta_tester_status` che unisce beta_access_codes + app_state per tracking tester
+- **File**: `src/app/admin/beta-testers/page.tsx`, `src/app/api/admin/generate-beta-code/route.ts`, `src/components/welcome-onboarding.tsx`, `src/lib/analytics.ts`, `src/components/beta-feedback-button.tsx`, `src/app/api/beta-feedback/route.ts`, `supabase-schema-beta-codes.sql`, `supabase-schema-beta-tracking.sql`, `.env.local.example`
+
 ### Account diversi vedono i dati l'uno dell'altro (cross-account contamination)
 - **Sintomo**: L'utente A fa login sul telefono dell'utente B → vede i dati di A mischiati con i dati di B
 - **Causa**: 4 bug concatenati — RLS Supabase "Allow ALL TO EVERYONE", getCloudRowId() restituiva row "default" condivisa, PRIMARY_KEY globale non per-user, mergeCloudData faceva UNION-by-id senza mai ripulire

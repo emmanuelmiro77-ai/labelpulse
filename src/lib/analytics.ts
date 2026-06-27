@@ -250,6 +250,20 @@ export function isFeatureEnabled(flag: string): boolean {
   return false;
 }
 
+/**
+ * Feature flags available in LabelPulse.
+ * Create these in PostHog Dashboard → Feature Flags.
+ *
+ * - beta_features_enabled: true for all beta testers (enables experimental features)
+ * - beta_scraper_v3: enables the new Beatport scraper v3
+ * - beta_artist_explorer: enables the artist explorer tab
+ */
+export const FEATURE_FLAGS = {
+  BETA_FEATURES: "beta_features_enabled",
+  SCRAPER_V3: "beta_scraper_v3",
+  ARTIST_EXPLORER: "beta_artist_explorer",
+} as const;
+
 // ============================================================================
 // HELPERS
 // ============================================================================

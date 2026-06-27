@@ -70,7 +70,7 @@ export async function POST(req: NextRequest) {
         { status: 400 }
       );
     }
-    if (!["bug", "feature", "other"].includes(category)) {
+    if (!["bug", "feature", "praise", "complaint", "other"].includes(category)) {
       return NextResponse.json(
         { error: "Invalid category" },
         { status: 400 }
@@ -147,6 +147,37 @@ CREATE POLICY "Allow anon insert" ON beta_feedback FOR INSERT WITH CHECK (true);
         { error: "Failed to save feedback", details: error.message },
         { status: 500 }
       );
+    }
+
+    // 🔔 FASE 1.4: Forward bug reports to Discord webhook (best-effort, non-blocking)
+    if (category === "bug" || category === "feature") {
+      const webhookUrl = process.env.DISCORD_FEEDBACK_WEBHOOK_URL;
+      if (webhookUrl) {
+        try {
+          const emoji = category === "bug" ? "🐛" : "💡";
+          const embed = {
+            title: `${emoji} Nuovo ${category === "bug" ? "Bug Report" : "Feature Request"}`,
+            description: message.slice(0, 2000),
+            color: category === "bug" ? 0xff4444 : 0x44aaff,
+            fields: [
+              { name: "Email", value: email, inline: true },
+              { name: "Categoria", value: category, inline: true },
+              ...(subject ? [{ name: "Oggetto", value: subject.slice(0, 200), inline: false }] : []),
+              ...(url ? [{ name: "URL", value: url.slice(0, 100), inline: false }] : []),
+            ],
+            footer: { text: "LabelPulse Beta Feedback" },
+            timestamp: new Date().toISOString(),
+          };
+          await fetch(webhookUrl, {
+            method: "POST",
+            headers: { "Content-Type": "application/json" },
+            body: JSON.stringify({ embeds: [embed] }),
+          });
+        } catch (webhookErr) {
+          // Don't fail the request if Discord webhook fails
+          console.error("[beta-feedback] Discord webhook failed (non-blocking):", webhookErr);
+        }
+      }
     }
 
     return NextResponse.json({ ok: true });

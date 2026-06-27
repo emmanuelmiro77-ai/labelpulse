@@ -24,6 +24,8 @@ import {
   ShieldCheck,
   Lock,
   MessageSquareHeart,
+  MessageCircle,
+  Trophy,
 } from "lucide-react";
 
 const ONBOARDED_KEY = "labelpulse-onboarded-v2";
@@ -289,6 +291,44 @@ export function WelcomeOnboarding() {
               {isItalian
                 ? "Vedi l'icona cloud in alto a destra? Verde = sincronizzato. Giallo = in corso. Rosso = errore. Cliccalo per vedere lo stato del sync."
                 : "See the cloud icon top-right? Green = synced. Yellow = syncing. Red = error. Click it to see sync status."}
+            </div>
+          </div>
+
+          {/* Discord community */}
+          <div className="rounded-lg bg-indigo-500/10 border border-indigo-500/30 p-3 flex items-start gap-3">
+            <MessageCircle className="h-5 w-5 text-indigo-400 shrink-0 mt-0.5" />
+            <div className="text-sm">
+              <p className="font-medium text-foreground">
+                {isItalian ? "Unisciti alla community Discord" : "Join the Discord community"}
+              </p>
+              <p className="text-xs text-muted-foreground mt-0.5">
+                {isItalian
+                  ? "Sei un beta tester esclusivo! Nel nostro Discord trovi supporto, aggiornamenti, e puoi condividere feedback direttamente con il team."
+                  : "You're an exclusive beta tester! On our Discord you'll find support, updates, and can share feedback directly with the team."}
+              </p>
+              <a
+                href="https://discord.gg/labelpulse"
+                target="_blank"
+                rel="noopener noreferrer"
+                className="inline-flex items-center gap-1 mt-2 text-xs font-medium text-indigo-400 hover:text-indigo-300 underline"
+              >
+                {isItalian ? "Entra su Discord →" : "Join Discord →"}
+              </a>
+            </div>
+          </div>
+
+          {/* Early Adopter offer */}
+          <div className="rounded-lg bg-amber-500/10 border border-amber-500/30 p-3 flex items-start gap-3">
+            <Trophy className="h-5 w-5 text-amber-400 shrink-0 mt-0.5" />
+            <div className="text-sm">
+              <p className="font-medium text-foreground">
+                {isItalian ? "Offerta Lifetime Early Adopter" : "Lifetime Early Adopter Offer"}
+              </p>
+              <p className="text-xs text-muted-foreground mt-0.5">
+                {isItalian
+                  ? "Come beta tester, avrai accesso a un'offerta esclusiva al lancio commerciale. Continua a usare l'app e fornisci feedback per sbloccarla."
+                  : "As a beta tester, you'll get access to an exclusive offer at commercial launch. Keep using the app and provide feedback to unlock it."}
+              </p>
             </div>
           </div>
         </div>

@@ -18,6 +18,7 @@ CREATE TABLE IF NOT EXISTS beta_access_codes (
   email TEXT NOT NULL,                    -- email del beta tester (lowercase)
   code TEXT NOT NULL,                     -- codice alfanumerico 8 char
   note TEXT,                              -- descrizione opzionale (es. "Marco - iPhone")
+  discord_user_id TEXT,                   -- Discord user ID per tracciare chi è chi sul server
   created_at TIMESTAMPTZ DEFAULT NOW(),
   expires_at TIMESTAMPTZ NOT NULL,        -- default 30 giorni
   used_at TIMESTAMPTZ,                    -- NULL finché non usato

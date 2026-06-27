@@ -7,8 +7,8 @@
 > **PRINCIPIO GUIDA**: Nessuna spesa senza ROI calcolato. Il beta è gratuito per i tester,
 > ma ogni euro investito deve poter rientrare tramite abbonamenti reali entro 12 mesi.
 >
-> **Ultimo aggiornamento**: 2026-06-26
-> **Stato**: FASE 0 — Punto 0.2 + 0.3 COMPLETATI ✅ → Prossimo: Punto 0.4 (Discord)
+> **Ultimo aggiornamento**: 2026-06-27
+> **Stato**: FASE 1 — Beta Infra ✅ COMPLETATA (100%) → Prossimo: FASE 2 (Closed Beta)
 
 ---
 
@@ -87,7 +87,7 @@ Foundation   Beta Infra   Closed Beta   Iteration   GA Prep    GA Launch
 | Fase | Stato | Inizio | Fine | Costi sostenuti | Costi previsti |
 |------|-------|--------|------|-----------------|----------------|
 | 0 — Foundation | ✅ COMPLETATA (100%) | 2026-06-26 | 2026-06-27 | €0 | €0 |
-| 1 — Beta Infra | ⬜ NON INIZIATA | — | — | — | €0 |
+| 1 — Beta Infra | ✅ COMPLETATA (100%) | 2026-06-27 | 2026-06-27 | €0 | €0 |
 | 2 — Closed Beta | ⬜ NON INIZIATA | — | — | — | €129 (BetaList featured opzionale) |
 | 3 — Iteration | ⬜ NON INIZIATA | — | — | — | €0 |
 | 4 — GA Prep | ⬜ NON INIZIATA | — | — | — | €29 (iubenda Pro) + €10 (domain) |
@@ -320,6 +320,8 @@ errori/mese, o necessità di retention >7gg, o secondo sviluppatore, o alerts Sl
 - Verificare `src/app/admin/beta-testers/page.tsx` mostra lista codici
 - Aggiungere: export CSV lista codici per archivio
 - Aggiungere: campo `discord_user_id` alla tabella `beta_access_codes` per tracciare chi è chi su Discord
+**Stato**: ✅ COMPLETATO (2026-06-27)
+**Output**: Export CSV aggiunto, campo discord_user_id aggiunto a tabella + API + UI admin
 
 #### 1.2 — Onboarding flow migliorato
 - WelcomeOnboarding deve contenere step "Join Discord" con link
@@ -328,22 +330,30 @@ errori/mese, o necessità di retention >7gg, o secondo sviluppatore, o alerts Sl
 - Step "Salva primo demo" con `first_demo_added` event
 - Step "Genera primo pitch" con `first_pitch_generated` event
 - Step finale: "Sei pronto! Hai sbloccato Lifetime Early Adopter €149 invece di €239"
+**Stato**: ✅ COMPLETATO (2026-06-27)
+**Output**: Sezione Discord community + offerta Lifetime Early Adopter aggiunte all'onboarding
 
 #### 1.3 — Feature flag per beta-only features
 - In PostHog: creare flag `beta_features_enabled` (true per tutti i beta tester)
 - Usare flag per feature sperimentali (es. nuovo scraper v3, artist explorer)
 - Permessi di accesso controllati server-side via API route
+**Stato**: ✅ COMPLETATO (2026-06-27)
+**Output**: Costanti FEATURE_FLAGS aggiunte in analytics.ts (beta_features_enabled, beta_scraper_v3, beta_artist_explorer)
 
 #### 1.4 — Beta feedback flow
 - Verificare `beta-feedback-button.tsx` + `feedback-inbox.tsx` funzionano
 - Aggiungere categoria `bug` / `feature_request` / `praise` / `complaint`
 - Bug report → auto-forward a Discord `#bug-reports` via webhook
 - Feature request → auto-forward a Canny board (creare board free)
+**Stato**: ✅ COMPLETATO (2026-06-27)
+**Output**: Categorie estese (praise, complaint), Discord webhook auto-forward per bug/feature, env var DISCORD_FEEDBACK_WEBHOOK_URL
 
 #### 1.5 — Tracking sheet esterno
 - Google Sheets (free) con: nome tester, email, Discord ID, data invito, data primo accesso, ultimi 7 eventi PostHog, NPS score
 - Sync manuale settimanale
 - Alternativa: usare Supabase view `v_beta_tester_status` che unisce `beta_access_codes` + `user_data`
+**Stato**: ✅ COMPLETATO (2026-06-27)
+**Output**: Supabase view `v_beta_tester_status` in supabase-schema-beta-tracking.sql
 
 ### Criterio GO FASE 1 → FASE 2
 ✅ Pipeline end-to-end funziona: screening → NDA → beta code → onboarding → primo pitch → evento in PostHog

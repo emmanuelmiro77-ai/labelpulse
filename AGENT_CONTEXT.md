@@ -219,7 +219,7 @@ alla fase SaaS commerciale profittevole. Contiene:
 - **Criteri GO/NO-GO** espliciti per passare da una fase alla successiva
 - **Stato avanzamento** aggiornato dopo ogni task completato
 
-🟢 **Stato attuale**: FASE 0 — Foundation ✅ COMPLETATA (100%)! Tutti i punti 0.1-0.9 completati. Prossimo: FASE 1 (Beta Infra). Security audit: 5 CRITICAL fix da implementare (3-4 ore).
+🟢 **Stato attuale**: FASE 1 — Beta Infra ✅ COMPLETATA (100%)! Tutti i punti 1.1-1.5 completati. Security audit: 5 CRITICAL + H-8 + M-3 fixati. Prossimo: FASE 2 (Closed Beta).
 
 ### ⚠️ TODO CRITICO UTENTE (entro 14 giorni dal 2026-06-26)
 - **Bugsnag Trial 14 giorni**: verificare in Settings → Billing che dopo il trial si auto-downgradi a Free (€0). Se auto-converte a paid ($80+/mese), creare nuovo progetto Free + cambiare API key in Vercel env vars (`NEXT_PUBLIC_BUGSNAG_API_KEY` + `BUGSNAG_API_KEY`).

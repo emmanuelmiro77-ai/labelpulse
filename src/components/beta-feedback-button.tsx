@@ -20,7 +20,7 @@ import { useAppStore } from "@/lib/store";
 
 type MyReply = {
   id: number;
-  category: "bug" | "feature" | "other";
+  category: "bug" | "feature" | "praise" | "complaint" | "other";
   subject: string | null;
   message: string;
   status: string;
@@ -33,6 +33,8 @@ type MyReply = {
 const CATEGORY_LABELS: Record<string, string> = {
   bug: "Bug",
   feature: "Funzione",
+  praise: "Apprezzamento",
+  complaint: "Lamento",
   other: "Altro",
 };
 

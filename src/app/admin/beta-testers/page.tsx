@@ -4,7 +4,7 @@ import { useEffect, useState } from "react";
 import { useRouter } from "next/navigation";
 import { useSession } from "next-auth/react";
 import {
-  KeyRound, Plus, RefreshCw, Copy, Check, AlertCircle, UserPlus, Clock, CheckCircle2,
+  KeyRound, Plus, RefreshCw, Copy, Check, AlertCircle, UserPlus, Clock, CheckCircle2, Download,
 } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
@@ -20,6 +20,7 @@ type BetaCode = {
   expires_at: string;
   used_at: string | null;
   created_by: string | null;
+  discord_user_id?: string | null;
 };
 
 const ADMIN_EMAILS = new Set(["emmanuel.miro77@gmail.com"]);
@@ -37,6 +38,7 @@ export default function AdminBetaTestersPage() {
   const [newEmail, setNewEmail] = useState("");
   const [newNote, setNewNote] = useState("");
   const [newExpiresDays, setNewExpiresDays] = useState("30");
+  const [newDiscordUserId, setNewDiscordUserId] = useState("");
   const [generating, setGenerating] = useState(false);
   const [lastGenerated, setLastGenerated] = useState<{ code: string; email: string } | null>(null);
   const [copied, setCopied] = useState<string | null>(null);
@@ -103,6 +105,7 @@ export default function AdminBetaTestersPage() {
           email: newEmail.trim(),
           note: newNote.trim() || null,
           expiresInDays: Number(newExpiresDays) || 30,
+          discordUserId: newDiscordUserId.trim() || null,
         }),
       });
       if (!res.ok) throw new Error(await res.text());
@@ -110,6 +113,7 @@ export default function AdminBetaTestersPage() {
       setLastGenerated({ code: data.code, email: data.email });
       setNewEmail("");
       setNewNote("");
+      setNewDiscordUserId("");
       await fetchCodes();
     } catch (err: any) {
       setError(err.message);
@@ -129,6 +133,35 @@ export default function AdminBetaTestersPage() {
     setAdminToken(tokenInput.trim());
   };
 
+  const exportCSV = () => {
+    if (codes.length === 0) return;
+    const headers = ["ID", "Email", "Codice", "Nota", "Discord User ID", "Creato", "Scadenza", "Usato", "Stato"];
+    const rows = codes.map((c) => {
+      const isUsed = !!c.used_at;
+      const isExpired = !isUsed && new Date(c.expires_at) < new Date();
+      const status = isUsed ? "usato" : isExpired ? "scaduto" : "attivo";
+      return [
+        c.id,
+        c.email,
+        c.code,
+        c.note || "",
+        c.discord_user_id || "",
+        new Date(c.created_at).toLocaleDateString("it-IT"),
+        new Date(c.expires_at).toLocaleDateString("it-IT"),
+        c.used_at ? new Date(c.used_at).toLocaleDateString("it-IT") : "",
+        status,
+      ];
+    });
+    const csvContent = [headers, ...rows].map((r) => r.map((v) => `"${String(v).replace(/"/g, '""')}"`).join(",")).join("\n");
+    const blob = new Blob([csvContent], { type: "text/csv;charset=utf-8;" });
+    const url = URL.createObjectURL(blob);
+    const link = document.createElement("a");
+    link.href = url;
+    link.download = `beta-codes-${new Date().toISOString().slice(0, 10)}.csv`;
+    link.click();
+    URL.revokeObjectURL(url);
+  };
+
   if (status === "loading") {
     return <div className="min-h-screen flex items-center justify-center">Caricamento…</div>;
   }
@@ -146,6 +179,10 @@ export default function AdminBetaTestersPage() {
           </p>
         </div>
         <div className="flex gap-2">
+          <Button variant="outline" size="sm" onClick={exportCSV} disabled={codes.length === 0} title="Esporta CSV">
+            <Download className="h-4 w-4" />
+            CSV
+          </Button>
           <Button variant="outline" size="sm" onClick={() => router.push("/admin/feedback")}>
             Bug Reports
           </Button>
@@ -202,6 +239,15 @@ export default function AdminBetaTestersPage() {
                   value={newNote}
                   onChange={(e) => setNewNote(e.target.value)}
                   placeholder="Es: Marco — iPhone 13"
+                />
+              </div>
+              <div className="space-y-1.5">
+                <Label htmlFor="new-discord">Discord User ID (opzionale)</Label>
+                <Input
+                  id="new-discord"
+                  value={newDiscordUserId}
+                  onChange={(e) => setNewDiscordUserId(e.target.value)}
+                  placeholder="Es: 123456789012345678"
                 />
               </div>
               <div className="space-y-1.5">
