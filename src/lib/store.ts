@@ -3126,8 +3126,39 @@ export async function loadFromCloud(): Promise<void> {
   // 🔒 FASE D: skip old app_state load — causes statement timeout
   // Le nuove tabelle dedicate vengono caricate da loadFromNewTables()
   if (DISABLE_OLD_APP_STATE_SYNC) {
-    console.log("[LabelPulse Cloud] Old app_state sync disabled (FASE D) — using new tables only");
+    console.log("[LabelPulse Cloud] Old app_state sync disabled (FASE D) — loading only global rankings");
     useAppStore.setState({ hasCloudSynced: true });
+
+    // 🔒 FASE D FIX: carica SOLO la riga globale (classifiche + artisti)
+    // NON la riga personale (che ora è nelle nuove tabelle dedicate)
+    try {
+      const { loadGlobalRowOnly } = await import("./supabase");
+      const globalData = await loadGlobalRowOnly();
+      if (globalData) {
+        console.log("[LabelPulse Cloud] Global rankings loaded:", {
+          labels: globalData.labels?.length || 0,
+          snaps: globalData.rankingSnapshots?.length || 0,
+        });
+        // Merge global data (labels with rankings, snapshots) into local state
+        const currentState = useAppStore.getState();
+        const mergedLabels = (globalData.labels || []).map((globalLabel: any) => {
+          // Find matching local label and merge personal data
+          const localLabel = currentState.labels.find((l) => l.id === globalLabel.id);
+          if (localLabel) {
+            return { ...globalLabel, ...localLabel };
+          }
+          return globalLabel;
+        });
+        useAppStore.setState({
+          labels: mergedLabels.length > 0 ? mergedLabels : currentState.labels,
+          rankingSnapshots: globalData.rankingSnapshots || currentState.rankingSnapshots,
+          rankingsUpdatedAt: globalData.rankingsUpdatedAt || currentState.rankingsUpdatedAt,
+        });
+      }
+    } catch (err) {
+      console.warn("[LabelPulse Cloud] Global row load failed:", err);
+    }
+
     // 🔒 FIX: imposta lo status del cloud a "synced" così l'icona smette di girare
     try {
       const { setStatus } = await import("./supabase");

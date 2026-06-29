@@ -715,6 +715,38 @@ export async function saveStateToCloud(data: object): Promise<boolean> {
 }
 
 /**
+ * 🔒 FASE D — Carica SOLO la riga globale (classifiche + snapshots + artisti)
+ *
+ * Usata quando il vecchio sync personale è disabilitato (DISABLE_OLD_APP_STATE_SYNC).
+ * I dati personali (demo, label personalizzate, pitch, profilo) vengono dalle
+ * nuove tabelle dedicate via loadFromNewTables().
+ *
+ * Returns null se la riga global non esiste o è vuota.
+ */
+export async function loadGlobalRowOnly(): Promise<any | null> {
+  const supabase = getSupabase();
+  if (!supabase) return null;
+
+  try {
+    const { data, error } = await supabase
+      .from(CLOUD_TABLE)
+      .select("data, updated_at")
+      .eq("id", getGlobalCloudRowId())
+      .maybeSingle();
+
+    if (error) {
+      console.error("[LabelPulse Cloud] Global row load error:", error.message);
+      return null;
+    }
+
+    return data?.data || null;
+  } catch (err) {
+    console.error("[LabelPulse Cloud] Global row load exception:", err);
+    return null;
+  }
+}
+
+/**
  * Carica lo stato completo dell'app da Supabase.
  *
  * CLOUD-FIRST SPLIT (2026-06-23): reads from BOTH rows and merges:
