@@ -42,15 +42,19 @@ export async function POST(req: NextRequest) {
 
   try {
     const body = await req.json();
+    console.log("[/api/demos POST] Received body:", JSON.stringify(body, null, 2));
     const {
       id, label_id, label_name, track_name, artist_name, link,
       status, sent_date, pitch_text, pitch_subject, pitch_tracks,
       notes, parent_release_id,
     } = body || {};
 
-    if (!id || !label_id || !track_name) {
+    // 🔒 FASE C FIX: label_id è OPZIONALE (demo "senza target" sono validi)
+    // Genera id se non fornito
+    const finalId = id || `demo_${Date.now()}_${Math.random().toString(36).slice(2, 8)}`;
+    if (!track_name) {
       return NextResponse.json(
-        { error: "Missing required fields: id, label_id, track_name" },
+        { error: "Missing required field: track_name" },
         { status: 400 }
       );
     }
@@ -58,9 +62,9 @@ export async function POST(req: NextRequest) {
     const { data, error } = await supabase
       .from("demo_submissions")
       .insert({
-        id: String(id),
+        id: String(finalId),
         user_email: email,
-        label_id: String(label_id),
+        label_id: label_id ? String(label_id) : "no_target",
         label_name: label_name || null,
         track_name: String(track_name),
         artist_name: artist_name || null,
@@ -77,10 +81,11 @@ export async function POST(req: NextRequest) {
       .single();
 
     if (error) {
-      console.error("[/api/demos POST]", error);
-      return NextResponse.json({ error: error.message }, { status: 500 });
+      console.error("[/api/demos POST] Supabase error:", error.code, error.message, error.details);
+      return NextResponse.json({ error: error.message, code: error.code }, { status: 500 });
     }
 
+    console.log("[/api/demos POST] ✅ Inserted demo:", data?.id);
     return NextResponse.json({ demo: data });
   } catch (err: any) {
     console.error("[/api/demos POST] exception:", err);
