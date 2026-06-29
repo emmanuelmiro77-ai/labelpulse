@@ -173,6 +173,77 @@ Se vuoi una garanzia al 100%, possiamo aggiungere test automatici
 
 ---
 
+## 📊 STATO CORRENTE DEL PROGETTO (aggiornato 2026-06-29)
+
+### Architettura dati — DUE sistemi in parallelo (transizione)
+
+```
+SISTEMA VECCHIO (deprecato, in fase di rimozione):
+  localStorage (5MB) ↔ app_state (blob JSONB su Supabase)
+  ⚠️ Problemi: QuotaExceededError, no cross-device, no RLS vera
+
+SISTEMA NUOVO (FASE C+D, operativo):
+  API routes (NextAuth + JWT Supabase) ↔ 4 tabelle dedicate con RLS
+  ✅ demo_submissions, label_personal_data, pitch_campaigns, user_profiles
+  ✅ RLS: USING (user_email = auth.jwt()->>'email') — isolamento 100%
+  ✅ Realtime live per cross-device updates (1-2 secondi)
+```
+
+**Strategia dual write**: ogni operazione su store.ts scrive su ENTRAMBI i sistemi.
+Quando la migrazione sarà completa, rimuoveremo il vecchio sistema.
+
+### Fasi completate
+
+| Fase | Cosa | Commit |
+|------|------|--------|
+| FASE 0 | Foundation (9 task) | `0eb9933` |
+| FASE 1 | Beta Infra (5 task) | `0eb9933` |
+| Security audit | 5 CRITICAL + H-8 + M-3 fixati | `244e0cf`, `dcc091d` |
+| FASE A | Fix QuotaExceededError | `f2853e0` |
+| FASE B | Fix savedPitches sync | `e85b14e` |
+| FASE C | 4 tabelle dedicate + dual write + cross-device | `f719c03` → `88da254` |
+| FASE D | Supabase Auth + RLS vera + realtime live | `446221e` → `65b61ad` |
+| Migrazione | Script one-time app_state → nuove tabelle | `fb983ef` |
+
+### Test superati (verificati)
+
+- ✅ **Isolamento utenti**: GET /api/demos senza login → 401 Unauthorized, 0 demo
+- ✅ **Bridge NextAuth→Supabase**: supabaseAccessToken presente nella sessione
+- ✅ **Cross-device**: demo creato su PC lavoro → visibile su PC casa (stesso login)
+- ✅ **QuotaExceededError recovery**: auto-cleanup sidecar + forceCloudSync
+
+### Cosa NON toccare MAI (regole critiche)
+
+1. ⚠️ Non rimuovere `--webpack` dal build script (Turbopack non genera source maps)
+2. ⚠️ Non rimuovere `buildCommand` da `vercel.json`
+3. ⚠️ Non riattivare filtro `QuotaExceededError` in bugsnag.ts (lo stiamo tracciando)
+4. ⚠️ Non rimuovere il dual write da store.ts finché la migrazione non è completa
+5. ⚠️ Non cancellare i dati da `app_state` finché non verifichiamo che le nuove tabelle hanno tutto
+
+### File chiave da conoscere
+
+- `src/lib/store.ts` — Zustand store con dual write (vecchio + nuovo sistema)
+- `src/lib/supabase-admin.ts` — getAdminClient() con strategia JWT+fallback
+- `src/lib/api-client.ts` — helper per chiamate alle nuove API routes
+- `src/lib/auth-options.ts` — NextAuth con bridge a Supabase Auth
+- `src/hooks/use-realtime-sync.ts` — realtime live per le 4 tabelle
+- `src/app/api/demos/route.ts` — CRUD demo_submissions
+- `src/app/api/label-data/route.ts` — CRUD label_personal_data
+- `src/app/api/pitches/route.ts` — CRUD pitch_campaigns
+- `src/app/api/profile/route.ts` — CRUD user_profiles
+- `src/app/api/admin/migrate-appstate/route.ts` — migrazione one-time
+- `supabase-schema-fase-c.sql` — schema 4 nuove tabelle con RLS
+
+### TODO prossimi
+
+1. **Eseguire migrazione dati**: `GET /api/admin/migrate-appstate` con BETA_ADMIN_TOKEN
+2. **Verificare dati migrati** su Supabase Table Editor
+3. **FASE 2 — Closed Beta**: recruitment 5-10 tester
+4. **Setup PostHog**: manca API key su Vercel (NEXT_PUBLIC_POSTHOG_KEY)
+5. **(Futuro) FASE E**: rimuovere vecchio sistema app_state per dati utente
+
+---
+
 ## 🎯 PROMPT DA DARE ALL'AGENTE ALL'INIZIO DI UNA NUOVA CHAT
 
 Copia-incolla questo testo all'inizio di una nuova chat:
