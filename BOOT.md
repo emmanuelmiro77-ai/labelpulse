@@ -222,6 +222,8 @@ SISTEMA NUOVO (FASE C+D, operativo):
 
 #### ⚠️ Regole critiche — NON TOCCARE MAI
 
+0. 🚨🚨🚨 **REGOLA ZERO**: Il localStorage NON deve MAI contenere dati che devono essere condivisi cross-device. Tutto deve andare DIRETTAMENTE al cloud via API. Le classifiche Beatport (dati globali) vanno pushate via `/api/admin/push-rankings`. I dati personali vanno nelle 4 tabelle dedicate. Il localStorage è solo cache temporanea, non fonte di verità.
+
 1. ⚠️ Non rimuovere `--webpack` dal build script (Turbopack non genera source maps)
 2. ⚠️ Non rimuovere `buildCommand` da `vercel.json`
 3. ⚠️ Non riattivare filtro `QuotaExceededError` in bugsnag.ts (lo stiamo tracciando)
