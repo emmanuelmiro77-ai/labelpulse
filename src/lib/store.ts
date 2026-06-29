@@ -3023,8 +3023,44 @@ const CLOUD_SYNC_DEBOUNCE_MS = 3000; // 3 secondi di debounce
  *
  * Le nuove tabelle vengono ancora scritte dal dual write nelle azioni
  * (addDemo, updateLabel, etc.) — quello non viene toccato.
+ *
+ * 🔒 BUG FIX (classifiche): saveGlobalRowIfAdmin() permette ancora all'admin
+ * di pushare le classifiche aggiornate al cloud (riga 'global').
  */
 const DISABLE_OLD_APP_STATE_SYNC = true;
+
+/**
+ * 🔒 FASE D FIX: Permette all'admin di salvare SOLO la riga globale (classifiche).
+ * Non salva la riga personale (causa timeout + ormai nelle nuove tabelle).
+ */
+export async function saveGlobalRowIfAdmin(): Promise<boolean> {
+  if (!isSupabaseConfigured()) return false;
+  if (isApplyingRemoteUpdate()) return false;
+
+  // Verifica se l'utente corrente è admin
+  try {
+    const { isCurrentUserAdmin } = await import("./supabase");
+    if (!isCurrentUserAdmin()) {
+      return false;
+    }
+  } catch {
+    return false;
+  }
+
+  try {
+    const { saveGlobalRowOnly } = await import("./supabase");
+    const state = useAppStore.getState();
+    const ok = await saveGlobalRowOnly({
+      labels: state.labels,
+      rankingSnapshots: state.rankingSnapshots,
+      rankingsUpdatedAt: state.rankingsUpdatedAt,
+    });
+    return ok;
+  } catch (err) {
+    console.error("[LabelPulse Cloud] saveGlobalRowIfAdmin failed:", err);
+    return false;
+  }
+}
 
 export function syncToCloud(): void {
   if (!isSupabaseConfigured()) return;
@@ -3162,22 +3198,54 @@ export async function loadFromCloud(): Promise<void> {
         console.log("[LabelPulse Cloud] Global rankings loaded:", {
           labels: globalData.labels?.length || 0,
           snaps: globalData.rankingSnapshots?.length || 0,
+          updatedAt: globalData.rankingsUpdatedAt,
         });
         // Merge global data (labels with rankings, snapshots) into local state
         const currentState = useAppStore.getState();
-        const mergedLabels = (globalData.labels || []).map((globalLabel: any) => {
-          // Find matching local label and merge personal data
-          const localLabel = currentState.labels.find((l) => l.id === globalLabel.id);
-          if (localLabel) {
-            return { ...globalLabel, ...localLabel };
+        // 🔒 BUG FIX: globalLabel deve vincere sui campi Beatport (rank, points, genres)
+        // I campi personali (emails, notes) vengono dalle nuove tabelle via loadFromNewTables
+        // Quindi qui facciamo: prendi locale come base, sovrascrivi con globale per i campi Beatport
+        const globalLabels = globalData.labels || [];
+        const globalById = new Map(globalLabels.map((l: any) => [l.id, l]));
+
+        const mergedLabels = currentState.labels.map((localLabel: any) => {
+          const globalLabel = globalById.get(localLabel.id);
+          if (globalLabel) {
+            // Global vince su campi Beatport, locale mantiene campi personali
+            return {
+              ...localLabel,
+              // Campi Beatport dal globale (più recenti):
+              genres: globalLabel.genres || localLabel.genres,
+              rankByGenre: globalLabel.rankByGenre || localLabel.rankByGenre,
+              pointsByGenre: globalLabel.pointsByGenre || localLabel.pointsByGenre,
+              trending: globalLabel.trending ?? localLabel.trending,
+              trendingRankByGenre: globalLabel.trendingRankByGenre || localLabel.trendingRankByGenre,
+              trendingPointsByGenre: globalLabel.trendingPointsByGenre || localLabel.trendingPointsByGenre,
+              imageUrl: globalLabel.imageUrl || localLabel.imageUrl,
+              slug: globalLabel.slug || localLabel.slug,
+              beatportId: globalLabel.beatportId ?? localLabel.beatportId,
+              prevRankByGenre: globalLabel.prevRankByGenre || localLabel.prevRankByGenre,
+            };
           }
-          return globalLabel;
+          return localLabel;
         });
+
+        // Aggiungi label globali che non esistono in locale
+        const localIds = new Set(currentState.labels.map((l: any) => l.id));
+        for (const globalLabel of globalLabels) {
+          if (!localIds.has(globalLabel.id)) {
+            mergedLabels.push(globalLabel);
+          }
+        }
+
         useAppStore.setState({
           labels: mergedLabels.length > 0 ? mergedLabels : currentState.labels,
-          rankingSnapshots: globalData.rankingSnapshots || currentState.rankingSnapshots,
+          rankingSnapshots: (globalData.rankingSnapshots?.length || 0) > (currentState.rankingSnapshots?.length || 0)
+            ? globalData.rankingSnapshots
+            : currentState.rankingSnapshots,
           rankingsUpdatedAt: globalData.rankingsUpdatedAt || currentState.rankingsUpdatedAt,
         });
+        console.log("[LabelPulse Cloud] Merge completato. Labels totali:", mergedLabels.length);
       }
     } catch (err) {
       console.warn("[LabelPulse Cloud] Global row load failed:", err);

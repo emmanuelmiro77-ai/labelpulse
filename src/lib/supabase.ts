@@ -747,6 +747,46 @@ export async function loadGlobalRowOnly(): Promise<any | null> {
 }
 
 /**
+ * 🔒 FASE D FIX: Salva SOLO la riga globale (classifiche Beatport).
+ * Usata da saveGlobalRowIfAdmin() per permettere all'admin di pushare
+ * nuove classifiche senza salvare la riga personale (che causava timeout).
+ */
+export async function saveGlobalRowOnly(data: {
+  labels: any[];
+  rankingSnapshots: any[];
+  rankingsUpdatedAt: string | null;
+}): Promise<boolean> {
+  const supabase = getSupabase();
+  if (!supabase) return false;
+
+  try {
+    const globalPayload = buildGlobalPayload(data);
+    const { error } = await supabase.from(CLOUD_TABLE).upsert(
+      {
+        id: getGlobalCloudRowId(),
+        data: globalPayload,
+        updated_at: new Date().toISOString(),
+      },
+      { onConflict: "id" }
+    );
+
+    if (error) {
+      console.error("[LabelPulse Cloud] Global row save error:", error.message);
+      return false;
+    }
+
+    console.log("[LabelPulse Cloud] ✅ Global row saved (admin):", {
+      labels: globalPayload.labels?.length || 0,
+      snapshots: globalPayload.rankingSnapshots?.length || 0,
+    });
+    return true;
+  } catch (err) {
+    console.error("[LabelPulse Cloud] Global row save exception:", err);
+    return false;
+  }
+}
+
+/**
  * Carica lo stato completo dell'app da Supabase.
  *
  * CLOUD-FIRST SPLIT (2026-06-23): reads from BOTH rows and merges:
