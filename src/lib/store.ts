@@ -7,7 +7,7 @@ import labelData from "./labels-data.json";
 import { saveStateToCloud, loadStateFromCloud, isSupabaseConfigured, isApplyingRemoteUpdate, markLocalProfileEdit } from "./supabase";
 import { saveArtistsToIDB, loadArtistsFromIDB, clearArtistsIDB } from "./artists-idb";
 import type { PitchTrackEntry } from "./pitch-utils";
-import { apiCreateDemo, apiUpdateDemo, apiDeleteDemo, apiUpsertLabelData, apiDeleteLabelData, apiCreatePitch, apiUpdatePitch, apiDeletePitch } from "./api-client";
+import { apiCreateDemo, apiUpdateDemo, apiDeleteDemo, apiUpsertLabelData, apiDeleteLabelData, apiCreatePitch, apiUpdatePitch, apiDeletePitch, apiUpsertProfile } from "./api-client";
 
 // ==================== TYPES ====================
 
@@ -2116,6 +2116,19 @@ export const useAppStore = create<AppState>()(
             console.warn("[LabelPulse] Immediate profile sync failed:", e);
           }
         }, 0);
+        // 🔒 FASE C.7: dual write — also push to user_profiles table
+        const current = useAppStore.getState().userProfile;
+        if (current) {
+          apiUpsertProfile({
+            artist_name: current.artistName,
+            bio: current.bio,
+            photo_url: current.photoUrl,
+            sc_link: current.scLink,
+            links: current.links,
+            cyanite_api_token: current.cyaniteApiToken,
+            locale: useAppStore.getState().locale,
+          }).catch(() => {/* silent */});
+        }
       },
 
       getGenres: () => labelData.genres,
@@ -3305,10 +3318,11 @@ export async function loadFromNewTables(): Promise<void> {
 
   try {
     // Fetch all data in parallel
-    const [demosRes, labelsRes, pitchesRes] = await Promise.all([
+    const [demosRes, labelsRes, pitchesRes, profileRes] = await Promise.all([
       fetch("/api/demos").catch(() => null),
       fetch("/api/label-data").catch(() => null),
       fetch("/api/pitches").catch(() => null),
+      fetch("/api/profile").catch(() => null),
     ]);
 
     const state = useAppStore.getState();
@@ -3444,6 +3458,41 @@ export async function loadFromNewTables(): Promise<void> {
     console.log("[FASE C.6] loadFromNewTables completed");
   } catch (err) {
     console.error("[FASE C.6] loadFromNewTables failed:", err);
+  }
+}
+
+/**
+ * 🔒 FASE C.7 — Load user profile from new table
+ * (integrated into loadFromNewTables above, but also callable standalone)
+ */
+export async function loadProfileFromNewTable(): Promise<void> {
+  if (typeof window === "undefined") return;
+  try {
+    const res = await fetch("/api/profile");
+    if (!res.ok) return;
+    const data = await res.json();
+    const p = data.profile;
+    if (!p) return;
+
+    const current = useAppStore.getState().userProfile;
+    // Only update if API has data that local doesn't (avoid overwriting local edits)
+    const apiHasData = !!p.artist_name || !!p.bio || !!p.photo_url || !!p.sc_link;
+    if (!apiHasData) return;
+
+    useAppStore.setState({
+      userProfile: {
+        ...current,
+        artistName: p.artist_name || current.artistName,
+        bio: p.bio || current.bio,
+        photoUrl: p.photo_url || current.photoUrl,
+        scLink: p.sc_link || current.scLink,
+        links: p.links || current.links,
+        cyaniteApiToken: p.cyanite_api_token || current.cyaniteApiToken,
+      },
+    });
+    console.log("[FASE C.7] Profile loaded from new table");
+  } catch (err) {
+    console.error("[FASE C.7] loadProfileFromNewTable failed:", err);
   }
 }
 
