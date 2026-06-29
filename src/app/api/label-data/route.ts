@@ -1,0 +1,178 @@
+import { NextRequest, NextResponse } from "next/server";
+import { getAdminClient } from "@/lib/supabase-admin";
+
+/**
+ * API /api/label-data — CRUD per la tabella label_personal_data
+ *
+ * 🔒 FASE C: tutte le operazioni autenticate via NextAuth.
+ * Una riga per (user_email, label_id). Se l'utente non ha personalizzato
+ * una label, non c'è riga.
+ *
+ * GET    /api/label-data                  → lista tutte le label personalizzate
+ * GET    /api/label-data?label_id=<id>    → singola label personalizzata
+ * POST   /api/label-data                  → upsert (insert or update)
+ * PATCH  /api/label-data?label_id=<id>    → aggiorna (partial)
+ * DELETE /api/label-data?label_id=<id>    → cancella
+ */
+
+export async function GET(req: NextRequest) {
+  const { supabase, email } = await getAdminClient();
+  if (!supabase || !email) {
+    return NextResponse.json({ error: "Not authenticated" }, { status: 401 });
+  }
+
+  const { searchParams } = new URL(req.url);
+  const labelId = searchParams.get("label_id");
+
+  if (labelId) {
+    const { data, error } = await supabase
+      .from("label_personal_data")
+      .select("*")
+      .eq("user_email", email)
+      .eq("label_id", labelId)
+      .maybeSingle();
+
+    if (error) {
+      console.error("[/api/label-data GET single]", error);
+      return NextResponse.json({ error: error.message }, { status: 500 });
+    }
+    return NextResponse.json({ label_data: data });
+  }
+
+  const { data, error } = await supabase
+    .from("label_personal_data")
+    .select("*")
+    .eq("user_email", email);
+
+  if (error) {
+    console.error("[/api/label-data GET all]", error);
+    return NextResponse.json({ error: error.message }, { status: 500 });
+  }
+
+  return NextResponse.json({ labels: data || [] });
+}
+
+export async function POST(req: NextRequest) {
+  const { supabase, email } = await getAdminClient();
+  if (!supabase || !email) {
+    return NextResponse.json({ error: "Not authenticated" }, { status: 401 });
+  }
+
+  try {
+    const body = await req.json();
+    const {
+      label_id, emails, notes, status, website, demo_link,
+      social_link, soundcloud_link, beatport_link, contact_info,
+      custom_links, is_custom, custom_name, custom_genre,
+    } = body || {};
+
+    if (!label_id) {
+      return NextResponse.json({ error: "Missing label_id" }, { status: 400 });
+    }
+
+    // Upsert: insert or update on conflict (user_email, label_id)
+    const { data, error } = await supabase
+      .from("label_personal_data")
+      .upsert(
+        {
+          user_email: email,
+          label_id: String(label_id),
+          emails: emails || [],
+          notes: notes || null,
+          status: status || "unknown",
+          website: website || null,
+          demo_link: demo_link || null,
+          social_link: social_link || null,
+          soundcloud_link: soundcloud_link || null,
+          beatport_link: beatport_link || null,
+          contact_info: contact_info || null,
+          custom_links: custom_links || [],
+          is_custom: is_custom || false,
+          custom_name: custom_name || null,
+          custom_genre: custom_genre || null,
+        },
+        { onConflict: "user_email,label_id" }
+      )
+      .select()
+      .single();
+
+    if (error) {
+      console.error("[/api/label-data POST]", error);
+      return NextResponse.json({ error: error.message }, { status: 500 });
+    }
+
+    return NextResponse.json({ label_data: data });
+  } catch (err: any) {
+    console.error("[/api/label-data POST] exception:", err);
+    return NextResponse.json({ error: "Internal server error" }, { status: 500 });
+  }
+}
+
+export async function PATCH(req: NextRequest) {
+  const { supabase, email } = await getAdminClient();
+  if (!supabase || !email) {
+    return NextResponse.json({ error: "Not authenticated" }, { status: 401 });
+  }
+
+  const { searchParams } = new URL(req.url);
+  const labelId = searchParams.get("label_id");
+  if (!labelId) {
+    return NextResponse.json({ error: "Missing label_id" }, { status: 400 });
+  }
+
+  try {
+    const updates = await req.json();
+    delete updates.id;
+    delete updates.user_email;
+    delete updates.label_id;
+    delete updates.created_at;
+
+    const { data, error } = await supabase
+      .from("label_personal_data")
+      .update(updates)
+      .eq("user_email", email)
+      .eq("label_id", labelId)
+      .select()
+      .single();
+
+    if (error) {
+      console.error("[/api/label-data PATCH]", error);
+      return NextResponse.json({ error: error.message }, { status: 500 });
+    }
+
+    if (!data) {
+      return NextResponse.json({ error: "Label data not found" }, { status: 404 });
+    }
+
+    return NextResponse.json({ label_data: data });
+  } catch (err: any) {
+    console.error("[/api/label-data PATCH] exception:", err);
+    return NextResponse.json({ error: "Internal server error" }, { status: 500 });
+  }
+}
+
+export async function DELETE(req: NextRequest) {
+  const { supabase, email } = await getAdminClient();
+  if (!supabase || !email) {
+    return NextResponse.json({ error: "Not authenticated" }, { status: 401 });
+  }
+
+  const { searchParams } = new URL(req.url);
+  const labelId = searchParams.get("label_id");
+  if (!labelId) {
+    return NextResponse.json({ error: "Missing label_id" }, { status: 400 });
+  }
+
+  const { error } = await supabase
+    .from("label_personal_data")
+    .delete()
+    .eq("user_email", email)
+    .eq("label_id", labelId);
+
+  if (error) {
+    console.error("[/api/label-data DELETE]", error);
+    return NextResponse.json({ error: error.message }, { status: 500 });
+  }
+
+  return NextResponse.json({ ok: true });
+}

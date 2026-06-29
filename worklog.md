@@ -1696,3 +1696,29 @@ Stage Summary:
 - Fix: rilevazione + auto-cleanup sidecar + forceCloudSync immediato + banner UI visibile
 - 3 file modificati: src/lib/store.ts, src/components/storage-quota-warning.tsx (NEW), src/app/layout.tsx
 - Prossimo: FASE B (push TUTTO nel cloud) + FASE C (architettura definitiva tipo LabelRadar)
+
+---
+Task ID: fase-c-1-schema-sql
+Agent: Main Agent
+Task: FASE C.1 — Creare schema SQL nuove tabelle dedicate con RLS
+
+Work Log:
+- Analizzata architettura attuale: dati utente in blob JSONB su app_state → non scalabile, non isolato
+- Progettate 4 nuove tabelle dedicate:
+  1. demo_submissions (id UUID, user_email, label_id, track_name, link, status, pitch_text, pitch_tracks JSONB)
+  2. label_personal_data (user_email, label_id, emails[], notes, status, custom_links JSONB, is_custom)
+  3. pitch_campaigns (id UUID, user_email, label_id, subject, body, status draft|sent, sent_method)
+  4. user_profiles (user_email PK, artist_name, bio, photo_url, sc_link, links JSONB)
+- Tutte con RLS: USING (user_email = auth.jwt()->>'email')
+- Tutte con indici su user_email per performance
+- Realtime abilitato su tutte (ALTER PUBLICATION supabase_realtime ADD TABLE)
+- Trigger updated_at automatico su ogni UPDATE
+- Strategia auth pragmatica: NextAuth + service_role (RLS come second-layer, attiva quando migreremo a Supabase Auth)
+- File creato: supabase-schema-fase-c.sql
+- Aggiornato AGENT_CONTEXT.md con piano dettagliato 8 step
+
+Stage Summary:
+- FASE C.1 completata
+- File: supabase-schema-fase-c.sql (NEW)
+- ⚠️ AZIONE MANUALE RICHIESTA: utente deve eseguire il SQL nel Supabase SQL Editor
+- Prossimo: FASE C.2 (API routes CRUD)

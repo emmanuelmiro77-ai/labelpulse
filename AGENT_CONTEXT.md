@@ -229,8 +229,48 @@ L'utente ha segnalato perdita dati critica: demo caricate su PC lavoro NON sono 
 
 **Piano 3 fasi (Opzione C)**:
 - **FASE A** ✅ (2026-06-29): Fix QuotaExceededError — rilevazione + auto-cleanup sidecar + forceCloudSync immediato + banner UI
-- **FASE B** (prossima): Push TUTTO nel cloud — verificare buildPersonalPayload include tutto, trigger immediato per demo/pitch edits
-- **FASE C** (1-2 settimane): Architettura definitiva — tabelle Supabase dedicate (demo_submissions, label_personal_data, pitch_campaigns, user_profiles) con RLS basata su Supabase Auth JWT. Realtime cross-device.
+- **FASE B** ✅ (2026-06-29): Fix critico — `syncToCloud()` e `forceCloudSync()` NON includevano `savedPitches` e `sentCampaigns`. Ora sì.
+- **FASE C** 🟡 (IN CORSO 2026-06-29): Architettura definitiva — tabelle Supabase dedicate
+
+### 🏗️ FASE C — Architettura definitiva (dettaglio tecnico)
+
+**File SQL**: `supabase-schema-fase-c.sql` — creare su Supabase SQL Editor
+
+**4 nuove tabelle** (tutte con `user_email` come partition key + RLS):
+1. **`demo_submissions`** — sostituisce `demos[]` nel blob
+   - PK: `id` (UUID client-side)
+   - Campi: label_id, track_name, link, status, pitch_text, pitch_tracks (JSONB), notes
+2. **`label_personal_data`** — sostituisce emails/notes/status/etc delle label
+   - PK: `id` BIGSERIAL, UNIQUE(user_email, label_id)
+   - Campi: emails[], notes, status, website, demo_link, custom_links (JSONB), is_custom
+3. **`pitch_campaigns`** — sostituisce `savedPitches[]` + `sentCampaigns[]`
+   - PK: `id` (UUID client-side)
+   - status: 'draft' | 'sent' (distingue bozze da inviate)
+4. **`user_profiles`** — sostituisce `userProfile`
+   - PK: `user_email`
+   - Campi: artist_name, bio, photo_url, sc_link, links (JSONB), cyanite_api_token
+
+**Strategia auth (pragmatica)**:
+- NextAuth (Google) fornisce email via session
+- API routes Next.js usano `getServerSession()` + `SUPABASE_SERVICE_ROLE_KEY` (bypassa RLS)
+- RLS basata su `auth.jwt()->>'email'` come second-layer (attiva quando migreremo a Supabase Auth)
+- Con anon key attuale: RLS blocca tutto (claim email NULL) → API routes sono l'unico accesso
+
+**8 step FASE C**:
+1. ✅ C.1 — Schema SQL `supabase-schema-fase-c.sql` (creato)
+2. ⏳ C.2 — API routes CRUD per ogni tabella (auth + service_role)
+3. ⏳ C.3 — Migrare `addDemo/updateDemo/deleteDemo` in store.ts → nuova tabella
+4. ⏳ C.4 — Migrare `updateLabel/addLabel/deleteLabel` → nuova tabella
+5. ⏳ C.5 — Migrare `savedPitches/sentCampaigns` → nuova tabella
+6. ⏳ C.6 — Realtime subscription cross-device
+7. ⏳ C.7 — Migrare `userProfile` → nuova tabella
+8. ⏳ C.8 — Test cross-device E2E
+
+**⚠️ MIGRAZIONE DATI**: dopo che le nuove tabelle sono operative, dobbiamo:
+- Leggere i dati esistenti da `app_state.data->demos` per ogni utente
+- Inserirli nelle nuove tabelle `demo_submissions`
+- Stesso per labels personalizzate, pitches, profile
+- Poi deprecare `app_state` per i dati utente (mantenerlo solo per global/Beatport)
 
 ### ⚠️ TODO CRITICO UTENTE (entro 14 giorni dal 2026-06-26)
 - **Bugsnag Trial 14 giorni**: verificare in Settings → Billing che dopo il trial si auto-downgradi a Free (€0). Se auto-converte a paid ($80+/mese), creare nuovo progetto Free + cambiare API key in Vercel env vars (`NEXT_PUBLIC_BUGSNAG_API_KEY` + `BUGSNAG_API_KEY`).
