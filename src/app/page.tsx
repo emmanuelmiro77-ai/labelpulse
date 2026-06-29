@@ -1,6 +1,7 @@
 "use client";
 
 import { useAppStore, loadFromCloud, forceCloudSync, loadArtistsOnBoot, loadFromNewTables } from "@/lib/store";
+import { useRealtimeSync } from "@/hooks/use-realtime-sync";
 import { t, LOCALE_NAMES, LOCALE_FLAGS, type Locale } from "@/lib/i18n";
 import { useAuthEffect } from "@/lib/use-auth";
 import { useSession } from "next-auth/react";
@@ -84,6 +85,9 @@ export default function Home() {
   // Bridge NextAuth session ↔ cloud sync. Mounts the email-based row id,
   // triggers loadFromCloud() on login, and resets state on logout.
   useAuthEffect();
+
+  // 🔒 FASE D.5: Realtime subscription per cross-device live updates
+  useRealtimeSync();
 
   // Carica i dati dal cloud dopo la reidratazione da localStorage
   useEffect(() => {
