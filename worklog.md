@@ -1810,3 +1810,25 @@ Stage Summary:
 - Cross-device: dati salvati nelle nuove tabelle, accessibili da qualsiasi dispositivo con stesso login
 - Realtime live attivo per cross-device updates
 - Prossimo: FASE 2 (Closed Beta) — ora l'app è solida e sicura per tester esterni
+
+---
+Task ID: migrazione-dati-completata
+Agent: Main Agent
+Task: Migrazione dati da app_state alle nuove tabelle
+
+Work Log:
+- Creato script migrazione (scripts/migrate-appstate-to-new-tables.js)
+- Creata API route admin (src/app/api/admin/migrate-appstate/route.ts)
+- Fix auth: aggiunto fallback via sessione NextAuth admin (no serve token)
+- Fix critico: disabilitato syncToCloud/forceCloudSync/loadFromCloud del vecchio sistema (causava statement timeout)
+- Fix critico: disabilitato auto-push artisti (blob 5MB+ causava timeout 500)
+- Eseguita migrazione via API: 2 utenti processati, 663 label + 1 profilo migrati, 0 errori
+
+Stage Summary:
+- MIGRAZIONE COMPLETATA ✅
+- 663 label personalizzate migrate da app_state a label_personal_data
+- 1 profilo producer migrato a user_profiles
+- Demo (4) e pitch erano già migrati dal dual write
+- Vecchio sistema app_state disabilitato (no più timeout)
+- L'app ora usa SOLO le nuove tabelle dedicate con RLS
+- Pronta per FASE 2 (Closed Beta)

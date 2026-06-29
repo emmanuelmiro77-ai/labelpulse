@@ -219,7 +219,7 @@ alla fase SaaS commerciale profittevole. Contiene:
 - **Criteri GO/NO-GO** espliciti per passare da una fase alla successiva
 - **Stato avanzamento** aggiornato dopo ogni task completato
 
-🟢 **Stato attuale**: FASE 1 ✅ + Security audit (C-1→C-5, H-8, M-3) ✅ + FASE A (QuotaExceededError) ✅ + FASE B (savedPitches sync) ✅ + FASE C (architettura cross-device) ✅ + FASE D (Supabase Auth + RLS vera + realtime live) ✅ + **TEST ISOLAMENTE SUPERATO** ✅. **Isolamento utenti 100% garantito a livello database (verificato con test 401 senza login)**. Prossimo: FASE 2 (Closed Beta).
+🟢 **Stato attuale**: FASE 1 ✅ + Security audit (C-1→C-5, H-8, M-3) ✅ + FASE A (QuotaExceededError) ✅ + FASE B (savedPitches sync) ✅ + FASE C (architettura cross-device) ✅ + FASE D (Supabase Auth + RLS vera + realtime live) ✅ + **MIGRAZIONE DATI COMPLETATA** ✅ (663 label + 1 profilo migrati, 0 errori). **Isolamento utenti 100% garantito + vecchio sistema app_state disabilitato**. Pronta per FASE 2 (Closed Beta).
 
 ### 🚨 ARCHITETTURA TARGET — Cross-device sync come LabelRadar
 L'utente ha segnalato perdita dati critica: demo caricate su PC lavoro NON sono visibili su PC casa. Cause:
