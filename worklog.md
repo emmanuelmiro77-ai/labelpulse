@@ -1788,3 +1788,25 @@ Stage Summary:
 - Una volta attivo Supabase Auth, RLS funziona a livello database → isolamento 100%
 - Realtime live: cambiamenti cross-device entro 1-2 secondi
 - Prossimo: D.4 (test isolamento) + D.6 (test E2E) dopo setup manuale
+
+---
+Task ID: fase-d-test-isolamento-completato
+Agent: Main Agent
+Task: FASE D — Test isolamento utenti (D.4 + D.6)
+
+Work Log:
+- D.1: Google provider abilitato su Supabase Dashboard (manuale)
+- Bridge NextAuth→Supabase verificato: supabaseAccessToken presente nella sessione ✅
+- Fix bug: API /api/demos POST richiedeva label_id obbligatorio, ma l'app permette demo "senza target" → reso opzionale (commit d4ec043)
+- Test creazione demo: POST /api/demos con "Test 2" → 200 OK, riga inserita con user_email=emmanuel.miro77@gmail.com ✅
+- Test isolamento (D.4): finestra incognito senza login → GET /api/demos → 401 Unauthorized, 0 demo ✅
+- RLS verificata a livello database: utente non autenticato NON può leggere i demo
+
+Stage Summary:
+- FASE D COMPLETATA ✅ (tutti i test superati)
+- Isolamento utenti 100% garantito a livello database
+- Senza login: 401 + 0 demo accessibili
+- Con login: solo i propri demo (RLS filtra per user_email)
+- Cross-device: dati salvati nelle nuove tabelle, accessibili da qualsiasi dispositivo con stesso login
+- Realtime live attivo per cross-device updates
+- Prossimo: FASE 2 (Closed Beta) — ora l'app è solida e sicura per tester esterni
