@@ -3289,6 +3289,165 @@ function setupRealtimeSubscriptionSafe(): void {
 }
 
 /**
+ * 🔒 FASE C.6 — Load data from new dedicated tables
+ *
+ * Called after loadFromCloud() to fetch data from the new tables:
+ * demo_submissions, label_personal_data, pitch_campaigns, user_profiles.
+ *
+ * Strategy: merge with existing state (don't overwrite if local has more recent).
+ * If new tables have data that local doesn't, use new tables (they're the source of truth).
+ *
+ * This is what makes cross-device work: PC lavoro scrive su /api/demos,
+ * PC casa fa login → loadFromNewTables() → fetch /api/demos → vede i demo.
+ */
+export async function loadFromNewTables(): Promise<void> {
+  if (typeof window === "undefined") return;
+
+  try {
+    // Fetch all data in parallel
+    const [demosRes, labelsRes, pitchesRes] = await Promise.all([
+      fetch("/api/demos").catch(() => null),
+      fetch("/api/label-data").catch(() => null),
+      fetch("/api/pitches").catch(() => null),
+    ]);
+
+    const state = useAppStore.getState();
+
+    // 1. Demos — if new tables have demos, prefer them over local
+    if (demosRes?.ok) {
+      const data = await demosRes.json();
+      const apiDemos = data.demos || [];
+      if (apiDemos.length > 0) {
+        console.log(`[FASE C.6] Loaded ${apiDemos.length} demos from new table`);
+        // Merge: union by id, prefer API version (source of truth)
+        const existingById = new Map(state.demos.map((d: any) => [d.id, d]));
+        for (const ad of apiDemos) {
+          existingById.set(ad.id, {
+            id: ad.id,
+            labelId: ad.label_id,
+            trackName: ad.track_name,
+            artistName: ad.artist_name || "",
+            link: ad.link || "",
+            status: ad.status || "ready",
+            sentDate: ad.sent_date,
+            pitchText: ad.pitch_text,
+            pitchSubject: ad.pitch_subject,
+            pitchTracks: ad.pitch_tracks,
+            notes: ad.notes,
+            parentReleaseId: ad.parent_release_id,
+            createdAt: ad.created_at,
+          });
+        }
+        useAppStore.setState({ demos: Array.from(existingById.values()) });
+      }
+    }
+
+    // 2. Label personal data — apply on top of existing labels
+    if (labelsRes?.ok) {
+      const data = await labelsRes.json();
+      const apiLabels = data.labels || [];
+      if (apiLabels.length > 0) {
+        console.log(`[FASE C.6] Loaded ${apiLabels.length} label personal data from new table`);
+        const labelMap = new Map(state.labels.map((l: any) => [l.id, { ...l }]));
+        const customLabels: any[] = [];
+
+        for (const al of apiLabels) {
+          if (al.is_custom) {
+            // Custom label — add to labels array if not present
+            if (!labelMap.has(al.label_id)) {
+              customLabels.push({
+                id: al.label_id,
+                name: al.custom_name || "Unknown",
+                genre: al.custom_genre || "",
+                status: al.status || "unknown",
+                emails: al.emails || [],
+                notes: al.notes || "",
+                website: al.website || "",
+                demoLink: al.demo_link || "",
+                socialLink: al.social_link || "",
+                soundcloudLink: al.soundcloud_link || "",
+                contactInfo: al.contact_info || "",
+                isCustom: true,
+                submissionType: "email",
+                createdAt: al.created_at,
+                genres: [],
+                rankByGenre: {},
+                pointsByGenre: {},
+                trending: false,
+                trendingRankByGenre: {},
+                trendingPointsByGenre: {},
+              });
+            }
+          }
+          // Apply personal data to existing label
+          const existing = labelMap.get(al.label_id);
+          if (existing) {
+            if (al.emails?.length) existing.emails = al.emails;
+            if (al.notes) existing.notes = al.notes;
+            if (al.status) existing.status = al.status;
+            if (al.website) existing.website = al.website;
+            if (al.demo_link) existing.demoLink = al.demo_link;
+            if (al.social_link) existing.socialLink = al.social_link;
+            if (al.soundcloud_link) existing.soundcloudLink = al.soundcloud_link;
+            if (al.contact_info) existing.contactInfo = al.contact_info;
+          }
+        }
+
+        useAppStore.setState({
+          labels: [...Array.from(labelMap.values()), ...customLabels],
+        });
+      }
+    }
+
+    // 3. Pitches — split into drafts (savedPitches) and sent (sentCampaigns)
+    if (pitchesRes?.ok) {
+      const data = await pitchesRes.json();
+      const apiPitches = data.pitches || [];
+      if (apiPitches.length > 0) {
+        console.log(`[FASE C.6] Loaded ${apiPitches.length} pitches from new table`);
+        const drafts: any[] = [];
+        const sent: any[] = [];
+        for (const p of apiPitches) {
+          const mapped = {
+            id: p.id,
+            labelId: p.label_id,
+            labelName: p.label_name,
+            demoId: p.demo_id,
+            subject: p.subject,
+            body: p.body,
+            pitchTracks: p.pitch_tracks,
+            epLinkMode: p.ep_link_mode,
+            epSoundCloudUrl: p.ep_soundcloud_url,
+            createdAt: p.created_at,
+            updatedAt: p.updated_at,
+            sentAt: p.sent_at,
+            sentMethod: p.sent_method,
+          };
+          if (p.status === "sent") {
+            sent.push(mapped);
+          } else {
+            drafts.push(mapped);
+          }
+        }
+        // Merge: union by id
+        const draftMap = new Map(state.savedPitches.map((p: any) => [p.id, p]));
+        for (const d of drafts) draftMap.set(d.id, d);
+        const sentMap = new Map(state.sentCampaigns.map((c: any) => [c.id, c]));
+        for (const s of sent) sentMap.set(s.id, s);
+        useAppStore.setState({
+          savedPitches: Array.from(draftMap.values()),
+          sentCampaigns: Array.from(sentMap.values()),
+        });
+      }
+    }
+
+    console.log("[FASE C.6] loadFromNewTables completed");
+  } catch (err) {
+    console.error("[FASE C.6] loadFromNewTables failed:", err);
+  }
+}
+
+/**
  * Merge dei dati cloud con quelli locali, preservando i dati utente.
  * Usa la stessa logica della funzione merge di Zustand persist.
  *

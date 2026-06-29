@@ -1,6 +1,6 @@
 "use client";
 
-import { useAppStore, loadFromCloud, forceCloudSync, loadArtistsOnBoot } from "@/lib/store";
+import { useAppStore, loadFromCloud, forceCloudSync, loadArtistsOnBoot, loadFromNewTables } from "@/lib/store";
 import { t, LOCALE_NAMES, LOCALE_FLAGS, type Locale } from "@/lib/i18n";
 import { useAuthEffect } from "@/lib/use-auth";
 import { useSession } from "next-auth/react";
@@ -89,6 +89,8 @@ export default function Home() {
   useEffect(() => {
     if (hasRehydrated) {
       loadFromCloud();
+      // 🔒 FASE C.6: also load from new dedicated tables (cross-device sync)
+      loadFromNewTables();
       // Load artists from IndexedDB (Phase 2 — scraper v2 data is too large
       // for localStorage, persisted in IDB instead)
       loadArtistsOnBoot();
