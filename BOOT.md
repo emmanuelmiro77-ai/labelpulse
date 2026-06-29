@@ -175,57 +175,70 @@ Se vuoi una garanzia al 100%, possiamo aggiungere test automatici
 
 ## 📊 STATO CORRENTE DEL PROGETTO (aggiornato 2026-06-29)
 
-### Architettura dati — DUE sistemi in parallelo (transizione)
+### 🎯 RIEPILOGO COMPLETO LAVORO (recap definitivo)
+
+#### Architettura attuale — DUE sistemi in parallelo
 
 ```
-SISTEMA VECCHIO (deprecato, in fase di rimozione):
+SISTEMA VECCHIO (parzialmente disabilitato):
   localStorage (5MB) ↔ app_state (blob JSONB su Supabase)
-  ⚠️ Problemi: QuotaExceededError, no cross-device, no RLS vera
+  ✅ ANCORA ATTIVO per: riga 'global' (classifiche Beatport + artisti condivisi)
+  ⚠️ DISABILITATO per: riga personale (user_email) — causa statement timeout
 
 SISTEMA NUOVO (FASE C+D, operativo):
   API routes (NextAuth + JWT Supabase) ↔ 4 tabelle dedicate con RLS
-  ✅ demo_submissions, label_personal_data, pitch_campaigns, user_profiles
+  ✅ demo_submissions — demo per utente
+  ✅ label_personal_data — email/note/status personalizzati
+  ✅ pitch_campaigns — bozze + inviate (status draft|sent)
+  ✅ user_profiles — profilo producer
   ✅ RLS: USING (user_email = auth.jwt()->>'email') — isolamento 100%
   ✅ Realtime live per cross-device updates (1-2 secondi)
 ```
 
-**Strategia dual write**: ogni operazione su store.ts scrive su ENTRAMBI i sistemi.
-Quando la migrazione sarà completa, rimuoveremo il vecchio sistema.
+#### Fasi completate (in ordine cronologico)
 
-### Fasi completate
+| Fase | Commit | Cosa |
+|------|--------|------|
+| FASE 0 | `0eb9933` | Foundation: 9 task (Discord, NDA, screening, email, legal, backup, security audit) |
+| FASE 1 | `0eb9933` | Beta Infra: 5 task (beta codes, onboarding, feature flags, feedback webhook, tracking view) |
+| Security audit | `244e0cf`, `dcc091d` | 5 CRITICAL (C-1→C-5) + H-8 + M-3 fixati |
+| **FASE A** | `f2853e0` | Fix QuotaExceededError: rilevazione + auto-cleanup sidecar + forceCloudSync immediato + banner UI |
+| **FASE B** | `e85b14e` | Fix critico: syncToCloud/forceCloudSync NON includevano savedPitches/sentCampaigns |
+| **FASE C** | `f719c03`→`88da254` | 4 tabelle dedicate + dual write + loadFromNewTables cross-device |
+| **FASE D** | `446221e`→`65b61ad` | Bridge NextAuth→Supabase Auth + RLS vera + realtime live |
+| Migrazione | `fb983ef`, `273f02e` | Script one-time: 663 label + 1 profilo migrati, 0 errori |
+| Fix timeout | `328d5b9`, `d45f56e` | Disabilitato sync vecchio sistema + auto-push artisti (causavano statement timeout) |
+| Fix cloud icon | `25cd38a` | setStatus('synced') quando vecchio sync disabilitato |
+| Fix classifiche | `e5aaa14` | loadGlobalRowOnly() — carica SOLO riga global (classifiche) |
 
-| Fase | Cosa | Commit |
-|------|------|--------|
-| FASE 0 | Foundation (9 task) | `0eb9933` |
-| FASE 1 | Beta Infra (5 task) | `0eb9933` |
-| Security audit | 5 CRITICAL + H-8 + M-3 fixati | `244e0cf`, `dcc091d` |
-| FASE A | Fix QuotaExceededError | `f2853e0` |
-| FASE B | Fix savedPitches sync | `e85b14e` |
-| FASE C | 4 tabelle dedicate + dual write + cross-device | `f719c03` → `88da254` |
-| FASE D | Supabase Auth + RLS vera + realtime live | `446221e` → `65b61ad` |
-| Migrazione | Script one-time app_state → nuove tabelle | `fb983ef` |
-
-### Test superati (verificati)
+#### Test superati (verificati)
 
 - ✅ **Isolamento utenti**: GET /api/demos senza login → 401 Unauthorized, 0 demo
 - ✅ **Bridge NextAuth→Supabase**: supabaseAccessToken presente nella sessione
 - ✅ **Cross-device**: demo creato su PC lavoro → visibile su PC casa (stesso login)
 - ✅ **QuotaExceededError recovery**: auto-cleanup sidecar + forceCloudSync
+- ✅ **Migrazione dati**: 663 label + 1 profilo migrati, 0 errori
+- ✅ **Classifiche**: caricate da riga global anche con vecchio sync disabilitato
 
-### Cosa NON toccare MAI (regole critiche)
+#### ⚠️ Regole critiche — NON TOCCARE MAI
 
 1. ⚠️ Non rimuovere `--webpack` dal build script (Turbopack non genera source maps)
 2. ⚠️ Non rimuovere `buildCommand` da `vercel.json`
 3. ⚠️ Non riattivare filtro `QuotaExceededError` in bugsnag.ts (lo stiamo tracciando)
-4. ⚠️ Non rimuovere il dual write da store.ts finché la migrazione non è completa
-5. ⚠️ Non cancellare i dati da `app_state` finché non verifichiamo che le nuove tabelle hanno tutto
+4. ⚠️ Non riattivare syncToCloud/forceCloudSync del vecchio sistema (causa statement timeout)
+5. ⚠️ Non riattivare auto-push artisti (forcePushArtistsToCloud causa timeout 500)
+6. ⚠️ Non cancellare i dati da `app_state` riga 'global' (contiene classifiche + artisti condivisi)
+7. ⚠️ Non rimuovere il dual write da store.ts (scrive sia vecchio che nuovo sistema)
+8. ⚠️ Non modificare la RLS delle 4 nuove tabelle (auth.jwt()->>'email' è la sicurezza)
 
-### File chiave da conoscere
+#### File chiave da conoscere
 
-- `src/lib/store.ts` — Zustand store con dual write (vecchio + nuovo sistema)
+**Sistema nuovo (FASE C+D) — operativo:**
+- `src/lib/store.ts` — Zustand store con dual write + loadFromNewTables + loadGlobalRowOnly
 - `src/lib/supabase-admin.ts` — getAdminClient() con strategia JWT+fallback
 - `src/lib/api-client.ts` — helper per chiamate alle nuove API routes
-- `src/lib/auth-options.ts` — NextAuth con bridge a Supabase Auth
+- `src/lib/auth-options.ts` — NextAuth con bridge a Supabase Auth (signInWithIdToken)
+- `src/lib/supabase-auth-server.ts` — helpers SSR per sessione Supabase
 - `src/hooks/use-realtime-sync.ts` — realtime live per le 4 tabelle
 - `src/app/api/demos/route.ts` — CRUD demo_submissions
 - `src/app/api/label-data/route.ts` — CRUD label_personal_data
@@ -234,13 +247,50 @@ Quando la migrazione sarà completa, rimuoveremo il vecchio sistema.
 - `src/app/api/admin/migrate-appstate/route.ts` — migrazione one-time
 - `supabase-schema-fase-c.sql` — schema 4 nuove tabelle con RLS
 
-### TODO prossimi
+**Sistema vecchio (parzialmente disabilitato):**
+- `src/lib/supabase.ts` — saveStateToCloud (solo admin globale), loadGlobalRowOnly, loadStateFromCloud (disabilitato)
+- `app_state` table — riga 'global' ancora attiva per classifiche
 
-1. **Eseguire migrazione dati**: `GET /api/admin/migrate-appstate` con BETA_ADMIN_TOKEN
-2. **Verificare dati migrati** su Supabase Table Editor
-3. **FASE 2 — Closed Beta**: recruitment 5-10 tester
-4. **Setup PostHog**: manca API key su Vercel (NEXT_PUBLIC_POSTHOG_KEY)
-5. **(Futuro) FASE E**: rimuovere vecchio sistema app_state per dati utente
+**Memoria permanente:**
+- `BOOT.md` — questo file
+- `AGENT_CONTEXT.md` — overview + architettura + regole
+- `BUG_REGISTRY.md` — bug risolti per sintomo → causa → fix
+- `worklog.md` — log cronologico append-only
+
+#### Variabili d'ambiente richieste (Vercel)
+
+```
+NEXT_PUBLIC_SUPABASE_URL
+NEXT_PUBLIC_SUPABASE_ANON_KEY
+SUPABASE_SERVICE_ROLE_KEY
+GOOGLE_CLIENT_ID
+GOOGLE_CLIENT_SECRET
+NEXTAUTH_SECRET
+NEXTAUTH_URL
+BETA_ADMIN_TOKEN
+NEXT_PUBLIC_BUGSNAG_API_KEY
+BUGSNAG_API_KEY
+NEXT_PUBLIC_POSTHOG_KEY  (⚠️ ancora da configurare)
+DISCORD_FEEDBACK_WEBHOOK_URL
+SUPPORT_EMAIL
+```
+
+#### Configurazioni Supabase (manuali, già fatte)
+
+- ✅ Google provider abilitato su Authentication → Providers → Google
+- ✅ Callback URL: `https://vksemjnqqfocspxzbscx.supabase.co/auth/v1/callback`
+- ✅ 4 nuove tabelle create (demo_submissions, label_personal_data, pitch_campaigns, user_profiles)
+- ✅ RLS attiva su tutte con policy `user_email = auth.jwt()->>'email'`
+- ✅ Realtime abilitato su tutte le tabelle
+- ✅ Trigger updated_at automatico
+
+#### TODO prossimi (in ordine di priorità)
+
+1. **Verificare classifiche** dopo deploy `e5aaa14` (classifiche devono tornare visibili)
+2. **Setup PostHog**: manca API key su Vercel (NEXT_PUBLIC_POSTHOG_KEY) per analytics funnel
+3. **FASE 2 — Closed Beta**: recruitment 5-10 tester reali (app è pronta)
+4. **(Futuro) FASE E**: migrare anche le classifiche in una tabella dedicata (non più app_state)
+5. **(Futuro) FASE F**: rimuovere definitivamente il vecchio sistema app_state per i dati personali
 
 ---
 
