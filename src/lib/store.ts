@@ -2651,9 +2651,14 @@ export const useAppStore = create<AppState>()(
     }),
     {
       name: PRIMARY_KEY,
-      version: 18,
+      version: 19,  // 🔒 FASE D: bump 18→19 per rimuovere labels dal localStorage (causava QuotaExceededError)
       storage: createJSONStorage(() => robustStorage),
       migrate: (persisted: any, version: number) => {
+        // 🔒 FASE D FIX v19: rimuovi labels dal persisted state (occupavano 4MB+ inutilmente)
+        if (version < 19 && persisted && persisted.labels) {
+          console.log("[LabelPulse] Migrating v18→v19: removing labels from localStorage (was causing QuotaExceededError)");
+          delete persisted.labels;
+        }
         if (version < 5) {
           if (persisted.demos) {
             const seedIds = ["demo_1", "demo_2", "demo_3", "demo_4", "demo_5", "demo_6"];
@@ -2893,7 +2898,9 @@ export const useAppStore = create<AppState>()(
         return persisted;
       },
       partialize: (state) => ({
-        labels: state.labels,
+        // 🔒 FASE D FIX: NON salvare più labels nel localStorage — occupava 4MB+ e causava QuotaExceededError
+        // Le labels vengono dal cloud (riga global) + seed (labels-data.json) ad ogni boot
+        // labels: state.labels,  ← RIMOSSO
         demos: state.demos,
         releases: state.releases,
         savedPitches: state.savedPitches,

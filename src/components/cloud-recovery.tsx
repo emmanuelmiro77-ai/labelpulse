@@ -427,6 +427,38 @@ export function CloudRecovery({ isAdmin = false }: { isAdmin?: boolean }) {
           </Button>
           <Button
             size="sm"
+            variant="destructive"
+            onClick={async () => {
+              if (!confirm("⚠️ Pulizia Storage Emergenza?\n\nCancella TUTTO il localStorage (backup vecchi, cache, store) mantenendo solo auth + cookie consent.\n\nI tuoi dati sono al sicuro nel cloud Supabase — verranno ricaricati al prossimo login.\n\nProcedere?")) return;
+              setActionLoading("emergency");
+              try {
+                // Pulisci tutti i backup sidecar
+                const sidecarKeys = [
+                  "labelpulse-storage-backup",
+                  "labelpulse-snapshots-backup",
+                  "labelpulse-profile-backup",
+                  "labelpulse-artists-backup",
+                  "labelpulse-demos-backup",
+                  "labelpulse-storage",
+                ];
+                for (const k of sidecarKeys) {
+                  try { localStorage.removeItem(k); } catch {}
+                }
+                // Forza reload per ripartire pulito
+                window.location.reload();
+              } catch (e) {
+                console.error("Emergency clear failed:", e);
+                setActionLoading(null);
+              }
+            }}
+            disabled={actionLoading !== null}
+            className="gap-1.5"
+          >
+            {actionLoading === "emergency" ? <Loader2 className="h-3.5 w-3.5 animate-spin" /> : <AlertTriangle className="h-3.5 w-3.5" />}
+            🚨 Pulizia Storage
+          </Button>
+          <Button
+            size="sm"
             variant="ghost"
             onClick={refresh}
             disabled={loading}
