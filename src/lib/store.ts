@@ -3102,9 +3102,26 @@ export async function forceCloudSync(): Promise<void> {
 // 🔒 FASE A FIX: When localStorage is full and we can't save locally, immediately
 // push to cloud so the user doesn't lose data. The state is still in memory (Zustand
 // store), we just need to bypass the 3-second debounce and save NOW.
+//
+// 🔒 EMERGENCY FIX (iPhone crash): limitiamo il numero di tentativi per evitare
+// loop infiniti che mandano in crash il browser (specialmente su iPhone con poca RAM).
+let _quotaExceededAttempts = 0;
+const MAX_QUOTA_EXCEEDED_ATTEMPTS = 5;
+
 if (typeof window !== "undefined") {
   window.addEventListener("labelpulse:storage-quota-exceeded", () => {
-    console.warn("[LabelPulse Storage] Quota exceeded — forcing immediate cloud sync to prevent data loss");
+    _quotaExceededAttempts++;
+    if (_quotaExceededAttempts > MAX_QUOTA_EXCEEDED_ATTEMPTS) {
+      console.error("[LabelPulse Storage] Quota exceeded loop detected — EMERGENCY CLEAR + STOP to prevent crash.");
+      // 🔒 EMERGENCY: svuota localStorage per fermare il loop e prevenire crash
+      try {
+        emergencyClearLocalStorage();
+      } catch (err) {
+        console.error("[LabelPulse Storage] Emergency clear failed:", err);
+      }
+      return;
+    }
+    console.warn(`[LabelPulse Storage] Quota exceeded — forcing cloud sync (attempt ${_quotaExceededAttempts}/${MAX_QUOTA_EXCEEDED_ATTEMPTS})`);
     // forceCloudSync is defined above and in scope via hoisting
     forceCloudSync().catch((err) => {
       console.error("[LabelPulse Storage] Emergency cloud sync failed:", err);
@@ -3527,7 +3544,54 @@ export async function loadFromNewTables(): Promise<void> {
     console.log("[FASE C.6] loadFromNewTables completed");
   } catch (err) {
     console.error("[FASE C.6] loadFromNewTables failed:", err);
+    // 🔒 EMERGENCY FIX: non lasciare l'app in stato di crash, continua con dati locali
   }
+}
+
+/**
+ * 🔒 EMERGENCY FIX (iPhone crash): svuota localStorage se pieno
+ * Chiamato quando il loop di QuotaExceededError supera la soglia.
+ * Mantiene SOLO i dati essenziali (auth + cookie consent), cancella tutto il resto.
+ */
+export function emergencyClearLocalStorage(): void {
+  if (typeof window === "undefined") return;
+  console.warn("[LabelPulse] EMERGENCY: clearing localStorage to prevent crash");
+
+  // Mantieni solo auth + cookie consent
+  const keep = new Set([
+    "next-auth.session-token",
+    "next-auth.callback-url",
+    "next-auth.csrf-token",
+    "labelpulse-cookie-consent",
+    "labelpulse-auth",
+    "labelpulse-storage-owner",
+  ]);
+
+  const keysToKeep: string[] = [];
+  for (let i = 0; i < localStorage.length; i++) {
+    const key = localStorage.key(i);
+    if (key && keep.has(key)) {
+      keysToKeep.push(key);
+    }
+  }
+
+  // Salva i dati da tenere
+  const savedData: Record<string, string> = {};
+  for (const key of keysToKeep) {
+    savedData[key] = localStorage.getItem(key) || "";
+  }
+
+  // Pulisci tutto
+  localStorage.clear();
+
+  // Ripristina i dati essenziali
+  for (const [key, value] of Object.entries(savedData)) {
+    try {
+      localStorage.setItem(key, value);
+    } catch {}
+  }
+
+  console.log("[LabelPulse] EMERGENCY: localStorage cleared, kept", keysToKeep.length, "essential keys");
 }
 
 /**
