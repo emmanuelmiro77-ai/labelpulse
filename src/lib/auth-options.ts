@@ -139,26 +139,37 @@ export const authOptions: AuthOptions = {
         token.refreshToken = account.refresh_token;
         // 🔒 FASE D: scambia il Google ID token con una sessione Supabase Auth
         // così le RLS basate su auth.jwt()->>'email' funzionano a livello database.
-        if (account.provider === "google" && account.id_token) {
-          try {
-            const supabaseUrl = process.env.NEXT_PUBLIC_SUPABASE_URL!;
-            const supabaseAnonKey = process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY!;
-            const supabase = createClient(supabaseUrl, supabaseAnonKey);
-            const { data, error } = await supabase.auth.signInWithIdToken({
-              provider: "google",
-              token: account.id_token,
-            });
-            if (error) {
-              console.error("[NextAuth→Supabase] signInWithIdToken failed:", error.message);
-            } else if (data.session) {
-              // Salva i token Supabase nel JWT di NextAuth per usarli dopo
-              (token as any).supabaseAccessToken = data.session.access_token;
-              (token as any).supabaseRefreshToken = data.session.refresh_token;
-              (token as any).supabaseExpiresAt = data.session.expires_at;
-              console.log("[NextAuth→Supabase] Sessione Supabase creata per:", data.user?.email);
+        if (account.provider === "google") {
+          console.log("[NextAuth→Supabase] Bridge attempt. account keys:", Object.keys(account));
+          console.log("[NextAuth→Supabase] Has id_token:", !!account.id_token);
+          console.log("[NextAuth→Supabase] Has access_token:", !!account.access_token);
+          console.log("[NextAuth→Supabase] expires_at:", account.expires_at);
+          if (account.id_token) {
+            try {
+              const supabaseUrl = process.env.NEXT_PUBLIC_SUPABASE_URL!;
+              const supabaseAnonKey = process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY!;
+              const supabase = createClient(supabaseUrl, supabaseAnonKey);
+              const { data, error } = await supabase.auth.signInWithIdToken({
+                provider: "google",
+                token: account.id_token,
+              });
+              if (error) {
+                console.error("[NextAuth→Supabase] signInWithIdToken failed:", error.message, error.status);
+              } else if (data.session) {
+                // Salva i token Supabase nel JWT di NextAuth per usarli dopo
+                (token as any).supabaseAccessToken = data.session.access_token;
+                (token as any).supabaseRefreshToken = data.session.refresh_token;
+                (token as any).supabaseExpiresAt = data.session.expires_at;
+                console.log("[NextAuth→Supabase] ✅ Sessione Supabase creata per:", data.user?.email);
+              } else {
+                console.warn("[NextAuth→Supabase] signInWithIdToken returned no session, no error");
+              }
+            } catch (err) {
+              console.error("[NextAuth→Supabase] Bridge error:", err);
             }
-          } catch (err) {
-            console.error("[NextAuth→Supabase] Bridge error:", err);
+          } else {
+            console.warn("[NextAuth→Supabase] No id_token in account — bridge skipped");
+            console.log("[NextAuth→Supabase] Full account object:", JSON.stringify(account, null, 2));
           }
         }
       }
