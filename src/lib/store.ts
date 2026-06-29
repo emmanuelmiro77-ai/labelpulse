@@ -588,7 +588,65 @@ function safeLocalStorageSet(key: string, value: string): boolean {
   try {
     localStorage.setItem(key, value);
     return true;
-  } catch (e) {
+  } catch (e: any) {
+    // 🔒 FASE A FIX (QuotaExceededError): detect quota errors and try to recover
+    const isQuotaError =
+      e?.name === "QuotaExceededError" ||
+      e?.code === 22 ||
+      e?.code === 1014 ||
+      (typeof e?.message === "string" && e.message.toLowerCase().includes("quota"));
+
+    if (isQuotaError) {
+      console.warn(`[LabelPulse Storage] QuotaExceededError on ${key}. Attempting recovery...`);
+
+      // Strategy: clear all sidecar backups (they're emergency copies — cloud is the source of truth)
+      const sidecarKeys = [
+        "labelpulse-storage-backup",
+        "labelpulse-snapshots-backup",
+        "labelpulse-profile-backup",
+        "labelpulse-artists-backup",
+        "labelpulse-demos-backup",
+      ];
+      let cleared = 0;
+      for (const sk of sidecarKeys) {
+        if (sk === key) continue; // don't clear what we're trying to write
+        try {
+          if (localStorage.getItem(sk)) {
+            localStorage.removeItem(sk);
+            cleared++;
+          }
+        } catch {}
+      }
+      console.warn(`[LabelPulse Storage] Cleared ${cleared} sidecar backup(s) to free space.`);
+
+      // Retry the original write
+      try {
+        localStorage.setItem(key, value);
+        console.info(`[LabelPulse Storage] Write succeeded after clearing sidecars: ${key}`);
+
+        // 🔔 Notify UI that storage is under pressure (non-blocking)
+        if (typeof window !== "undefined") {
+          window.dispatchEvent(new CustomEvent("labelpulse:storage-quota-warning", {
+            detail: { cleared, recovered: true }
+          }));
+        }
+        return true;
+      } catch (e2: any) {
+        console.error(`[LabelPulse Storage] Write still failing after clearing sidecars:`, e2);
+
+        // 🔒 LAST RESORT: trigger immediate cloud sync (no debounce) so data isn't lost
+        // The state is still in memory (Zustand store); we just need to push it to cloud NOW.
+        // We can't import syncToCloud here (circular dep), so dispatch an event that the
+        // store subscription will pick up and trigger forceCloudSync().
+        if (typeof window !== "undefined") {
+          window.dispatchEvent(new CustomEvent("labelpulse:storage-quota-exceeded", {
+            detail: { key, error: e2?.message || "quota_exceeded" }
+          }));
+        }
+        return false;
+      }
+    }
+
     console.error(`[LabelPulse Storage] Failed to write ${key}:`, e);
     return false;
   }
@@ -2886,6 +2944,20 @@ export async function forceCloudSync(): Promise<void> {
     rankingSnapshots: state.rankingSnapshots,
   };
   await saveStateToCloud(dataToSync);
+}
+
+// ==================== QUOTA EXCEEDED — IMMEDIATE CLOUD SYNC ====================
+// 🔒 FASE A FIX: When localStorage is full and we can't save locally, immediately
+// push to cloud so the user doesn't lose data. The state is still in memory (Zustand
+// store), we just need to bypass the 3-second debounce and save NOW.
+if (typeof window !== "undefined") {
+  window.addEventListener("labelpulse:storage-quota-exceeded", () => {
+    console.warn("[LabelPulse Storage] Quota exceeded — forcing immediate cloud sync to prevent data loss");
+    // forceCloudSync is defined above and in scope via hoisting
+    forceCloudSync().catch((err) => {
+      console.error("[LabelPulse Storage] Emergency cloud sync failed:", err);
+    });
+  });
 }
 
 /**

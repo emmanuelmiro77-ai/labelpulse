@@ -8,6 +8,7 @@ import { AuthProvider } from "@/components/auth-provider";
 import { PostHogProvider } from "@/components/posthog-provider";
 import { BugsnagErrorBoundary } from "@/components/bugsnag-error-boundary";
 import { CookieConsent } from "@/components/cookie-consent";
+import { StorageQuotaWarning } from "@/components/storage-quota-warning";
 
 const geistSans = localFont({
   src: [
@@ -96,6 +97,7 @@ export default function RootLayout({
         <PWAInstall />
         <SWUpdater />
         <CookieConsent />
+        <StorageQuotaWarning />
       </body>
     </html>
   );

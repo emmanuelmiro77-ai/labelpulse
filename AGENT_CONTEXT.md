@@ -219,7 +219,18 @@ alla fase SaaS commerciale profittevole. Contiene:
 - **Criteri GO/NO-GO** espliciti per passare da una fase alla successiva
 - **Stato avanzamento** aggiornato dopo ogni task completato
 
-🟢 **Stato attuale**: FASE 1 — Beta Infra ✅ COMPLETATA (100%)! Tutti i punti 1.1-1.5 completati. Security audit: 5 CRITICAL + H-8 + M-3 fixati. Prossimo: FASE 2 (Closed Beta).
+🟢 **Stato attuale**: FASE 1 ✅ COMPLETATA. Security audit (C-1→C-5, H-8, M-3) ✅ fixati. **FASE A (QuotaExceededError fix)** ✅ completata 2026-06-29. In corso: **FASE B (push TUTTO nel cloud)** → **FASE C (architettura definitiva tipo LabelRadar)**.
+
+### 🚨 ARCHITETTURA TARGET — Cross-device sync come LabelRadar
+L'utente ha segnalato perdita dati critica: demo caricate su PC lavoro NON sono visibili su PC casa. Cause:
+1. localStorage ha limite 5MB → QuotaExceededError → perdita dati silenziosa
+2. Cloud sync attuale salva solo "guscio" (labels seed, artisti) NON i dati personali (demo, pitch, email personalizzate)
+3. RLS Supabase non basata su auth.uid() → impossibile isolamento vero
+
+**Piano 3 fasi (Opzione C)**:
+- **FASE A** ✅ (2026-06-29): Fix QuotaExceededError — rilevazione + auto-cleanup sidecar + forceCloudSync immediato + banner UI
+- **FASE B** (prossima): Push TUTTO nel cloud — verificare buildPersonalPayload include tutto, trigger immediato per demo/pitch edits
+- **FASE C** (1-2 settimane): Architettura definitiva — tabelle Supabase dedicate (demo_submissions, label_personal_data, pitch_campaigns, user_profiles) con RLS basata su Supabase Auth JWT. Realtime cross-device.
 
 ### ⚠️ TODO CRITICO UTENTE (entro 14 giorni dal 2026-06-26)
 - **Bugsnag Trial 14 giorni**: verificare in Settings → Billing che dopo il trial si auto-downgradi a Free (€0). Se auto-converte a paid ($80+/mese), creare nuovo progetto Free + cambiare API key in Vercel env vars (`NEXT_PUBLIC_BUGSNAG_API_KEY` + `BUGSNAG_API_KEY`).

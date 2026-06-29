@@ -14,6 +14,20 @@
 
 ## 🔥 CRITICI — Perdita dati / Sicurezza
 
+### 🔒 FASE A — Fix QuotaExceededError (data loss prevention)
+- **Sintomo**: Utente carica demo/pitch/label → chiude browser → riapre → dati spariti. Console mostra "QuotaExceededError: Setting the value of 'labelpulse-profile-backup' exceeded the quota"
+- **Causa**: Quando localStorage è pieno (limite 5MB), `safeLocalStorageSet` fallisce silenziosamente. Lo stato Zustand resta in memoria ma non viene persistito. Il cloud sync ha 3 secondi di debounce → se l'utente chiude prima di 3s, il cloud non riceve i dati → **perdita dati totale**.
+- **Fix** (commit FASE A, 2026-06-29):
+  1. `safeLocalStorageSet` ora rileva `QuotaExceededError` (via `e.name`, `e.code`, o message match)
+  2. Quando rileva quota error, **auto-pulisce i sidecar backup vecchi** (`labelpulse-storage-backup`, `labelpulse-snapshots-backup`, `labelpulse-profile-backup`, `labelpulse-artists-backup`, `labelpulse-demos-backup`) per fare spazio
+  3. Ritenta il setItem dopo la pulizia
+  4. Se ancora fallisce, emette evento `labelpulse:storage-quota-exceeded` che triggera `forceCloudSync()` **immediatamente** (no debounce) — i dati vanno nel cloud anche se non nel localStorage
+  5. Se il recovery funziona, emette `labelpulse:storage-quota-warning` (giallo, auto-dismiss 15s)
+  6. Se fallisce, emette `labelpulse:storage-quota-exceeded` (rosso, persistente)
+  7. Nuovo componente `<StorageQuotaWarning />` in `src/components/storage-quota-warning.tsx` mostra banner visibile all'utente
+  8. Banner aggiunto a `src/app/layout.tsx` (visibile su tutte le pagine)
+- **File**: `src/lib/store.ts` (safeLocalStorageSet + listener evento), `src/components/storage-quota-warning.tsx` (NEW), `src/app/layout.tsx` (import + render)
+
 ### 🔒 Security Audit: 5 CRITICAL fixes (C-1 through C-5)
 - **Sintomo**: 5 vulnerabilità critiche identificate nel security audit (docs/security-audit.md)
 - **Causa**: Endpoint API senza auth check + RLS Supabase USING (true) che permette accesso totale ai dati di tutti gli utenti

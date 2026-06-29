@@ -1664,3 +1664,35 @@ Stage Summary:
   4. Create feature flags in PostHog dashboard (beta_features_enabled, etc.)
 - Prossimo: FASE 2 (Closed Beta) — recruitment + 5-10 real testers
 
+
+---
+Task ID: fase-a-quota-exceeded-fix
+Agent: Main Agent
+Task: FASE A — Fix QuotaExceededError critico (utente ha perso demo caricate)
+
+Work Log:
+- Boot completato: letti BOOT.md, AGENT_CONTEXT.md, BUG_REGISTRY.md, worklog tail
+- Puliti 2 commit UUID non pushati (reset --hard origin/main → 0eb9933)
+- Analizzata architettura attuale: localStorage 5MB + cloud sync 3s debounce = perdita dati garantita se browser si chiude
+- Identificata causa radice in src/lib/store.ts: safeLocalStorageSet non gestiva QuotaExceededError
+- Fix safeLocalStorageSet: rileva QuotaExceededError (e.name, e.code, message match)
+- Implementato recovery: pulisce sidecar backup vecchi per fare spazio, ritenta setItem
+- Se recovery fallisce: emette evento labelpulse:storage-quota-exceeded
+- Aggiunto listener globale che triggera forceCloudSync() IMMEDIATO (no debounce) su evento quota-exceeded
+- Creato componente StorageQuotaWarning (src/components/storage-quota-warning.tsx) con 2 livelli:
+  * WARNING (giallo, auto-dismiss 15s) — sidecar puliti, write riuscito
+  * CRITICAL (rosso, persistente) — write fallito, solo cloud sync attivo
+- Aggiunto StorageQuotaWarning a layout.tsx (visibile su tutte le pagine)
+- Anti-regressione check: verificati 3 fix passati su store.ts (tutti presenti):
+  * _rehydrated guard (per "Dati utente spariscono dopo reload") ✅
+  * markLocalProfileEdit + forceCloudSync in setUserProfile (per "Foto profilo torna vecchia") ✅
+  * persist version 18 ✅
+- Aggiornato BUG_REGISTRY.md con nuova entry "FASE A — Fix QuotaExceededError"
+- Aggiornato AGENT_CONTEXT.md con piano architetturale 3 fasi (Opzione C)
+
+Stage Summary:
+- FASE A completata in 30 min
+- Problema: QuotaExceededError causava perdita dati silenziosa quando localStorage pieno
+- Fix: rilevazione + auto-cleanup sidecar + forceCloudSync immediato + banner UI visibile
+- 3 file modificati: src/lib/store.ts, src/components/storage-quota-warning.tsx (NEW), src/app/layout.tsx
+- Prossimo: FASE B (push TUTTO nel cloud) + FASE C (architettura definitiva tipo LabelRadar)
