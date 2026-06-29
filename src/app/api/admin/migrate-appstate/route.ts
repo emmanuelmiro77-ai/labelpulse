@@ -19,8 +19,29 @@ export async function GET(req: NextRequest) {
   // Auth check
   const authHeader = req.headers.get("authorization") || "";
   const token = authHeader.replace(/^Bearer\s+/i, "").trim();
+
+  // 🔍 DEBUG: log per capire perché il token non matcha
+  console.log("[migrate-appstate] DEBUG:", {
+    hasAuthHeader: !!authHeader,
+    tokenLength: token.length,
+    tokenPreview: token.substring(0, 10) + "...",
+    envTokenExists: !!process.env.BETA_ADMIN_TOKEN,
+    envTokenLength: process.env.BETA_ADMIN_TOKEN?.length || 0,
+    envTokenPreview: process.env.BETA_ADMIN_TOKEN?.substring(0, 10) + "...",
+    match: token === process.env.BETA_ADMIN_TOKEN,
+  });
+
   if (!token || token !== process.env.BETA_ADMIN_TOKEN) {
-    return NextResponse.json({ error: "unauthorized" }, { status: 401 });
+    return NextResponse.json({
+      error: "unauthorized",
+      debug: {
+        tokenReceived: token.substring(0, 5) + "...",
+        envTokenSet: !!process.env.BETA_ADMIN_TOKEN,
+        hint: !process.env.BETA_ADMIN_TOKEN
+          ? "BETA_ADMIN_TOKEN env var is NOT set on Vercel. Add it in Project Settings → Environment Variables, then redeploy."
+          : "Token mismatch. Check for whitespace or encoding issues.",
+      }
+    }, { status: 401 });
   }
 
   const supabaseUrl = process.env.NEXT_PUBLIC_SUPABASE_URL;
