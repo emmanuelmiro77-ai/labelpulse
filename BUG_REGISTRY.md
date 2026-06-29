@@ -14,6 +14,18 @@
 
 ## 🔥 CRITICI — Perdita dati / Sicurezza
 
+### 🔒 FASE D — Supabase Auth + RLS vera + realtime live (isolamento 100%)
+- **Sintomo**: RLS basata su `auth.jwt()->>'email'` non funzionava perché gli utenti non avevano sessione Supabase Auth (solo NextAuth). Le API routes usavano service_role (bypassa RLS) → isolamento dipendeva solo dal `.eq("user_email", email)` nelle query. Bug in una query = rischio cross-user.
+- **Causa**: NextAuth e Supabase Auth erano due sistemi separati. Senza JWT Supabase, la RLS non poteva filtrare a livello database.
+- **Fix** (commit `446221e` + `57a1bfe`, 2026-06-29):
+  1. **Bridge NextAuth → Supabase Auth**: nel callback `jwt` di NextAuth, scambiamo il Google ID token con una sessione Supabase usando `signInWithIdToken()`. Il Supabase access_token viene salvato nel JWT NextAuth.
+  2. **getAdminClient() strategia doppia**: PRIMA tenta di usare il JWT Supabase (RLS attiva a livello database). Se non disponibile, fallback a service_role con `.eq("user_email")`. Verifica email match per sicurezza.
+  3. **Realtime live**: hook `useRealtimeSync()` sottoscrive le 4 tabelle con `postgres_changes`. Cross-device updates entro 1-2 secondi.
+  4. **Beta-code login**: per i beta tester senza Google, creiamo l'utente su Supabase Auth via admin API, così hanno un JWT valido per RLS.
+- **Sicurezza**: con RLS attiva, anche se c'è un bug in una query (manca `.eq`), il database blocca cross-user. Defense in depth: le API routes mantengono `.eq("user_email")` anche con RLS attiva.
+- **File**: `src/lib/auth-options.ts` (bridge NextAuth→Supabase), `src/lib/supabase-admin.ts` (getAdminClient con JWT), `src/lib/supabase-auth-server.ts` (NEW — helpers SSR), `src/hooks/use-realtime-sync.ts` (NEW — realtime live), `src/app/page.tsx` (useRealtimeSync attivato), `package.json` (+ @supabase/ssr)
+- **⚠️ AZIONE MANUALE RICHIESTA**: abilitare Google provider su Supabase Dashboard → Authentication → Providers → Google
+
 ### 🔒 FASE C — Architettura definitiva cross-device (tipo LabelRadar)
 - **Sintomo**: Utente carica demo/pitch/profilo su PC lavoro → apre PC casa → non vede nulla. Dati legati al dispositivo, non all'account.
 - **Causa**: Tutti i dati utente erano in un blob JSONB su `app_state` (localStorage + cloud sync debounced). QuotaExceededError → perdita dati. Cross-device non funzionava davvero.

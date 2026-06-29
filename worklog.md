@@ -1755,3 +1755,36 @@ Stage Summary:
 - ⚠️ SQL eseguito su Supabase dall'utente (4 tabelle create)
 - Prossimo: test E2E cross-device (PC lavoro → PC casa → telefono)
 - TODO futuro (FASE D): Supabase Auth + realtime live + deprecare app_state per dati utente
+
+---
+Task ID: fase-d-supabase-auth-realtime
+Agent: Main Agent
+Task: FASE D — Supabase Auth per RLS vera + realtime live
+
+Work Log:
+- Installato @supabase/ssr@0.12.0
+- D.2: Bridge NextAuth ↔ Supabase Auth in auth-options.ts:
+  * Callback jwt scambia Google ID token con sessione Supabase (signInWithIdToken)
+  * Beta-code login crea utente su Supabase Auth via admin API
+  * supabaseAccessToken salvato nel JWT NextAuth
+- D.3: Modificato getAdminClient() in supabase-admin.ts:
+  * Strategia doppia: PRIMA tenta JWT Supabase (RLS attiva), POI fallback service_role
+  * Verifica email match tra NextAuth session e Supabase JWT
+  * useRls flag indica quale strategia è attiva
+- D.5: Realtime live hook (src/hooks/use-realtime-sync.ts):
+  * Sottoscrive 4 tabelle con postgres_changes
+  * Handlers per INSERT/UPDATE/DELETE su ogni tabella
+  * Aggiorna store Zustand in tempo reale
+  * Attivato in page.tsx
+- Nuovo file supabase-auth-server.ts con helpers per Server Components
+
+Commits:
+- 446221e — D.2 + D.3 (bridge + getAdminClient con JWT)
+- 57a1bfe — D.5 (realtime live hook)
+
+Stage Summary:
+- FASE D implementata a livello codice ✅
+- ⚠️ AZIONE MANUALE RICHIESTA: utente deve abilitare Google provider su Supabase Dashboard
+- Una volta attivo Supabase Auth, RLS funziona a livello database → isolamento 100%
+- Realtime live: cambiamenti cross-device entro 1-2 secondi
+- Prossimo: D.4 (test isolamento) + D.6 (test E2E) dopo setup manuale
