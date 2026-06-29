@@ -7,6 +7,7 @@ import labelData from "./labels-data.json";
 import { saveStateToCloud, loadStateFromCloud, isSupabaseConfigured, isApplyingRemoteUpdate, markLocalProfileEdit } from "./supabase";
 import { saveArtistsToIDB, loadArtistsFromIDB, clearArtistsIDB } from "./artists-idb";
 import type { PitchTrackEntry } from "./pitch-utils";
+import { apiCreateDemo, apiUpdateDemo, apiDeleteDemo, apiUpsertLabelData, apiDeleteLabelData } from "./api-client";
 
 // ==================== TYPES ====================
 
@@ -1746,35 +1747,49 @@ export const useAppStore = create<AppState>()(
       rankingSnapshots: [] as RankingSnapshot[],
 
       addLabel: (label) => {
+        const newId = genId();
+        const newLabel = {
+          ...label,
+          id: newId,
+          createdAt: new Date().toISOString(),
+          isCustom: true,
+          genre: label.genre || "",
+          contactInfo: label.contactInfo || "",
+          status: (label.status === "open" || label.status === "closed" || label.status === "unknown") ? label.status : "unknown",
+          notes: label.notes || "",
+          submissionType: label.submissionType || "email",
+          genres: label.genres || (label.genre ? [label.genre] : []),
+          rankByGenre: label.rankByGenre || {},
+          pointsByGenre: label.pointsByGenre || {},
+          trending: label.trending || false,
+          trendingRankByGenre: label.trendingRankByGenre || {},
+          trendingPointsByGenre: label.trendingPointsByGenre || {},
+          website: label.website || "",
+          demoLink: label.demoLink || "",
+          socialLink: label.socialLink || "",
+          soundcloudLink: label.soundcloudLink || "",
+          emails: label.emails || [],
+        };
         set((state) => ({
-          labels: [
-            ...state.labels,
-            {
-              ...label,
-              id: genId(),
-              createdAt: new Date().toISOString(),
-              isCustom: true,
-              genre: label.genre || "",
-              contactInfo: label.contactInfo || "",
-              status: (label.status === "open" || label.status === "closed" || label.status === "unknown") ? label.status : "unknown",
-              notes: label.notes || "",
-              submissionType: label.submissionType || "email",
-              genres: label.genres || (label.genre ? [label.genre] : []),
-              rankByGenre: label.rankByGenre || {},
-              pointsByGenre: label.pointsByGenre || {},
-              trending: label.trending || false,
-              trendingRankByGenre: label.trendingRankByGenre || {},
-              trendingPointsByGenre: label.trendingPointsByGenre || {},
-              website: label.website || "",
-              demoLink: label.demoLink || "",
-              socialLink: label.socialLink || "",
-              soundcloudLink: label.soundcloudLink || "",
-              emails: label.emails || [],
-            },
-          ],
+          labels: [...state.labels, newLabel],
           lastSavedAt: new Date().toISOString(),
         }));
         syncToCloud();
+        // 🔒 FASE C.4: dual write — custom label goes to new dedicated table
+        apiUpsertLabelData({
+          label_id: newId,
+          emails: newLabel.emails,
+          notes: newLabel.notes,
+          status: newLabel.status,
+          website: newLabel.website,
+          demo_link: newLabel.demoLink,
+          social_link: newLabel.socialLink,
+          soundcloud_link: newLabel.soundcloudLink,
+          contact_info: newLabel.contactInfo,
+          is_custom: true,
+          custom_name: newLabel.name,
+          custom_genre: newLabel.genre,
+        }).catch(() => {/* silent */});
         // Track first label added (only once per user — checked client-side via flag)
         if (typeof window !== "undefined") {
           const firstLabelKey = "lp_first_label_tracked";
@@ -1795,6 +1810,25 @@ export const useAppStore = create<AppState>()(
           lastSavedAt: new Date().toISOString(),
         }));
         syncToCloud();
+        // 🔒 FASE C.4: dual write — push personal data to new dedicated table
+        const updated = useAppStore.getState().labels.find((l) => l.id === id);
+        if (updated) {
+          apiUpsertLabelData({
+            label_id: id,
+            emails: updated.emails,
+            notes: updated.notes,
+            status: updated.status,
+            website: updated.website,
+            demo_link: updated.demoLink,
+            social_link: updated.socialLink,
+            soundcloud_link: updated.soundcloudLink,
+            beatport_link: updated.beatportLink,
+            contact_info: updated.contactInfo,
+            is_custom: updated.isCustom || false,
+            custom_name: updated.isCustom ? updated.name : undefined,
+            custom_genre: updated.isCustom ? updated.genre : undefined,
+          }).catch(() => {/* silent */});
+        }
       },
 
       deleteLabel: (id) => {
@@ -1803,18 +1837,33 @@ export const useAppStore = create<AppState>()(
           lastSavedAt: new Date().toISOString(),
         }));
         syncToCloud();
+        // 🔒 FASE C.4: dual write — delete from new dedicated table
+        apiDeleteLabelData(id).catch(() => {/* silent */});
       },
 
       addDemo: (demo) => {
         const id = genId();
+        const newDemo = { ...demo, id, createdAt: new Date().toISOString() };
         set((state) => ({
-          demos: [
-            ...state.demos,
-            { ...demo, id, createdAt: new Date().toISOString() },
-          ],
+          demos: [...state.demos, newDemo],
           lastSavedAt: new Date().toISOString(),
         }));
         syncToCloud();
+        // 🔒 FASE C.3: dual write — also push to new dedicated table
+        apiCreateDemo({
+          id: newDemo.id,
+          label_id: newDemo.labelId,
+          track_name: newDemo.trackName,
+          artist_name: newDemo.artistName,
+          link: newDemo.link,
+          status: newDemo.status,
+          sent_date: newDemo.sentDate,
+          pitch_text: newDemo.pitchText,
+          pitch_subject: newDemo.pitchSubject,
+          pitch_tracks: newDemo.pitchTracks,
+          notes: newDemo.notes,
+          parent_release_id: newDemo.parentReleaseId,
+        }).catch(() => {/* silent — logged in api-client */});
         // Track first demo added (only once per user)
         if (typeof window !== "undefined") {
           const firstDemoKey = "lp_first_demo_tracked";
@@ -1836,6 +1885,23 @@ export const useAppStore = create<AppState>()(
           lastSavedAt: new Date().toISOString(),
         }));
         syncToCloud();
+        // 🔒 FASE C.3: dual write — also push update to new dedicated table
+        const updated = useAppStore.getState().demos.find((d) => d.id === id);
+        if (updated) {
+          apiUpdateDemo(id, {
+            label_id: updated.labelId,
+            track_name: updated.trackName,
+            artist_name: updated.artistName,
+            link: updated.link,
+            status: updated.status,
+            sent_date: updated.sentDate,
+            pitch_text: updated.pitchText,
+            pitch_subject: updated.pitchSubject,
+            pitch_tracks: updated.pitchTracks,
+            notes: updated.notes,
+            parent_release_id: updated.parentReleaseId,
+          }).catch(() => {/* silent */});
+        }
       },
 
       deleteDemo: (id) => {
@@ -1844,6 +1910,8 @@ export const useAppStore = create<AppState>()(
           lastSavedAt: new Date().toISOString(),
         }));
         syncToCloud();
+        // 🔒 FASE C.3: dual write — also delete from new dedicated table
+        apiDeleteDemo(id).catch(() => {/* silent */});
       },
 
       addRelease: (release) => {
