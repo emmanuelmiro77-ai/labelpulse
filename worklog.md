@@ -547,6 +547,22 @@ Stage Summary:
 ---
 Task ID: 19
 Agent: Main Agent
+Task: Fix producer profile persistence on iPhone/PWA hide/close
+
+Work Log:
+- Added controlled local drafts for profile details in src/components/producer-profile.tsx
+- Added flush logic on `visibilitychange`, `pagehide` and `beforeunload` so unsaved draft fields persist before the app hides or closes
+- This prevents iPhone PWA quick-close from losing artist name, email, bio or SoundCloud link edits
+- Committed and pushed fix as `dda3788` to origin/main
+
+Stage Summary:
+- The profile editor now saves draft fields on background/unload, not only on blur
+- The fix is deployed and should prevent the reported iPhone/PWA profile reset issue
+- Ready for the next session from the current commit on `main`
+
+---
+Task ID: 20
+Agent: Main Agent
 Task: Preserve navigation context when opening label detail + add discovery icons in detail header
 
 Work Log:
