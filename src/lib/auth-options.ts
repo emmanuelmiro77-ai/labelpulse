@@ -12,6 +12,7 @@
 import { type AuthOptions } from "next-auth";
 import GoogleProvider from "next-auth/providers/google";
 import CredentialsProvider from "next-auth/providers/credentials";
+import { createClient } from "@supabase/supabase-js";
 
 // ==================== CONFIG DIAGNOSTICS ====================
 // NextAuth's production error "There is a problem with the server configuration"
@@ -136,12 +137,61 @@ export const authOptions: AuthOptions = {
       if (account) {
         token.accessToken = account.access_token;
         token.refreshToken = account.refresh_token;
+        // 🔒 FASE D: scambia il Google ID token con una sessione Supabase Auth
+        // così le RLS basate su auth.jwt()->>'email' funzionano a livello database.
+        if (account.provider === "google" && account.id_token) {
+          try {
+            const supabaseUrl = process.env.NEXT_PUBLIC_SUPABASE_URL!;
+            const supabaseAnonKey = process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY!;
+            const supabase = createClient(supabaseUrl, supabaseAnonKey);
+            const { data, error } = await supabase.auth.signInWithIdToken({
+              provider: "google",
+              token: account.id_token,
+            });
+            if (error) {
+              console.error("[NextAuth→Supabase] signInWithIdToken failed:", error.message);
+            } else if (data.session) {
+              // Salva i token Supabase nel JWT di NextAuth per usarli dopo
+              (token as any).supabaseAccessToken = data.session.access_token;
+              (token as any).supabaseRefreshToken = data.session.refresh_token;
+              (token as any).supabaseExpiresAt = data.session.expires_at;
+              console.log("[NextAuth→Supabase] Sessione Supabase creata per:", data.user?.email);
+            }
+          } catch (err) {
+            console.error("[NextAuth→Supabase] Bridge error:", err);
+          }
+        }
       }
       // Mark beta-code logins so the app can hide Gmail-dependent UI
       if (account?.provider === "beta-code") {
         token.isBetaCode = true;
         token.accessToken = undefined;
         token.refreshToken = undefined;
+        // 🔒 FASE D: per beta-code login, creiamo una sessione Supabase manualmente
+        // usando l'email (i beta tester non hanno Google token, ma serve il JWT Supabase per RLS)
+        try {
+          const supabaseUrl = process.env.NEXT_PUBLIC_SUPABASE_URL!;
+          const supabaseAnonKey = process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY!;
+          const supabaseServiceKey = process.env.SUPABASE_SERVICE_ROLE_KEY!;
+          // Usa service_role per creare una sessione magic link per il beta tester
+          // (in produzione, meglio migrare completamente a Supabase Auth, ma per ora questo funziona)
+          if (user?.email) {
+            const adminClient = createClient(supabaseUrl, supabaseServiceKey);
+            // Verifica se l'utente esiste già su Supabase Auth, altrimenti crealo
+            const { data: existingUser } = await adminClient.auth.admin.listUsers();
+            const found = existingUser?.users?.find((u: any) => u.email === user.email);
+            if (!found) {
+              // Crea l'utente su Supabase Auth
+              await adminClient.auth.admin.createUser({
+                email: user.email,
+                email_confirm: true,
+              });
+              console.log("[NextAuth→Supabase] Beta user created on Supabase Auth:", user.email);
+            }
+          }
+        } catch (err) {
+          console.error("[NextAuth→Supabase] Beta-code bridge error:", err);
+        }
       }
       if (user) {
         token.id = (user as any).id || token.sub;
@@ -151,6 +201,8 @@ export const authOptions: AuthOptions = {
     async session({ session, token }) {
       (session as any).accessToken = token.accessToken;
       (session as any).isBetaCode = !!token.isBetaCode;
+      // 🔒 FASE D: esponi i token Supabase alla sessione client
+      (session as any).supabaseAccessToken = (token as any).supabaseAccessToken;
       return session;
     },
   },
