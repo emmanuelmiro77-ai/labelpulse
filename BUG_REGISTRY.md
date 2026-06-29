@@ -14,6 +14,25 @@
 
 ## 🔥 CRITICI — Perdita dati / Sicurezza
 
+### 🔒 FASE C — Architettura definitiva cross-device (tipo LabelRadar)
+- **Sintomo**: Utente carica demo/pitch/profilo su PC lavoro → apre PC casa → non vede nulla. Dati legati al dispositivo, non all'account.
+- **Causa**: Tutti i dati utente erano in un blob JSONB su `app_state` (localStorage + cloud sync debounced). QuotaExceededError → perdita dati. Cross-device non funzionava davvero.
+- **Fix** (commit `f719c03` → `88da254`, 2026-06-29): 4 nuove tabelle Supabase dedicate con RLS per-user:
+  1. **`demo_submissions`** — demo per utente (id UUID, user_email, label_id, track_name, pitch_text, pitch_tracks JSONB)
+  2. **`label_personal_data`** — email/note/status personalizzati per label (UNIQUE user_email+label_id)
+  3. **`pitch_campaigns`** — bozze + inviate (status draft|sent)
+  4. **`user_profiles`** — profilo producer (PK user_email)
+- **Strategia dual write**: ogni operazione su store.ts scrive sia nel vecchio sistema (localStorage/app_state) che nelle nuove tabelle via API routes. Se la API fallisce, l'operazione locale continua.
+- **API routes** (auth NextAuth + service_role):
+  - `/api/demos` (GET/POST/PATCH/DELETE)
+  - `/api/label-data` (GET/POST/PATCH/DELETE con upsert)
+  - `/api/pitches` (GET/POST/PATCH/DELETE con filtro status)
+  - `/api/profile` (GET/POST/DELETE con upsert)
+- **Cross-device**: `loadFromNewTables()` chiamata al login → fetcha tutte le 4 tabelle in parallelo → merge con stato locale (union by id, API è source of truth)
+- **RLS**: `USING (user_email = auth.jwt()->>'email')` — second layer di difesa (attivo quando migreremo a Supabase Auth)
+- **File**: `supabase-schema-fase-c.sql` (NEW), `src/lib/supabase-admin.ts` (NEW), `src/lib/api-client.ts` (NEW), `src/app/api/demos/route.ts` (NEW), `src/app/api/label-data/route.ts` (NEW), `src/app/api/pitches/route.ts` (NEW), `src/app/api/profile/route.ts` (NEW), `src/lib/store.ts` (modificato: addDemo/updateDemo/deleteDemo/addLabel/updateLabel/deleteLabel/addSavedPitch/updateSavedPitch/deleteSavedPitch/addSentCampaign/deleteSentCampaign/setUserProfile + loadFromNewTables + loadProfileFromNewTable), `src/app/page.tsx` (loadFromNewTables chiamata dopo loadFromCloud)
+- **⚠️ AZIONE MANUALE RICHIESTA**: utente deve eseguire `supabase-schema-fase-c.sql` nel Supabase SQL Editor per creare le 4 tabelle
+
 ### 🔒 FASE A — Fix QuotaExceededError (data loss prevention)
 - **Sintomo**: Utente carica demo/pitch/label → chiude browser → riapre → dati spariti. Console mostra "QuotaExceededError: Setting the value of 'labelpulse-profile-backup' exceeded the quota"
 - **Causa**: Quando localStorage è pieno (limite 5MB), `safeLocalStorageSet` fallisce silenziosamente. Lo stato Zustand resta in memoria ma non viene persistito. Il cloud sync ha 3 secondi di debounce → se l'utente chiude prima di 3s, il cloud non riceve i dati → **perdita dati totale**.

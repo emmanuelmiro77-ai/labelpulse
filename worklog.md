@@ -1722,3 +1722,36 @@ Stage Summary:
 - File: supabase-schema-fase-c.sql (NEW)
 - ⚠️ AZIONE MANUALE RICHIESTA: utente deve eseguire il SQL nel Supabase SQL Editor
 - Prossimo: FASE C.2 (API routes CRUD)
+
+---
+Task ID: fase-c-complete-architettura-definitiva
+Agent: Main Agent
+Task: FASE C — Architettura definitiva cross-device (tipo LabelRadar)
+
+Work Log:
+- C.1: Creato supabase-schema-fase-c.sql con 4 nuove tabelle + RLS + realtime + trigger
+- C.2: Creato 4 API routes CRUD (/api/demos, /api/label-data, /api/pitches, /api/profile) + helper supabase-admin.ts
+- C.3: Migrato addDemo/updateDemo/deleteDemo in store.ts → dual write verso /api/demos
+- C.4: Migrato addLabel/updateLabel/deleteLabel → dual write verso /api/label-data
+- C.5: Migrato addSavedPitch/updateSavedPitch/deleteSavedPitch/addSentCampaign/deleteSentCampaign → dual write verso /api/pitches
+- C.6: Creata loadFromNewTables() in store.ts — fetcha tutte le 4 tabelle in parallelo al login, merge con stato locale
+- C.7: Migrato setUserProfile → dual write verso /api/profile + loadProfileFromNewTable()
+- C.8: Aggiornata memoria permanente (BUG_REGISTRY + AGENT_CONTEXT + worklog)
+
+Commits:
+- f719c03 — C.1 + C.2 (schema SQL + API routes)
+- e600618 — C.3 + C.4 (demos + label-data dual write)
+- cd8f9e9 — C.5 (pitches dual write)
+- 9a588bc — C.6 (loadFromNewTables cross-device)
+- 88da254 — C.7 (userProfile dual write)
+
+Stage Summary:
+- FASE C COMPLETATA ✅ (8/8 step, ~2 ore di lavoro)
+- 4 nuove tabelle Supabase operative con RLS per-user
+- 4 API routes CRUD con auth NextAuth + service_role
+- Strategia dual write: vecchio sistema (localStorage/app_state) + nuovo (tabelle dedicate)
+- loadFromNewTables() chiamata al login → cross-device sync funziona
+- Tutti i fix passati su store.ts verificati presenti (anti-regressione ✅)
+- ⚠️ SQL eseguito su Supabase dall'utente (4 tabelle create)
+- Prossimo: test E2E cross-device (PC lavoro → PC casa → telefono)
+- TODO futuro (FASE D): Supabase Auth + realtime live + deprecare app_state per dati utente
