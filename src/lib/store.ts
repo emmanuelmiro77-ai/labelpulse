@@ -3128,6 +3128,13 @@ export async function loadFromCloud(): Promise<void> {
   if (DISABLE_OLD_APP_STATE_SYNC) {
     console.log("[LabelPulse Cloud] Old app_state sync disabled (FASE D) — using new tables only");
     useAppStore.setState({ hasCloudSynced: true });
+    // 🔒 FIX: imposta lo status del cloud a "synced" così l'icona smette di girare
+    try {
+      const { setStatus } = await import("./supabase");
+      setStatus("synced");
+    } catch (err) {
+      console.warn("[LabelPulse Cloud] Failed to set status to synced:", err);
+    }
     // Setup realtime subscription for future updates from other devices
     setupRealtimeSubscriptionSafe();
     return;

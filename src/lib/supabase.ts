@@ -97,7 +97,7 @@ export function subscribeToCloudStatus(listener: Listener): () => void {
   return () => listeners.delete(listener);
 }
 
-function setStatus(newStatus: CloudSyncStatus, errorMsg: string | null = null) {
+export function setStatus(newStatus: CloudSyncStatus, errorMsg: string | null = null) {
   _status = newStatus;
   if (errorMsg !== null) _lastError = errorMsg;
   if (newStatus === "synced" || newStatus === "syncing") {
