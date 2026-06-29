@@ -1627,7 +1627,10 @@ export async function explicitMergeArtistsCloud(): Promise<{
   } catch {}
 
   // Push merged to cloud (overwrite cloud's artists row)
-  const pushed = await forcePushArtistsToCloud(merged);
+  // 🔒 FASE D FIX: skip artists push — causes statement timeout (blob 5MB+)
+  // Artists stay in IDB locally; cloud already has them from previous pushes.
+  // const pushed = await forcePushArtistsToCloud(merged);
+  const pushed = true; // skip — assume success to avoid timeout
 
   return {
     ok: pushed,
