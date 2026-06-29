@@ -3,7 +3,7 @@
 import { useAppStore } from "@/lib/store";
 import { t } from "@/lib/i18n";
 import { isSupabaseConfigured } from "@/lib/supabase";
-import React, { useState, useCallback, useMemo, useRef } from "react";
+import React, { useState, useCallback, useEffect, useMemo, useRef } from "react";
 import { useSession } from "next-auth/react";
 import {
   Pencil,
@@ -190,6 +190,12 @@ export function ProducerProfile() {
   const [photoUploadError, setPhotoUploadError] = useState<string | null>(null);
   const fileInputRef = useRef<HTMLInputElement | null>(null);
 
+  // Local drafts for profile fields so we can flush them on app background/close.
+  const [artistNameDraft, setArtistNameDraft] = useState(userProfile.artistName);
+  const [emailDraft, setEmailDraft] = useState(userProfile.email);
+  const [bioDraft, setBioDraft] = useState(userProfile.bio);
+  const [scLinkDraft, setScLinkDraft] = useState(userProfile.scLink);
+
   // Local links state for editing before blur-save
   const [localLinks, setLocalLinks] = useState<{ type: string; value: string }[]>(
     userProfile.links?.length ? userProfile.links : []
@@ -228,6 +234,54 @@ export function ProducerProfile() {
     }
     setShowPhotoInput(false);
   }, [photoUrlDraft, userProfile.photoUrl, setUserProfile, triggerSaved]);
+
+  const flushProfileDrafts = useCallback(() => {
+    if (artistNameDraft !== userProfile.artistName) {
+      setUserProfile({ artistName: artistNameDraft });
+    }
+    if (emailDraft !== userProfile.email) {
+      setUserProfile({ email: emailDraft });
+    }
+    if (bioDraft !== userProfile.bio) {
+      setUserProfile({ bio: bioDraft });
+    }
+    if (scLinkDraft !== userProfile.scLink) {
+      setUserProfile({ scLink: scLinkDraft });
+    }
+  }, [artistNameDraft, bioDraft, emailDraft, scLinkDraft, setUserProfile, userProfile]);
+
+  useEffect(() => {
+    setArtistNameDraft(userProfile.artistName);
+    setEmailDraft(userProfile.email);
+    setBioDraft(userProfile.bio);
+    setScLinkDraft(userProfile.scLink);
+    setPhotoUrlDraft(userProfile.photoUrl);
+    setLocalLinks(userProfile.links?.length ? userProfile.links : []);
+  }, [userProfile.artistName, userProfile.email, userProfile.bio, userProfile.scLink, userProfile.photoUrl, userProfile.links]);
+
+  useEffect(() => {
+    const handleVisibilityChange = () => {
+      if (document.visibilityState === "hidden") {
+        flushProfileDrafts();
+      }
+    };
+    const handleBeforeUnload = () => {
+      flushProfileDrafts();
+    };
+    const handlePageHide = () => {
+      flushProfileDrafts();
+    };
+
+    document.addEventListener("visibilitychange", handleVisibilityChange);
+    window.addEventListener("beforeunload", handleBeforeUnload);
+    window.addEventListener("pagehide", handlePageHide);
+
+    return () => {
+      document.removeEventListener("visibilitychange", handleVisibilityChange);
+      window.removeEventListener("beforeunload", handleBeforeUnload);
+      window.removeEventListener("pagehide", handlePageHide);
+    };
+  }, [flushProfileDrafts]);
 
   const handlePhotoUrlKeyDown = useCallback(
     (e: React.KeyboardEvent<HTMLInputElement>) => {
@@ -508,7 +562,8 @@ export function ProducerProfile() {
               {t(locale, "profile.artistName" as any)}
             </UILabel>
             <Input
-              defaultValue={userProfile.artistName}
+              value={artistNameDraft}
+              onChange={(e) => setArtistNameDraft(e.target.value)}
               onBlur={(e) => handleFieldBlur("artistName", e.target.value)}
               placeholder="Your artist name"
               className="bg-secondary/50 text-sm"
@@ -522,7 +577,8 @@ export function ProducerProfile() {
             </UILabel>
             <Input
               type="email"
-              defaultValue={userProfile.email}
+              value={emailDraft}
+              onChange={(e) => setEmailDraft(e.target.value)}
               onBlur={(e) => handleFieldBlur("email", e.target.value)}
               placeholder="your@email.com"
               className="bg-secondary/50 text-sm"
@@ -535,7 +591,8 @@ export function ProducerProfile() {
               {t(locale, "profile.bio" as any)}
             </UILabel>
             <Textarea
-              defaultValue={userProfile.bio}
+              value={bioDraft}
+              onChange={(e) => setBioDraft(e.target.value)}
               onBlur={(e) => handleFieldBlur("bio", e.target.value)}
               placeholder={t(locale, "profile.bioPlaceholder" as any)}
               rows={3}
