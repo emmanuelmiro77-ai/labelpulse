@@ -2895,10 +2895,15 @@ export function syncToCloud(): void {
     // Update lastSavedAt to track which device last wrote
     const lastSavedAt = new Date().toISOString();
     useAppStore.setState({ lastSavedAt });
+    // 🔒 FASE B FIX: include ALL personal data — previously savedPitches and
+    // sentCampaigns were MISSING, causing pitch drafts and sent campaigns to
+    // never reach the cloud (only stayed in localStorage).
     const dataToSync = {
       labels: state.labels,
       demos: state.demos,
       releases: state.releases,
+      savedPitches: state.savedPitches,
+      sentCampaigns: state.sentCampaigns,
       activeTab: state.activeTab,
       locale: state.locale,
       userProfile: state.userProfile,
@@ -2929,10 +2934,13 @@ export async function forceCloudSync(): Promise<void> {
   const state = useAppStore.getState();
   const lastSavedAt = new Date().toISOString();
   useAppStore.setState({ lastSavedAt });
+  // 🔒 FASE B FIX: include ALL personal data — same as syncToCloud above
   const dataToSync = {
     labels: state.labels,
     demos: state.demos,
     releases: state.releases,
+    savedPitches: state.savedPitches,
+    sentCampaigns: state.sentCampaigns,
     activeTab: state.activeTab,
     locale: state.locale,
     userProfile: state.userProfile,
