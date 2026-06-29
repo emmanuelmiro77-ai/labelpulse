@@ -7,7 +7,7 @@ import labelData from "./labels-data.json";
 import { saveStateToCloud, loadStateFromCloud, isSupabaseConfigured, isApplyingRemoteUpdate, markLocalProfileEdit } from "./supabase";
 import { saveArtistsToIDB, loadArtistsFromIDB, clearArtistsIDB } from "./artists-idb";
 import type { PitchTrackEntry } from "./pitch-utils";
-import { apiCreateDemo, apiUpdateDemo, apiDeleteDemo, apiUpsertLabelData, apiDeleteLabelData } from "./api-client";
+import { apiCreateDemo, apiUpdateDemo, apiDeleteDemo, apiUpsertLabelData, apiDeleteLabelData, apiCreatePitch, apiUpdatePitch, apiDeletePitch } from "./api-client";
 
 // ==================== TYPES ====================
 
@@ -1951,14 +1951,25 @@ export const useAppStore = create<AppState>()(
       addSavedPitch: (pitch) => {
         const id = genId();
         const now = new Date().toISOString();
+        const newPitch = { ...pitch, id, createdAt: now, updatedAt: now };
         set((state) => ({
-          savedPitches: [
-            ...state.savedPitches,
-            { ...pitch, id, createdAt: now, updatedAt: now },
-          ],
+          savedPitches: [...state.savedPitches, newPitch],
           lastSavedAt: now,
         }));
         syncToCloud();
+        // 🔒 FASE C.5: dual write — also push to pitch_campaigns table
+        apiCreatePitch({
+          id: newPitch.id,
+          label_id: newPitch.labelId,
+          label_name: newPitch.labelName,
+          demo_id: newPitch.demoId,
+          subject: newPitch.subject,
+          body: newPitch.body,
+          pitch_tracks: newPitch.pitchTracks,
+          ep_link_mode: newPitch.epLinkMode,
+          ep_soundcloud_url: newPitch.epSoundCloudUrl,
+          status: "draft",
+        }).catch(() => {/* silent */});
         return id;
       },
       updateSavedPitch: (id, updates) => {
@@ -1969,6 +1980,20 @@ export const useAppStore = create<AppState>()(
           lastSavedAt: new Date().toISOString(),
         }));
         syncToCloud();
+        // 🔒 FASE C.5: dual write — update pitch_campaigns table
+        const updated = useAppStore.getState().savedPitches.find((p) => p.id === id);
+        if (updated) {
+          apiUpdatePitch(id, {
+            label_id: updated.labelId,
+            label_name: updated.labelName,
+            demo_id: updated.demoId,
+            subject: updated.subject,
+            body: updated.body,
+            pitch_tracks: updated.pitchTracks,
+            ep_link_mode: updated.epLinkMode,
+            ep_soundcloud_url: updated.epSoundCloudUrl,
+          }).catch(() => {/* silent */});
+        }
       },
       deleteSavedPitch: (id) => {
         set((state) => ({
@@ -1976,20 +2001,35 @@ export const useAppStore = create<AppState>()(
           lastSavedAt: new Date().toISOString(),
         }));
         syncToCloud();
+        // 🔒 FASE C.5: dual write — delete from pitch_campaigns
+        apiDeletePitch(id).catch(() => {/* silent */});
       },
 
       // ==================== SENT CAMPAIGNS (Inviati) ====================
       addSentCampaign: (campaign) => {
         const id = genId();
         const now = new Date().toISOString();
+        const newCampaign = { ...campaign, id, sentAt: now };
         set((state) => ({
-          sentCampaigns: [
-            { ...campaign, id, sentAt: now },
-            ...state.sentCampaigns, // newest first
-          ],
+          sentCampaigns: [newCampaign, ...state.sentCampaigns],
           lastSavedAt: now,
         }));
         syncToCloud();
+        // 🔒 FASE C.5: dual write — also push to pitch_campaigns with status=sent
+        apiCreatePitch({
+          id: newCampaign.id,
+          label_id: newCampaign.labelId,
+          label_name: newCampaign.labelName,
+          demo_id: newCampaign.demoId,
+          subject: newCampaign.subject,
+          body: newCampaign.body,
+          pitch_tracks: newCampaign.pitchTracks,
+          ep_link_mode: newCampaign.epLinkMode,
+          ep_soundcloud_url: newCampaign.epSoundCloudUrl,
+          status: "sent",
+          sent_at: now,
+          sent_method: newCampaign.sentMethod,
+        }).catch(() => {/* silent */});
         return id;
       },
       deleteSentCampaign: (id) => {
@@ -1998,6 +2038,8 @@ export const useAppStore = create<AppState>()(
           lastSavedAt: new Date().toISOString(),
         }));
         syncToCloud();
+        // 🔒 FASE C.5: dual write — delete from pitch_campaigns
+        apiDeletePitch(id).catch(() => {/* silent */});
       },
 
       advanceDemoStatus: (id) => {
