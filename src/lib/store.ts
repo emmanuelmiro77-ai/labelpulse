@@ -3002,10 +3002,29 @@ const CLOUD_SYNC_DEBOUNCE_MS = 3000; // 3 secondi di debounce
  * Sincronizza lo stato corrente con Supabase (debounced).
  * Chiamata dopo ogni azione utente che modifica i dati.
  */
+/**
+ * 🔒 FASE D FIX: Disable old app_state sync to prevent statement timeout.
+ *
+ * Il vecchio sistema app_state salva un blob JSONB enorme (con 2000+ labels).
+ * Supabase free tier ha statement timeout di 8s → POST fallisce con 500.
+ *
+ * Ora che abbiamo le nuove tabelle dedicate (demo_submissions, etc.),
+ * il vecchio sync non serve più. Lo disabilitiamo per:
+ * 1. Evitare i timeout 500
+ * 2. Ridurre il carico su Supabase
+ * 3. Preparare la rimozione definitiva del vecchio sistema
+ *
+ * Le nuove tabelle vengono ancora scritte dal dual write nelle azioni
+ * (addDemo, updateLabel, etc.) — quello non viene toccato.
+ */
+const DISABLE_OLD_APP_STATE_SYNC = true;
+
 export function syncToCloud(): void {
   if (!isSupabaseConfigured()) return;
   // Skip if we're applying a remote update (avoids feedback loop)
   if (isApplyingRemoteUpdate()) return;
+  // 🔒 FASE D: skip old app_state sync — causes statement timeout
+  if (DISABLE_OLD_APP_STATE_SYNC) return;
 
   if (_cloudSyncTimer) {
     clearTimeout(_cloudSyncTimer);
@@ -3048,6 +3067,8 @@ export function syncToCloud(): void {
 export async function forceCloudSync(): Promise<void> {
   if (!isSupabaseConfigured()) return;
   if (isApplyingRemoteUpdate()) return;
+  // 🔒 FASE D: skip old app_state sync — causes statement timeout
+  if (DISABLE_OLD_APP_STATE_SYNC) return;
 
   if (_cloudSyncTimer) {
     clearTimeout(_cloudSyncTimer);
@@ -3099,6 +3120,16 @@ export async function loadFromCloud(): Promise<void> {
   if (!isSupabaseConfigured()) {
     console.log("[LabelPulse Cloud] Supabase not configured, skipping cloud load");
     useAppStore.setState({ hasCloudSynced: true });
+    return;
+  }
+
+  // 🔒 FASE D: skip old app_state load — causes statement timeout
+  // Le nuove tabelle dedicate vengono caricate da loadFromNewTables()
+  if (DISABLE_OLD_APP_STATE_SYNC) {
+    console.log("[LabelPulse Cloud] Old app_state sync disabled (FASE D) — using new tables only");
+    useAppStore.setState({ hasCloudSynced: true });
+    // Setup realtime subscription for future updates from other devices
+    setupRealtimeSubscriptionSafe();
     return;
   }
 
