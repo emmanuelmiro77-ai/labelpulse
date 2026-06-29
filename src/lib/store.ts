@@ -2315,7 +2315,12 @@ export const useAppStore = create<AppState>()(
         };
       },
 
-      setRankingsUpdatedAt: (date) => { set({ rankingsUpdatedAt: date }); syncToCloud(); },
+      setRankingsUpdatedAt: (date) => {
+        set({ rankingsUpdatedAt: date });
+        syncToCloud();
+        // 🔒 FASE D FIX: pusha le classifiche direttamente al cloud (no localStorage)
+        pushRankingsToCloud();
+      },
 
       addRankingSnapshot: (source) => {
         const state = get();
@@ -2347,6 +2352,8 @@ export const useAppStore = create<AppState>()(
           lastSavedAt: new Date().toISOString(),
         }));
         syncToCloud();
+        // 🔒 FASE D FIX: pusha le classifiche direttamente al cloud (no localStorage)
+        pushRankingsToCloud();
       },
 
       exportData: () => {
@@ -4100,5 +4107,53 @@ export async function loadArtistsOnBoot(): Promise<void> {
     }
   } catch (e) {
     console.warn("[LabelPulse] Failed to load artists on boot:", e);
+  }
+}
+
+/**
+ * 🔒 FASE D FIX — Pusha le classifiche direttamente al cloud
+ *
+ * Chiamata quando l'admin fa scrape/import Beatport.
+ * Invia le label con rank + snapshots all'API /api/admin/push-rankings
+ * che salva direttamente nella riga 'global' di app_state.
+ *
+ * NON passa dal localStorage. Funziona da qualsiasi dispositivo.
+ */
+async function pushRankingsToCloud(): Promise<void> {
+  if (typeof window === "undefined") return;
+
+  try {
+    const state = useAppStore.getState();
+    const labelsWithRank = state.labels.filter(
+      (l: any) => l.rankByGenre && Object.keys(l.rankByGenre).length > 0
+    );
+
+    if (labelsWithRank.length === 0) {
+      console.log("[push-rankings] No labels with rank to push");
+      return;
+    }
+
+    console.log(`[push-rankings] Pushing ${labelsWithRank.length} labels + ${state.rankingSnapshots.length} snapshots to cloud...`);
+
+    const res = await fetch("/api/admin/push-rankings", {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({
+        labels: labelsWithRank,
+        rankingSnapshots: state.rankingSnapshots,
+        rankingsUpdatedAt: state.rankingsUpdatedAt || new Date().toISOString(),
+      }),
+    });
+
+    if (!res.ok) {
+      const err = await res.json().catch(() => ({}));
+      console.error("[push-rankings] Failed:", res.status, err);
+      return;
+    }
+
+    const data = await res.json();
+    console.log("[push-rankings] ✅ Pushed to cloud:", data);
+  } catch (err) {
+    console.error("[push-rankings] Error:", err);
   }
 }
