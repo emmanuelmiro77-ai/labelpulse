@@ -1,5 +1,7 @@
 import { NextRequest, NextResponse } from "next/server";
 import { createClient } from "@supabase/supabase-js";
+import { getServerSession } from "next-auth";
+import { authOptions } from "@/lib/auth-options";
 
 /**
  * API /api/admin/migrate-appstate
@@ -8,38 +10,50 @@ import { createClient } from "@supabase/supabase-js";
  * alle nuove tabelle dedicate (demo_submissions, label_personal_data,
  * pitch_campaigns, user_profiles).
  *
- * Usa SUPABASE_SERVICE_ROLE_KEY per bypassare RLS durante la migrazione.
+ * Auth (2 modi, basta UNO):
+ * 1. Bearer token: Authorization: Bearer <BETA_ADMIN_TOKEN>
+ * 2. Admin email: sessione NextAuth con email in ADMIN_EMAILS
  *
- * Usage:
- *   GET /api/admin/migrate-appstate
- *   Headers: Authorization: Bearer <BETA_ADMIN_TOKEN>
+ * Usa SUPABASE_SERVICE_ROLE_KEY per bypassare RLS durante la migrazione.
  */
 
+const ADMIN_EMAILS = new Set([
+  "emmanuel.miro77@gmail.com",
+]);
+
 export async function GET(req: NextRequest) {
-  // Auth check
+  // Auth check — metodo 1: Bearer token
   const authHeader = req.headers.get("authorization") || "";
   const token = authHeader.replace(/^Bearer\s+/i, "").trim();
+  const tokenMatch = token && process.env.BETA_ADMIN_TOKEN && token === process.env.BETA_ADMIN_TOKEN;
 
-  // 🔍 DEBUG: log per capire perché il token non matcha
-  console.log("[migrate-appstate] DEBUG:", {
-    hasAuthHeader: !!authHeader,
-    tokenLength: token.length,
-    tokenPreview: token.substring(0, 10) + "...",
-    envTokenExists: !!process.env.BETA_ADMIN_TOKEN,
-    envTokenLength: process.env.BETA_ADMIN_TOKEN?.length || 0,
-    envTokenPreview: process.env.BETA_ADMIN_TOKEN?.substring(0, 10) + "...",
-    match: token === process.env.BETA_ADMIN_TOKEN,
+  // Auth check — metodo 2: sessione NextAuth con email admin
+  let emailMatch = false;
+  let sessionEmail = null;
+  try {
+    const session = await getServerSession(authOptions as any);
+    sessionEmail = session?.user?.email?.toLowerCase().trim() || null;
+    if (sessionEmail && ADMIN_EMAILS.has(sessionEmail)) {
+      emailMatch = true;
+    }
+  } catch (err) {
+    console.error("[migrate-appstate] Session check error:", err);
+  }
+
+  console.log("[migrate-appstate] Auth check:", {
+    tokenMatch,
+    emailMatch,
+    sessionEmail,
   });
 
-  if (!token || token !== process.env.BETA_ADMIN_TOKEN) {
+  if (!tokenMatch && !emailMatch) {
     return NextResponse.json({
       error: "unauthorized",
       debug: {
-        tokenReceived: token.substring(0, 5) + "...",
-        envTokenSet: !!process.env.BETA_ADMIN_TOKEN,
-        hint: !process.env.BETA_ADMIN_TOKEN
-          ? "BETA_ADMIN_TOKEN env var is NOT set on Vercel. Add it in Project Settings → Environment Variables, then redeploy."
-          : "Token mismatch. Check for whitespace or encoding issues.",
+        tokenMatch,
+        emailMatch,
+        sessionEmail,
+        hint: "Auth via Bearer token OR NextAuth session with admin email.",
       }
     }, { status: 401 });
   }
