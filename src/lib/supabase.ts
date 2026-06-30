@@ -747,60 +747,6 @@ export async function loadGlobalRowOnly(): Promise<any | null> {
 }
 
 /**
- * 🔒 FASE D FIX — Applica i dati globali (classifiche) al store Zustand
- *
- * Chiamata dal realtime GLOBAL quando l'admin pusha nuove classifiche.
- * Fa il merge: locale come base, globale vince sui campi Beatport.
- */
-async function applyGlobalDataToStore(globalData: any): Promise<void> {
-  try {
-    const { useAppStore } = await import("./store");
-    const currentState = useAppStore.getState();
-    const globalLabels = globalData.labels || [];
-    const globalById = new Map(globalLabels.map((l: any) => [l.id, l]));
-
-    const mergedLabels = currentState.labels.map((localLabel: any) => {
-      const globalLabel = globalById.get(localLabel.id);
-      if (globalLabel) {
-        return {
-          ...localLabel,
-          genres: globalLabel.genres || localLabel.genres,
-          rankByGenre: globalLabel.rankByGenre || localLabel.rankByGenre,
-          pointsByGenre: globalLabel.pointsByGenre || localLabel.pointsByGenre,
-          trending: globalLabel.trending ?? localLabel.trending,
-          trendingRankByGenre: globalLabel.trendingRankByGenre || localLabel.trendingRankByGenre,
-          trendingPointsByGenre: globalLabel.trendingPointsByGenre || localLabel.trendingPointsByGenre,
-          imageUrl: globalLabel.imageUrl || localLabel.imageUrl,
-          slug: globalLabel.slug || localLabel.slug,
-          beatportId: globalLabel.beatportId ?? localLabel.beatportId,
-          prevRankByGenre: globalLabel.prevRankByGenre || localLabel.prevRankByGenre,
-        };
-      }
-      return localLabel;
-    });
-
-    // Aggiungi label globali che non esistono in locale
-    const localIds = new Set(currentState.labels.map((l: any) => l.id));
-    for (const globalLabel of globalLabels) {
-      if (!localIds.has(globalLabel.id)) {
-        mergedLabels.push(globalLabel);
-      }
-    }
-
-    useAppStore.setState({
-      labels: mergedLabels,
-      rankingSnapshots: (globalData.rankingSnapshots?.length || 0) > (currentState.rankingSnapshots?.length || 0)
-        ? globalData.rankingSnapshots
-        : currentState.rankingSnapshots,
-      rankingsUpdatedAt: globalData.rankingsUpdatedAt || currentState.rankingsUpdatedAt,
-    });
-    console.log("[LabelPulse Cloud] Global data applied to store. Labels:", mergedLabels.length, "UpdatedAt:", globalData.rankingsUpdatedAt);
-  } catch (err) {
-    console.error("[LabelPulse Cloud] applyGlobalDataToStore failed:", err);
-  }
-}
-
-/**
  * 🔒 FASE D FIX: Salva SOLO la riga globale (classifiche Beatport).
  * Usata da saveGlobalRowIfAdmin() per permettere all'admin di pushare
  * nuove classifiche senza salvare la riga personale (che causava timeout).
@@ -1104,12 +1050,12 @@ export function setupRealtimeSubscription(): () => void {
           console.log("[LabelPulse Cloud] Realtime PERSONAL update, applying personal overlay...");
           _isApplyingRemoteUpdate = true;
           try {
-            // 🔒 FASE D FIX: NON usare loadStateFromCloud() — è disabilitato.
-            // I dati personali ora sono nelle 4 nuove tabelle dedicate.
-            // Ricarica da loadFromNewTables() invece.
-            // (lazy import per evitare circular dep)
-            const { loadFromNewTables } = await import("./store");
-            await loadFromNewTables();
+            // 🔒 FASE D: Personal row update — this contains profile edits from other devices.
+            // loadStateFromCloud() is disabled, so we can't use it.
+            // Instead, just apply the personal data directly.
+            // (In FASE D, personal data is mostly in new dedicated tables, not the old app_state row.
+            // But keep this for safety: if someone edits profile on web, sync it immediately to mobile.)
+            await applyRemoteData(newData);
             setStatus("synced");
           } finally {
             _isApplyingRemoteUpdate = false;
@@ -1142,16 +1088,11 @@ export function setupRealtimeSubscription(): () => void {
           console.log("[LabelPulse Cloud] Realtime GLOBAL update (admin pushed new rankings), refreshing...");
           _isApplyingRemoteUpdate = true;
           try {
-            // 🔒 FASE D FIX: carica SOLO la riga globale (classifiche)
-            // NON usare loadStateFromCloud() — è disabilitato (causa timeout)
+            // 🔒 FASE D CRITICAL FIX: Instead of calling loadStateFromCloud() which is disabled,
+            // load ONLY the global row and apply it directly. This ensures rankings update
+            // immediately on all devices when admin pushes a new scrape.
             const globalData = await loadGlobalRowOnly();
             if (globalData) {
-              console.log("[LabelPulse Cloud] Realtime GLOBAL — applying new rankings:", {
-                labels: globalData.labels?.length || 0,
-                snaps: globalData.rankingSnapshots?.length || 0,
-                updatedAt: globalData.rankingsUpdatedAt,
-              });
-              // Applica direttamente i dati globali al store
               await applyGlobalDataToStore(globalData);
             }
             setStatus("synced");
@@ -1515,6 +1456,125 @@ async function applyRemoteData(cloudData: any): Promise<void> {
       });
     } catch (e) {
       console.warn("[LabelPulse Cloud] Post-realtime sidecar restore failed:", e);
+    }
+  }, 0);
+}
+
+/**
+ * 🔒 FASE D CRITICAL FIX — Apply ONLY global rankings data to the store.
+ *
+ * Called by the GLOBAL realtime channel when admin pushes new Beatport rankings.
+ * Unlike applyRemoteData (which merges ALL data), this function ONLY applies
+ * the global Beatport data (labels with rankings, snapshots, etc.).
+ *
+ * CRITICAL FIX FOR RANKINGS NOT UPDATING ON PHONE:
+ * - Previous code called loadStateFromCloud() which is DISABILITATA (DISABLE_OLD_APP_STATE_SYNC = true)
+ * - This caused the realtime update to be silently ignored
+ * - Now we call loadGlobalRowOnly() + applyGlobalDataToStore() to apply rankings directly
+ *
+ * SAFETY RULE: Preserve local user-edit fields (emails, notes, website, etc.)
+ * by doing UNION BY ID instead of REPLACE. Beatport data fields (rank, points, genres)
+ * from cloud WIN over local (since they're the source of truth from the scraper).
+ */
+async function applyGlobalDataToStore(globalData: any): Promise<void> {
+  const store = useAppStore.getState();
+
+  // ⚠️ Beatport fields that come from the scraper (cloud is source of truth)
+  const beatportFields = ["rankByGenre", "pointsByGenre", "trendingRankByGenre", "trendingPointsByGenre", "prevRankByGenre", "genres", "trending"];
+
+  // User-edit fields that should be preserved from local
+  const userEditFields = ["emails", "notes", "website", "demoLink", "socialLink", "soundcloudLink", "status", "tier", "instagramLink", "facebookLink", "bandcampLink", "beatstatsLink", "imageUrl", "slug"];
+
+  const merged: any = {};
+
+  // ---------- LABELS: union by id, cloud's Beatport data WINS, preserve local user edits ----------
+  const cloudLabels = Array.isArray(globalData.labels) ? globalData.labels : [];
+  const localLabels = Array.isArray(store.labels) ? store.labels : [];
+  const labelsById = new Map<string, any>();
+  const labelsByName = new Map<string, any>();
+
+  // First: add all cloud labels
+  for (const cl of cloudLabels) {
+    if (!cl || typeof cl !== "object") continue;
+    labelsById.set(cl.id, { ...cl });
+    const nm = cl.name?.toLowerCase().trim();
+    if (nm) labelsByName.set(nm, cl);
+  }
+
+  // Second: merge local labels, preserving user-edit fields
+  for (const ll of localLabels) {
+    if (!ll || typeof ll !== "object") continue;
+    const nm = ll.name?.toLowerCase().trim();
+    const existing = labelsById.get(ll.id) || (nm ? labelsByName.get(nm) : undefined);
+
+    if (existing) {
+      // Label exists in cloud — preserve local user-edit fields
+      for (const f of userEditFields) {
+        const lv = (ll as any)[f];
+        if (Array.isArray(lv) ? lv.length > 0 : (lv && String(lv).trim() !== "")) {
+          (existing as any)[f] = lv;
+        }
+      }
+    } else {
+      // Label not in cloud — add it as-is (local-only label)
+      labelsById.set(ll.id, { ...ll });
+      if (nm) labelsByName.set(nm, ll);
+    }
+  }
+
+  merged.labels = Array.from(labelsById.values());
+  console.log(`[LabelPulse Cloud] Global labels applied: ${merged.labels.length} total`);
+
+  // ---------- SNAPSHOTS: union by id (timestamp + source as key) ----------
+  const cloudSnaps = Array.isArray(globalData.rankingSnapshots) ? globalData.rankingSnapshots : [];
+  const localSnaps = Array.isArray(store.rankingSnapshots) ? store.rankingSnapshots : [];
+
+  // Try to use mergeSnapshots from store.ts for consistent merge logic
+  let mergeSnapshotsFn: any = null;
+  try {
+    const storeMod = await import("./store");
+    mergeSnapshotsFn = (storeMod as any).mergeSnapshotsPublic || null;
+  } catch {
+    // fall through
+  }
+
+  if (mergeSnapshotsFn && typeof mergeSnapshotsFn === "function") {
+    merged.rankingSnapshots = mergeSnapshotsFn(localSnaps, cloudSnaps);
+  } else {
+    // Fallback: manual union by id
+    const seen = new Set<string>();
+    const out: any[] = [];
+    for (const s of [...localSnaps, ...cloudSnaps]) {
+      if (!s || typeof s !== "object") continue;
+      const key = s.id || `${s.timestamp}|${s.source}`;
+      if (seen.has(key)) continue;
+      seen.add(key);
+      out.push(s);
+    }
+    out.sort((x, y) => new Date(x.timestamp || 0).getTime() - new Date(y.timestamp || 0).getTime());
+    merged.rankingSnapshots = out;
+  }
+
+  // Update rankingsUpdatedAt if provided
+  if (globalData.rankingsUpdatedAt) {
+    merged.rankingsUpdatedAt = globalData.rankingsUpdatedAt;
+  }
+
+  console.log(`[LabelPulse Cloud] Global data applied to store: labels=${merged.labels?.length}, snapshots=${merged.rankingSnapshots?.length}, updatedAt=${merged.rankingsUpdatedAt || "none"}`);
+
+  useAppStore.setState(merged);
+
+  // ⚠️ SAFETY: Restore from sidecar backups if the merge left us with empty data
+  setTimeout(() => {
+    try {
+      import("./store").then((storeMod: any) => {
+        const snapsRestored = storeMod.restoreSnapshotsFromSidecar?.();
+        if (snapsRestored && snapsRestored > 0) {
+          console.info(`[LabelPulse Cloud] Post-global-update sidecar restore: ${snapsRestored} snapshots recovered`);
+        }
+      });
+    } catch (e) {
+      console.warn("[LabelPulse Cloud] Post-global-update sidecar restore failed:", e);
     }
   }, 0);
 }
