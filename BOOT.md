@@ -210,6 +210,7 @@ SISTEMA NUOVO (FASE C+D, operativo):
 | Fix timeout | `328d5b9`, `d45f56e` | Disabilitato sync vecchio sistema + auto-push artisti (causavano statement timeout) |
 | Fix cloud icon | `25cd38a` | setStatus('synced') quando vecchio sync disabilitato |
 | Fix classifiche | `e5aaa14` | loadGlobalRowOnly() — carica SOLO riga global (classifiche) |
+| Fix classifiche cross-device | `d1130cf`, `2b521d1`, `0c0dd09` | push-rankings API + realtime fix + REPLACE totale (no merge) |
 
 #### Test superati (verificati)
 
@@ -222,7 +223,11 @@ SISTEMA NUOVO (FASE C+D, operativo):
 
 #### ⚠️ Regole critiche — NON TOCCARE MAI
 
-0. 🚨🚨🚨 **REGOLA ZERO**: Il localStorage NON deve MAI contenere dati che devono essere condivisi cross-device. Tutto deve andare DIRETTAMENTE al cloud via API. Le classifiche Beatport (dati globali) vanno pushate via `/api/admin/push-rankings`. I dati personali vanno nelle 4 tabelle dedicate. Il localStorage è solo cache temporanea, non fonte di verità.
+0. 🚨🚨🚨 **REGOLA ZERO (AGGIORNATA 30/06)**: Il cloud è l'UNICA verità. **REPLACE totale, NON merge.** Quando l'app carica i dati dal cloud (login o realtime), **sostituisce completamente** i dati locali. Niente union, niente merge, niente sidecar restore. Il localStorage è solo cache in memoria, non fonte di verità. Questo vale per:
+   - Classifiche Beatport (riga `global` → `applyGlobalDataToStore()` fa REPLACE)
+   - Dati personali (4 tabelle dedicate → `loadFromNewTables()` fa REPLACE)
+   - Snapshots (sempre dal cloud, mai merge)
+   - Se un utente vede dati vecchi → il cloud ha dati vecchi, non è un problema di merge
 
 1. ⚠️ Non rimuovere `--webpack` dal build script (Turbopack non genera source maps)
 2. ⚠️ Non rimuovere `buildCommand` da `vercel.json`

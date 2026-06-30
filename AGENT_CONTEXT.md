@@ -219,7 +219,7 @@ alla fase SaaS commerciale profittevole. Contiene:
 - **Criteri GO/NO-GO** espliciti per passare da una fase alla successiva
 - **Stato avanzamento** aggiornato dopo ogni task completato
 
-🟢 **Stato attuale**: FASE 1 ✅ + Security audit (C-1→C-5, H-8, M-3) ✅ + FASE A (QuotaExceededError) ✅ + FASE B (savedPitches sync) ✅ + FASE C (architettura cross-device) ✅ + FASE D (Supabase Auth + RLS vera + realtime live) ✅ + **MIGRAZIONE DATI COMPLETATA** ✅ (663 label + 1 profilo migrati, 0 errori). **Isolamento utenti 100% garantito + vecchio sistema app_state disabilitato**. Pronta per FASE 2 (Closed Beta).
+🟢 **Stato attuale**: FASE 1 ✅ + Security audit (C-1→C-5, H-8, M-3) ✅ + FASE A (QuotaExceededError) ✅ + FASE B (savedPitches sync) ✅ + FASE C (architettura cross-device) ✅ + FASE D (Supabase Auth + RLS vera + realtime live) ✅ + Migrazione dati ✅ + **Fix classifiche cross-device (REPLACE totale, no merge)** ✅ + **PostHog configurato** ✅ + **Bugsnag verificato** ✅. **Cloud = unica verità, REPLACE totale, niente merge.** Pronta per FASE 2 (Closed Beta).
 
 ### 🚨 ARCHITETTURA TARGET — Cross-device sync come LabelRadar
 L'utente ha segnalato perdita dati critica: demo caricate su PC lavoro NON sono visibili su PC casa. Cause:
@@ -260,6 +260,38 @@ L'utente ha segnalato perdita dati critica: demo caricate su PC lavoro NON sono 
 - Migrare a Supabase Auth per RLS vera (auth.jwt()->>'email')
 - Rimuovere il vecchio sistema app_state per dati utente (mantenerlo solo per global/Beatport)
 - Aggiungere realtime subscription alle nuove tabelle (cross-device updates live, non solo al login)
+
+### 🔄 WORKFLOW BUG FIXING (operativo)
+
+Quando un bug viene segnalato (da tester, Bugsnag, o utente):
+
+1. **Ricezione bug**: utente copia il feedback da Discord/Bugsnag e lo inoltra all'agente
+2. **Boot**: agente legge BOOT.md + BUG_REGISTRY.md per contesto e anti-regressione
+3. **Fix**: agente fixa il codice rispettando la REGOLA ZERO (REPLACE, no merge)
+4. **Test**: agente fa girare `npm test` (37 test automatici)
+5. **Commit + push**: agente commit con messaggio `fix(critical): descrizione` e push
+6. **Verifica utente**: utente hard refresh + test sul dispositivo
+7. **Aggiornamento memoria**: agente aggiorna BUG_REGISTRY.md + worklog.md + BOOT.md
+
+### 📊 WORKFLOW MONITORAGGIO BETA (operativo)
+
+```
+Mattina (5 min):
+├─ Bugsnag dashboard → controlla errori nuovi (email automatica su pulse.label.official@gmail.com)
+├─ PostHog → controlla signup/eventi nuovi (funnel: signup → first demo → first pitch)
+├─ Discord #bug-reports → controlla feedback tester
+└─ Se ci sono bug → inoltra all'agente → fix → push → Vercel redeploy automatico
+
+Quando un tester trova un bug:
+├─ Tester preme "Feedback" → Discord + Supabase (automatico)
+├─ Tester ha un crash → Bugsnag manda email (automatico)
+└─ Tu copi il bug all'agente → agente fixa → push → redeploy
+
+Configurazione verificata (30/06):
+- ✅ Bugsnag: API key su Vercel, email alert attivi, test `window.Bugsnag.notify()` funzionante
+- ✅ PostHog: API key phc_ su Vercel, host eu.i.posthog.com, eventi inviati senza errori 401
+- ✅ Discord webhook: DISCORD_FEEDBACK_WEBHOOK_URL su Vercel, feedback arrivano su #bug-reports
+- ✅ Test automatici: 37 test passano (vitest), girano prima di ogni push
 
 ### ⚠️ TODO CRITICO UTENTE (entro 14 giorni dal 2026-06-26)
 - **Bugsnag Trial 14 giorni**: verificare in Settings → Billing che dopo il trial si auto-downgradi a Free (€0). Se auto-converte a paid ($80+/mese), creare nuovo progetto Free + cambiare API key in Vercel env vars (`NEXT_PUBLIC_BUGSNAG_API_KEY` + `BUGSNAG_API_KEY`).
