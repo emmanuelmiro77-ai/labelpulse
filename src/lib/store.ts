@@ -4162,3 +4162,10 @@ async function pushRankingsToCloud(): Promise<void> {
     console.error("[push-rankings] Error:", err);
   }
 }
+
+// 🔒 ADMIN DEBUG: esponi useAppStore su window per permettere push manuale
+// delle classifiche dal vivo (le label non sono più in localStorage dopo v19)
+if (typeof window !== "undefined") {
+  (window as any).useAppStore = useAppStore;
+  (window as any).pushRankingsToCloud = pushRankingsToCloud;
+}
