@@ -14,6 +14,17 @@
 
 ## 🔥 CRITICI — Perdita dati / Sicurezza
 
+### 🔒 Rimozione dei salvataggi locali a favore del cloud come Fonte di Verità assoluta
+- **Sintomo**: Le cancellazioni o le modifiche radicali fatte su un dispositivo (es. eliminazione di una demo o note svuotate per una label) non venivano replicate sugli altri dispositivi. Inoltre, al momento del login, le nuove tabelle non venivano caricate in `use-auth.ts`, rendendo i dati non disponibili al primo accesso su un nuovo dispositivo.
+- **Causa**: `loadFromNewTables()` effettuava un'unione ("union by id") unendo i dati cloud con quelli preesistenti nel cache di localStorage, impedendo la propagazione delle cancellazioni. Inoltre, `useAuthEffect` caricava solo la riga globale delle classifiche e non chiamava `loadFromNewTables()`. Le release non erano sincronizzate nel cloud.
+- **Fix** (2026-06-30):
+  1. **Allineato il login**: `useAuthEffect` chiama ora `loadFromNewTables()` subito dopo aver completato l'autenticazione.
+  2. **Fonte di Verità Assoluta**: `loadFromNewTables()` sovrascrive interamente lo stato locale per `demos`, `savedPitches`, `sentCampaigns` e `releases` con i dati del database, eliminando il rischio di ghost-data locali. Resetta i campi personali delle label seed ed applica solo i dati cloud, rimuovendo le label custom non più presenti sul server.
+  3. **Inclusione Release**: Creata la tabella `user_releases` ed implementato l'endpoint `/api/releases` per sincronizzare anche le release e gli EP nel cloud (con relative azioni dual-write).
+  4. **Profilo Utente**: Integrato il caricamento del profilo utente direttamente dentro `loadFromNewTables()`.
+- **File**: `src/lib/store.ts` (aggiornate le azioni delle release e `loadFromNewTables()`), `src/lib/use-auth.ts` (aggiunta chiamata a `loadFromNewTables()` al login), `src/lib/api-client.ts` (aggiunti helper API per release), `src/app/api/releases/route.ts` (NEW — rotta API per release), `supabase-schema-releases.sql` (NEW — schema SQL per tabella release).
+- **⚠️ AZIONE MANUALE RICHIESTA**: Eseguire il file `supabase-schema-releases.sql` nel Supabase SQL Editor per creare la tabella `user_releases`.
+
 ### 🔒 FASE D — Supabase Auth + RLS vera + realtime live (isolamento 100%)
 - **Sintomo**: RLS basata su `auth.jwt()->>'email'` non funzionava perché gli utenti non avevano sessione Supabase Auth (solo NextAuth). Le API routes usavano service_role (bypassa RLS) → isolamento dipendeva solo dal `.eq("user_email", email)` nelle query. Bug in una query = rischio cross-user.
 - **Causa**: NextAuth e Supabase Auth erano due sistemi separati. Senza JWT Supabase, la RLS non poteva filtrare a livello database.

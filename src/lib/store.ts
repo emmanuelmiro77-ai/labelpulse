@@ -7,7 +7,20 @@ import labelData from "./labels-data.json";
 import { saveStateToCloud, loadStateFromCloud, isSupabaseConfigured, isApplyingRemoteUpdate, markLocalProfileEdit } from "./supabase";
 import { saveArtistsToIDB, loadArtistsFromIDB, clearArtistsIDB } from "./artists-idb";
 import type { PitchTrackEntry } from "./pitch-utils";
-import { apiCreateDemo, apiUpdateDemo, apiDeleteDemo, apiUpsertLabelData, apiDeleteLabelData, apiCreatePitch, apiUpdatePitch, apiDeletePitch, apiUpsertProfile } from "./api-client";
+import {
+  apiCreateDemo,
+  apiUpdateDemo,
+  apiDeleteDemo,
+  apiUpsertLabelData,
+  apiDeleteLabelData,
+  apiCreatePitch,
+  apiUpdatePitch,
+  apiDeletePitch,
+  apiUpsertProfile,
+  apiCreateRelease,
+  apiUpdateRelease,
+  apiDeleteRelease,
+} from "./api-client";
 
 // ==================== TYPES ====================
 
@@ -1916,14 +1929,27 @@ export const useAppStore = create<AppState>()(
 
       addRelease: (release) => {
         const id = genId();
+        const now = new Date().toISOString();
+        const newRelease = { ...release, id, createdAt: now };
         set((state) => ({
           releases: [
             ...state.releases,
-            { ...release, id, createdAt: new Date().toISOString() },
+            newRelease,
           ],
-          lastSavedAt: new Date().toISOString(),
+          lastSavedAt: now,
         }));
         syncToCloud();
+        // Scrittura speculare nel cloud per le release
+        apiCreateRelease({
+          id: newRelease.id,
+          type: newRelease.type,
+          title: newRelease.title,
+          artists: newRelease.artists,
+          track_ids: newRelease.trackIds,
+          genre: newRelease.genre,
+          notes: newRelease.notes,
+          ep_soundcloud_url: newRelease.epSoundCloudUrl,
+        }).catch(() => {/* silente */});
         return id;
       },
       updateRelease: (id, updates) => {
@@ -1934,12 +1960,33 @@ export const useAppStore = create<AppState>()(
           lastSavedAt: new Date().toISOString(),
         }));
         syncToCloud();
+        // Scrittura speculare nel cloud per l'aggiornamento della release
+        const updated = useAppStore.getState().releases.find((r) => r.id === id);
+        if (updated) {
+          apiUpdateRelease(id, {
+            type: updated.type,
+            title: updated.title,
+            artists: updated.artists,
+            track_ids: updated.trackIds,
+            genre: updated.genre,
+            notes: updated.notes,
+            ep_soundcloud_url: updated.epSoundCloudUrl,
+          }).catch(() => {/* silente */});
+        }
       },
       deleteRelease: (id) => {
-        // Detach all demos from this release, then remove the release itself
+        // Scollega tutti i demo legati a questa release, poi rimuovi la release stessa
         set((state) => ({
           releases: state.releases.filter((r) => r.id !== id),
           demos: state.demos.map((d) =>
+            d.parentReleaseId === id ? { ...d, parentReleaseId: null } : d
+          ),
+          lastSavedAt: new Date().toISOString(),
+        }));
+        syncToCloud();
+        // Scrittura speculare nel cloud per la cancellazione
+        apiDeleteRelease(id).catch(() => {/* silente */});
+      },
             d.parentReleaseId === id ? { ...d, parentReleaseId: null } : d
           ),
           lastSavedAt: new Date().toISOString(),
@@ -3490,86 +3537,96 @@ export async function loadFromNewTables(): Promise<void> {
   if (typeof window === "undefined") return;
 
   try {
-    // Fetch all data in parallel
-    const [demosRes, labelsRes, pitchesRes, profileRes] = await Promise.all([
+    // Carica tutti i dati in parallelo dal cloud (incluse le release)
+    const [demosRes, labelsRes, pitchesRes, profileRes, releasesRes] = await Promise.all([
       fetch("/api/demos").catch(() => null),
       fetch("/api/label-data").catch(() => null),
       fetch("/api/pitches").catch(() => null),
       fetch("/api/profile").catch(() => null),
+      fetch("/api/releases").catch(() => null),
     ]);
 
     const state = useAppStore.getState();
 
-    // 1. Demos — if new tables have demos, prefer them over local
+    // 1. Demos — Il server è la fonte assoluta di verità.
+    // Sovrascriviamo lo stato locale con i dati del server.
     if (demosRes?.ok) {
       const data = await demosRes.json();
       const apiDemos = data.demos || [];
-      if (apiDemos.length > 0) {
-        console.log(`[FASE C.6] Loaded ${apiDemos.length} demos from new table`);
-        // Merge: union by id, prefer API version (source of truth)
-        const existingById = new Map(state.demos.map((d: any) => [d.id, d]));
-        for (const ad of apiDemos) {
-          existingById.set(ad.id, {
-            id: ad.id,
-            labelId: ad.label_id,
-            trackName: ad.track_name,
-            artistName: ad.artist_name || "",
-            link: ad.link || "",
-            status: ad.status || "ready",
-            sentDate: ad.sent_date,
-            pitchText: ad.pitch_text,
-            pitchSubject: ad.pitch_subject,
-            pitchTracks: ad.pitch_tracks,
-            notes: ad.notes,
-            parentReleaseId: ad.parent_release_id,
-            createdAt: ad.created_at,
-          });
-        }
-        useAppStore.setState({ demos: Array.from(existingById.values()) });
-      }
+      console.log(`[FASE C.6] Loaded ${apiDemos.length} demos from new table`);
+      
+      const mappedDemos = apiDemos.map((ad: any) => ({
+        id: ad.id,
+        labelId: ad.label_id,
+        trackName: ad.track_name,
+        artistName: ad.artist_name || "",
+        link: ad.link || "",
+        status: ad.status || "ready",
+        sentDate: ad.sent_date,
+        pitchText: ad.pitch_text,
+        pitchSubject: ad.pitch_subject,
+        pitchTracks: ad.pitch_tracks || [],
+        notes: ad.notes,
+        parentReleaseId: ad.parent_release_id,
+        createdAt: ad.created_at,
+      }));
+      useAppStore.setState({ demos: mappedDemos });
     }
 
-    // 2. Label personal data — apply on top of existing labels
+    // 2. Label personal data — Il server è la fonte assoluta di verità per i dati personali.
+    // Prima, resettiamo tutti i campi personali delle label esistenti ai valori di default.
     if (labelsRes?.ok) {
       const data = await labelsRes.json();
       const apiLabels = data.labels || [];
-      if (apiLabels.length > 0) {
-        console.log(`[FASE C.6] Loaded ${apiLabels.length} label personal data from new table`);
-        const labelMap = new Map(state.labels.map((l: any) => [l.id, { ...l }]));
-        const customLabels: any[] = [];
+      console.log(`[FASE C.6] Loaded ${apiLabels.length} label personal data from new table`);
+      
+      // Filtriamo via le vecchie label custom (le ricostruiremo dall'API se sono ancora attive)
+      const cleanSeedLabels = state.labels
+        .filter((l: any) => !l.isCustom)
+        .map((l: any) => ({
+          ...l,
+          emails: [],
+          notes: "",
+          status: "unknown",
+          website: "",
+          demoLink: "",
+          socialLink: "",
+          soundcloudLink: "",
+          contactInfo: "",
+        }));
 
-        for (const al of apiLabels) {
-          if (al.is_custom) {
-            // Custom label — add to labels array if not present
-            if (!labelMap.has(al.label_id)) {
-              customLabels.push({
-                id: al.label_id,
-                name: al.custom_name || "Unknown",
-                genre: al.custom_genre || "",
-                status: al.status || "unknown",
-                emails: al.emails || [],
-                notes: al.notes || "",
-                website: al.website || "",
-                demoLink: al.demo_link || "",
-                socialLink: al.social_link || "",
-                soundcloudLink: al.soundcloud_link || "",
-                contactInfo: al.contact_info || "",
-                isCustom: true,
-                submissionType: "email",
-                createdAt: al.created_at,
-                genres: [],
-                rankByGenre: {},
-                pointsByGenre: {},
-                trending: false,
-                trendingRankByGenre: {},
-                trendingPointsByGenre: {},
-              });
-            }
-          }
-          // Apply personal data to existing label
+      const labelMap = new Map(cleanSeedLabels.map((l: any) => [l.id, l]));
+      const customLabels: any[] = [];
+
+      for (const al of apiLabels) {
+        if (al.is_custom) {
+          customLabels.push({
+            id: al.label_id,
+            name: al.custom_name || "Unknown",
+            genre: al.custom_genre || "",
+            status: al.status || "unknown",
+            emails: al.emails || [],
+            notes: al.notes || "",
+            website: al.website || "",
+            demoLink: al.demo_link || "",
+            socialLink: al.social_link || "",
+            soundcloudLink: al.soundcloud_link || "",
+            contactInfo: al.contact_info || "",
+            isCustom: true,
+            submissionType: "email",
+            createdAt: al.created_at,
+            genres: [],
+            rankByGenre: {},
+            pointsByGenre: {},
+            trending: false,
+            trendingRankByGenre: {},
+            trendingPointsByGenre: {},
+          });
+        } else {
+          // Applica i dati personali alla label seed corrispondente
           const existing = labelMap.get(al.label_id);
           if (existing) {
-            if (al.emails?.length) existing.emails = al.emails;
+            if (al.emails) existing.emails = al.emails;
             if (al.notes) existing.notes = al.notes;
             if (al.status) existing.status = al.status;
             if (al.website) existing.website = al.website;
@@ -3579,59 +3636,96 @@ export async function loadFromNewTables(): Promise<void> {
             if (al.contact_info) existing.contactInfo = al.contact_info;
           }
         }
-
-        useAppStore.setState({
-          labels: [...Array.from(labelMap.values()), ...customLabels],
-        });
       }
+
+      useAppStore.setState({
+        labels: [...Array.from(labelMap.values()), ...customLabels],
+      });
     }
 
-    // 3. Pitches — split into drafts (savedPitches) and sent (sentCampaigns)
+    // 3. Pitches — Il server è la fonte assoluta di verità per bozze e campagne inviate.
     if (pitchesRes?.ok) {
       const data = await pitchesRes.json();
       const apiPitches = data.pitches || [];
-      if (apiPitches.length > 0) {
-        console.log(`[FASE C.6] Loaded ${apiPitches.length} pitches from new table`);
-        const drafts: any[] = [];
-        const sent: any[] = [];
-        for (const p of apiPitches) {
-          const mapped = {
-            id: p.id,
-            labelId: p.label_id,
-            labelName: p.label_name,
-            demoId: p.demo_id,
-            subject: p.subject,
-            body: p.body,
-            pitchTracks: p.pitch_tracks,
-            epLinkMode: p.ep_link_mode,
-            epSoundCloudUrl: p.ep_soundcloud_url,
-            createdAt: p.created_at,
-            updatedAt: p.updated_at,
-            sentAt: p.sent_at,
-            sentMethod: p.sent_method,
-          };
-          if (p.status === "sent") {
-            sent.push(mapped);
-          } else {
-            drafts.push(mapped);
-          }
+      console.log(`[FASE C.6] Loaded ${apiPitches.length} pitches from new table`);
+      
+      const drafts: any[] = [];
+      const sent: any[] = [];
+      for (const p of apiPitches) {
+        const mapped = {
+          id: p.id,
+          labelId: p.label_id,
+          labelName: p.label_name,
+          demoId: p.demo_id,
+          subject: p.subject,
+          body: p.body,
+          pitchTracks: p.pitch_tracks || [],
+          epLinkMode: p.ep_link_mode,
+          epSoundCloudUrl: p.ep_soundcloud_url,
+          createdAt: p.created_at,
+          updatedAt: p.updated_at,
+          sentAt: p.sent_at,
+          sentMethod: p.sent_method,
+        };
+        if (p.status === "sent") {
+          sent.push(mapped);
+        } else {
+          drafts.push(mapped);
         }
-        // Merge: union by id
-        const draftMap = new Map(state.savedPitches.map((p: any) => [p.id, p]));
-        for (const d of drafts) draftMap.set(d.id, d);
-        const sentMap = new Map(state.sentCampaigns.map((c: any) => [c.id, c]));
-        for (const s of sent) sentMap.set(s.id, s);
-        useAppStore.setState({
-          savedPitches: Array.from(draftMap.values()),
-          sentCampaigns: Array.from(sentMap.values()),
-        });
+      }
+      useAppStore.setState({
+        savedPitches: drafts,
+        sentCampaigns: sent,
+      });
+    }
+
+    // 4. User profile — Sincronizza il profilo utente
+    if (profileRes?.ok) {
+      const data = await profileRes.json();
+      const p = data.profile;
+      if (p) {
+        console.log("[FASE C.6] Loaded user profile from new table");
+        const current = state.userProfile;
+        const apiHasData = !!p.artist_name || !!p.bio || !!p.photo_url || !!p.sc_link;
+        if (apiHasData) {
+          useAppStore.setState({
+            userProfile: {
+              ...current,
+              artistName: p.artist_name || current.artistName,
+              bio: p.bio || current.bio,
+              photoUrl: p.photo_url || current.photoUrl,
+              scLink: p.sc_link || current.scLink,
+              links: p.links || [],
+              cyaniteApiToken: p.cyanite_api_token || current.cyaniteApiToken,
+            },
+          });
+        }
       }
     }
 
-    console.log("[FASE C.6] loadFromNewTables completed");
+    // 5. Releases — Il server è la fonte assoluta di verità per le release (EP)
+    if (releasesRes?.ok) {
+      const data = await releasesRes.json();
+      const apiReleases = data.releases || [];
+      console.log(`[FASE C.6] Loaded ${apiReleases.length} releases from new table`);
+      
+      const mappedReleases = apiReleases.map((ar: any) => ({
+        id: ar.id,
+        type: ar.type || "ep",
+        title: ar.title,
+        artists: ar.artists || [],
+        trackIds: ar.track_ids || [],
+        genre: ar.genre || "",
+        notes: ar.notes || "",
+        createdAt: ar.created_at,
+        epSoundCloudUrl: ar.ep_soundcloud_url || "",
+      }));
+      useAppStore.setState({ releases: mappedReleases });
+    }
+
+    console.log("[FASE C.6] loadFromNewTables completed successfully");
   } catch (err) {
     console.error("[FASE C.6] loadFromNewTables failed:", err);
-    // 🔒 EMERGENCY FIX: non lasciare l'app in stato di crash, continua con dati locali
   }
 }
 

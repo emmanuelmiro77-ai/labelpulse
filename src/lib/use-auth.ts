@@ -10,6 +10,7 @@ import {
   verifyStorageOwner,
   clearAllLocalData,
   setStorageOwner,
+  loadFromNewTables,
 } from "./store";
 import { identifyUser, clearUser, trackEvent } from "./analytics";
 
@@ -105,6 +106,10 @@ export function useAuthEffect(): void {
     });
 
     loadFromCloud().then(() => {
+      // 🔒 Sincronizza immediatamente tutte le tabelle dedicate (demos, personal labels, pitches, profile, releases)
+      loadFromNewTables().catch((err) =>
+        console.error("[LabelPulse Auth] loadFromNewTables failed:", err)
+      );
       loadArtistsOnBoot().catch((e) =>
         console.warn("[LabelPulse Auth] loadArtistsOnBoot failed:", e)
       );

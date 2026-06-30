@@ -295,3 +295,69 @@ export async function apiFetchProfile(): Promise<ProfileRow | null> {
     return null;
   }
 }
+
+// ==================== RELEASES ====================
+
+export interface ReleaseRow {
+  id: string;
+  type?: string;
+  title: string;
+  artists?: string[];
+  track_ids?: string[];
+  genre?: string;
+  notes?: string;
+  ep_soundcloud_url?: string;
+}
+
+export async function apiCreateRelease(release: ReleaseRow): Promise<boolean> {
+  try {
+    const res = await fetch(`${API_BASE}/api/releases`, {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify(release),
+    });
+    if (!res.ok) {
+      console.error("[apiCreateRelease] failed:", res.status);
+      return false;
+    }
+    return true;
+  } catch (err) {
+    console.error("[apiCreateRelease] network error:", err);
+    return false;
+  }
+}
+
+export async function apiUpdateRelease(id: string, updates: Partial<ReleaseRow>): Promise<boolean> {
+  try {
+    const res = await fetch(`${API_BASE}/api/releases?id=${encodeURIComponent(id)}`, {
+      method: "PATCH",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify(updates),
+    });
+    if (!res.ok) {
+      console.error("[apiUpdateRelease] failed:", res.status);
+      return false;
+    }
+    return true;
+  } catch (err) {
+    console.error("[apiUpdateRelease] network error:", err);
+    return false;
+  }
+}
+
+export async function apiDeleteRelease(id: string): Promise<boolean> {
+  try {
+    const res = await fetch(`${API_BASE}/api/releases?id=${encodeURIComponent(id)}`, {
+      method: "DELETE",
+    });
+    if (!res.ok) {
+      console.error("[apiDeleteRelease] failed:", res.status);
+      return false;
+    }
+    return true;
+  } catch (err) {
+    console.error("[apiDeleteRelease] network error:", err);
+    return false;
+  }
+}
+

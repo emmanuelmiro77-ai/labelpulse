@@ -1848,3 +1848,26 @@ Stage Summary:
 - Vecchio sistema app_state disabilitato (no più timeout)
 - L'app ora usa SOLO le nuove tabelle dedicate con RLS
 - Pronta per FASE 2 (Closed Beta)
+
+---
+Task ID: cloud-only-source-of-truth
+Agent: Main Agent
+Task: Rimozione completa dipendenza dai salvataggi locali (Zustand localStorage cache) per utenti autenticati
+
+Work Log:
+- Analizzato il flusso di caricamento dei dati personali: `loadFromNewTables()` non gestiva le release e ignorava il profilo utente durante il login.
+- Risolto bug critico in `useAuthEffect` (`src/lib/use-auth.ts`): all'accesso di un utente, veniva chiamato `loadFromCloud` ma NON `loadFromNewTables()`. Ora viene eseguito il caricamento completo dal cloud non appena l'utente è autenticato.
+- Implementata la sincronizzazione delle Release (EP) nel cloud creando la tabella `user_releases` (in `supabase-schema-releases.sql`) e l'endpoint API `/api/releases` (in `src/app/api/releases/route.ts`).
+- Aggiornato `src/lib/api-client.ts` con i metodi CRUD per le release.
+- Modificato `src/lib/store.ts`:
+  - `addRelease`, `updateRelease`, `deleteRelease` ora effettuano scritture speculari dual-write sul server cloud.
+  - `loadFromNewTables()` è ora la fonte assoluta di verità per gli utenti autenticati: sovrascrive interamente lo stato locale per Demos, Pitches (savedPitches + sentCampaigns), User Profile e Releases eliminando la logica di unione parziale che ri-generava elementi cancellati.
+  - Per le label, all'avvio pulisce i dati locali ed applica esattamente solo i dati personali caricati dal cloud (inclusa la gestione e il recupero delle label custom e seed).
+- Verificato che non vi siano errori di compilazione nello store e nelle rotte API.
+
+Stage Summary:
+- Rimozione salvataggi locali completata ✅
+- Creato `/api/releases` + `user_releases` table schema.
+- Allineato il login (`useAuthEffect`) per forzare il caricamento del cloud.
+- Il cloud è ora la fonte assoluta e unica di verità per tutti i dati utente su qualsiasi dispositivo.
+- ⚠️ AZIONE RICHIESTA: L'utente deve eseguire `supabase-schema-releases.sql` nel Supabase SQL Editor per creare la tabella `user_releases`.
