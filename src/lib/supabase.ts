@@ -747,6 +747,60 @@ export async function loadGlobalRowOnly(): Promise<any | null> {
 }
 
 /**
+ * 🔒 FASE D FIX — Applica i dati globali (classifiche) al store Zustand
+ *
+ * Chiamata dal realtime GLOBAL quando l'admin pusha nuove classifiche.
+ * Fa il merge: locale come base, globale vince sui campi Beatport.
+ */
+async function applyGlobalDataToStore(globalData: any): Promise<void> {
+  try {
+    const { useAppStore } = await import("./store");
+    const currentState = useAppStore.getState();
+    const globalLabels = globalData.labels || [];
+    const globalById = new Map(globalLabels.map((l: any) => [l.id, l]));
+
+    const mergedLabels = currentState.labels.map((localLabel: any) => {
+      const globalLabel = globalById.get(localLabel.id);
+      if (globalLabel) {
+        return {
+          ...localLabel,
+          genres: globalLabel.genres || localLabel.genres,
+          rankByGenre: globalLabel.rankByGenre || localLabel.rankByGenre,
+          pointsByGenre: globalLabel.pointsByGenre || localLabel.pointsByGenre,
+          trending: globalLabel.trending ?? localLabel.trending,
+          trendingRankByGenre: globalLabel.trendingRankByGenre || localLabel.trendingRankByGenre,
+          trendingPointsByGenre: globalLabel.trendingPointsByGenre || localLabel.trendingPointsByGenre,
+          imageUrl: globalLabel.imageUrl || localLabel.imageUrl,
+          slug: globalLabel.slug || localLabel.slug,
+          beatportId: globalLabel.beatportId ?? localLabel.beatportId,
+          prevRankByGenre: globalLabel.prevRankByGenre || localLabel.prevRankByGenre,
+        };
+      }
+      return localLabel;
+    });
+
+    // Aggiungi label globali che non esistono in locale
+    const localIds = new Set(currentState.labels.map((l: any) => l.id));
+    for (const globalLabel of globalLabels) {
+      if (!localIds.has(globalLabel.id)) {
+        mergedLabels.push(globalLabel);
+      }
+    }
+
+    useAppStore.setState({
+      labels: mergedLabels,
+      rankingSnapshots: (globalData.rankingSnapshots?.length || 0) > (currentState.rankingSnapshots?.length || 0)
+        ? globalData.rankingSnapshots
+        : currentState.rankingSnapshots,
+      rankingsUpdatedAt: globalData.rankingsUpdatedAt || currentState.rankingsUpdatedAt,
+    });
+    console.log("[LabelPulse Cloud] Global data applied to store. Labels:", mergedLabels.length, "UpdatedAt:", globalData.rankingsUpdatedAt);
+  } catch (err) {
+    console.error("[LabelPulse Cloud] applyGlobalDataToStore failed:", err);
+  }
+}
+
+/**
  * 🔒 FASE D FIX: Salva SOLO la riga globale (classifiche Beatport).
  * Usata da saveGlobalRowIfAdmin() per permettere all'admin di pushare
  * nuove classifiche senza salvare la riga personale (che causava timeout).
@@ -1050,11 +1104,12 @@ export function setupRealtimeSubscription(): () => void {
           console.log("[LabelPulse Cloud] Realtime PERSONAL update, applying personal overlay...");
           _isApplyingRemoteUpdate = true;
           try {
-            // Personal update: only the personal overlay changed. We need to
-            // re-merge with the global row to produce the final state.
-            // Easiest: just reload both from cloud.
-            const fresh = await loadStateFromCloud();
-            if (fresh) await applyRemoteData(fresh);
+            // 🔒 FASE D FIX: NON usare loadStateFromCloud() — è disabilitato.
+            // I dati personali ora sono nelle 4 nuove tabelle dedicate.
+            // Ricarica da loadFromNewTables() invece.
+            // (lazy import per evitare circular dep)
+            const { loadFromNewTables } = await import("./store");
+            await loadFromNewTables();
             setStatus("synced");
           } finally {
             _isApplyingRemoteUpdate = false;
@@ -1087,10 +1142,18 @@ export function setupRealtimeSubscription(): () => void {
           console.log("[LabelPulse Cloud] Realtime GLOBAL update (admin pushed new rankings), refreshing...");
           _isApplyingRemoteUpdate = true;
           try {
-            // Global update: admin pushed new Beatport data. Reload both rows
-            // and re-merge so the user sees the new rankings immediately.
-            const fresh = await loadStateFromCloud();
-            if (fresh) await applyRemoteData(fresh);
+            // 🔒 FASE D FIX: carica SOLO la riga globale (classifiche)
+            // NON usare loadStateFromCloud() — è disabilitato (causa timeout)
+            const globalData = await loadGlobalRowOnly();
+            if (globalData) {
+              console.log("[LabelPulse Cloud] Realtime GLOBAL — applying new rankings:", {
+                labels: globalData.labels?.length || 0,
+                snaps: globalData.rankingSnapshots?.length || 0,
+                updatedAt: globalData.rankingsUpdatedAt,
+              });
+              // Applica direttamente i dati globali al store
+              await applyGlobalDataToStore(globalData);
+            }
             setStatus("synced");
           } finally {
             _isApplyingRemoteUpdate = false;
