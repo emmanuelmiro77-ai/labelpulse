@@ -1987,12 +1987,6 @@ export const useAppStore = create<AppState>()(
         // Scrittura speculare nel cloud per la cancellazione
         apiDeleteRelease(id).catch(() => {/* silente */});
       },
-            d.parentReleaseId === id ? { ...d, parentReleaseId: null } : d
-          ),
-          lastSavedAt: new Date().toISOString(),
-        }));
-        syncToCloud();
-      },
 
       // ==================== SAVED PITCHES (Bozze) ====================
       addSavedPitch: (pitch) => {
