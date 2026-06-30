@@ -186,11 +186,12 @@ SISTEMA VECCHIO (parzialmente disabilitato):
   ⚠️ DISABILITATO per: riga personale (user_email) — causa statement timeout
 
 SISTEMA NUOVO (FASE C+D, operativo):
-  API routes (NextAuth + JWT Supabase) ↔ 4 tabelle dedicate con RLS
+  API routes (NextAuth + JWT Supabase) ↔ 5 tabelle dedicate con RLS
   ✅ demo_submissions — demo per utente
   ✅ label_personal_data — email/note/status personalizzati
   ✅ pitch_campaigns — bozze + inviate (status draft|sent)
   ✅ user_profiles — profilo producer
+  ✅ user_releases — release ed EP dell'utente
   ✅ RLS: USING (user_email = auth.jwt()->>'email') — isolamento 100%
   ✅ Realtime live per cross-device updates (1-2 secondi)
 ```
@@ -236,7 +237,7 @@ SISTEMA NUOVO (FASE C+D, operativo):
 5. ⚠️ Non riattivare auto-push artisti (forcePushArtistsToCloud causa timeout 500)
 6. ⚠️ Non cancellare i dati da `app_state` riga 'global' (contiene classifiche + artisti condivisi)
 7. ⚠️ Non rimuovere il dual write da store.ts (scrive sia vecchio che nuovo sistema)
-8. ⚠️ Non modificare la RLS delle 4 nuove tabelle (auth.jwt()->>'email' è la sicurezza)
+8. ⚠️ Non modificare la RLS delle 5 nuove tabelle (auth.jwt()->>'email' è la sicurezza)
 
 #### File chiave da conoscere
 
@@ -246,13 +247,15 @@ SISTEMA NUOVO (FASE C+D, operativo):
 - `src/lib/api-client.ts` — helper per chiamate alle nuove API routes
 - `src/lib/auth-options.ts` — NextAuth con bridge a Supabase Auth (signInWithIdToken)
 - `src/lib/supabase-auth-server.ts` — helpers SSR per sessione Supabase
-- `src/hooks/use-realtime-sync.ts` — realtime live per le 4 tabelle
+- `src/hooks/use-realtime-sync.ts` — realtime live per le 5 tabelle
 - `src/app/api/demos/route.ts` — CRUD demo_submissions
 - `src/app/api/label-data/route.ts` — CRUD label_personal_data
 - `src/app/api/pitches/route.ts` — CRUD pitch_campaigns
 - `src/app/api/profile/route.ts` — CRUD user_profiles
+- `src/app/api/releases/route.ts` — CRUD user_releases
 - `src/app/api/admin/migrate-appstate/route.ts` — migrazione one-time
 - `supabase-schema-fase-c.sql` — schema 4 nuove tabelle con RLS
+- `supabase-schema-releases.sql` — schema tabella user_releases con RLS
 
 **Sistema vecchio (parzialmente disabilitato):**
 - `src/lib/supabase.ts` — saveStateToCloud (solo admin globale), loadGlobalRowOnly, loadStateFromCloud (disabilitato)
@@ -286,7 +289,7 @@ SUPPORT_EMAIL
 
 - ✅ Google provider abilitato su Authentication → Providers → Google
 - ✅ Callback URL: `https://vksemjnqqfocspxzbscx.supabase.co/auth/v1/callback`
-- ✅ 4 nuove tabelle create (demo_submissions, label_personal_data, pitch_campaigns, user_profiles)
+- ✅ 5 nuove tabelle create (demo_submissions, label_personal_data, pitch_campaigns, user_profiles, user_releases)
 - ✅ RLS attiva su tutte con policy `user_email = auth.jwt()->>'email'`
 - ✅ Realtime abilitato su tutte le tabelle
 - ✅ Trigger updated_at automatico
