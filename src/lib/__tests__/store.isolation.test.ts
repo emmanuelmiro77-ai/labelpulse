@@ -34,6 +34,7 @@ import {
   setStorageOwner,
   verifyStorageOwner,
   clearAllLocalData,
+  restoreProfileFromSidecar,
   useAppStore,
 } from "@/lib/store";
 
@@ -203,6 +204,30 @@ describe("Cross-account data isolation (fix f54bff8)", () => {
       // MUST still be true — if this fails, someone reintroduced the bug
       // where logout locks the user out with an infinite "Loading LabelPulse..." spinner.
       expect(useAppStore.getState().hasRehydrated).toBe(true);
+    });
+  });
+
+  describe("restoreProfileFromSidecar safety", () => {
+    it("restores user profile when cloud is empty but sidecar has profile data", () => {
+      const profileData = JSON.stringify({
+        userProfile: {
+          artistName: "DJ Test",
+          bio: "Producer from Italy",
+          email: "dj@test.com",
+          links: [{ type: "website", value: "https://example.com" }],
+        },
+      });
+      localStorage.setItem(PROFILE_BACKUP_KEY, profileData);
+      useAppStore.setState({ userProfile: { artistName: "", bio: "", email: "", links: [] } });
+
+      const restored = restoreProfileFromSidecar();
+
+      expect(restored).toBe(true);
+      expect(useAppStore.getState().userProfile.artistName).toBe("DJ Test");
+      expect(useAppStore.getState().userProfile.bio).toBe("Producer from Italy");
+      expect(useAppStore.getState().userProfile.links).toEqual([
+        { type: "website", value: "https://example.com" },
+      ]);
     });
   });
 });

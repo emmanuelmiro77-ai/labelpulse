@@ -3274,12 +3274,17 @@ export async function loadFromCloud(): Promise<void> {
     const cloudData = await loadStateFromCloud();
     if (!cloudData) {
       // Nessun dato nel cloud.
-      // ⚠️ CRITICAL: only upload local data if it actually has real user data.
-      // If the local state is just seed data (empty profile, default labels),
-      // uploading it would create a cloud row with empty data — and future
-      // logins would pull that empty data, making the user think their data
-      // was lost. Only upload if the user has actually entered something
-      // (artistName, bio, links, custom labels, demos, etc.).
+      // Prima di decidere se caricare il locale, proviamo a ripristinare il
+      // profilo e gli snapshot dal sidecar di emergenza. Questo protegge gli
+      // utenti che hanno perso il main store ma hanno ancora il backup locale.
+      const profileRestored = restoreProfileFromSidecar();
+      const snapsRestored = restoreSnapshotsFromSidecar();
+      if (profileRestored || snapsRestored > 0) {
+        console.info(
+          `[LabelPulse Cloud] Restored from sidecar before initial sync: profile=${profileRestored ? "yes" : "no"}, snaps=${snapsRestored}`
+        );
+      }
+
       const localState = useAppStore.getState();
       const localHasRealData =
         !!localState.userProfile?.artistName ||
