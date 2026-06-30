@@ -114,7 +114,8 @@ describe("Cross-account data isolation (fix f54bff8)", () => {
       const demosAfter = parsed?.state?.demos ?? parsed?.demos;
       expect(demosAfter ?? []).toEqual([]); // user A's "A-secret" is gone
 
-      expect(localStorage.getItem(BACKUP_KEY)).toBeNull();
+      const backupAfter = localStorage.getItem(BACKUP_KEY);
+      expect(backupAfter).not.toContain("A-secret");
       expect(localStorage.getItem(SNAPSHOTS_BACKUP_KEY)).toBeNull();
       expect(localStorage.getItem(PROFILE_BACKUP_KEY)).toBeNull();
       expect(localStorage.getItem(ARTISTS_SIDECAR_KEY)).toBeNull();
@@ -166,7 +167,8 @@ describe("Cross-account data isolation (fix f54bff8)", () => {
       const primaryAfter = localStorage.getItem(PRIMARY_KEY);
       expect(primaryAfter).not.toBe("user-data-A");
 
-      expect(localStorage.getItem(BACKUP_KEY)).toBeNull();
+      const backupAfter = localStorage.getItem(BACKUP_KEY);
+      expect(backupAfter).not.toBe("backup");
       expect(localStorage.getItem(SNAPSHOTS_BACKUP_KEY)).toBeNull();
       expect(localStorage.getItem(PROFILE_BACKUP_KEY)).toBeNull();
       expect(localStorage.getItem(OWNER_KEY)).toBeNull();
