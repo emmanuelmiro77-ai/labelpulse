@@ -1472,111 +1472,57 @@ async function applyRemoteData(cloudData: any): Promise<void> {
  * - This caused the realtime update to be silently ignored
  * - Now we call loadGlobalRowOnly() + applyGlobalDataToStore() to apply rankings directly
  *
- * SAFETY RULE: Preserve local user-edit fields (emails, notes, website, etc.)
- * by doing UNION BY ID instead of REPLACE. Beatport data fields (rank, points, genres)
- * from cloud WIN over local (since they're the source of truth from the scraper).
+ * 🔒 REGOLA ZERO: REPLACE totale, NON merge. Il cloud è l'unica verità.
+ * Le label dal cloud sostituiscono completamente quelle locali (preservando
+ * solo i campi personali che vivono nelle 4 nuove tabelle dedicate).
+ * Gli snapshots vengono sostituiti completamente dal cloud.
+ * Niente sidecar restore, niente union, niente merge.
  */
 async function applyGlobalDataToStore(globalData: any): Promise<void> {
   const store = useAppStore.getState();
 
-  // ⚠️ Beatport fields that come from the scraper (cloud is source of truth)
-  const beatportFields = ["rankByGenre", "pointsByGenre", "trendingRankByGenre", "trendingPointsByGenre", "prevRankByGenre", "genres", "trending"];
+  // 🔒 REGOLA ZERO: REPLACE totale. Il cloud è l'unica verità.
+  // Niente merge, niente union, niente sidecar restore.
+  // I campi personali (emails, notes) vivono nelle 4 nuove tabelle,
+  // non nel global — quindi possiamo sostituire completamente.
 
-  // User-edit fields that should be preserved from local
-  const userEditFields = ["emails", "notes", "website", "demoLink", "socialLink", "soundcloudLink", "status", "tier", "instagramLink", "facebookLink", "bandcampLink", "beatstatsLink", "imageUrl", "slug"];
-
-  const merged: any = {};
-
-  // ---------- LABELS: union by id, cloud's Beatport data WINS, preserve local user edits ----------
   const cloudLabels = Array.isArray(globalData.labels) ? globalData.labels : [];
   const localLabels = Array.isArray(store.labels) ? store.labels : [];
-  const labelsById = new Map<string, any>();
-  const labelsByName = new Map<string, any>();
+  const localById = new Map(localLabels.map((l: any) => [l.id, l]));
 
-  // First: add all cloud labels
-  for (const cl of cloudLabels) {
-    if (!cl || typeof cl !== "object") continue;
-    labelsById.set(cl.id, { ...cl });
-    const nm = cl.name?.toLowerCase().trim();
-    if (nm) labelsByName.set(nm, cl);
-  }
-
-  // Second: merge local labels, preserving user-edit fields
-  for (const ll of localLabels) {
-    if (!ll || typeof ll !== "object") continue;
-    const nm = ll.name?.toLowerCase().trim();
-    const existing = labelsById.get(ll.id) || (nm ? labelsByName.get(nm) : undefined);
-
-    if (existing) {
-      // Label exists in cloud — preserve local user-edit fields
-      for (const f of userEditFields) {
-        const lv = (ll as any)[f];
-        if (Array.isArray(lv) ? lv.length > 0 : (lv && String(lv).trim() !== "")) {
-          (existing as any)[f] = lv;
-        }
-      }
-    } else {
-      // Label not in cloud — add it as-is (local-only label)
-      labelsById.set(ll.id, { ...ll });
-      if (nm) labelsByName.set(nm, ll);
+  // REPLIACE: prendi TUTTE le label dal cloud, preserva SOLO i campi personali dal locale
+  const finalLabels = cloudLabels.map((cl: any) => {
+    const localLabel = localById.get(cl.id);
+    if (localLabel) {
+      return {
+        ...cl,  // TUTTI i campi Beatport dal cloud (REPLACE)
+        // Campi personali dal locale (vivi nelle 4 nuove tabelle):
+        emails: localLabel.emails || [],
+        notes: localLabel.notes || "",
+        status: localLabel.status || "unknown",
+        website: localLabel.website || "",
+        demoLink: localLabel.demoLink || "",
+        socialLink: localLabel.socialLink || "",
+        soundcloudLink: localLabel.soundcloudLink || "",
+        beatportLink: localLabel.beatportLink || "",
+        contactInfo: localLabel.contactInfo || "",
+        customLinks: localLabel.customLinks || [],
+        isCustom: localLabel.isCustom || false,
+      };
     }
-  }
+    return cl;
+  });
 
-  merged.labels = Array.from(labelsById.values());
-  console.log(`[LabelPulse Cloud] Global labels applied: ${merged.labels.length} total`);
+  // 🔒 REPLACE snapshots: SEMPRE dal cloud, niente merge, niente union
+  const finalSnapshots = Array.isArray(globalData.rankingSnapshots) ? globalData.rankingSnapshots : [];
 
-  // ---------- SNAPSHOTS: union by id (timestamp + source as key) ----------
-  const cloudSnaps = Array.isArray(globalData.rankingSnapshots) ? globalData.rankingSnapshots : [];
-  const localSnaps = Array.isArray(store.rankingSnapshots) ? store.rankingSnapshots : [];
+  useAppStore.setState({
+    labels: finalLabels,
+    rankingSnapshots: finalSnapshots,
+    rankingsUpdatedAt: globalData.rankingsUpdatedAt || null,
+  });
 
-  // Try to use mergeSnapshots from store.ts for consistent merge logic
-  let mergeSnapshotsFn: any = null;
-  try {
-    const storeMod = await import("./store");
-    mergeSnapshotsFn = (storeMod as any).mergeSnapshotsPublic || null;
-  } catch {
-    // fall through
-  }
-
-  if (mergeSnapshotsFn && typeof mergeSnapshotsFn === "function") {
-    merged.rankingSnapshots = mergeSnapshotsFn(localSnaps, cloudSnaps);
-  } else {
-    // Fallback: manual union by id
-    const seen = new Set<string>();
-    const out: any[] = [];
-    for (const s of [...localSnaps, ...cloudSnaps]) {
-      if (!s || typeof s !== "object") continue;
-      const key = s.id || `${s.timestamp}|${s.source}`;
-      if (seen.has(key)) continue;
-      seen.add(key);
-      out.push(s);
-    }
-    out.sort((x, y) => new Date(x.timestamp || 0).getTime() - new Date(y.timestamp || 0).getTime());
-    merged.rankingSnapshots = out;
-  }
-
-  // Update rankingsUpdatedAt if provided
-  if (globalData.rankingsUpdatedAt) {
-    merged.rankingsUpdatedAt = globalData.rankingsUpdatedAt;
-  }
-
-  console.log(`[LabelPulse Cloud] Global data applied to store: labels=${merged.labels?.length}, snapshots=${merged.rankingSnapshots?.length}, updatedAt=${merged.rankingsUpdatedAt || "none"}`);
-
-  useAppStore.setState(merged);
-
-  // ⚠️ SAFETY: Restore from sidecar backups if the merge left us with empty data
-  setTimeout(() => {
-    try {
-      import("./store").then((storeMod: any) => {
-        const snapsRestored = storeMod.restoreSnapshotsFromSidecar?.();
-        if (snapsRestored && snapsRestored > 0) {
-          console.info(`[LabelPulse Cloud] Post-global-update sidecar restore: ${snapsRestored} snapshots recovered`);
-        }
-      });
-    } catch (e) {
-      console.warn("[LabelPulse Cloud] Post-global-update sidecar restore failed:", e);
-    }
-  }, 0);
+  console.log(`[LabelPulse Cloud] ✅ REPLACE completo: labels=${finalLabels.length}, snapshots=${finalSnapshots.length}, updatedAt=${globalData.rankingsUpdatedAt || "none"}`);
 }
 
 // ==================== ARTISTS CLOUD SYNC (separate row) ====================
