@@ -1,5 +1,5 @@
 /**
- * LabelPulse Service Worker v6 — Bulletproof Offline-First PWA + Web Push
+ * LabelPulse Service Worker v7 — Bulletproof Offline-First PWA + Web Push
  *
  * v6 (2026-06-25): removed skipWaiting() from install handler so the
  *   update flow is user-driven (banner → "Aggiorna" → SKIP_WAITING).
@@ -16,7 +16,7 @@
  * - Web Push notifications work on iOS (Home Screen), Android, Desktop
  */
 
-const CACHE_NAME = "labelpulse-v6";
+const CACHE_NAME = "labelpulse-v7";
 const OFFLINE_URL = "/";
 
 // Pre-cache essential assets on install
@@ -29,10 +29,9 @@ const PRECACHE_ASSETS = [
   "/icons/apple-touch-icon.png",
 ];
 
-// Install: cache critical assets. Do NOT call skipWaiting() here —
-// we want the new SW to wait until the user clicks "Aggiorna" in the
-// SWUpdater banner, which posts SKIP_WAITING. This makes the update
-// flow predictable and prevents the "banner won't go away" bug.
+// Install: cache critical assets.
+// 🔒 FASE D FIX: skipWaiting() automatico per forzare aggiornamento su iPhone
+// (Franco aveva cache v6 vecchia con bug cross-account, non vedeva il banner)
 self.addEventListener("install", (event) => {
   event.waitUntil(
     caches.open(CACHE_NAME).then((cache) => {
@@ -42,8 +41,8 @@ self.addEventListener("install", (event) => {
       });
     })
   );
-  // NOTE: skipWaiting() is intentionally NOT called here. It only runs
-  // when the app posts { type: "SKIP_WAITING" } to the waiting worker.
+  // 🔒 FASE D: skipWaiting automatico — forza l'aggiornamento immediato
+  self.skipWaiting();
 });
 
 // Activate: clean old caches and claim all pages immediately
