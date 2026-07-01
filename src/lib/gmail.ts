@@ -86,6 +86,79 @@ export interface SendEmailResult {
   error?: string;
 }
 
+export interface EmailAttachment {
+  filename: string;
+  contentType: string;
+  data: string; // base64-encoded content
+}
+
+function encodeSubject(subject: string): string {
+  return btoa(unescape(encodeURIComponent(subject)))
+    .replace(/\+/g, "-")
+    .replace(/\//g, "_")
+    .replace(/=+$/, "");
+}
+
+function buildRawEmailMessage(opts: {
+  to: string[];
+  subject: string;
+  body: string;
+  cc?: string[];
+  attachments?: EmailAttachment[];
+  inReplyToMessageId?: string;
+  references?: string;
+}): string {
+  const { to, subject, body, cc = [], attachments = [], inReplyToMessageId, references } = opts;
+  const toHeader = to.join(", ");
+  const headers: string[] = [`To: ${toHeader}`];
+
+  if (cc.length > 0) {
+    headers.push(`Cc: ${cc.join(", ")}`);
+  }
+  if (inReplyToMessageId) {
+    headers.push(`In-Reply-To: <${inReplyToMessageId}>`);
+  }
+  if (references) {
+    headers.push(`References: ${references}`);
+  } else if (inReplyToMessageId) {
+    headers.push(`References: <${inReplyToMessageId}>`);
+  }
+
+  headers.push(`Subject: =?utf-8?B?${encodeSubject(subject)}?=`);
+
+  if (attachments.length > 0) {
+    const boundary = `----LabelPulseBoundary${Date.now()}${Math.random().toString(16).slice(2)}`;
+    headers.push(`Content-Type: multipart/mixed; boundary="${boundary}"`);
+    headers.push("MIME-Version: 1.0");
+
+    const parts = [
+      `--${boundary}`,
+      "Content-Type: text/plain; charset=utf-8",
+      "Content-Transfer-Encoding: 7bit",
+      "",
+      body,
+    ];
+
+    for (const attachment of attachments) {
+      parts.push(
+        `--${boundary}`,
+        `Content-Type: ${attachment.contentType}; name="${attachment.filename}"`,
+        "Content-Transfer-Encoding: base64",
+        `Content-Disposition: attachment; filename="${attachment.filename}"`,
+        "",
+        attachment.data
+      );
+    }
+
+    parts.push(`--${boundary}--`);
+    return headers.join("\r\n") + "\r\n\r\n" + parts.join("\r\n");
+  }
+
+  headers.push("Content-Type: text/plain; charset=utf-8");
+  headers.push("MIME-Version: 1.0");
+  return headers.join("\r\n") + "\r\n\r\n" + body;
+}
+
 // ===== GIS Script Loader =====
 
 let gisLoaded = false;
@@ -341,30 +414,17 @@ export async function sendEmail(
   to: string[],
   subject: string,
   body: string,
-  cc: string[] = []
+  cc: string[] = [],
+  attachments: EmailAttachment[] = []
 ): Promise<SendEmailResult> {
   try {
-    // Build RFC 2822 email — IMPORTANT: header lines must NOT contain a
-    // trailing \r\n themselves, and the array must NOT contain empty strings
-    // for missing optional headers. A blank line in the middle of the
-    // headers section terminates the headers prematurely (RFC 2822 §3.5),
-    // which causes Gmail to interpret everything after the blank line
-    // (Subject, Content-Type, MIME-Version, AND the body) as the message
-    // body. Result: the recipient sees "(no subject)" + raw MIME headers
-    // in the body. This was a real production bug — fixed by building the
-    // headers array with only the lines that should actually appear, then
-    // letting `.join("\r\n")` add the line endings.
-    const toHeader = to.join(", ");
-    const headers: string[] = [`To: ${toHeader}`];
-    if (cc.length > 0) {
-      headers.push(`Cc: ${cc.join(", ")}`);
-    }
-    headers.push(`Subject: =?utf-8?B?${btoa(unescape(encodeURIComponent(subject)))}?=`);
-    headers.push("Content-Type: text/plain; charset=utf-8");
-    headers.push("MIME-Version: 1.0");
-
-    // Blank line separates headers from body (RFC 2822)
-    const rawEmail = headers.join("\r\n") + "\r\n\r\n" + body;
+    const rawEmail = buildRawEmailMessage({
+      to,
+      subject,
+      body,
+      cc,
+      attachments,
+    });
 
     const encodedEmail = btoa(unescape(encodeURIComponent(rawEmail)))
       .replace(/\+/g, "-")
@@ -418,35 +478,21 @@ export async function sendReplyInThread(
     inReplyToMessageId?: string;
     cc?: string[];
     references?: string;    // References header (RFC 5322 §3.6.4)
+    attachments?: EmailAttachment[];
   }
 ): Promise<SendEmailResult & { threadId?: string }> {
   try {
-    const { to, subject, body, threadId, inReplyToMessageId, cc = [], references } = opts;
+    const { to, subject, body, threadId, inReplyToMessageId, cc = [], references, attachments = [] } = opts;
 
-    const toHeader = to.join(", ");
-
-    // Build headers array — only include optional headers when they have a
-    // value. Empty strings in the array would create a blank line when
-    // joined with \r\n, terminating the headers section prematurely (see
-    // the matching fix in sendEmail above for the full story).
-    const headers: string[] = [`To: ${toHeader}`];
-    if (cc.length > 0) {
-      headers.push(`Cc: ${cc.join(", ")}`);
-    }
-    if (inReplyToMessageId) {
-      headers.push(`In-Reply-To: <${inReplyToMessageId}>`);
-    }
-    if (references) {
-      headers.push(`References: ${references}`);
-    } else if (inReplyToMessageId) {
-      headers.push(`References: <${inReplyToMessageId}>`);
-    }
-    headers.push(`Subject: =?utf-8?B?${btoa(unescape(encodeURIComponent(subject)))}?=`);
-    headers.push("Content-Type: text/plain; charset=utf-8");
-    headers.push("MIME-Version: 1.0");
-
-    // Blank line separates headers from body (RFC 2822)
-    const rawEmail = headers.join("\r\n") + "\r\n\r\n" + body;
+    const rawEmail = buildRawEmailMessage({
+      to,
+      subject,
+      body,
+      cc,
+      attachments,
+      inReplyToMessageId,
+      references,
+    });
 
     const encodedEmail = btoa(unescape(encodeURIComponent(rawEmail)))
       .replace(/\+/g, "-")

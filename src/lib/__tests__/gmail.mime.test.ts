@@ -246,6 +246,26 @@ describe("Gmail MIME headers (fix 03f4d17)", () => {
       const separatorCount = (rawDecoded!.match(/\r\n\r\n/g) || []).length;
       expect(separatorCount).toBe(1);
     });
+
+    it("builds a multipart/mixed message when attachments are provided", async () => {
+      const { rawDecoded } = await captureGmailRequest(() =>
+        sendReplyInThread("token-123", {
+          to: ["to@x.com"],
+          subject: "Re: Demo",
+          body: "Reply body",
+          attachments: [{
+            filename: "night-shift.zip",
+            contentType: "application/zip",
+            data: "SGVsbG8gZnJvbSBhdHRhY2htZW50",
+          }],
+        })
+      );
+
+      expect(rawDecoded).toContain("Content-Type: multipart/mixed;");
+      expect(rawDecoded).toContain("Content-Disposition: attachment; filename=\"night-shift.zip\"");
+      expect(rawDecoded).toContain("Content-Transfer-Encoding: base64");
+      expect(rawDecoded).toContain("SGVsbG8gZnJvbSBhdHRhY2htZW50");
+    });
   });
 
   describe("sendEmail — error handling", () => {

@@ -3,7 +3,7 @@
 import { useAppStore, type Demo, type DemoStatus, type Label, type Release } from "@/lib/store";
 import { t, type Locale } from "@/lib/i18n";
 import { type PitchTrackEntry, type TrackStatus } from "@/lib/pitch-utils";
-import { useState, useMemo, useCallback, useEffect } from "react";
+import { useState, useMemo, useCallback, useEffect, type ChangeEvent } from "react";
 import {
   Plus,
   Pencil,
@@ -82,7 +82,6 @@ import {
   PITCH_LANGUAGES,
   type PitchTone,
   type PitchLanguage,
-  type PitchTrackEntry,
 } from "@/lib/pitch-utils";
 import { useToast } from "@/hooks/use-toast";
 import { sendEmail, sendReplyInThread, ensureValidToken } from "@/lib/gmail";
@@ -3388,6 +3387,8 @@ function MaterialSubmissionForm({
   const [isOpen, setIsOpen] = useState(false);
   const [sending, setSending] = useState(false);
   const [sent, setSent] = useState(false);
+  const [materialLanguage, setMaterialLanguage] = useState<"it" | "en">(locale === "it" ? "it" : "en");
+  const [attachment, setAttachment] = useState<{ filename: string; contentType: string; data: string } | null>(null);
 
   // Pre-filled producer info from profile (editable)
   const [producerName, setProducerName] = useState(userProfile?.artistName || "");
@@ -3439,11 +3440,12 @@ function MaterialSubmissionForm({
       .filter((l) => l.value.trim())
       .map((l) => `  • ${l.type.toUpperCase()}: ${l.value.trim()}`)
       .join("\n");
+    const attachmentLine = attachment ? `\nALLEGATO\n  • ${attachment.filename}\n` : "";
 
-    if (locale === "it") {
+    if (materialLanguage === "it") {
       return `Gentile team ${label?.name || ""},
 
-In seguito al vostro feedback positivo sulla traccia "${demo.trackName}", vi invio il materiale richiesto.
+In seguito al vostro feedback positivo sulla traccia "${demo.trackName}", vi invio il materiale richiesto e i riferimenti della traccia selezionata.
 
 PRODUTTORE
   • Nome: ${producerName}
@@ -3452,9 +3454,8 @@ PRODUTTORE
 ${producerBio ? `\nBIO\n  ${producerBio}\n` : ""}
 TRACCIA: ${selectedDemo.trackName}
 ${selectedDemo.bpm ? `BPM: ${selectedDemo.bpm}\n` : ""}${selectedDemo.key ? `Key: ${selectedDemo.key}\n` : ""}${selectedDemo.genre ? `Genere: ${selectedDemo.genre}\n` : ""}
-LINK MATERIALE
-${linkLines}
-
+LINK DI RIFERIMENTO DELLA TRACCIA
+${linkLines}${attachmentLine}
 Resto a disposizione per qualsiasi ulteriore necessità.
 
 Cordiali saluti,
@@ -3462,7 +3463,7 @@ ${producerName}`;
     }
     return `Hi ${label?.name || "team"},
 
-Following your positive feedback on "${demo.trackName}", here are the requested materials.
+Following your positive feedback on "${demo.trackName}", I'm sending the requested materials and the reference links for the selected track.
 
 PRODUCER
   • Name: ${producerName}
@@ -3471,19 +3472,47 @@ PRODUCER
 ${producerBio ? `\nBIO\n  ${producerBio}\n` : ""}
 TRACK: ${selectedDemo.trackName}
 ${selectedDemo.bpm ? `BPM: ${selectedDemo.bpm}\n` : ""}${selectedDemo.key ? `Key: ${selectedDemo.key}\n` : ""}${selectedDemo.genre ? `Genre: ${selectedDemo.genre}\n` : ""}
-MATERIAL LINKS
-${linkLines}
-
+TRACK REFERENCE LINKS
+${linkLines}${attachmentLine}
 Happy to provide anything else you may need.
 
 Best regards,
 ${producerName}`;
-  }, [links, locale, label, demo.trackName, producerName, producerEmail, producerSc, producerBio, selectedDemo]);
+  }, [links, materialLanguage, label, demo.trackName, producerName, producerEmail, producerSc, producerBio, selectedDemo, attachment]);
 
   const [emailPreview, setEmailPreview] = useState("");
   useEffect(() => {
     if (isOpen) setEmailPreview(buildMaterialEmailBody());
   }, [isOpen, buildMaterialEmailBody]);
+
+  const handleAttachmentChange = useCallback(async (event: ChangeEvent<HTMLInputElement>) => {
+    const file = event.target.files?.[0];
+    if (!file) {
+      setAttachment(null);
+      return;
+    }
+
+    const reader = new FileReader();
+    reader.onload = () => {
+      const result = reader.result;
+      if (typeof result === "string") {
+        const base64 = result.includes(",") ? result.split(",")[1] : result;
+        setAttachment({
+          filename: file.name,
+          contentType: file.type || "application/octet-stream",
+          data: base64,
+        });
+      }
+    };
+    reader.onerror = () => {
+      toast({
+        title: locale === "it" ? "Errore upload file" : "File upload error",
+        description: locale === "it" ? "Non è stato possibile leggere il file selezionato." : "The selected file could not be read.",
+        variant: "destructive",
+      });
+    };
+    reader.readAsDataURL(file);
+  }, [locale, toast]);
 
   const handleSend = useCallback(async () => {
     if (!gmailAuth?.isConnected) {
@@ -3520,6 +3549,7 @@ ${producerName}`;
         body: emailPreview,
         threadId: demo.gmailThreadId,
         inReplyToMessageId: demo.gmailReplyMessageId,
+        attachments: attachment ? [attachment] : [],
       });
 
       if (result.success) {
@@ -3546,7 +3576,7 @@ ${producerName}`;
     } finally {
       setSending(false);
     }
-  }, [gmailAuth, replyToEmails, replySubject, emailPreview, demo, links, setGmailAuth, updateDemo, toast]);
+  }, [gmailAuth, replyToEmails, replySubject, emailPreview, demo, links, attachment, setGmailAuth, updateDemo, toast]);
 
   // Already-sent indicator
   if (demo.materialSentDate && !isOpen) {
@@ -3730,6 +3760,39 @@ ${producerName}`;
             </Button>
           </div>
         ))}
+      </div>
+
+      {/* Language + attachment controls */}
+      <div className="grid gap-3 md:grid-cols-2">
+        <div className="space-y-1">
+          <p className="text-[10px] text-muted-foreground/70 uppercase tracking-wider font-medium">
+            {locale === "it" ? "Lingua email" : "Email language"}
+          </p>
+          <Select value={materialLanguage} onValueChange={(value) => setMaterialLanguage(value as "it" | "en")}>
+            <SelectTrigger className="bg-secondary/50 text-sm h-9">
+              <SelectValue />
+            </SelectTrigger>
+            <SelectContent>
+              <SelectItem value="it">Italiano</SelectItem>
+              <SelectItem value="en">English</SelectItem>
+            </SelectContent>
+          </Select>
+        </div>
+        <div className="space-y-1">
+          <p className="text-[10px] text-muted-foreground/70 uppercase tracking-wider font-medium">
+            {locale === "it" ? "Allegato" : "Attachment"}
+          </p>
+          <Input
+            type="file"
+            onChange={handleAttachmentChange}
+            className="bg-secondary/50 text-xs h-9 file:mr-3 file:rounded file:border-0 file:bg-primary/10 file:px-2 file:py-1 file:text-xs file:text-primary"
+          />
+          {attachment && (
+            <p className="text-[10px] text-emerald-400/70">
+              {locale === "it" ? "File allegato:" : "Attached file:"} {attachment.filename}
+            </p>
+          )}
+        </div>
       </div>
 
       {/* Email preview */}
