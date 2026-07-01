@@ -122,6 +122,21 @@ function getDaysSince(dateStr: string | null): number | null {
   return Math.floor((Date.now() - new Date(dateStr).getTime()) / 86400000);
 }
 
+export function formatDemoDate(dateStr: string | null, locale: string): string {
+  if (!dateStr) return "—";
+  try {
+    const d = new Date(dateStr);
+    if (isNaN(d.getTime())) return dateStr;
+    return d.toLocaleDateString(locale === "it" ? "it-IT" : "en-US", {
+      year: "numeric",
+      month: "short",
+      day: "numeric",
+    });
+  } catch (e) {
+    return dateStr;
+  }
+}
+
 const STATUS_TKEYS: Record<DemoStatus, "demos.ready" | "demos.sent" | "demos.reviewing" | "demos.accepted" | "demos.rejected"> = {
   ready: "demos.ready",
   sent: "demos.sent",
@@ -976,7 +991,7 @@ export function DemoTracker() {
                         <div className="flex flex-wrap items-center gap-x-3 gap-y-0.5 mt-1 text-[11px] text-muted-foreground">
                           {demo.sentDate && (
                             <span className="flex items-center gap-1">
-                              <Calendar className="h-3 w-3" /> {demo.sentDate}
+                              <Calendar className="h-3 w-3" /> {formatDemoDate(demo.sentDate, locale)}
                               {daysSince !== null && <span className="ml-0.5">({daysSince}{t(locale, "dash.daysAgo")})</span>}
                             </span>
                           )}
@@ -1279,7 +1294,7 @@ export function DemoTracker() {
                         {demo.sentDate && (
                           <div className="flex items-center gap-1.5 text-[11px] text-muted-foreground">
                             <Clock className="h-3 w-3" />
-                            <span>{demo.sentDate}{daysSince !== null && <span className={isOverdue ? "text-amber-400 font-semibold ml-1" : "ml-1"}>({daysSince}{t(locale, "dash.daysAgo")})</span>}</span>
+                            <span>{formatDemoDate(demo.sentDate, locale)}{daysSince !== null && <span className={isOverdue ? "text-amber-400 font-semibold ml-1" : "ml-1"}>({daysSince}{t(locale, "dash.daysAgo")})</span>}</span>
                           </div>
                         )}
                         {demo.pitchText && (
@@ -1299,7 +1314,7 @@ export function DemoTracker() {
                               <MessageSquare className="h-2.5 w-2.5" />
                               <span>{locale === "it" ? cfg.labelIt : cfg.labelEn}</span>
                               {demo.replyDate && (
-                                <span className="text-muted-foreground/60 ml-0.5">· {demo.replyDate}</span>
+                                <span className="text-muted-foreground/60 ml-0.5">· {formatDemoDate(demo.replyDate, locale)}</span>
                               )}
                             </div>
                           );
@@ -1422,7 +1437,7 @@ export function DemoTracker() {
                           <span className="ml-1">{t(locale, STATUS_TKEYS[demo.status])}</span>
                         </Badge>
                       </td>
-                      <td className="px-4 py-3 text-xs text-muted-foreground font-mono">{demo.sentDate ?? "—"}</td>
+                      <td className="px-4 py-3 text-xs text-muted-foreground font-mono">{formatDemoDate(demo.sentDate, locale)}</td>
                       <td className="px-4 py-3 text-xs font-mono">
                         {daysSince !== null ? (
                           <span className={isOverdue ? "text-amber-400 font-semibold" : "text-muted-foreground"}>
@@ -4202,7 +4217,7 @@ function DemoDetailDialog({
             {demo.sentDate && (
               <div className="bg-secondary/30 rounded-lg p-3">
                 <p className="text-[10px] text-muted-foreground uppercase flex items-center gap-1"><Calendar className="h-3 w-3" /> {t(locale, "demos.sentDate")}</p>
-                <p className="text-sm font-semibold text-foreground mt-1">{demo.sentDate}</p>
+                <p className="text-sm font-semibold text-foreground mt-1">{formatDemoDate(demo.sentDate, locale)}</p>
                 {daysSince !== null && <p className="text-[10px] text-muted-foreground mt-0.5">{daysSince} {t(locale, "dash.daysAgo")}</p>}
               </div>
             )}
