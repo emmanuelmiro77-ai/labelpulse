@@ -373,6 +373,19 @@
 
 ---
 
+## 🔥 REDESIGN DEMO SUBMISSION TRACKER (tipo LabelRadar)
+
+### Riprogettazione Tracker Demo con Stato Granulare per Traccia, NLP e Pulse Alerts
+- **Sintomo**: Il tracker demo era rigido, poco automatizzato e confuso per gli EP multi-traccia. Mancava evidenza visiva quando arrivava una risposta Gmail e lo stato "reviewing" (tradotto con "In attesa di risposta") confondeva l'utente.
+- **Causa**: Un EP a più tracce veniva trattato come blocco unico, senza tracciare la scelta di singoli brani da parte delle label. La scansione Gmail rilevava risposte positive ma non identificava quali tracce fossero d'interesse.
+- **Fix** (commit 2026-07-01):
+  1. **Stato Granulare per Traccia**: Aggiunto `TrackStatus` (`awaiting`, `reviewing`, `accepted`, `rejected`, `signed`, `declined`) a ciascun brano in `pitchTracks` di `Demo`. Mostrato sotto forma di micro-badge nel Kanban e nella Tabella. Menu a discesa nel dettaglio della demo per aggiornare manualmente.
+  2. **NLP Track-Matching**: Nel parser di `scanGmailReplies()`, se una risposta Gmail è positiva, analizza corpo e oggetto per cercare menzioni dei titoli delle tracce dell'EP. Se trovate, pre-imposta la traccia su `reviewing` e mostra un banner **Smart Alert** verde smeraldo per applicare la modifica con un click.
+  3. **Pulse Alerts & Flussi**: Aggiunto flag `gmailUnreadResponse` che attiva un pallino verde smeraldo pulsante con scritta "Risposta!" sulla card Kanban e nella Tabella. Corrette le traduzioni i18n per `reviewing` (ora *"Risposta Ricevuta / In Trattativa"* in IT).
+- **File**: `src/lib/pitch-utils.ts` (aggiunto `TrackStatus`), `src/lib/store.ts` (aggiornato `scanGmailReplies` + `gmailUnreadResponse`), `src/lib/i18n.ts` (traduzioni), `src/components/demo-tracker.tsx` (UI, Smart Alert Banner, Pulse effects, granular controls).
+
+---
+
 ## 📝 WORKFLOW — Come aggiornare questo file
 
 Quando si risolve un bug:

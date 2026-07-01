@@ -2,6 +2,7 @@
 
 import { useAppStore, type Demo, type DemoStatus, type Label, type Release } from "@/lib/store";
 import { t, type Locale } from "@/lib/i18n";
+import { type PitchTrackEntry, type TrackStatus } from "@/lib/pitch-utils";
 import { useState, useMemo, useCallback, useEffect } from "react";
 import {
   Plus,
@@ -147,6 +148,18 @@ const REPLY_STATUS_CONFIG: Record<
   rejected:  { labelIt: "Rifiutata",          labelEn: "Rejected",          color: "text-red-400",             bgColor: "bg-red-500/10",        borderColor: "border-red-500/30",     icon: "thumbs-down" },
 };
 
+export const TRACK_STATUS_CONFIG: Record<
+  TrackStatus,
+  { labelIt: string; labelEn: string; color: string; bgColor: string; borderColor: string }
+> = {
+  awaiting: { labelIt: "Inviata (In attesa)", labelEn: "Sent (Awaiting)", color: "text-gray-400", bgColor: "bg-gray-500/10", borderColor: "border-gray-500/20" },
+  reviewing: { labelIt: "In Trattativa", labelEn: "In Discussion", color: "text-cyan-400", bgColor: "bg-cyan-500/10", borderColor: "border-cyan-500/20" },
+  accepted: { labelIt: "Interesse / Accettata", labelEn: "Interested / Accepted", color: "text-emerald-400", bgColor: "bg-emerald-500/10", borderColor: "border-emerald-500/20" },
+  rejected: { labelIt: "Rifiutata", labelEn: "Declined", color: "text-red-400", bgColor: "bg-red-500/10", borderColor: "border-red-500/20" },
+  signed: { labelIt: "Firmata! 🎉", labelEn: "Signed! 🎉", color: "text-purple-400", bgColor: "bg-purple-500/10", borderColor: "border-purple-500/20" },
+  declined: { labelIt: "Svincolata", labelEn: "Released", color: "text-gray-500", bgColor: "bg-secondary/30", borderColor: "border-border/30" },
+};
+
 function getReplyStatus(demo: Demo): ReplyStatus {
   return (demo.replyStatus as ReplyStatus) || "none";
 }
@@ -222,6 +235,13 @@ export function DemoTracker() {
 
   // Detail dialog
   const [detailDemo, setDetailDemo] = useState<Demo | null>(null);
+
+  const handleOpenDetail = useCallback((demo: Demo) => {
+    setDetailDemo(demo);
+    if (demo.gmailUnreadResponse) {
+      updateDemo(demo.id, { gmailUnreadResponse: false });
+    }
+  }, [updateDemo]);
 
   // Gmail reply scan — invokes store action, surfaces result via toast
   const handleScanReplies = useCallback(async () => {
@@ -896,7 +916,7 @@ export function DemoTracker() {
                 <Card
                   key={demo.id}
                   className="bg-card/80 border-border/30 hover:border-primary/30 transition-all cursor-pointer"
-                  onClick={() => setDetailDemo(demo)}
+                  onClick={() => handleOpenDetail(demo)}
                 >
                   <CardContent className="p-4">
                     <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-2">
@@ -933,7 +953,7 @@ export function DemoTracker() {
                         </div>
                       </div>
                       <div className="flex items-center gap-1 shrink-0">
-                        <Button variant="ghost" size="icon" className="h-7 w-7" onClick={(e) => { e.stopPropagation(); setDetailDemo(demo); }} title={t(locale, "demos.viewDetail")}>
+                        <Button variant="ghost" size="icon" className="h-7 w-7" onClick={(e) => { e.stopPropagation(); handleOpenDetail(demo); }} title={t(locale, "demos.viewDetail")}>
                           <Eye className="h-3.5 w-3.5" />
                         </Button>
                         {canAdvance(demo.status) && (
@@ -1102,14 +1122,25 @@ export function DemoTracker() {
                   return (
                     <Card
                       key={demo.id}
-                      className={`bg-card/80 border-border/30 hover:border-primary/20 transition-all group cursor-pointer ${isOverdue ? "ring-1 ring-amber-500/40" : ""}`}
-                      onClick={() => setDetailDemo(demo)}
+                      className={`bg-card/80 border-border/30 hover:border-primary/20 transition-all group cursor-pointer ${isOverdue ? "ring-1 ring-amber-500/40" : ""} ${demo.gmailUnreadResponse ? "ring-2 ring-emerald-500/55" : ""}`}
+                      onClick={() => handleOpenDetail(demo)}
                     >
                       <CardContent className="p-3 space-y-1.5">
                         <div className="flex items-start justify-between gap-1">
                           <div className="flex-1 min-w-0">
                             <div className="flex items-center gap-1.5 flex-wrap">
                               <h4 className="text-sm font-semibold text-foreground leading-tight">{demo.trackName}</h4>
+                              {demo.gmailUnreadResponse && (
+                                <div className="flex items-center gap-1 bg-emerald-500/10 border border-emerald-500/35 rounded px-1.5 py-0.5 animate-pulse shrink-0">
+                                  <span className="relative flex h-1.5 w-1.5">
+                                    <span className="animate-ping absolute inline-flex h-full w-full rounded-full bg-emerald-400 opacity-75"></span>
+                                    <span className="relative inline-flex rounded-full h-1.5 w-1.5 bg-emerald-500"></span>
+                                  </span>
+                                  <span className="text-[8px] font-extrabold text-emerald-400 uppercase tracking-wider">
+                                    {locale === "it" ? "Risposta!" : "Reply!"}
+                                  </span>
+                                </div>
+                              )}
                               {demo.parentReleaseId && (() => {
                                 const r = releases.find(rel => rel.id === demo.parentReleaseId);
                                 if (!r) return null;
@@ -1149,7 +1180,7 @@ export function DemoTracker() {
                             })()}
                           </div>
                           <div className="flex items-center gap-0.5 opacity-0 group-hover:opacity-100 transition-opacity shrink-0">
-                            <Button variant="ghost" size="icon" className="h-6 w-6" onClick={(e) => { e.stopPropagation(); setDetailDemo(demo); }} title={t(locale, "demos.viewDetail")}>
+                            <Button variant="ghost" size="icon" className="h-6 w-6" onClick={(e) => { e.stopPropagation(); handleOpenDetail(demo); }} title={t(locale, "demos.viewDetail")}>
                               <Eye className="h-3 w-3" />
                             </Button>
                             {canAdvance(demo.status) && (
@@ -1184,6 +1215,26 @@ export function DemoTracker() {
                         >
                           {getLabelName(demo.labelId)}
                         </p>
+
+                        {/* EP tracks & granular status display */}
+                        {demo.pitchTracks && demo.pitchTracks.length >= 2 && (
+                          <div className="flex flex-col gap-1.5 mt-2 mb-1 border-t border-border/10 pt-2 bg-secondary/10 rounded-md p-1.5 border border-border/5">
+                            {demo.pitchTracks.map((tr, idx) => {
+                              const trStatus = tr.status || "awaiting";
+                              const trCfg = TRACK_STATUS_CONFIG[trStatus] || TRACK_STATUS_CONFIG.awaiting;
+                              return (
+                                <div key={idx} className="flex items-center justify-between text-[10px] gap-1.5">
+                                  <span className="text-muted-foreground truncate max-w-[125px] font-medium" title={tr.trackName}>
+                                    {idx + 1}. {tr.trackName}
+                                  </span>
+                                  <span className={`px-1 py-0.2 rounded font-semibold text-[8px] tracking-tight shrink-0 ${trCfg.bgColor} ${trCfg.color} border ${trCfg.borderColor}`}>
+                                    {locale === "it" ? trCfg.labelIt : trCfg.labelEn}
+                                  </span>
+                                </div>
+                              );
+                            })}
+                          </div>
+                        )}
                         {demo.sentDate && (
                           <div className="flex items-center gap-1.5 text-[11px] text-muted-foreground">
                             <Clock className="h-3 w-3" />
@@ -1278,13 +1329,43 @@ export function DemoTracker() {
                   return (
                     <tr
                       key={demo.id}
-                      className="hover:bg-secondary/20 transition-colors cursor-pointer"
-                      onClick={() => setDetailDemo(demo)}
+                      className={`hover:bg-secondary/20 transition-colors cursor-pointer ${demo.gmailUnreadResponse ? "bg-emerald-500/5 hover:bg-emerald-500/10" : ""}`}
+                      onClick={() => handleOpenDetail(demo)}
                     >
                       <td className="px-4 py-3">
-                        <div className="font-medium text-foreground">{demo.trackName}</div>
+                        <div className="flex items-center gap-2 flex-wrap">
+                          <div className="font-semibold text-foreground">{demo.trackName}</div>
+                          {demo.gmailUnreadResponse && (
+                            <div className="flex items-center gap-1 bg-emerald-500/10 border border-emerald-500/35 rounded px-1.5 py-0.5 animate-pulse">
+                              <span className="relative flex h-1.5 w-1.5">
+                                <span className="animate-ping absolute inline-flex h-full w-full rounded-full bg-emerald-400 opacity-75"></span>
+                                <span className="relative inline-flex rounded-full h-1.5 w-1.5 bg-emerald-500"></span>
+                              </span>
+                              <span className="text-[8px] font-extrabold text-emerald-400 uppercase tracking-wider">
+                                {locale === "it" ? "Risposta!" : "Reply!"}
+                              </span>
+                            </div>
+                          )}
+                        </div>
                         {demo.artistName && <div className="text-[10px] text-muted-foreground/60 mt-0.5">{demo.artistName}</div>}
-                        {demo.notes && <div className="text-[11px] text-muted-foreground/60 mt-0.5 line-clamp-1">{demo.notes}</div>}
+                        
+                        {/* EP tracks display in table */}
+                        {demo.pitchTracks && demo.pitchTracks.length >= 2 && (
+                          <div className="flex flex-wrap gap-1.5 mt-2 max-w-md">
+                            {demo.pitchTracks.map((tr, idx) => {
+                              const trStatus = tr.status || "awaiting";
+                              const trCfg = TRACK_STATUS_CONFIG[trStatus] || TRACK_STATUS_CONFIG.awaiting;
+                              return (
+                                <span key={idx} className={`inline-flex items-center gap-1 text-[9px] px-1.5 py-0.5 rounded-md border ${trCfg.bgColor} ${trCfg.color} ${trCfg.borderColor}`}>
+                                  <span className="text-[8px] text-muted-foreground font-mono">{idx + 1}.</span>
+                                  <span className="font-semibold">{tr.trackName}</span>
+                                  <span className="text-[7px] uppercase opacity-75">({locale === "it" ? trCfg.labelIt : trCfg.labelEn})</span>
+                                </span>
+                              );
+                            })}
+                          </div>
+                        )}
+                        {demo.notes && <div className="text-[11px] text-muted-foreground/60 mt-1 line-clamp-1">{demo.notes}</div>}
                       </td>
                       <td className="px-4 py-3">
                         <span
@@ -1310,7 +1391,7 @@ export function DemoTracker() {
                       </td>
                       <td className="px-4 py-3 text-right">
                         <div className="flex items-center justify-end gap-1">
-                          <Button variant="ghost" size="icon" className="h-7 w-7" onClick={(e) => { e.stopPropagation(); setDetailDemo(demo); }} title={t(locale, "demos.viewDetail")}>
+                          <Button variant="ghost" size="icon" className="h-7 w-7" onClick={(e) => { e.stopPropagation(); handleOpenDetail(demo); }} title={t(locale, "demos.viewDetail")}>
                             <Eye className="h-3.5 w-3.5" />
                           </Button>
                           {canAdvance(demo.status) && (
@@ -3677,6 +3758,26 @@ function DemoDetailDialog({
   const [inAppEmailAvailable, setInAppEmailAvailable] = useState(false);
   const { toast } = useToast();
 
+  const handleTrackStatusChange = useCallback((trackIdx: number, newStatus: TrackStatus) => {
+    if (!demo) return;
+    let currentTracks = demo.pitchTracks;
+    // Fallback if structured pitchTracks not yet saved
+    if (!Array.isArray(currentTracks) || currentTracks.length === 0) {
+      currentTracks = displayTracks;
+    }
+    const updatedTracks = currentTracks.map((t, idx) => {
+      if (idx === trackIdx) {
+        return { ...t, status: newStatus };
+      }
+      return { ...t, status: t.status || "awaiting" as const };
+    });
+    updateDemo(demo.id, { pitchTracks: updatedTracks });
+    toast({
+      title: locale === "it" ? "Stato traccia aggiornato" : "Track status updated",
+      description: `${displayTracks[trackIdx]?.trackName || ""} → ${TRACK_STATUS_CONFIG[newStatus][locale === "it" ? "labelIt" : "labelEn"]}`
+    });
+  }, [demo, displayTracks, updateDemo, toast, locale]);
+
   // Check on mount whether the in-app email service is available. We do this
   // once per dialog open — cheap GET to /api/email/send.
   useEffect(() => {
@@ -4043,6 +4144,62 @@ function DemoDetailDialog({
             </div>
           </div>
 
+          {/* NLP Smart Alert Banner */}
+          {demo.nlpMatchedTracks && demo.nlpMatchedTracks.length > 0 && (
+            <div className="bg-emerald-500/10 border border-emerald-500/25 rounded-lg p-3 space-y-2 text-sm text-foreground">
+              <div className="flex items-start gap-2.5">
+                <Sparkles className="h-5 w-5 text-emerald-400 mt-0.5 shrink-0 animate-pulse" />
+                <div>
+                  <p className="font-semibold text-emerald-400">
+                    {locale === "it" ? "Smart Alert — Rilevata traccia d'interesse!" : "Smart Alert — Track of interest detected!"}
+                  </p>
+                  <p className="text-xs text-muted-foreground mt-0.5 leading-relaxed">
+                    {locale === "it"
+                      ? "Dall'analisi della risposta Gmail della label, sembrano essere interessati alla/e traccia/e: "
+                      : "Analyzing the label's reply, they seem interested in the following track(s): "}
+                    <strong className="text-foreground">{demo.nlpMatchedTracks.join(", ")}</strong>.
+                  </p>
+                </div>
+              </div>
+              <div className="flex items-center gap-2 justify-end">
+                <Button
+                  size="sm"
+                  variant="ghost"
+                  className="h-7 text-xs text-muted-foreground hover:text-foreground"
+                  onClick={() => {
+                    updateDemo(demo.id, { nlpMatchedTracks: [] });
+                  }}
+                >
+                  {locale === "it" ? "Ignora" : "Dismiss"}
+                </Button>
+                <Button
+                  size="sm"
+                  className="h-7 text-xs bg-emerald-500 hover:bg-emerald-600 text-white font-semibold"
+                  onClick={() => {
+                    const updatedTracks = demo.pitchTracks?.map((t) => {
+                      if (demo.nlpMatchedTracks?.includes(t.trackName)) {
+                        return { ...t, status: "reviewing" as const };
+                      }
+                      return t;
+                    }) || [];
+                    updateDemo(demo.id, {
+                      status: "reviewing",
+                      nlpMatchedTracks: [],
+                      pitchTracks: updatedTracks,
+                      replyStatus: "positive"
+                    });
+                    toast({
+                      title: locale === "it" ? "Stato Aggiornato!" : "Status Updated!",
+                      description: locale === "it" ? "Tracce impostate su 'In Trattativa'." : "Tracks updated to 'In Discussion'."
+                    });
+                  }}
+                >
+                  {locale === "it" ? "Sì, applica automatico" : "Yes, apply automatically"}
+                </Button>
+              </div>
+            </div>
+          )}
+
           {/* SoundCloud Link(s) — multi-track rendering when the demo is
               actually a multi-track / EP pitch. Previously this only showed
               demo.link (the first track's URL), which was misleading. */}
@@ -4067,42 +4224,68 @@ function DemoDetailDialog({
                 </a>
               ) : (
                 <ol className="space-y-1.5">
-                  {displayTracks.map((track, idx) => (
-                    <li
-                      key={idx}
-                      className="bg-secondary/30 rounded-md p-2 border border-border/30"
-                    >
-                      <div className="flex items-baseline gap-2">
-                        <span className="text-xs font-mono text-muted-foreground shrink-0">
-                          {idx + 1}.
-                        </span>
-                        <div className="min-w-0 flex-1">
-                          <p className="text-sm font-semibold text-foreground truncate">
-                            {track.trackName}
-                          </p>
-                          {track.artistName && (
-                            <p className="text-[10px] text-muted-foreground truncate">
-                              {track.artistName}
-                            </p>
-                          )}
-                          {track.scLink ? (
-                            <a
-                              href={track.scLink}
-                              target="_blank"
-                              rel="noopener noreferrer"
-                              className="text-xs text-primary hover:underline font-mono break-all"
+                  {displayTracks.map((track, idx) => {
+                    const trStatus = (demo.pitchTracks && demo.pitchTracks[idx]?.status) || track.status || "awaiting";
+                    return (
+                      <li
+                        key={idx}
+                        className="bg-secondary/30 rounded-md p-3 border border-border/30"
+                      >
+                        <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-3">
+                          <div className="min-w-0 flex-1">
+                            <div className="flex items-center gap-1.5">
+                              <span className="text-xs font-mono text-muted-foreground shrink-0">
+                                {idx + 1}.
+                              </span>
+                              <p className="text-sm font-semibold text-foreground truncate">
+                                {track.trackName}
+                              </p>
+                            </div>
+                            {track.artistName && (
+                              <p className="text-[10px] text-muted-foreground truncate pl-3.5 mt-0.5">
+                                {track.artistName}
+                              </p>
+                            )}
+                            {track.scLink ? (
+                              <div className="pl-3.5 mt-1">
+                                <a
+                                  href={track.scLink}
+                                  target="_blank"
+                                  rel="noopener noreferrer"
+                                  className="text-xs text-primary hover:underline font-mono break-all"
+                                >
+                                  {track.scLink}
+                                </a>
+                              </div>
+                            ) : (
+                              <p className="text-xs text-amber-500 italic pl-3.5 mt-1">
+                                {locale === "it" ? "Link mancante" : "Missing link"}
+                              </p>
+                            )}
+                          </div>
+                          
+                          {/* Granular Track Status Control */}
+                          <div className="flex items-center gap-2 shrink-0 sm:self-center">
+                            <Select
+                              value={trStatus}
+                              onValueChange={(v) => handleTrackStatusChange(idx, v as TrackStatus)}
                             >
-                              {track.scLink}
-                            </a>
-                          ) : (
-                            <p className="text-xs text-amber-500 italic">
-                              {locale === "it" ? "Link mancante" : "Missing link"}
-                            </p>
-                          )}
+                              <SelectTrigger className="bg-secondary/50 text-xs h-7 w-[160px]">
+                                <SelectValue />
+                              </SelectTrigger>
+                              <SelectContent>
+                                {(Object.keys(TRACK_STATUS_CONFIG) as TrackStatus[]).map((statusKey) => (
+                                  <SelectItem key={statusKey} value={statusKey} className="text-xs">
+                                    {locale === "it" ? TRACK_STATUS_CONFIG[statusKey].labelIt : TRACK_STATUS_CONFIG[statusKey].labelEn}
+                                  </SelectItem>
+                                ))}
+                              </SelectContent>
+                            </Select>
+                          </div>
                         </div>
-                      </div>
-                    </li>
-                  ))}
+                      </li>
+                    );
+                  })}
                 </ol>
               )}
             </div>

@@ -26,6 +26,8 @@ export const PITCH_LANGUAGES: Record<PitchLanguage, string> = {
   pt: "Português",
 };
 
+export type TrackStatus = "awaiting" | "reviewing" | "accepted" | "rejected" | "signed" | "declined";
+
 /**
  * Represents a track entry in an EP pitch — used by ep-multi templates so
  * each track has its own name + SoundCloud link, properly attributed.
@@ -34,6 +36,7 @@ export interface PitchTrackEntry {
   trackName: string;
   artistName: string;        // primary artist (+ collaborators, already joined)
   scLink: string;            // direct SoundCloud link to THIS track
+  status?: TrackStatus;      // track status (granular track-by-track)
 }
 
 /**

@@ -1871,3 +1871,32 @@ Stage Summary:
 - Allineato il login (`useAuthEffect`) per forzare il caricamento del cloud.
 - Il cloud è ora la fonte assoluta e unica di verità per tutti i dati utente su qualsiasi dispositivo.
 - ⚠️ AZIONE RICHIESTA: L'utente deve eseguire `supabase-schema-releases.sql` nel Supabase SQL Editor per creare la tabella `user_releases`.
+
+---
+Task ID: demo-tracker-redesign-labelradar
+Agent: Main Agent
+Task: Riprogettazione Demo Tracker stile LabelRadar (Stati granulari traccia-per-traccia, NLP, Pulse alerts)
+
+Work Log:
+- Analizzato il collo di bottiglia dell'esperienza d'uso per EP multi-traccia: impossibilità di tracciare la scelta di singoli brani da parte di una label, confusione semantica sullo stato "reviewing" (tradotto impropriamente come "In attesa di risposta") e mancanza di stimoli visivi all'arrivo di risposte reali da Gmail.
+- Modificato `src/lib/pitch-utils.ts`: definito `TrackStatus` (`awaiting` | `reviewing` | `accepted` | `rejected` | `signed` | `declined`) e aggiunto alle proprietà di `PitchTrackEntry`.
+- Modificato `src/lib/store.ts`:
+  - Aggiunti campi `gmailUnreadResponse` (boolean) e `nlpMatchedTracks` (string[]) all'interfaccia `Demo`.
+  - Esteso il parser dei risultati di scansione email Gmail in `scanGmailReplies()`: se una risposta è positiva, analizza corpo e oggetto cercando stringhe corrispondenti ai titoli dei brani inviati.
+  - Inizializza automaticamente lo stato delle tracce d'interesse scoperte a `reviewing` (e le altre ad `awaiting`). Se la mail è un rifiuto (`rejected`), imposta tutti i brani a `rejected`.
+  - Imposta il flag `gmailUnreadResponse` a `true` quando viene rilevata una nuova risposta Gmail.
+- Modificato `src/lib/i18n.ts`: corretta la traduzione di `demos.reviewing` in italiano (ora *"Risposta Ricevuta / In Trattativa"*) e in inglese (ora *"In Conversation / Under Review"*).
+- Modificato `src/components/demo-tracker.tsx`:
+  - Creata la configurazione grafica dei micro-badge `TRACK_STATUS_CONFIG` per le tracce.
+  - Implementata la funzione `handleOpenDetail()` che, all'apertura del dialog di dettaglio di una demo, azzera automaticamente il flag `gmailUnreadResponse` nel db/store.
+  - Kanban e Tabella aggiornati con l'effetto "Pulse Alert" (pallino verde lampeggiante animato) e la dicitura "Risposta!" se la demo ha nuove email non lette.
+  - Kanban e Tabella aggiornati per mostrare la lista dei brani granulari dell'EP con i loro micro-badge di stato personalizzati.
+  - Dettaglio Demo aggiornato con uno **Smart Alert Banner** (sfondo verde, icona Sparkles) che informa l'utente dei brani identificati dall'NLP e permette di applicare l'auto-aggiornamento di stato con un solo click.
+  - Aggiunto un menu a discesa per ciascun brano nel dettaglio EP, permettendo di personalizzare o aggiornare manualmente lo stato del singolo brano (es. Firmato, Svincolato, ecc.).
+- Verificato che non vi siano errori di compilazione né in store.ts né in demo-tracker.tsx (compilazione impeccabile).
+
+Stage Summary:
+- Riprogettazione Demo Submission Tracker completata con successo! ✅
+- L'app è ora pionieristica e offre un sistema di tracciamento multi-traccia unico che surclassa la rigidità di LabelRadar integrando direttamente le risposte Gmail.
+- Pronto per il commit, push e deploy automatico su Vercel.
+

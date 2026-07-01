@@ -246,6 +246,9 @@ export interface Demo {
    * or just shows the single `link` as before.
    */
   pitchTracks?: PitchTrackEntry[];
+  // Rilevamento automatico e NLP
+  gmailUnreadResponse?: boolean; // se c'è una risposta da visualizzare/gestire
+  nlpMatchedTracks?: string[];   // tracce dell'EP che l'NLP pensa siano d'interesse
 }
 
 // ==================== SAVED PITCHES (Bozze) ====================
@@ -2332,6 +2335,46 @@ export const useAppStore = create<AppState>()(
             followUpDate.setDate(followUpDate.getDate() + 28);
             updates.followUpDueDate = followUpDate.toISOString();
           }
+
+          // NLP Track-Matching & Track-by-Track status initialization
+          let matchedTrackNames: string[] = [];
+          if ((classification.category === "positive" || classification.category === "info") && Array.isArray(demo.pitchTracks) && demo.pitchTracks.length >= 2) {
+            const emailContent = `${reply.subject} ${reply.bodyText}`.toLowerCase();
+            matchedTrackNames = demo.pitchTracks
+              .filter((track) => {
+                const name = track.trackName.toLowerCase().trim();
+                if (name.length < 3) return false;
+                return emailContent.includes(name);
+              })
+              .map((track) => track.trackName);
+
+            if (matchedTrackNames.length > 0) {
+              updates.nlpMatchedTracks = matchedTrackNames;
+              updates.pitchTracks = demo.pitchTracks.map((track) => {
+                if (matchedTrackNames.includes(track.trackName)) {
+                  return { ...track, status: "reviewing" as const };
+                }
+                return { ...track, status: track.status || "awaiting" as const };
+              });
+            } else {
+              // Se non troviamo match specifici ma l'email è positiva, impostiamo tutte a reviewing se non già impostato
+              updates.pitchTracks = demo.pitchTracks.map((track) => ({
+                ...track,
+                status: track.status || "reviewing" as const
+              }));
+            }
+          } else if (Array.isArray(demo.pitchTracks) && demo.pitchTracks.length >= 2) {
+            // Se la risposta è negativa (rejected), aggiorna tutte le tracce a rejected
+            if (classification.category === "rejected") {
+              updates.pitchTracks = demo.pitchTracks.map((track) => ({
+                ...track,
+                status: "rejected" as const
+              }));
+            }
+          }
+
+          // Segnala che c'è una nuova risposta da leggere per visualizzare l'effetto "Pulse"
+          updates.gmailUnreadResponse = true;
 
           get().updateDemo(result.demoId, updates);
 
