@@ -1798,7 +1798,9 @@ export async function getArtistsCloudSyncInfo(): Promise<{ count: number; savedA
 
     if (error) {
       if (error.code === "PGRST116") return { count: 0, savedAt: null };
-      return null;
+      const message = humanizeCloudError(error);
+      console.error("[LabelPulse Cloud] getArtistsCloudSyncInfo error:", error);
+      throw new Error(message);
     }
 
     const artists = (data?.data as any)?.artists;
@@ -1806,8 +1808,9 @@ export async function getArtistsCloudSyncInfo(): Promise<{ count: number; savedA
       count: Array.isArray(artists) ? artists.length : 0,
       savedAt: (data?.data as any)?.savedAt || data?.updated_at || null,
     };
-  } catch {
-    return null;
+  } catch (err) {
+    console.error("[LabelPulse Cloud] getArtistsCloudSyncInfo failed:", err);
+    throw err;
   }
 }
 
@@ -1837,7 +1840,9 @@ export async function getMainCloudSyncInfo(): Promise<{
       if (error.code === "PGRST116") {
         return { labels: 0, labelsWithRankings: 0, snapshots: 0, demos: 0, profileHasData: false, lastSavedAt: null };
       }
-      return null;
+      const message = humanizeCloudError(error);
+      console.error("[LabelPulse Cloud] getMainCloudSyncInfo error:", error);
+      throw new Error(message);
     }
 
     const d = (data?.data as any) || {};
@@ -1859,8 +1864,9 @@ export async function getMainCloudSyncInfo(): Promise<{
       profileHasData,
       lastSavedAt: d.lastSavedAt || data?.updated_at || null,
     };
-  } catch {
-    return null;
+  } catch (err) {
+    console.error("[LabelPulse Cloud] getMainCloudSyncInfo failed:", err);
+    throw err;
   }
 }
 

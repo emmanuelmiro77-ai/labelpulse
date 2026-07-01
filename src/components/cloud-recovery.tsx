@@ -94,11 +94,13 @@ export function CloudRecovery({ isAdmin = false }: { isAdmin?: boolean }) {
   const [loading, setLoading] = useState(false);
   const [actionLoading, setActionLoading] = useState<string | null>(null);
   const [confirmAction, setConfirmAction] = useState<null | "push" | "pull" | "merge" | "mergeArtists">(null);
+  const [cloudError, setCloudError] = useState<string | null>(null);
 
   const configured = isSupabaseConfigured();
 
   const refresh = useCallback(async () => {
     setLoading(true);
+    setCloudError(null);
     try {
       // Local state
       const s = useAppStore.getState();
@@ -161,12 +163,20 @@ export function CloudRecovery({ isAdmin = false }: { isAdmin?: boolean }) {
 
       // Cloud state (if configured)
       if (configured) {
-        const [mainInfo, artistsInfo] = await Promise.all([
-          getMainCloudSyncInfo(),
-          getArtistsCloudSyncInfo(),
-        ]);
-        setCloudState(mainInfo);
-        setArtistsCloud(artistsInfo);
+        try {
+          const [mainInfo, artistsInfo] = await Promise.all([
+            getMainCloudSyncInfo(),
+            getArtistsCloudSyncInfo(),
+          ]);
+          setCloudState(mainInfo);
+          setArtistsCloud(artistsInfo);
+        } catch (err: any) {
+          setCloudState(null);
+          setArtistsCloud(null);
+          const message = err?.message || String(err);
+          setCloudError(message);
+          console.error("[CloudRecovery] refresh cloud error:", err);
+        }
       } else {
         setCloudState(null);
         setArtistsCloud(null);
@@ -330,6 +340,10 @@ export function CloudRecovery({ isAdmin = false }: { isAdmin?: boolean }) {
                 <StatRow label="Artisti (riga separata)" value={artistsCloud?.count ?? 0} highlight={(artistsCloud?.count ?? 0) === 0} />
                 <StatRow label="Profilo" value={cloudState.profileHasData ? "OK" : "vuoto"} highlight={!cloudState.profileHasData} />
                 <StatRow label="Ultimo sync" value={formatRelativeTime(cloudState.lastSavedAt)} />
+              </div>
+            ) : cloudError ? (
+              <div className="text-xs text-destructive-foreground whitespace-pre-wrap break-words">
+                Errore cloud: {cloudError}
               </div>
             ) : (
               <div className="text-xs text-muted-foreground">Impossibile leggere</div>
