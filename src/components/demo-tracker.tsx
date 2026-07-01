@@ -234,10 +234,14 @@ export function DemoTracker() {
   const [scanningReplies, setScanningReplies] = useState(false);
 
   // Detail dialog
-  const [detailDemo, setDetailDemo] = useState<Demo | null>(null);
+  const [detailDemoId, setDetailDemoId] = useState<string | null>(null);
+  const detailDemo = useMemo(() => {
+    if (!detailDemoId) return null;
+    return demos.find((d) => d.id === detailDemoId) || null;
+  }, [detailDemoId, demos]);
 
   const handleOpenDetail = useCallback((demo: Demo) => {
-    setDetailDemo(demo);
+    setDetailDemoId(demo.id);
     if (demo.gmailUnreadResponse) {
       updateDemo(demo.id, { gmailUnreadResponse: false });
     }
@@ -974,7 +978,7 @@ export function DemoTracker() {
         )}
 
         {/* Detail Dialog (reused) */}
-        <DemoDetailDialog demo={detailDemo} onClose={() => setDetailDemo(null)} locale={locale} getLabelName={getLabelName} labels={labels} updateDemo={updateDemo} userProfile={userProfile} gmailAuth={gmailAuth} setGmailAuth={setGmailAuth} demos={demos} releases={releases} />
+        <DemoDetailDialog demo={detailDemo} onClose={() => setDetailDemoId(null)} locale={locale} getLabelName={getLabelName} labels={labels} updateDemo={updateDemo} userProfile={userProfile} gmailAuth={gmailAuth} setGmailAuth={setGmailAuth} demos={demos} releases={releases} />
       </div>
     );
   }
@@ -1220,6 +1224,7 @@ export function DemoTracker() {
                         {demo.pitchTracks && demo.pitchTracks.length >= 2 && (
                           <div className="flex flex-col gap-1.5 mt-2 mb-1 border-t border-border/10 pt-2 bg-secondary/10 rounded-md p-1.5 border border-border/5">
                             {demo.pitchTracks.map((tr, idx) => {
+                              if (!tr) return null;
                               const trStatus = tr.status || "awaiting";
                               const trCfg = TRACK_STATUS_CONFIG[trStatus] || TRACK_STATUS_CONFIG.awaiting;
                               return (
@@ -1423,7 +1428,7 @@ export function DemoTracker() {
       )}
 
       {/* Detail Dialog */}
-      <DemoDetailDialog demo={detailDemo} onClose={() => setDetailDemo(null)} locale={locale} getLabelName={getLabelName} labels={labels} updateDemo={updateDemo} userProfile={userProfile} gmailAuth={gmailAuth} setGmailAuth={setGmailAuth} demos={demos} releases={releases} />
+      <DemoDetailDialog demo={detailDemo} onClose={() => setDetailDemoId(null)} locale={locale} getLabelName={getLabelName} labels={labels} updateDemo={updateDemo} userProfile={userProfile} gmailAuth={gmailAuth} setGmailAuth={setGmailAuth} demos={demos} releases={releases} />
 
       {/* Add/Edit Dialog */}
       <Dialog open={showAddDialog} onOpenChange={setShowAddDialog}>
@@ -3758,6 +3763,78 @@ function DemoDetailDialog({
   const [inAppEmailAvailable, setInAppEmailAvailable] = useState(false);
   const { toast } = useToast();
 
+  // ==================== MULTI-TRACK LINK RESOLUTION ====================
+  // Resolves the list of tracks (with their per-track SoundCloud URLs) to
+  // render in the dialog. The demo detail previously only showed ONE link
+  // (demo.link), which is wrong for multi-track pitches — the user might
+  // have sent an "ep-multi" pitch with 2+ tracks, each with its own SC URL,
+  // but demo.link only held the first track's URL.
+  //
+  // Resolution order:
+  //   1. demo.pitchTracks (structured field saved by the EP-mode pitch flows)
+  //   2. demo.parentReleaseId → look up the Release + its tracks
+  //   3. parse pitchText for numbered track entries (back-compat for demos
+  //      saved before pitchTracks was added)
+  //   4. fallback to single-track: just demo.link + demo.trackName
+  const displayTracks = useMemo<PitchTrackEntry[]>(() => {
+    if (!demo) return [];
+
+    // (1) Structured pitchTracks field
+    if (Array.isArray(demo.pitchTracks) && demo.pitchTracks.length >= 2) {
+      return demo.pitchTracks;
+    }
+
+    // (2) Belongs to a Release (EP) — look up release + its tracks
+    if (demo.parentReleaseId) {
+      const release = releases.find((r) => r.id === demo.parentReleaseId);
+      if (release && release.trackIds.length >= 2) {
+        // If the release has a single EP album URL, surface that (the whole
+        // EP is one continuous SoundCloud set, not per-track links).
+        if (release.epSoundCloudUrl && release.epSoundCloudUrl.trim()) {
+          return [{
+            trackName: release.title,
+            artistName: release.artists.join(" × "),
+            scLink: release.epSoundCloudUrl.trim(),
+          }];
+        }
+        // Otherwise build per-track entries from the release's demos
+        const tracksFromRelease: PitchTrackEntry[] = release.trackIds
+          .map((tid) => demos.find((d) => d.id === tid))
+          .filter((d): d is Demo => !!d)
+          .map((d) => ({
+            trackName: d.trackName,
+            artistName: d.artists && d.artists.length > 0
+              ? d.artists.join(" × ")
+              : (d.artistName || ""),
+            scLink: d.link || "",
+          }));
+        if (tracksFromRelease.length >= 2) return tracksFromRelease;
+      }
+    }
+
+    // (3) Parse pitchText for multi-track entries (back-compat)
+    if (demo.pitchText) {
+      const parsed = parseMultiTrackFromPitchText(demo.pitchText);
+      if (parsed.length >= 2) return parsed;
+    }
+
+    // (4) Fallback: single-track display
+    if (demo.link) {
+      return [{
+        trackName: demo.trackName,
+        artistName: demo.artists && demo.artists.length > 0
+          ? demo.artists.join(" × ")
+          : (demo.artistName || ""),
+        scLink: demo.link,
+      }];
+    }
+
+    return [];
+  }, [demo, releases, demos]);
+
+  // Whether the demo is being shown as a multi-track pitch in the dialog.
+  const isMultiTrack = displayTracks.length >= 2;
+
   const handleTrackStatusChange = useCallback((trackIdx: number, newStatus: TrackStatus) => {
     if (!demo) return;
     let currentTracks = demo.pitchTracks;
@@ -4024,78 +4101,6 @@ function DemoDetailDialog({
       setSendingEmail(false);
     }
   }, [demo, label, effectivePitchSubject, effectivePitchBody, displayPitchText, updateDemo, toast]);
-
-  // ==================== MULTI-TRACK LINK RESOLUTION ====================
-  // Resolves the list of tracks (with their per-track SoundCloud URLs) to
-  // render in the dialog. The demo detail previously only showed ONE link
-  // (demo.link), which is wrong for multi-track pitches — the user might
-  // have sent an "ep-multi" pitch with 2+ tracks, each with its own SC URL,
-  // but demo.link only held the first track's URL.
-  //
-  // Resolution order:
-  //   1. demo.pitchTracks (structured field saved by the EP-mode pitch flows)
-  //   2. demo.parentReleaseId → look up the Release + its tracks
-  //   3. parse pitchText for numbered track entries (back-compat for demos
-  //      saved before pitchTracks was added)
-  //   4. fallback to single-track: just demo.link + demo.trackName
-  const displayTracks = useMemo<PitchTrackEntry[]>(() => {
-    if (!demo) return [];
-
-    // (1) Structured pitchTracks field
-    if (Array.isArray(demo.pitchTracks) && demo.pitchTracks.length >= 2) {
-      return demo.pitchTracks;
-    }
-
-    // (2) Belongs to a Release (EP) — look up release + its tracks
-    if (demo.parentReleaseId) {
-      const release = releases.find((r) => r.id === demo.parentReleaseId);
-      if (release && release.trackIds.length >= 2) {
-        // If the release has a single EP album URL, surface that (the whole
-        // EP is one continuous SoundCloud set, not per-track links).
-        if (release.epSoundCloudUrl && release.epSoundCloudUrl.trim()) {
-          return [{
-            trackName: release.title,
-            artistName: release.artists.join(" × "),
-            scLink: release.epSoundCloudUrl.trim(),
-          }];
-        }
-        // Otherwise build per-track entries from the release's demos
-        const tracksFromRelease: PitchTrackEntry[] = release.trackIds
-          .map((tid) => demos.find((d) => d.id === tid))
-          .filter((d): d is Demo => !!d)
-          .map((d) => ({
-            trackName: d.trackName,
-            artistName: d.artists && d.artists.length > 0
-              ? d.artists.join(" × ")
-              : (d.artistName || ""),
-            scLink: d.link || "",
-          }));
-        if (tracksFromRelease.length >= 2) return tracksFromRelease;
-      }
-    }
-
-    // (3) Parse pitchText for multi-track entries (back-compat)
-    if (demo.pitchText) {
-      const parsed = parseMultiTrackFromPitchText(demo.pitchText);
-      if (parsed.length >= 2) return parsed;
-    }
-
-    // (4) Fallback: single-track display
-    if (demo.link) {
-      return [{
-        trackName: demo.trackName,
-        artistName: demo.artists && demo.artists.length > 0
-          ? demo.artists.join(" × ")
-          : (demo.artistName || ""),
-        scLink: demo.link,
-      }];
-    }
-
-    return [];
-  }, [demo, releases, demos]);
-
-  // Whether the demo is being shown as a multi-track pitch in the dialog.
-  const isMultiTrack = displayTracks.length >= 2;
 
   if (!demo) return null;
 
