@@ -3853,42 +3853,31 @@ function DemoDetailDialog({
 
     // Determine global demo status & replyStatus based on individual track statuses
     const statuses = updatedTracks.map(t => t.status || "awaiting");
-    const hasSigned = statuses.includes("signed");
-    const hasAccepted = statuses.includes("accepted");
-    const hasReviewing = statuses.includes("reviewing");
-    const allRejectedOrDeclined = statuses.every(s => s === "rejected" || s === "declined");
-    const anyPositiveInterest = hasSigned || hasAccepted || hasReviewing;
+    
+    // Filtra gli stati delle tracce che non sono terminali (rifiutate/svincolate)
+    // per determinare lo stato di avanzamento "positivo".
+    const activeStatuses = statuses.filter(s => s !== 'rejected' && s !== 'declined');
 
-    // Se tutte le tracce sono state rifiutate, lo stato globale è 'rejected'.
-    if (allRejectedOrDeclined) {
+    if (activeStatuses.length === 0) {
+      // Se non ci sono stati "attivi", significa che tutte le tracce sono state rifiutate/svincolate.
       demoUpdates.status = "rejected";
       demoUpdates.replyStatus = "rejected";
-    }
-    // Se c'è un qualsiasi interesse positivo (firmata, accettata, in revisione),
-    // lo stato globale diventa 'reviewing' (In Trattativa), a meno che non sia già 'accepted'.
-    else if (anyPositiveInterest) {
-      // Se almeno una traccia è firmata, e tutte le altre tracce di cui si attende
-      // una risposta sono state firmate, allora l'intera demo può essere considerata "accepted".
-      const allRelevantSigned = updatedTracks
-        .filter(t => t.status !== 'rejected' && t.status !== 'declined')
-        .every(t => t.status === 'signed');
-      
-      if (allRelevantSigned && hasSigned) {
-        demoUpdates.status = "accepted";
+    } else if (activeStatuses.every(s => s === 'signed')) {
+      // Se tutte le tracce attive sono state firmate, l'intera demo è accettata.
+      demoUpdates.status = "accepted";
+      demoUpdates.replyStatus = "positive";
+    } else if (activeStatuses.some(s => ['signed', 'accepted', 'reviewing'].includes(s))) {
+      // Se c'è almeno un segnale di interesse (firmata, accettata, in revisione),
+      // la demo è in trattativa.
+      demoUpdates.status = "reviewing";
+      if (activeStatuses.some(s => ['signed', 'accepted'].includes(s))) {
+        demoUpdates.replyStatus = "positive"; // Interesse forte
       } else {
-        demoUpdates.status = "reviewing";
+        demoUpdates.replyStatus = "info"; // Interesse iniziale
       }
-
-      // Aggiorna lo stato della risposta in base al segnale più forte
-      if (hasSigned || hasAccepted) {
-        demoUpdates.replyStatus = "positive";
-      } else if (hasReviewing) {
-        demoUpdates.replyStatus = "info";
-      }
-    }
-    // Altrimenti, se non c'è nessun interesse positivo e non sono state tutte rifiutate,
-    // significa che siamo ancora in attesa. Lo stato rimane 'sent'.
-    else {
+    } else {
+      // Se nessuna delle condizioni sopra è vera, significa che le tracce attive
+      // sono ancora in attesa di una risposta.
       demoUpdates.status = "sent";
     }
 
