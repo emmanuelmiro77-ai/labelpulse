@@ -41,6 +41,7 @@ import {
   BarChart3,
   Users,
   RotateCcw,
+  History,
 } from "lucide-react";
 import { useToast } from "@/hooks/use-toast";
 import { Input } from "@/components/ui/input";
@@ -502,6 +503,12 @@ export function LabelFinder() {
   // Updated via the <audio> timeupdate event listener; reset on track change.
   const [audioProgress, setAudioProgress] = useState<{ current: number; duration: number }>({ current: 0, duration: 0 });
   const audioRef = useRef<HTMLAudioElement | null>(null);
+
+  // Derive the demos associated with this label to render the submission history
+  const labelDemos = useMemo(() => {
+    if (!detailLabel) return [];
+    return demos.filter((d) => d.labelId === detailLabel.id);
+  }, [detailLabel, demos]);
 
   // Derive the label's Top 10 tracks from the scraped artist data. Each
   // artist has tracksByGenre; we flatten and filter by `track.label ===
@@ -2343,6 +2350,113 @@ export function LabelFinder() {
                             <p className="text-[9px] text-muted-foreground uppercase">pts</p>
                           </div>
                         </button>
+                      ))}
+                    </div>
+                  </div>
+                )}
+
+                {/* Submissions History with this label (CRM section) */}
+                {labelDemos.length > 0 && (
+                  <div className="space-y-3 py-3 border-b border-border/30">
+                    <div className="flex items-center gap-2">
+                      <History className="h-4 w-4 text-primary" />
+                      <p className="text-[10px] text-muted-foreground uppercase tracking-wider font-medium">
+                        {locale === "it" ? "Storico Invii Demo" : "Demo Submission History"}
+                      </p>
+                      <Badge variant="secondary" className="text-[9px] bg-secondary/50 font-mono ml-auto">
+                        {labelDemos.length}
+                      </Badge>
+                    </div>
+                    <div className="space-y-2 max-h-52 overflow-y-auto pr-1">
+                      {labelDemos.map((demo) => {
+                        // Import state configs to draw colors correctly
+                        const isOverdue = (demo.status === "sent" || demo.status === "reviewing") &&
+                          Math.floor((Date.now() - new Date(demo.sentDate || demo.createdAt).getTime()) / 86400000) > 28;
+                        const hasUnread = demo.gmailUnreadResponse;
+
+                        return (
+                          <div
+                            key={demo.id}
+                            className={`flex flex-col gap-1.5 rounded-md border p-2.5 transition-all bg-secondary/25 border-border/20 ${
+                              hasUnread ? "ring-1 ring-emerald-500/50 bg-emerald-500/5" : ""
+                            }`}
+                          >
+                            <div className="flex items-start justify-between gap-2">
+                              <div className="min-w-0">
+                                <p className="text-xs font-semibold text-foreground truncate">{demo.trackName}</p>
+                                {demo.artistName && (
+                                  <p className="text-[9px] text-muted-foreground mt-0.5 font-mono truncate">{demo.artistName}</p>
+                                )}
+                              </div>
+                              <div className="flex items-center gap-1.5 shrink-0">
+                                {hasUnread && (
+                                  <span className="inline-flex h-2 w-2 rounded-full bg-emerald-500 animate-pulse" title="Nuova risposta!" />
+                                )}
+                                <span className={`px-1.5 py-0.5 rounded text-[9px] font-bold uppercase tracking-wider ${
+                                  demo.status === "accepted" ? "bg-emerald-500/10 text-emerald-400 border border-emerald-500/20" :
+                                  demo.status === "rejected" ? "bg-red-500/10 text-red-400 border border-red-500/20" :
+                                  demo.status === "reviewing" ? "bg-cyan-500/10 text-cyan-400 border border-cyan-500/20" :
+                                  demo.status === "sent" ? "bg-purple-500/10 text-purple-400 border border-purple-500/20" :
+                                  "bg-gray-500/10 text-gray-400 border border-gray-500/20"
+                                }`}>
+                                  {locale === "it"
+                                    ? (demo.status === "accepted" ? "Accettata" :
+                                       demo.status === "rejected" ? "Rifiutata" :
+                                       demo.status === "reviewing" ? "In Trattativa" :
+                                       demo.status === "sent" ? "Inviata" : "Pronta")
+                                    : (demo.status === "accepted" ? "Accepted" :
+                                       demo.status === "rejected" ? "Rejected" :
+                                       demo.status === "reviewing" ? "In Discussion" :
+                                       demo.status === "sent" ? "Sent" : "Ready")
+                                  }
+                                </span>
+                              </div>
+                            </div>
+
+                            {/* Pitch tracks preview if EP */}
+                            {demo.pitchTracks && demo.pitchTracks.length >= 2 && (
+                              <div className="flex flex-col gap-1 pl-2 border-l border-border/30 my-0.5">
+                                {demo.pitchTracks.map((tr, tIdx) => {
+                                  const trStatus = tr.status || "awaiting";
+                                  return (
+                                    <div key={tIdx} className="flex items-center justify-between text-[9px] gap-2">
+                                      <span className="text-muted-foreground/80 truncate max-w-[150px]">{tIdx + 1}. {tr.trackName}</span>
+                                      <span className={`text-[7px] font-semibold tracking-wide ${
+                                        trStatus === "accepted" || trStatus === "signed" ? "text-emerald-400" :
+                                        trStatus === "rejected" ? "text-red-400" :
+                                        trStatus === "reviewing" ? "text-cyan-400" : "text-muted-foreground/60"
+                                      }`}>
+                                        {locale === "it"
+                                          ? (trStatus === "signed" ? "FIRMATA! 🎉" :
+                                             trStatus === "accepted" ? "ACCETTATA" :
+                                             trStatus === "reviewing" ? "IN TRATTATIVA" :
+                                             trStatus === "rejected" ? "RIFIUTATA" : "IN ATTESA")
+                                          : trStatus.toUpperCase()
+                                        }
+                                      </span>
+                                    </div>
+                                  );
+                                })}
+                              </div>
+                            )}
+
+                            <div className="flex items-center justify-between text-[9px] text-muted-foreground mt-0.5">
+                              <span>
+                                {locale === "it" ? "Inviata il: " : "Sent on: "}
+                                {demo.sentDate || new Date(demo.createdAt).toLocaleDateString(locale === "it" ? "it-IT" : "en-US")}
+                              </span>
+                              {isOverdue && (
+                                <span className="text-amber-400 font-semibold flex items-center gap-0.5">
+                                  ⚠️ {locale === "it" ? "Follow-up necessario" : "Follow-up overdue"}
+                                </span>
+                              )}
+                            </div>
+                          </div>
+                        );
+                      })}
+                    </div>
+                  </div>
+                )}
                       ))}
                     </div>
                   </div>

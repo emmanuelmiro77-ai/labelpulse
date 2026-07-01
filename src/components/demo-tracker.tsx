@@ -294,6 +294,42 @@ export function DemoTracker() {
   // Label history view
   const [labelHistoryId, setLabelHistoryId] = useState<string | null>(null);
 
+  // Self-healing: if any demo has its global status out of sync with its track statuses,
+  // automatically update it and sync to the database.
+  useEffect(() => {
+    const safeDemos = Array.isArray(demos) ? demos : [];
+    safeDemos.forEach((demo) => {
+      if (Array.isArray(demo.pitchTracks) && demo.pitchTracks.length >= 2) {
+        const statuses = demo.pitchTracks.map(t => t.status || "awaiting");
+        const activeStatuses = statuses.filter(s => s !== 'rejected' && s !== 'declined');
+
+        let computedStatus: DemoStatus = "sent";
+        let computedReplyStatus: Demo['replyStatus'] = demo.replyStatus || "none";
+
+        if (activeStatuses.length === 0) {
+          computedStatus = "rejected";
+          computedReplyStatus = "rejected";
+        } else if (activeStatuses.every(s => s === 'signed')) {
+          computedStatus = "accepted";
+          computedReplyStatus = "positive";
+        } else if (activeStatuses.some(s => ['signed', 'accepted', 'reviewing'].includes(s))) {
+          computedStatus = "reviewing";
+          computedReplyStatus = activeStatuses.some(s => ['signed', 'accepted'].includes(s)) ? "positive" : "info";
+        } else {
+          computedStatus = "sent";
+        }
+
+        if (demo.status !== computedStatus || (computedReplyStatus !== "none" && demo.replyStatus !== computedReplyStatus)) {
+          console.log(`[Self-Healing] Healing demo ${demo.id} (${demo.trackName}): status ${demo.status} -> ${computedStatus}, replyStatus ${demo.replyStatus} -> ${computedReplyStatus}`);
+          updateDemo(demo.id, {
+            status: computedStatus,
+            replyStatus: computedReplyStatus,
+          });
+        }
+      }
+    });
+  }, [demos, updateDemo]);
+
   const [formTrackName, setFormTrackName] = useState("");
   const [formArtists, setFormArtists] = useState<string[]>([]);
   const [formArtistInput, setFormArtistInput] = useState("");

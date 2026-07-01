@@ -161,7 +161,7 @@ function handleDemoChange(payload: RealtimePayload) {
 
   const idx = demos.findIndex((d) => d.id === newRow.id);
   if (idx >= 0) {
-    demos[idx] = mappedDemo;
+    demos[idx] = { ...demos[idx], ...mappedDemo };
   } else {
     demos.unshift(mappedDemo);
   }
