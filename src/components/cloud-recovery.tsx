@@ -20,6 +20,7 @@
  */
 
 import { useEffect, useState, useCallback } from "react";
+import { useSession } from "next-auth/react";
 import {
   RefreshCw, Upload, Download, AlertTriangle, CheckCircle2,
   Database, Cloud, HardDrive, Loader2, RotateCcw, FileDown,
@@ -95,6 +96,8 @@ export function CloudRecovery({ isAdmin = false }: { isAdmin?: boolean }) {
   const [actionLoading, setActionLoading] = useState<string | null>(null);
   const [confirmAction, setConfirmAction] = useState<null | "push" | "pull" | "merge" | "mergeArtists">(null);
   const [cloudError, setCloudError] = useState<string | null>(null);
+  const { data: session, status } = useSession();
+  const email = session?.user?.email || null;
 
   const configured = isSupabaseConfigured();
 
@@ -162,7 +165,7 @@ export function CloudRecovery({ isAdmin = false }: { isAdmin?: boolean }) {
       }
 
       // Cloud state (if configured)
-      if (configured) {
+      if (configured && email && status === "authenticated") {
         try {
           const [mainInfo, artistsInfo] = await Promise.all([
             getMainCloudSyncInfo(),
@@ -170,6 +173,7 @@ export function CloudRecovery({ isAdmin = false }: { isAdmin?: boolean }) {
           ]);
           setCloudState(mainInfo);
           setArtistsCloud(artistsInfo);
+          setCloudError(null);
         } catch (err: any) {
           setCloudState(null);
           setArtistsCloud(null);
@@ -180,13 +184,18 @@ export function CloudRecovery({ isAdmin = false }: { isAdmin?: boolean }) {
       } else {
         setCloudState(null);
         setArtistsCloud(null);
+        if (configured && status !== "authenticated") {
+          setCloudError("Utente non autenticato. Accedi con Google per leggere il cloud.");
+        } else {
+          setCloudError(null);
+        }
       }
     } catch (e) {
       console.warn("[CloudRecovery] refresh failed:", e);
     } finally {
       setLoading(false);
     }
-  }, [configured]);
+  }, [configured, email, status]);
 
   useEffect(() => {
     refresh();

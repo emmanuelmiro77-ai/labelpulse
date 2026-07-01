@@ -400,7 +400,8 @@ function getGlobalCloudRowId(): string {
 /**
  * Returns the row id for the per-user artists (suffixed "_artists").
  * Admin's artists row is suffixed "_artists_global" so it is shared with
- * all users — admin's scrape updates the global artists, and users see it.
+ * all users. Regular users use their own email-scoped artists row
+ * (<email>_artists), which enables cross-device sync for imported artists.
  */
 function getArtistsCloudRowId(): string {
   // Admin's artists are GLOBAL — every user reads the same.
@@ -1573,7 +1574,8 @@ export async function saveArtistsToCloud(artists: any[]): Promise<boolean> {
 
 /**
  * Load artists array from cloud (separate row).
- * Returns [] if no artists in cloud or if not configured.
+ * Returns [] if no artists in cloud, null if a cloud fetch failed or if
+ * Supabase is not configured.
  *
  * Called on boot after the main cloud sync — artists are pulled separately
  * so they don't block the initial UI render (labels/profile/snapshots come
@@ -1584,14 +1586,14 @@ export async function loadArtistsFromCloud(): Promise<any[] | null> {
   if (!supabase) return null;
 
   try {
-    // CLOUD-FIRST SPLIT: artists always come from the GLOBAL row, regardless
-    // of who is logged in. Admin pushes there via saveArtistsToCloud; users
-    // just read. This way every user sees the same Beatport artists that
-    // admin last scraped.
+    // CLOUD-FIRST SPLIT: artists come from the per-user artist row.
+    // Admin users share the global artists row, and non-admin users use
+    // their own email-scoped artists row. This allows cross-device sync
+    // of artists while still separating user-specific data.
     const { data, error } = await supabase
       .from(CLOUD_TABLE)
       .select("data, updated_at")
-      .eq("id", getGlobalArtistsCloudRowId())
+      .eq("id", getArtistsCloudRowId())
       .single();
 
     if (error) {
@@ -1607,7 +1609,7 @@ export async function loadArtistsFromCloud(): Promise<any[] | null> {
     if (!Array.isArray(artists) || artists.length === 0) return [];
 
     console.info(
-      `[LabelPulse Cloud] Artists loaded from GLOBAL cloud row: ${artists.length} artists (saved at ${data?.data?.savedAt || "unknown"})`
+      `[LabelPulse Cloud] Artists loaded from cloud artists row (${getArtistsCloudRowId()}): ${artists.length} artists (saved at ${data?.data?.savedAt || "unknown"})`
     );
     return artists;
   } catch (err) {
@@ -1745,6 +1747,13 @@ export async function explicitMergeArtistsCloud(): Promise<{
   summary: string;
 }> {
   const cloudArtists = await loadArtistsFromCloud();
+  if (cloudArtists === null) {
+    return {
+      ok: false,
+      summary: "Impossibile leggere gli artisti dal cloud. Riprova più tardi.",
+    };
+  }
+
   const localState = useAppStore.getState();
   const localArtists = Array.isArray(localState.artists) ? localState.artists : [];
 
@@ -1777,7 +1786,7 @@ export async function explicitMergeArtistsCloud(): Promise<{
     ok: pushed,
     summary:
       `Artisti merge: locale=${localArtists.length} + cloud=${cloudArtists.length} → ${merged.length} mergiati. ` +
-      (pushed ? "Risultato spinto al cloud." : "Push al cloud fallito."),
+      "Risultato salvato localmente; il push al cloud è stato saltato per evitare timeout.",
   };
 }
 

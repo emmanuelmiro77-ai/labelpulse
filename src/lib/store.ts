@@ -3118,7 +3118,8 @@ const CLOUD_SYNC_DEBOUNCE_MS = 3000; // 3 secondi di debounce
  * 🔒 BUG FIX (classifiche): saveGlobalRowIfAdmin() permette ancora all'admin
  * di pushare le classifiche aggiornate al cloud (riga 'global').
  */
-const DISABLE_OLD_APP_STATE_SYNC = true;
+export const OLD_APP_STATE_SYNC_DISABLED = true;
+const DISABLE_OLD_APP_STATE_SYNC = OLD_APP_STATE_SYNC_DISABLED;
 
 /**
  * 🔒 FASE D FIX: Permette all'admin di salvare SOLO la riga globale (classifiche).
@@ -4181,6 +4182,10 @@ export async function loadArtistsOnBoot(): Promise<void> {
     const cloudArtists = await loadArtistsFromCloud();
     const currentLocal = useAppStore.getState().artists || idbArtists;
 
+    // ⚠️ CLOUD FIRST: if the cloud load fails, do not assume the cloud is empty.
+    // Treat a failed cloud fetch as a transient failure and keep local data only.
+    // This prevents accidental overwrites of real cloud data when Supabase is
+    // temporarily unavailable or returns a timeout.
     if (cloudArtists === null) {
       console.warn("[LabelPulse] Cloud artists load failed — keeping local data and skipping cloud sync for now.");
       return;
