@@ -2457,10 +2457,6 @@ export function LabelFinder() {
                     </div>
                   </div>
                 )}
-                      ))}
-                    </div>
-                  </div>
-                )}
 
                 {/* User-editable fields with auto-save */}
                 <div className="space-y-4 py-3">
