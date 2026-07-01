@@ -3848,7 +3848,51 @@ function DemoDetailDialog({
       }
       return { ...t, status: t.status || "awaiting" as const };
     });
-    updateDemo(demo.id, { pitchTracks: updatedTracks });
+
+    const demoUpdates: Partial<Demo> = { pitchTracks: updatedTracks };
+
+    // Determine global demo status & replyStatus based on individual track statuses
+    const statuses = updatedTracks.map(t => t.status || "awaiting");
+    const hasSigned = statuses.includes("signed");
+    const hasAccepted = statuses.includes("accepted");
+    const hasReviewing = statuses.includes("reviewing");
+    const allRejectedOrDeclined = statuses.every(s => s === "rejected" || s === "declined");
+    const anyPositiveInterest = hasSigned || hasAccepted || hasReviewing;
+
+    // Se tutte le tracce sono state rifiutate, lo stato globale è 'rejected'.
+    if (allRejectedOrDeclined) {
+      demoUpdates.status = "rejected";
+      demoUpdates.replyStatus = "rejected";
+    }
+    // Se c'è un qualsiasi interesse positivo (firmata, accettata, in revisione),
+    // lo stato globale diventa 'reviewing' (In Trattativa), a meno che non sia già 'accepted'.
+    else if (anyPositiveInterest) {
+      // Se almeno una traccia è firmata, e tutte le altre tracce di cui si attende
+      // una risposta sono state firmate, allora l'intera demo può essere considerata "accepted".
+      const allRelevantSigned = updatedTracks
+        .filter(t => t.status !== 'rejected' && t.status !== 'declined')
+        .every(t => t.status === 'signed');
+      
+      if (allRelevantSigned && hasSigned) {
+        demoUpdates.status = "accepted";
+      } else {
+        demoUpdates.status = "reviewing";
+      }
+
+      // Aggiorna lo stato della risposta in base al segnale più forte
+      if (hasSigned || hasAccepted) {
+        demoUpdates.replyStatus = "positive";
+      } else if (hasReviewing) {
+        demoUpdates.replyStatus = "info";
+      }
+    }
+    // Altrimenti, se non c'è nessun interesse positivo e non sono state tutte rifiutate,
+    // significa che siamo ancora in attesa. Lo stato rimane 'sent'.
+    else {
+      demoUpdates.status = "sent";
+    }
+
+    updateDemo(demo.id, demoUpdates);
     toast({
       title: locale === "it" ? "Stato traccia aggiornato" : "Track status updated",
       description: `${displayTracks[trackIdx]?.trackName || ""} → ${TRACK_STATUS_CONFIG[newStatus][locale === "it" ? "labelIt" : "labelEn"]}`
