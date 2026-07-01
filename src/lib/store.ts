@@ -4181,6 +4181,11 @@ export async function loadArtistsOnBoot(): Promise<void> {
     const cloudArtists = await loadArtistsFromCloud();
     const currentLocal = useAppStore.getState().artists || idbArtists;
 
+    if (cloudArtists === null) {
+      console.warn("[LabelPulse] Cloud artists load failed — keeping local data and skipping cloud sync for now.");
+      return;
+    }
+
     if (cloudArtists.length === 0 && currentLocal.length === 0) {
       console.info("[LabelPulse] No artists in cloud or local. User has not imported a scrape yet.");
       return;

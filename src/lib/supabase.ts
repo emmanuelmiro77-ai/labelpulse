@@ -1579,9 +1579,9 @@ export async function saveArtistsToCloud(artists: any[]): Promise<boolean> {
  * so they don't block the initial UI render (labels/profile/snapshots come
  * first, artists come second).
  */
-export async function loadArtistsFromCloud(): Promise<any[]> {
+export async function loadArtistsFromCloud(): Promise<any[] | null> {
   const supabase = getSupabase();
-  if (!supabase) return [];
+  if (!supabase) return null;
 
   try {
     // CLOUD-FIRST SPLIT: artists always come from the GLOBAL row, regardless
@@ -1600,7 +1600,7 @@ export async function loadArtistsFromCloud(): Promise<any[]> {
         return [];
       }
       console.error("[LabelPulse Cloud] Artists load error:", error.message);
-      return [];
+      return null;
     }
 
     const artists = (data?.data as any)?.artists;
@@ -1612,7 +1612,7 @@ export async function loadArtistsFromCloud(): Promise<any[]> {
     return artists;
   } catch (err) {
     console.error("[LabelPulse Cloud] Artists load exception:", err);
-    return [];
+    return null;
   }
 }
 
