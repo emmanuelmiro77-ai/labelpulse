@@ -173,6 +173,37 @@ Se vuoi una garanzia al 100%, possiamo aggiungere test automatici
 
 ---
 
+## 📌 ISTRUZIONI PERMANENTI DELL'UTENTE (Regole Globali di Sviluppo)
+
+> **⚠️ QUESTE REGOLE SONO TASSATIVE E HANNO PRECEDENZA SU TUTTO.**
+> Devono essere rispettate in ogni sessione, senza eccezioni.
+
+### Ruolo dell'Assistente
+Sei un assistente AI senior ed esperto sviluppatore Full Stack. Il tuo compito è aiutarmi a sviluppare, ottimizzare e fare refactoring di un'applicazione Next.js (App Router) focalizzata sul settore musicale e DJing.
+
+### 1. REGOLE TASSATIVE DI AVVIO (Pre-Sessione)
+Prima di scrivere qualsiasi riga di codice o proporre modifiche, devi TASSATIVAMENTE:
+1. **Leggere il file di boot del progetto corrente** (BOOT.md) e il file **agent** (AGENT_CONTEXT.md). Questo serve a comprendere lo stato attuale del software, evitare regressioni e non ripetere errori o fix di bug già risolti in precedenza.
+2. **Sincronizzare la tua conoscenza** con la struttura e il workflow definiti in questi file.
+3. Eseguire `bash scripts/agent-boot.sh` per il boot completo della memoria.
+
+### 2. Stack Tecnologico del Progetto
+- **Framework:** Next.js (App Router) con TypeScript.
+- **Stato & Validazione:** Zustand per la gestione dello stato globale, Zod per la validazione dei dati.
+- **Database & Auth:** Prisma ORM, Supabase (tabelle: app_state, demo_submissions, label_personal_data, pitch_campaigns, user_profiles, beta_access_codes, beta_feedback, ranking_snapshots), NextAuth. **Supabase è il cuore dei salvataggi del sistema: assicurati che sia sempre aggiornato e coerente con ogni modifica.**
+- **Funzionalità Core:** Analisi audio tramite Essentia.js WebAssembly (`public/essentia-wasm.web.js`), scraping di dati musicali con script dedicati per Beatport e Beatstats.
+
+### 3. Regole Operative e Gestione Git/Deploy
+1. **Modularità:** Scrivi codice TypeScript pulito, fortemente tipato, modulare e DRY (Don't Repeat Yourself).
+2. **Integrità del DB:** Qualsiasi modifica ai modelli Prisma deve rispettare le relazioni esistenti (in particolare la gestione di demo e feedback) e riflettersi immediatamente su Supabase.
+3. **Chiusura Sessione (Git & Vercel):** Al termine di ogni sessione di lavoro, se hai apportato fix, miglioramenti, correzioni o innovazioni al software, devi compilare i file modificati, preparare il commit di GitHub e procedere con il push per avviare il deploy automatico su Vercel.
+4. **Approccio:** Non scrivere spiegazioni teoriche prolisse. Vai dritto al punto, mostra il codice modificato e spiega solo le modifiche chiave.
+5. **Lingua:** Rispondi sempre in italiano.
+6. **Anti-regressione:** Prima di committare, verifica che i fix passati sui file toccati siano ancora presenti (vedi protocollo in BUG_REGISTRY.md).
+7. **Cloud-first (REGOLA ZERO):** Il cloud (Supabase) è l'unica verità. REPLACE totale, NON merge. Il localStorage è solo cache temporanea.
+
+---
+
 ## 📊 STATO CORRENTE DEL PROGETTO (aggiornato 2026-06-29)
 
 ### 🎯 RIEPILOGO COMPLETO LAVORO (recap definitivo)
