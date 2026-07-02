@@ -1900,3 +1900,28 @@ Stage Summary:
 - L'app è ora pionieristica e offre un sistema di tracciamento multi-traccia unico che surclassa la rigidità di LabelRadar integrando direttamente le risposte Gmail.
 - Pronto per il commit, push e deploy automatico su Vercel.
 
+
+---
+Task ID: outbox-retry-sync-affidabile
+Agent: Claude (chat esterna, no accesso git — sessione 2026-07-02)
+Task: Fix affidabilità sync cloud multi-dispositivo — outbox con retry + diagnostica reale
+
+Work Log:
+- Analizzato il flusso di scrittura verso le 5 tabelle dedicate: tutte le funzioni in `api-client.ts` erano fire-and-forget (`.catch(() => {/* silent */})`), senza retry. Una scrittura fallita per rete assente/tab in background/5xx spariva senza lasciare traccia, e la modifica restava solo in localStorage — a rischio di essere sovrascritta dal REPLACE di `loadFromNewTables()` al prossimo login da altro dispositivo.
+- Diagnosticata la causa del falso allarme nello screenshot dell'utente (pannello "Diagnosi & Ripristino Sync" con cloud a 0 su tutto): il pannello leggeva `getMainCloudSyncInfo()` in `src/lib/supabase.ts`, che interroga la riga personale della vecchia tabella `app_state` — disattivata da `OLD_APP_STATE_SYNC_DISABLED`. Diagnostica basata su un sistema morto.
+- Creato `src/lib/outbox.ts`: coda di retry persistente in localStorage, FIFO per risorsa, retry su online/visibilitychange/interval 15s, drop solo su errori 4xx definitivi o dopo 50 tentativi.
+- Riscritto `src/lib/api-client.ts`: tutte le funzioni di scrittura (demos, label-data, pitches, profile, releases) ora passano da `writeWithOutbox()`.
+- Modificato `src/lib/use-auth.ts`: avvio `startOutboxAutoFlush()` sempre al boot; aggiunto refetch di sicurezza di `loadFromNewTables()` ogni 3 minuti + su tab visibile, per compensare il JWT Supabase (realtime) che scade dopo ~1h e non viene mai rinnovato.
+- Creato `src/app/api/sync-status/route.ts`: endpoint che legge le 5 tabelle vere per l'utente autenticato.
+- Riscritto `src/components/cloud-recovery.tsx`: diagnostica basata sui dati reali, contatore "modifiche in sospeso" dall'outbox, pulsante "Ricarica dal cloud", rimossi i pulsanti Sovrascrivi cloud/locale legati al sistema morto.
+- Verificato con `npx tsc --noEmit`: zero errori nuovi introdotti sui file toccati (gli errori preesistenti nel resto del codebase, non toccati, restano).
+- ⚠️ Nessun accesso a git/GitHub/Vercel in questa sessione (zip caricato senza `.git`, nessuna credenziale). Consegnati i file all'utente per commit/push manuale.
+
+Commits: NESSUNO — da fare manualmente dall'utente (vedi istruzioni fornite in chat)
+
+Stage Summary:
+- Fix implementato e verificato a livello di codice ✅
+- Root cause reale (scritture senza retry) risolta con pattern outbox
+- Root cause del falso allarme (diagnostica su sistema morto) risolta
+- TODO aperto: refresh automatico del JWT Supabase lato client per il realtime (non risolto in questa sessione — mitigato con polling di sicurezza)
+- Prossimo: l'utente deve fare `git add -A && git commit && git push origin main`, poi verificare su Vercel che il deploy vada a buon fine e testare il flusso multi-dispositivo

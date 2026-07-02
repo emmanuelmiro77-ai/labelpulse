@@ -1,16 +1,23 @@
 /**
- * 🔒 FASE C — API client per le nuove tabelle dedicate
+ * 🔒 API client per le tabelle dedicate (demo_submissions, label_personal_data,
+ * pitch_campaigns, user_profiles, user_releases).
  *
- * Helper functions per chiamare le API routes /api/demos, /api/label-data,
- * /api/pitches, /api/profile con gestione errori silenziosa.
+ * 🔒 AFFIDABILITÀ (fix definitivo sync multi-dispositivo):
+ * Tutte le scritture (create/update/delete) passano da `writeWithOutbox()`.
+ * Se il salvataggio fallisce per un motivo temporaneo (rete assente, tab in
+ * background, 5xx momentaneo di Vercel/Supabase), l'operazione NON viene
+ * persa: viene messa in coda in localStorage e ritentata automaticamente
+ * (su riconnessione, su tab tornata visibile, e ogni 15s) finché non va a
+ * buon fine. Solo così il cloud può davvero essere l'unica fonte di verità:
+ * se una scrittura può sparire nel nulla, "cloud is source of truth" è solo
+ * una speranza, non una garanzia.
  *
- * Strategia: "dual write" — l'app continua a usare localStorage come cache,
- * MA ogni operazione viene anche inviata alla nuova API.
- * Quando la migrazione sarà completa, rimuoveremo il vecchio sistema app_state.
- *
- * Se la API fallisce (network error, server down), l'errore viene loggato ma
- * l'operazione locale continua — l'utente non vede errori.
+ * Le funzioni GET restano letture normali: se falliscono, chi chiama
+ * (loadFromNewTables) semplicemente non aggiorna quel pezzo di stato e
+ * riprova al giro successivo.
  */
+
+import { writeWithOutbox } from "./outbox";
 
 const API_BASE = "";
 
@@ -76,55 +83,15 @@ export interface ProfileRow {
 // ==================== DEMOS ====================
 
 export async function apiCreateDemo(demo: DemoRow): Promise<boolean> {
-  try {
-    const res = await fetch(`${API_BASE}/api/demos`, {
-      method: "POST",
-      headers: { "Content-Type": "application/json" },
-      body: JSON.stringify(demo),
-    });
-    if (!res.ok) {
-      console.error("[apiCreateDemo] failed:", res.status, await res.text().catch(() => ""));
-      return false;
-    }
-    return true;
-  } catch (err) {
-    console.error("[apiCreateDemo] network error:", err);
-    return false;
-  }
+  return writeWithOutbox(`${API_BASE}/api/demos`, "POST", demo, `demo:create:${demo.id}`);
 }
 
 export async function apiUpdateDemo(id: string, updates: Partial<DemoRow>): Promise<boolean> {
-  try {
-    const res = await fetch(`${API_BASE}/api/demos?id=${encodeURIComponent(id)}`, {
-      method: "PATCH",
-      headers: { "Content-Type": "application/json" },
-      body: JSON.stringify(updates),
-    });
-    if (!res.ok) {
-      console.error("[apiUpdateDemo] failed:", res.status, await res.text().catch(() => ""));
-      return false;
-    }
-    return true;
-  } catch (err) {
-    console.error("[apiUpdateDemo] network error:", err);
-    return false;
-  }
+  return writeWithOutbox(`${API_BASE}/api/demos?id=${encodeURIComponent(id)}`, "PATCH", updates, `demo:update:${id}`);
 }
 
 export async function apiDeleteDemo(id: string): Promise<boolean> {
-  try {
-    const res = await fetch(`${API_BASE}/api/demos?id=${encodeURIComponent(id)}`, {
-      method: "DELETE",
-    });
-    if (!res.ok) {
-      console.error("[apiDeleteDemo] failed:", res.status, await res.text().catch(() => ""));
-      return false;
-    }
-    return true;
-  } catch (err) {
-    console.error("[apiDeleteDemo] network error:", err);
-    return false;
-  }
+  return writeWithOutbox(`${API_BASE}/api/demos?id=${encodeURIComponent(id)}`, "DELETE", undefined, `demo:delete:${id}`);
 }
 
 export async function apiFetchAllDemos(): Promise<DemoRow[] | null> {
@@ -145,37 +112,11 @@ export async function apiFetchAllDemos(): Promise<DemoRow[] | null> {
 // ==================== LABEL DATA ====================
 
 export async function apiUpsertLabelData(labelData: LabelDataRow): Promise<boolean> {
-  try {
-    const res = await fetch(`${API_BASE}/api/label-data`, {
-      method: "POST",
-      headers: { "Content-Type": "application/json" },
-      body: JSON.stringify(labelData),
-    });
-    if (!res.ok) {
-      console.error("[apiUpsertLabelData] failed:", res.status, await res.text().catch(() => ""));
-      return false;
-    }
-    return true;
-  } catch (err) {
-    console.error("[apiUpsertLabelData] network error:", err);
-    return false;
-  }
+  return writeWithOutbox(`${API_BASE}/api/label-data`, "POST", labelData, `label-data:upsert:${labelData.label_id}`);
 }
 
 export async function apiDeleteLabelData(labelId: string): Promise<boolean> {
-  try {
-    const res = await fetch(`${API_BASE}/api/label-data?label_id=${encodeURIComponent(labelId)}`, {
-      method: "DELETE",
-    });
-    if (!res.ok) {
-      console.error("[apiDeleteLabelData] failed:", res.status);
-      return false;
-    }
-    return true;
-  } catch (err) {
-    console.error("[apiDeleteLabelData] network error:", err);
-    return false;
-  }
+  return writeWithOutbox(`${API_BASE}/api/label-data?label_id=${encodeURIComponent(labelId)}`, "DELETE", undefined, `label-data:delete:${labelId}`);
 }
 
 export async function apiFetchAllLabelData(): Promise<LabelDataRow[] | null> {
@@ -196,55 +137,15 @@ export async function apiFetchAllLabelData(): Promise<LabelDataRow[] | null> {
 // ==================== PITCHES ====================
 
 export async function apiCreatePitch(pitch: PitchRow): Promise<boolean> {
-  try {
-    const res = await fetch(`${API_BASE}/api/pitches`, {
-      method: "POST",
-      headers: { "Content-Type": "application/json" },
-      body: JSON.stringify(pitch),
-    });
-    if (!res.ok) {
-      console.error("[apiCreatePitch] failed:", res.status, await res.text().catch(() => ""));
-      return false;
-    }
-    return true;
-  } catch (err) {
-    console.error("[apiCreatePitch] network error:", err);
-    return false;
-  }
+  return writeWithOutbox(`${API_BASE}/api/pitches`, "POST", pitch, `pitch:create:${pitch.id}`);
 }
 
 export async function apiUpdatePitch(id: string, updates: Partial<PitchRow>): Promise<boolean> {
-  try {
-    const res = await fetch(`${API_BASE}/api/pitches?id=${encodeURIComponent(id)}`, {
-      method: "PATCH",
-      headers: { "Content-Type": "application/json" },
-      body: JSON.stringify(updates),
-    });
-    if (!res.ok) {
-      console.error("[apiUpdatePitch] failed:", res.status);
-      return false;
-    }
-    return true;
-  } catch (err) {
-    console.error("[apiUpdatePitch] network error:", err);
-    return false;
-  }
+  return writeWithOutbox(`${API_BASE}/api/pitches?id=${encodeURIComponent(id)}`, "PATCH", updates, `pitch:update:${id}`);
 }
 
 export async function apiDeletePitch(id: string): Promise<boolean> {
-  try {
-    const res = await fetch(`${API_BASE}/api/pitches?id=${encodeURIComponent(id)}`, {
-      method: "DELETE",
-    });
-    if (!res.ok) {
-      console.error("[apiDeletePitch] failed:", res.status);
-      return false;
-    }
-    return true;
-  } catch (err) {
-    console.error("[apiDeletePitch] network error:", err);
-    return false;
-  }
+  return writeWithOutbox(`${API_BASE}/api/pitches?id=${encodeURIComponent(id)}`, "DELETE", undefined, `pitch:delete:${id}`);
 }
 
 export async function apiFetchAllPitches(): Promise<PitchRow[] | null> {
@@ -265,21 +166,7 @@ export async function apiFetchAllPitches(): Promise<PitchRow[] | null> {
 // ==================== PROFILE ====================
 
 export async function apiUpsertProfile(profile: ProfileRow): Promise<boolean> {
-  try {
-    const res = await fetch(`${API_BASE}/api/profile`, {
-      method: "POST",
-      headers: { "Content-Type": "application/json" },
-      body: JSON.stringify(profile),
-    });
-    if (!res.ok) {
-      console.error("[apiUpsertProfile] failed:", res.status);
-      return false;
-    }
-    return true;
-  } catch (err) {
-    console.error("[apiUpsertProfile] network error:", err);
-    return false;
-  }
+  return writeWithOutbox(`${API_BASE}/api/profile`, "POST", profile, "profile:upsert");
 }
 
 export async function apiFetchProfile(): Promise<ProfileRow | null> {
@@ -311,54 +198,13 @@ export interface ReleaseRow {
 }
 
 export async function apiCreateRelease(release: ReleaseRow): Promise<boolean> {
-  try {
-    const res = await fetch(`${API_BASE}/api/releases`, {
-      method: "POST",
-      headers: { "Content-Type": "application/json" },
-      body: JSON.stringify(release),
-    });
-    if (!res.ok) {
-      console.error("[apiCreateRelease] failed:", res.status);
-      return false;
-    }
-    return true;
-  } catch (err) {
-    console.error("[apiCreateRelease] network error:", err);
-    return false;
-  }
+  return writeWithOutbox(`${API_BASE}/api/releases`, "POST", release, `release:create:${release.id}`);
 }
 
 export async function apiUpdateRelease(id: string, updates: Partial<ReleaseRow>): Promise<boolean> {
-  try {
-    const res = await fetch(`${API_BASE}/api/releases?id=${encodeURIComponent(id)}`, {
-      method: "PATCH",
-      headers: { "Content-Type": "application/json" },
-      body: JSON.stringify(updates),
-    });
-    if (!res.ok) {
-      console.error("[apiUpdateRelease] failed:", res.status);
-      return false;
-    }
-    return true;
-  } catch (err) {
-    console.error("[apiUpdateRelease] network error:", err);
-    return false;
-  }
+  return writeWithOutbox(`${API_BASE}/api/releases?id=${encodeURIComponent(id)}`, "PATCH", updates, `release:update:${id}`);
 }
 
 export async function apiDeleteRelease(id: string): Promise<boolean> {
-  try {
-    const res = await fetch(`${API_BASE}/api/releases?id=${encodeURIComponent(id)}`, {
-      method: "DELETE",
-    });
-    if (!res.ok) {
-      console.error("[apiDeleteRelease] failed:", res.status);
-      return false;
-    }
-    return true;
-  } catch (err) {
-    console.error("[apiDeleteRelease] network error:", err);
-    return false;
-  }
+  return writeWithOutbox(`${API_BASE}/api/releases?id=${encodeURIComponent(id)}`, "DELETE", undefined, `release:delete:${id}`);
 }
-

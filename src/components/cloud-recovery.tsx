@@ -1,45 +1,45 @@
 "use client";
 
 /**
- * CloudRecovery — Diagnostica & Ripristino sync cloud.
+ * CloudRecovery — Diagnostica sync cloud (v2 — post migrazione FASE C/D).
  *
- * Questo componente è la "cassetta degli attrezzi" per risolvere problemi di
- * sincronizzazione cloud. Mostra:
- *   - Stato locale (quanti label, quanti con rankByGenre, snapshots, artisti)
- *   - Stato cloud (stessi metrici, più lastSavedAt)
- *   - Stato sidecar (profile backup, snapshots backup)
+ * 🔒 PERCHÉ RISCRITTO (2026-07-02):
+ * La versione precedente leggeva lo stato cloud da `getMainCloudSyncInfo()` /
+ * `getArtistsCloudSyncInfo()` in src/lib/supabase.ts, che interrogano la riga
+ * PERSONALE della vecchia tabella `app_state`. Quella riga non viene più
+ * scritta da FASE D in poi (vedi OLD_APP_STATE_SYNC_DISABLED in store.ts) —
+ * quindi il pannello mostrava SEMPRE "0" su tutto lato cloud, anche quando i
+ * dati reali erano sani e al sicuro nelle 5 tabelle dedicate. Falso allarme,
+ * e i pulsanti "Sovrascrivi cloud/locale" agivano sul sistema morto: inutili
+ * nella migliore delle ipotesi, fuorvianti nella peggiore.
  *
- * Azioni disponibili:
- *   - "Unisci cloud + locale" — run mergeCloudData, push result to cloud
- *   - "Sovrascrivi cloud con locale" — push local → cloud (destructive su cloud)
- *   - "Sovrascrivi locale con cloud" — pull cloud → local (destructive su local)
- *   - "Ripristina da sidecar" — restore profile + snapshots da backup locali
- *   - "Scarica backup JSON" — download completo dei dati locali
+ * Ora il pannello legge `/api/sync-status`, che interroga le tabelle vere
+ * (demo_submissions, label_personal_data, pitch_campaigns, user_profiles,
+ * user_releases) — la sola fonte di verità secondo REGOLA ZERO.
  *
- * Mostrato nel tab Profilo, sotto la sezione "Sincronizzazione Cloud".
+ * Mostra anche quante operazioni sono in coda nell'outbox locale (vedi
+ * src/lib/outbox.ts): se questo numero non è zero, significa che ci sono
+ * modifiche fatte su QUESTO dispositivo che non sono ancora arrivate al
+ * cloud — verranno ritentate automaticamente in background.
  */
 
 import { useEffect, useState, useCallback } from "react";
 import { useSession } from "next-auth/react";
 import {
-  RefreshCw, Upload, Download, AlertTriangle, CheckCircle2,
-  Database, Cloud, HardDrive, Loader2, RotateCcw, FileDown,
+  RefreshCw, AlertTriangle, CheckCircle2, CloudOff,
+  Database, Cloud, HardDrive, Loader2, RotateCcw, FileDown, UploadCloud,
 } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import {
   Card, CardContent, CardDescription, CardHeader, CardTitle,
 } from "@/components/ui/card";
-import {
-  AlertDialog, AlertDialogAction, AlertDialogCancel, AlertDialogContent,
-  AlertDialogDescription, AlertDialogFooter, AlertDialogHeader, AlertDialogTitle,
-} from "@/components/ui/alert-dialog";
 import { useToast } from "@/hooks/use-toast";
-import { useAppStore, restoreProfileFromSidecar, restoreSnapshotsFromSidecar, restoreArtistsFromSidecar } from "@/lib/store";
 import {
-  getMainCloudSyncInfo, getArtistsCloudSyncInfo,
-  forcePushLocalToCloud, forcePullCloudToLocal,
-  explicitMergeLocalAndCloud, explicitMergeArtistsCloud, isSupabaseConfigured,
-} from "@/lib/supabase";
+  useAppStore, restoreProfileFromSidecar, restoreSnapshotsFromSidecar,
+  restoreArtistsFromSidecar, loadFromNewTables,
+} from "@/lib/store";
+import { isSupabaseConfigured } from "@/lib/supabase";
+import { getPendingCount, onOutboxChange, flushOutbox } from "@/lib/outbox";
 
 interface LocalState {
   labels: number;
@@ -51,18 +51,14 @@ interface LocalState {
   lastSavedAt: string | null;
 }
 
-interface CloudState {
-  labels: number;
-  labelsWithRankings: number;
-  snapshots: number;
+interface CloudSyncStatus {
   demos: number;
+  labelPersonalData: number;
+  pitchDrafts: number;
+  pitchSent: number;
+  releases: number;
   profileHasData: boolean;
-  lastSavedAt: string | null;
-}
-
-interface ArtistsCloudState {
-  count: number;
-  savedAt: string | null;
+  lastUpdatedAt: string | null;
 }
 
 function formatRelativeTime(iso: string | null): string {
@@ -87,25 +83,29 @@ function formatRelativeTime(iso: string | null): string {
 export function CloudRecovery({ isAdmin = false }: { isAdmin?: boolean }) {
   const { toast } = useToast();
   const [localState, setLocalState] = useState<LocalState | null>(null);
-  const [cloudState, setCloudState] = useState<CloudState | null>(null);
-  const [artistsCloud, setArtistsCloud] = useState<ArtistsCloudState | null>(null);
+  const [cloudState, setCloudState] = useState<CloudSyncStatus | null>(null);
   const [sidecarProfile, setSidecarProfile] = useState<boolean>(false);
   const [sidecarSnapshots, setSidecarSnapshots] = useState<number>(0);
   const [sidecarArtists, setSidecarArtists] = useState<number>(0);
   const [loading, setLoading] = useState(false);
   const [actionLoading, setActionLoading] = useState<string | null>(null);
-  const [confirmAction, setConfirmAction] = useState<null | "push" | "pull" | "merge" | "mergeArtists">(null);
   const [cloudError, setCloudError] = useState<string | null>(null);
+  const [pendingOutbox, setPendingOutbox] = useState<number>(0);
   const { data: session, status } = useSession();
   const email = session?.user?.email || null;
 
   const configured = isSupabaseConfigured();
 
+  useEffect(() => {
+    setPendingOutbox(getPendingCount());
+    return onOutboxChange(setPendingOutbox);
+  }, []);
+
   const refresh = useCallback(async () => {
     setLoading(true);
     setCloudError(null);
     try {
-      // Local state
+      // Stato locale
       const s = useAppStore.getState();
       const labels = s.labels || [];
       const labelsWithRankings = labels.filter(
@@ -126,7 +126,7 @@ export function CloudRecovery({ isAdmin = false }: { isAdmin?: boolean }) {
         lastSavedAt: s.lastSavedAt || null,
       });
 
-      // Sidecar state
+      // Sidecar (backup di emergenza locali)
       try {
         const sideProfileRaw = localStorage.getItem("labelpulse-profile-backup");
         const sideSnapsRaw = localStorage.getItem("labelpulse-snapshots-backup");
@@ -137,53 +137,49 @@ export function CloudRecovery({ isAdmin = false }: { isAdmin?: boolean }) {
             const prof = p?.userProfile || p?.state?.userProfile;
             setSidecarProfile(!!prof && (!!prof.artistName || !!prof.email || !!prof.bio));
           } catch { setSidecarProfile(false); }
-        } else {
-          setSidecarProfile(false);
-        }
+        } else setSidecarProfile(false);
         if (sideSnapsRaw) {
           try {
             const sn = JSON.parse(sideSnapsRaw);
             const arr = Array.isArray(sn) ? sn : (sn?.rankingSnapshots || sn?.state?.rankingSnapshots || []);
             setSidecarSnapshots(Array.isArray(arr) ? arr.length : 0);
           } catch { setSidecarSnapshots(0); }
-        } else {
-          setSidecarSnapshots(0);
-        }
+        } else setSidecarSnapshots(0);
         if (sideArtistsRaw) {
           try {
             const ar = JSON.parse(sideArtistsRaw);
             const arr = ar?.artists;
             setSidecarArtists(Array.isArray(arr) ? arr.length : 0);
           } catch { setSidecarArtists(0); }
-        } else {
-          setSidecarArtists(0);
-        }
+        } else setSidecarArtists(0);
       } catch {
         setSidecarProfile(false);
         setSidecarSnapshots(0);
         setSidecarArtists(0);
       }
 
-      // Cloud state (if configured)
+      // Stato cloud VERO — dalle 5 tabelle dedicate
       if (configured && email && status === "authenticated") {
         try {
-          const [mainInfo, artistsInfo] = await Promise.all([
-            getMainCloudSyncInfo(),
-            getArtistsCloudSyncInfo(),
-          ]);
-          setCloudState(mainInfo);
-          setArtistsCloud(artistsInfo);
+          const res = await fetch("/api/sync-status");
+          if (!res.ok) throw new Error(`HTTP ${res.status}`);
+          const data = await res.json();
+          setCloudState({
+            demos: data.demos ?? 0,
+            labelPersonalData: data.labelPersonalData ?? 0,
+            pitchDrafts: data.pitchDrafts ?? 0,
+            pitchSent: data.pitchSent ?? 0,
+            releases: data.releases ?? 0,
+            profileHasData: !!data.profileHasData,
+            lastUpdatedAt: data.lastUpdatedAt ?? null,
+          });
           setCloudError(null);
         } catch (err: any) {
           setCloudState(null);
-          setArtistsCloud(null);
-          const message = err?.message || String(err);
-          setCloudError(message);
-          console.error("[CloudRecovery] refresh cloud error:", err);
+          setCloudError(err?.message || String(err));
         }
       } else {
         setCloudState(null);
-        setArtistsCloud(null);
         if (configured && status !== "authenticated") {
           setCloudError("Utente non autenticato. Accedi con Google per leggere il cloud.");
         } else {
@@ -201,60 +197,53 @@ export function CloudRecovery({ isAdmin = false }: { isAdmin?: boolean }) {
     refresh();
   }, [refresh]);
 
-  const handleAction = async (action: "push" | "pull" | "merge" | "mergeArtists" | "sidecar") => {
-    setActionLoading(action);
+  const handleForceReloadFromCloud = async () => {
+    setActionLoading("reload");
     try {
-      if (action === "push") {
-        const ok = await forcePushLocalToCloud();
-        toast({
-          title: ok ? "Cloud aggiornato" : "Errore",
-          description: ok
-            ? "I dati locali hanno sovrascritto il cloud."
-            : "Impossibile caricare i dati sul cloud. Riprova.",
-          variant: ok ? "default" : "destructive",
-        });
-      } else if (action === "pull") {
-        const ok = await forcePullCloudToLocal();
-        toast({
-          title: ok ? "Locale aggiornato" : "Errore",
-          description: ok
-            ? "I dati del cloud hanno sovrascritto il locale."
-            : "Impossibile scaricare i dati dal cloud. Riprova.",
-          variant: ok ? "default" : "destructive",
-        });
-      } else if (action === "merge") {
-        const result = await explicitMergeLocalAndCloud();
-        toast({
-          title: result.ok ? "Merge completato" : "Errore",
-          description: result.summary,
-          variant: result.ok ? "default" : "destructive",
-        });
-      } else if (action === "sidecar") {
-        const p = restoreProfileFromSidecar();
-        const sn = restoreSnapshotsFromSidecar();
-        const ar = restoreArtistsFromSidecar();
-        toast({
-          title: "Ripristino sidecar",
-          description: `Profilo: ${p ? "OK" : "niente"}, Snapshot: ${sn} recuperati, Artisti: ${ar} recuperati.`,
-        });
-      } else if (action === "mergeArtists") {
-        const result = await explicitMergeArtistsCloud();
-        toast({
-          title: result.ok ? "Merge artisti completato" : "Errore",
-          description: result.summary,
-          variant: result.ok ? "default" : "destructive",
-        });
-      }
+      await loadFromNewTables();
+      toast({
+        title: "Ricaricato dal cloud",
+        description: "Demo, label personalizzate, pitch, profilo e release sono stati ricaricati dalle tabelle Supabase — questa è sempre la versione più aggiornata.",
+      });
       await refresh();
     } catch (e: any) {
-      toast({
-        title: "Errore",
-        description: e?.message || "Operazione fallita.",
-        variant: "destructive",
-      });
+      toast({ title: "Errore", description: e?.message || "Ricaricamento fallito.", variant: "destructive" });
     } finally {
       setActionLoading(null);
-      setConfirmAction(null);
+    }
+  };
+
+  const handleFlushOutbox = async () => {
+    setActionLoading("flush");
+    try {
+      const { pending, flushed } = await flushOutbox();
+      toast({
+        title: flushed > 0 ? "Sincronizzazione completata" : "Niente da inviare",
+        description: `${flushed} operazioni inviate al cloud. ${pending} ancora in coda.`,
+      });
+      await refresh();
+    } catch (e: any) {
+      toast({ title: "Errore", description: e?.message || "Invio fallito.", variant: "destructive" });
+    } finally {
+      setActionLoading(null);
+    }
+  };
+
+  const handleSidecarRestore = async () => {
+    setActionLoading("sidecar");
+    try {
+      const p = restoreProfileFromSidecar();
+      const sn = restoreSnapshotsFromSidecar();
+      const ar = restoreArtistsFromSidecar();
+      toast({
+        title: "Ripristino sidecar",
+        description: `Profilo: ${p ? "OK" : "niente"}, Snapshot: ${sn} recuperati, Artisti: ${ar} recuperati.`,
+      });
+      await refresh();
+    } catch (e: any) {
+      toast({ title: "Errore", description: e?.message || "Operazione fallita.", variant: "destructive" });
+    } finally {
+      setActionLoading(null);
     }
   };
 
@@ -262,7 +251,7 @@ export function CloudRecovery({ isAdmin = false }: { isAdmin?: boolean }) {
     const s = useAppStore.getState();
     const backup = {
       exportedAt: new Date().toISOString(),
-      version: "2.1",
+      version: "2.4",
       state: {
         labels: s.labels,
         demos: s.demos,
@@ -286,26 +275,34 @@ export function CloudRecovery({ isAdmin = false }: { isAdmin?: boolean }) {
   };
 
   return (
-    <Card className="border-amber-500/30 bg-amber-500/5">
+    <Card className={pendingOutbox > 0 ? "border-amber-500/40 bg-amber-500/5" : "border-border/50"}>
       <CardHeader>
         <CardTitle className="flex items-center gap-2 text-base">
-          <AlertTriangle className="h-4 w-4 text-amber-400" />
-          Diagnosi & Ripristino Sync
+          {pendingOutbox > 0 ? (
+            <CloudOff className="h-4 w-4 text-amber-400" />
+          ) : (
+            <CheckCircle2 className="h-4 w-4 text-emerald-400" />
+          )}
+          Diagnosi Sync Cloud
         </CardTitle>
         <CardDescription>
-          Cosa c&apos;è realmente nel tuo browser, nel cloud, e nei backup di emergenza.
-          Usa queste azioni se after login vedi &quot;niente classifiche&quot; o &quot;niente artisti&quot;.
+          Il cloud (Supabase) è l&apos;unica fonte di verità: qualsiasi modifica fatta su un dispositivo
+          arriva qui e viene ricaricata su ogni altro dispositivo collegato con la stessa email.
+          {pendingOutbox > 0 && (
+            <span className="block mt-1 text-amber-400">
+              {pendingOutbox} modifiche fatte su QUESTO dispositivo sono ancora in coda verso il cloud
+              (rete assente o momentaneamente non raggiungibile) — verranno inviate automaticamente appena possibile.
+            </span>
+          )}
         </CardDescription>
       </CardHeader>
       <CardContent className="space-y-4">
         {!configured && (
           <div className="rounded-md bg-red-500/10 border border-red-500/30 p-3 text-xs text-red-400">
-            Cloud non configurato. Configura Supabase URL + anon key sopra
-            prima di poter usare le azioni di sync.
+            Cloud non configurato. Configura Supabase URL + anon key prima di poter usare le azioni di sync.
           </div>
         )}
 
-        {/* Diagnostica stato */}
         <div className="grid grid-cols-1 md:grid-cols-3 gap-3">
           {/* Locale */}
           <div className="rounded-md bg-secondary/30 p-3 space-y-2">
@@ -321,20 +318,20 @@ export function CloudRecovery({ isAdmin = false }: { isAdmin?: boolean }) {
                 <StatRow label="Label con classifiche" value={localState.labelsWithRankings} highlight={localState.labelsWithRankings === 0} />
                 <StatRow label="Snapshot storici" value={localState.snapshots} highlight={localState.snapshots === 0} />
                 <StatRow label="Demo" value={localState.demos} />
-                <StatRow label="Artisti" value={localState.artists} highlight={localState.artists === 0} />
                 <StatRow label="Profilo" value={localState.profileHasData ? "OK" : "vuoto"} highlight={!localState.profileHasData} />
-                <StatRow label="Ultimo salvataggio" value={formatRelativeTime(localState.lastSavedAt)} />
+                <StatRow label="Ultima modifica" value={formatRelativeTime(localState.lastSavedAt)} />
+                <StatRow label="In coda verso cloud" value={pendingOutbox} highlight={pendingOutbox > 0} />
               </div>
             ) : (
               <div className="text-xs text-muted-foreground">Niente dati</div>
             )}
           </div>
 
-          {/* Cloud */}
+          {/* Cloud — VERO, dalle 5 tabelle dedicate */}
           <div className="rounded-md bg-secondary/30 p-3 space-y-2">
             <div className="flex items-center gap-2 text-xs font-semibold">
               <Cloud className="h-3.5 w-3.5 text-purple-400" />
-              Cloud (Supabase)
+              Cloud (Supabase — fonte di verità)
             </div>
             {!configured ? (
               <div className="text-xs text-muted-foreground">Non configurato</div>
@@ -342,13 +339,13 @@ export function CloudRecovery({ isAdmin = false }: { isAdmin?: boolean }) {
               <Loader2 className="h-4 w-4 animate-spin text-muted-foreground" />
             ) : cloudState ? (
               <div className="space-y-1 text-xs text-muted-foreground">
-                <StatRow label="Label totali" value={cloudState.labels} />
-                <StatRow label="Label con classifiche" value={cloudState.labelsWithRankings} highlight={cloudState.labelsWithRankings === 0} />
-                <StatRow label="Snapshot storici" value={cloudState.snapshots} highlight={cloudState.snapshots === 0} />
                 <StatRow label="Demo" value={cloudState.demos} />
-                <StatRow label="Artisti (riga separata)" value={artistsCloud?.count ?? 0} highlight={(artistsCloud?.count ?? 0) === 0} />
+                <StatRow label="Label personalizzate" value={cloudState.labelPersonalData} />
+                <StatRow label="Pitch (bozze)" value={cloudState.pitchDrafts} />
+                <StatRow label="Pitch (inviati)" value={cloudState.pitchSent} />
+                <StatRow label="Release / EP" value={cloudState.releases} />
                 <StatRow label="Profilo" value={cloudState.profileHasData ? "OK" : "vuoto"} highlight={!cloudState.profileHasData} />
-                <StatRow label="Ultimo sync" value={formatRelativeTime(cloudState.lastSavedAt)} />
+                <StatRow label="Ultima modifica cloud" value={formatRelativeTime(cloudState.lastUpdatedAt)} />
               </div>
             ) : cloudError ? (
               <div className="text-xs text-destructive-foreground whitespace-pre-wrap break-words">
@@ -359,7 +356,7 @@ export function CloudRecovery({ isAdmin = false }: { isAdmin?: boolean }) {
             )}
           </div>
 
-          {/* Sidecar (backup di emergenza) */}
+          {/* Sidecar (backup di emergenza, solo classifiche/artisti/profilo — non i dati personali cloud) */}
           <div className="rounded-md bg-secondary/30 p-3 space-y-2">
             <div className="flex items-center gap-2 text-xs font-semibold">
               <Database className="h-3.5 w-3.5 text-amber-400" />
@@ -371,7 +368,8 @@ export function CloudRecovery({ isAdmin = false }: { isAdmin?: boolean }) {
               <StatRow label="Artisti backup" value={sidecarArtists} highlight={sidecarArtists === 0} />
             </div>
             <div className="text-[10px] text-muted-foreground/70 pt-1 border-t border-border/30 mt-2">
-              Questi backup vivono in localStorage e sopravvivono anche se il cloud o lo store principale vengono wipeati.
+              Backup di emergenza SOLO per classifiche/artisti/profilo (riga globale). I tuoi dati
+              personali (demo, pitch, label personalizzate) vivono esclusivamente nelle tabelle cloud qui sopra.
             </div>
           </div>
         </div>
@@ -381,62 +379,34 @@ export function CloudRecovery({ isAdmin = false }: { isAdmin?: boolean }) {
           <Button
             size="sm"
             variant="outline"
-            onClick={() => setConfirmAction("merge")}
+            onClick={handleForceReloadFromCloud}
             disabled={!configured || actionLoading !== null}
             className="gap-1.5"
           >
-            {actionLoading === "merge" ? <Loader2 className="h-3.5 w-3.5 animate-spin" /> : <RefreshCw className="h-3.5 w-3.5" />}
-            Unisci cloud + locale
+            {actionLoading === "reload" ? <Loader2 className="h-3.5 w-3.5 animate-spin" /> : <RefreshCw className="h-3.5 w-3.5" />}
+            Ricarica dal cloud (versione più recente)
           </Button>
-          <Button
-            size="sm"
-            variant="outline"
-            onClick={() => setConfirmAction("mergeArtists")}
-            disabled={!configured || actionLoading !== null}
-            className="gap-1.5"
-          >
-            {actionLoading === "mergeArtists" ? <Loader2 className="h-3.5 w-3.5 animate-spin" /> : <RefreshCw className="h-3.5 w-3.5" />}
-            Unisci artisti cloud + locale
-          </Button>
-          {/* ⚠️ Azioni distruttive — visibili solo agli admin.
-              Per gli utenti finali sono pericolose perché possono wipeare
-              dati validi (sia sul cloud che sul locale). L'utente base ha
-              il merge intelligente + il ripristino sidecar per risolvere
-              i problemi di sync; se le azioni distruttive servono davvero,
-              significa che c'è un bug e va gestito dal supporto. */}
-          {isAdmin && (
+          {pendingOutbox > 0 && (
             <Button
               size="sm"
               variant="outline"
-              onClick={() => setConfirmAction("push")}
-              disabled={!configured || actionLoading !== null}
-              className="gap-1.5"
+              onClick={handleFlushOutbox}
+              disabled={actionLoading !== null}
+              className="gap-1.5 border-amber-500/40 text-amber-400"
             >
-              {actionLoading === "push" ? <Loader2 className="h-3.5 w-3.5 animate-spin" /> : <Upload className="h-3.5 w-3.5" />}
-              Sovrascrivi cloud con locale
-            </Button>
-          )}
-          {isAdmin && (
-            <Button
-              size="sm"
-              variant="outline"
-              onClick={() => setConfirmAction("pull")}
-              disabled={!configured || actionLoading !== null}
-              className="gap-1.5"
-            >
-              {actionLoading === "pull" ? <Loader2 className="h-3.5 w-3.5 animate-spin" /> : <Download className="h-3.5 w-3.5" />}
-              Sovrascrivi locale con cloud
+              {actionLoading === "flush" ? <Loader2 className="h-3.5 w-3.5 animate-spin" /> : <UploadCloud className="h-3.5 w-3.5" />}
+              Invia {pendingOutbox} modifiche in sospeso
             </Button>
           )}
           <Button
             size="sm"
             variant="outline"
-            onClick={() => handleAction("sidecar")}
+            onClick={handleSidecarRestore}
             disabled={actionLoading !== null}
             className="gap-1.5"
           >
             {actionLoading === "sidecar" ? <Loader2 className="h-3.5 w-3.5 animate-spin" /> : <RotateCcw className="h-3.5 w-3.5" />}
-            Ripristina da sidecar
+            Ripristina classifiche/artisti da sidecar
           </Button>
           <Button
             size="sm"
@@ -450,38 +420,6 @@ export function CloudRecovery({ isAdmin = false }: { isAdmin?: boolean }) {
           </Button>
           <Button
             size="sm"
-            variant="destructive"
-            onClick={async () => {
-              if (!confirm("⚠️ Pulizia Storage Emergenza?\n\nCancella TUTTO il localStorage (backup vecchi, cache, store) mantenendo solo auth + cookie consent.\n\nI tuoi dati sono al sicuro nel cloud Supabase — verranno ricaricati al prossimo login.\n\nProcedere?")) return;
-              setActionLoading("emergency");
-              try {
-                // Pulisci tutti i backup sidecar
-                const sidecarKeys = [
-                  "labelpulse-storage-backup",
-                  "labelpulse-snapshots-backup",
-                  "labelpulse-profile-backup",
-                  "labelpulse-artists-backup",
-                  "labelpulse-demos-backup",
-                  "labelpulse-storage",
-                ];
-                for (const k of sidecarKeys) {
-                  try { localStorage.removeItem(k); } catch {}
-                }
-                // Forza reload per ripartire pulito
-                window.location.reload();
-              } catch (e) {
-                console.error("Emergency clear failed:", e);
-                setActionLoading(null);
-              }
-            }}
-            disabled={actionLoading !== null}
-            className="gap-1.5"
-          >
-            {actionLoading === "emergency" ? <Loader2 className="h-3.5 w-3.5 animate-spin" /> : <AlertTriangle className="h-3.5 w-3.5" />}
-            🚨 Pulizia Storage
-          </Button>
-          <Button
-            size="sm"
             variant="ghost"
             onClick={refresh}
             disabled={loading}
@@ -492,79 +430,16 @@ export function CloudRecovery({ isAdmin = false }: { isAdmin?: boolean }) {
           </Button>
         </div>
 
-        {/* Help text */}
         <div className="text-[11px] text-muted-foreground/70 pt-2 border-t border-border/30">
-          <p className="mb-1"><strong>Cosa fare se &quot;non vedo le classifiche&quot; dopo login:</strong></p>
+          <p className="mb-1"><strong>Come funziona ora:</strong></p>
           <ol className="list-decimal list-inside space-y-0.5 ml-2">
-            <li>Controlla quanti &quot;Label con classifiche&quot; hai in locale vs cloud.</li>
-            <li>Se cloud ne ha di più → clicca &quot;Unisci cloud + locale&quot; (NON sovrascrivere).</li>
-            <li>Se entrambi vuoti → usa &quot;Ripristina da sidecar&quot; per recuperare dai backup di emergenza.</li>
-            <li>Se ancora niente → &quot;Scarica backup JSON&quot; e mandalo al supporto, poi rifai il login.</li>
+            <li>Ogni modifica che fai (demo, pitch, note su una label, profilo, release) viene inviata subito al cloud.</li>
+            <li>Se la rete manca, la modifica resta in coda su questo dispositivo (vedi &quot;In coda verso cloud&quot; sopra) e riparte da sola appena torna la connessione.</li>
+            <li>Il cloud è sempre la versione ufficiale: al login su un altro dispositivo, o cliccando &quot;Ricarica dal cloud&quot;, vedi sempre l&apos;ultima modifica fatta, da qualunque dispositivo sia arrivata.</li>
+            <li>Se &quot;In coda verso cloud&quot; resta &gt; 0 per molto tempo con connessione attiva, scarica il backup JSON e contatta il supporto.</li>
           </ol>
-          {isAdmin && (
-            <p className="mt-2 text-amber-400/80">
-              <strong>Admin only:</strong> &quot;Sovrascrivi cloud/locale&quot; sono operazioni distruttive — usale solo se sai che una delle due parti ha dati certamente migliori. Il merge intelligente è quasi sempre preferibile.
-            </p>
-          )}
-          {!isAdmin && (
-            <p className="mt-2 text-muted-foreground/50">
-              Per problemi persistenti di sync, scarica il backup JSON e contatta il supporto — le azioni di sovrascrittura sono riservate all&apos;admin per evitare perdite di dati.
-            </p>
-          )}
         </div>
       </CardContent>
-
-      {/* Confirm dialog */}
-      <AlertDialog open={confirmAction !== null} onOpenChange={(o) => !o && setConfirmAction(null)}>
-        <AlertDialogContent>
-          <AlertDialogHeader>
-            <AlertDialogTitle>
-              {confirmAction === "push" && "Sovrascrivere il cloud con i dati locali?"}
-              {confirmAction === "pull" && "Sovrascrivere i dati locali con il cloud?"}
-              {confirmAction === "merge" && "Unire cloud e locale?"}
-              {confirmAction === "mergeArtists" && "Unire artisti cloud e locale?"}
-            </AlertDialogTitle>
-            <AlertDialogDescription>
-              {confirmAction === "push" && (
-                "I dati nel cloud verranno completamente sostituiti con quelli che hai adesso su questo browser. " +
-                "Se su altri dispositivi hai dati più aggiornati, andranno persi. " +
-                "Consigliato solo se sai che il locale ha i dati migliori."
-              )}
-              {confirmAction === "pull" && (
-                "I dati locali verranno completamente sostituiti con quelli del cloud. " +
-                "Se hai modifiche locali non ancora sincronizzate, andranno perse. " +
-                "Consigliato solo se sai che il cloud ha i dati migliori."
-              )}
-              {confirmAction === "merge" && (
-                "Verrà eseguito un merge intelligente: le label vengono unite per id, " +
-                "i campi Beatport vengono mergiati per genere (locale vince per i generi che ha), " +
-                "gli snapshot vengono uniti per id. Il risultato verrà poi spinto al cloud. " +
-                "È l&apos;operazione più sicura — non perde dati da nessuna parte."
-              )}
-              {confirmAction === "mergeArtists" && (
-                "Verrà eseguito un merge intelligente degli artisti: gli artisti locali " +
-                "e cloud vengono uniti per id. Se lo stesso artista esiste in entrambi, " +
-                "viene tenuta la versione con più tracce / bio / scrape più recente. " +
-                "Il risultato viene salvato in locale, IDB, sidecar e cloud."
-              )}
-            </AlertDialogDescription>
-          </AlertDialogHeader>
-          <AlertDialogFooter>
-            <AlertDialogCancel>Annulla</AlertDialogCancel>
-            <AlertDialogAction
-              onClick={() => confirmAction && handleAction(confirmAction)}
-              className={
-                (confirmAction === "merge" || confirmAction === "mergeArtists")
-                  ? "bg-cyan-500 hover:bg-cyan-600 text-white"
-                  : "bg-amber-500 hover:bg-amber-600 text-white"
-              }
-            >
-              <CheckCircle2 className="h-4 w-4 mr-1.5" />
-              Conferma
-            </AlertDialogAction>
-          </AlertDialogFooter>
-        </AlertDialogContent>
-      </AlertDialog>
     </Card>
   );
 }

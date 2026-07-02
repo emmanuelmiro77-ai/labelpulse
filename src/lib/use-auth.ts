@@ -13,6 +13,7 @@ import {
   loadFromNewTables,
 } from "./store";
 import { identifyUser, clearUser, trackEvent } from "./analytics";
+import { startOutboxAutoFlush } from "./outbox";
 
 /**
  * Hook that bridges NextAuth session ↔ LabelPulse cloud sync.
@@ -44,6 +45,14 @@ export function useAuthEffect(): void {
   const { data: session, status } = useSession();
   const hasRehydrated = useAppStore((s) => s.hasRehydrated);
   const lastActedEmailRef = useRef<string | null>(null);
+
+  // Step 0: avvia SEMPRE la coda di retry per le scritture verso il cloud,
+  // indipendentemente da login/logout — se ci sono operazioni rimaste in
+  // sospeso da una sessione precedente (rete assente, tab chiusa troppo
+  // presto), vanno ritentate appena l'app si riapre.
+  useEffect(() => {
+    startOutboxAutoFlush();
+  }, []);
 
   // Step 1: keep the cloud-sync module informed about the current user.
   useEffect(() => {
@@ -143,4 +152,37 @@ export function useAuthEffect(): void {
       }, 0);
     }
   }, [status]);
+
+  // Step 4: rete di sicurezza — il realtime (use-realtime-sync.ts) richiede un
+  // JWT Supabase valido, che scade dopo circa un'ora e NON viene mai
+  // rinnovato automaticamente in questa versione. Se scade, il realtime
+  // smette di aggiornare silenziosamente, senza errori visibili. Per non
+  // dipendere solo da quello, ricarichiamo comunque le 5 tabelle dedicate:
+  //  - ogni volta che la tab torna visibile (l'utente torna sull'app)
+  //  - ogni 3 minuti mentre la tab è aperta e visibile
+  // Così, anche nel caso peggiore (realtime morto), il ritardo massimo per
+  // vedere una modifica fatta su un altro dispositivo è di pochi minuti,
+  // non "mai finché non fai logout/login".
+  useEffect(() => {
+    if (status !== "authenticated") return;
+    const email = (session?.user?.email ?? null) as string | null;
+    if (!email || !isSupabaseConfigured()) return;
+
+    const safeReload = () => {
+      loadFromNewTables().catch((e) =>
+        console.warn("[LabelPulse Auth] periodic loadFromNewTables failed:", e)
+      );
+    };
+
+    const onVisibility = () => {
+      if (document.visibilityState === "visible") safeReload();
+    };
+    document.addEventListener("visibilitychange", onVisibility);
+    const interval = setInterval(safeReload, 3 * 60 * 1000);
+
+    return () => {
+      document.removeEventListener("visibilitychange", onVisibility);
+      clearInterval(interval);
+    };
+  }, [status, session?.user?.email]);
 }
