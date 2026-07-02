@@ -371,6 +371,7 @@ function LabelLogo({
         height={size}
         onError={() => setImgError(true)}
         loading="lazy"
+        referrerPolicy="no-referrer"
         className="shrink-0 rounded-md object-cover bg-secondary/50 border border-border/30"
         style={{ width: size, height: size }}
       />

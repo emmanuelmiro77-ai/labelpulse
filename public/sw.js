@@ -1,5 +1,5 @@
 /**
- * LabelPulse Service Worker v7 — Bulletproof Offline-First PWA + Web Push
+ * LabelPulse Service Worker v8 — Bulletproof Offline-First PWA + Web Push
  *
  * v6 (2026-06-25): removed skipWaiting() from install handler so the
  *   update flow is user-driven (banner → "Aggiorna" → SKIP_WAITING).
@@ -16,7 +16,7 @@
  * - Web Push notifications work on iOS (Home Screen), Android, Desktop
  */
 
-const CACHE_NAME = "labelpulse-v7";
+const CACHE_NAME = "labelpulse-v8";
 const OFFLINE_URL = "/";
 
 // Pre-cache essential assets on install
