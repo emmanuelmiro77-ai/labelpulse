@@ -2067,6 +2067,13 @@ export function LabelFinder() {
                   <DialogTitle className="flex items-center gap-2 flex-wrap">
                     <LabelLogo label={detailLabel} size={36} />
                     <span>{detailLabel.name}</span>
+                    <button
+                      onClick={() => toggleFavoriteLabel(detailLabel.id)}
+                      className="shrink-0 hover:scale-110 transition-transform"
+                      title={detailLabel.isFavorite ? "Rimuovi dai preferiti" : "Aggiungi ai preferiti"}
+                    >
+                      <Star className={`h-5 w-5 ${detailLabel.isFavorite ? "fill-amber-400 text-amber-400" : "text-muted-foreground hover:text-amber-400"}`} />
+                    </button>
                     {rank && <span className="text-xs font-mono text-primary/70 bg-primary/10 px-2 py-0.5 rounded">{t(locale, "labels.rank")} {rank}</span>}
                     {getTierBadge(detailLabel)}
                     {detailLabel.trending && <Badge className="bg-orange-500/20 text-orange-300 border-orange-500/30 text-[10px] px-1.5 py-0">🔥 Trending</Badge>}
