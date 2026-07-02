@@ -63,7 +63,7 @@ export async function POST(req: NextRequest) {
     const {
       label_id, emails, notes, status, website, demo_link,
       social_link, soundcloud_link, beatport_link, contact_info,
-      custom_links, is_custom, custom_name, custom_genre,
+      custom_links, is_custom, custom_name, custom_genre, is_favorite,
     } = body || {};
 
     if (!label_id) {
@@ -90,6 +90,7 @@ export async function POST(req: NextRequest) {
           is_custom: is_custom || false,
           custom_name: custom_name || null,
           custom_genre: custom_genre || null,
+          is_favorite: is_favorite ?? false,
         },
         { onConflict: "user_email,label_id" }
       )

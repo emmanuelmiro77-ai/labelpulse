@@ -71,6 +71,7 @@ export interface Label {
   trendingRankByGenre: Record<string, number>;
   trendingPointsByGenre: Record<string, number>;
   isCustom?: boolean; // user-added label
+  isFavorite?: boolean; // 🔒 FEATURE: preferiti (1 click per ritrovare)
   prevRankByGenre?: Record<string, number>; // Previous ranking snapshot (before last import)
   // ⚠️ Beatport identity (added 2026-06-24, beta tester Frank fonico request:
   // "aggiungerei se si può, il logo delle labels, per un riconoscimento immediato").
@@ -1350,6 +1351,7 @@ interface AppState {
   // Label actions
   addLabel: (label: Partial<Omit<Label, "id" | "createdAt">> & { name: string }) => void;
   updateLabel: (id: string, updates: Partial<Label>) => void;
+  toggleFavoriteLabel: (id: string) => void; // 🔒 FEATURE: preferiti (1 click)
   deleteLabel: (id: string) => void;
 
   // Demo actions
@@ -1845,6 +1847,32 @@ export const useAppStore = create<AppState>()(
             custom_genre: updated.isCustom ? updated.genre : undefined,
           }).catch(() => {/* silent */});
         }
+      },
+
+      // 🔒 FEATURE: toggle preferito (1 click per ritrovare la label)
+      toggleFavoriteLabel: (id) => {
+        const current = get().labels.find((l) => l.id === id);
+        const newFav = !current?.isFavorite;
+        set((state) => ({
+          labels: state.labels.map((l) =>
+            l.id === id ? { ...l, isFavorite: newFav } : l
+          ),
+          lastSavedAt: new Date().toISOString(),
+        }));
+        // Cloud sync (upsert su label_personal_data)
+        apiUpsertLabelData({
+          label_id: id,
+          is_favorite: newFav,
+          emails: current?.emails || [],
+          notes: current?.notes || "",
+          status: current?.status || "unknown",
+          website: current?.website || "",
+          demo_link: current?.demoLink || "",
+          social_link: current?.socialLink || "",
+          soundcloud_link: current?.soundcloudLink || "",
+          contact_info: current?.contactInfo || "",
+          is_custom: current?.isCustom || false,
+        }).catch(() => {/* silent */});
       },
 
       deleteLabel: (id) => {
@@ -3672,6 +3700,7 @@ export async function loadFromNewTables(): Promise<void> {
             if (al.social_link) existing.socialLink = al.social_link;
             if (al.soundcloud_link) existing.soundcloudLink = al.soundcloud_link;
             if (al.contact_info) existing.contactInfo = al.contact_info;
+            if (al.is_favorite !== undefined) existing.isFavorite = al.is_favorite;
           }
         }
       }

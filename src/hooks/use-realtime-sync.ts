@@ -209,6 +209,7 @@ function handleLabelDataChange(payload: RealtimePayload) {
       socialLink: newRow.social_link || labels[idx].socialLink,
       soundcloudLink: newRow.soundcloud_link || labels[idx].soundcloudLink,
       contactInfo: newRow.contact_info || labels[idx].contactInfo,
+      isFavorite: newRow.is_favorite ?? labels[idx].isFavorite,
     };
     useAppStore.setState({ labels });
   } else if (newRow.is_custom) {

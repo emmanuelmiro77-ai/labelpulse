@@ -43,6 +43,7 @@ export interface LabelDataRow {
   contact_info?: string;
   custom_links?: { type: string; value: string }[];
   is_custom?: boolean;
+  is_favorite?: boolean;
   custom_name?: string;
   custom_genre?: string;
 }

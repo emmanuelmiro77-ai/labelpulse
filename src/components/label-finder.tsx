@@ -42,6 +42,7 @@ import {
   Users,
   RotateCcw,
   History,
+  Star,
 } from "lucide-react";
 import { useToast } from "@/hooks/use-toast";
 import { Input } from "@/components/ui/input";
@@ -452,7 +453,7 @@ function LabelDiscoveryIcons({
 }
 
 export function LabelFinder() {
-  const { labels, demos, releases, addLabel, updateLabel, deleteLabel, addDemo, locale, getGenres, setActiveTab, userProfile, setUserProfile, gmailAuth, setGmailAuth, selectedLabelId, setSelectedLabelId, selectedArtistId, setSelectedArtistId, setNavigationReturnTo, artists } =
+  const { labels, demos, releases, addLabel, updateLabel, deleteLabel, toggleFavoriteLabel, addDemo, locale, getGenres, setActiveTab, userProfile, setUserProfile, gmailAuth, setGmailAuth, selectedLabelId, setSelectedLabelId, selectedArtistId, setSelectedArtistId, setNavigationReturnTo, artists } =
     useAppStore();
   const genres = getGenres();
   const { toast } = useToast();
@@ -462,6 +463,7 @@ export function LabelFinder() {
   const [genreFilter, setGenreFilter] = useState<string[]>([]);
   const [genrePopoverOpen, setGenrePopoverOpen] = useState(false);
   const [statusFilter, setStatusFilter] = useState("all");
+  const [showFavoritesOnly, setShowFavoritesOnly] = useState(false); // 🔒 FEATURE: preferiti (1 click)
   const [showAddDialog, setShowAddDialog] = useState(false);
   const [editingLabel, setEditingLabel] = useState<Label | null>(null);
   const [deleteConfirmId, setDeleteConfirmId] = useState<string | null>(null);
@@ -905,15 +907,16 @@ export function LabelFinder() {
         (l.name || "").toLowerCase().includes(q) ||
         (Array.isArray(l.genres) && l.genres.some((g) => (g || "").toLowerCase().includes(q))) ||
         (l.contactInfo || "").toLowerCase().includes(q) ||
-        (Array.isArray(l.emails) && l.emails.some((e) => (e || "").toLowerCase().includes(q)));
+        (Array.isArray(l.emails) && l.emails.some((e) => (e || "").toLowerCase().includes(e)));
       const matchGenre =
         genreFilter.length === 0 ||
         (Array.isArray(l.genres) && genreFilter.every((g) => l.genres.includes(g)));
       const matchStatus =
         statusFilter === "all" || l.status === statusFilter;
-      return matchSearch && matchGenre && matchStatus;
+      const matchFavorite = !showFavoritesOnly || l.isFavorite;
+      return matchSearch && matchGenre && matchStatus && matchFavorite;
     });
-  }, [labels, search, genreFilter, statusFilter]);
+  }, [labels, search, genreFilter, statusFilter, showFavoritesOnly]);
 
   const toggleGenre = (genre: string) => {
     setGenreFilter((prev) =>
@@ -1888,6 +1891,16 @@ export function LabelFinder() {
             </div>
           </PopoverContent>
         </Popover>
+        <Button
+          variant={showFavoritesOnly ? "default" : "outline"}
+          size="sm"
+          onClick={() => setShowFavoritesOnly(!showFavoritesOnly)}
+          className={showFavoritesOnly ? "glow-purple shrink-0" : "border-amber-500/30 text-amber-400 hover:bg-amber-500/10 shrink-0"}
+          title="Mostra solo le label preferite"
+        >
+          <Star className={`h-4 w-4 mr-1.5 ${showFavoritesOnly ? "fill-current" : ""}`} />
+          Preferiti
+        </Button>
         <Select value={statusFilter} onValueChange={setStatusFilter}>
           <SelectTrigger className="w-full sm:w-[150px] bg-secondary/50 border-border/50">
             <ChevronDown className="h-3.5 w-3.5 mr-1.5 shrink-0" />
@@ -1927,6 +1940,16 @@ export function LabelFinder() {
                     <div className="flex items-center gap-2 flex-wrap">
                       <LabelLogo label={label} size={28} />
                       <h3 className="font-semibold text-foreground text-sm truncate">{label.name}</h3>
+                      <button
+                        onClick={(e) => {
+                          e.stopPropagation();
+                          toggleFavoriteLabel(label.id);
+                        }}
+                        className="shrink-0 hover:scale-110 transition-transform"
+                        title={label.isFavorite ? "Rimuovi dai preferiti" : "Aggiungi ai preferiti"}
+                      >
+                        <Star className={`h-4 w-4 ${label.isFavorite ? "fill-amber-400 text-amber-400" : "text-muted-foreground hover:text-amber-400"}`} />
+                      </button>
                       {enriched && (
                         <Badge className="bg-primary/15 text-primary border-primary/20 text-[10px] px-1.5 py-0">
                           <CircleDot className="h-2.5 w-2.5 mr-0.5" />{t(locale, "labels.enriched")}
