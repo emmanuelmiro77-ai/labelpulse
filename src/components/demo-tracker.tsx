@@ -1318,6 +1318,7 @@ export function DemoTracker() {
                   </span>
                 </div>
                 {columnDemos.map((demo) => {
+                  const computedStatus = getDemoStatus(demo);
                   const daysSince = getDaysSince(demo.sentDate);
                   const isOverdue = (computedStatus === "sent" || computedStatus === "reviewing") && daysSince !== null && daysSince > 14;
                   return (
