@@ -728,6 +728,14 @@ export function DemoTracker() {
   };
 
   const openEdit = (demo: Demo) => {
+    // 🔒 Task B: Migra status legacy → responses[] se necessario
+    const migratedResponses = migrateStatusToResponses(demo);
+    if (migratedResponses.length > 0 && (!demo.responses || demo.responses.length === 0)) {
+      console.log(`[DemoTracker] Migrating legacy status '${demo.status}' → ${migratedResponses.length} responses`);
+      updateDemo(demo.id, { responses: migratedResponses });
+      demo = { ...demo, responses: migratedResponses };
+    }
+
     setFormTrackName(demo.trackName);
     setFormArtists(
       Array.isArray(demo.artists) && demo.artists.length > 0
