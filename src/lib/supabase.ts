@@ -1509,6 +1509,7 @@ async function applyGlobalDataToStore(globalData: any): Promise<void> {
         contactInfo: localLabel.contactInfo || "",
         customLinks: localLabel.customLinks || [],
         isCustom: localLabel.isCustom || false,
+        isFavorite: localLabel.isFavorite || false, // 🔒 FIX: preserva preferiti durante REPLACE globale
       };
     }
     return cl;

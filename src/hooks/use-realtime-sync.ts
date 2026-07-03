@@ -187,6 +187,7 @@ function handleLabelDataChange(payload: RealtimePayload) {
         socialLink: "",
         soundcloudLink: "",
         contactInfo: "",
+        isFavorite: false,
       };
       useAppStore.setState({ labels });
     }
