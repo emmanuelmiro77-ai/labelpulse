@@ -87,9 +87,11 @@ export function getPendingCount(): number {
  * (rete, 5xx, timeout), la mette in coda per il retry automatico e
  * ritorna comunque true — la UI locale è già aggiornata (optimistic),
  * la coda garantisce che prima o poi la scrittura arrivi al cloud.
- * Se fallisce per un motivo "definitivo" (401/403/400/404 — dati o
+ * Se fallisce per un motivo "definitivo" (400/403/404/409 — dati o
  * permessi non validi, un retry non risolverebbe nulla), NON viene
  * accodata: si logga e si ritorna false.
+ * ⚠️ 401 (sessione scaduta) NON è definitivo: viene accodata per retry
+ * perché la sessione si rinnova al prossimo refresh della pagina.
  */
 export async function writeWithOutbox(
   url: string,
@@ -103,11 +105,23 @@ export async function writeWithOutbox(
       headers: body !== undefined ? { "Content-Type": "application/json" } : undefined,
       body: body !== undefined ? JSON.stringify(body) : undefined,
     });
-    if (res.ok) return true;
+    if (res.ok) {
+      console.log(`[outbox] ✅ ${label} — scritta con successo`);
+      return true;
+    }
+
+    // 🔒 FIX: 401 (sessione scaduta) deve essere ritentato, non scartato.
+    // La sessione NextAuth si rinnova al prossimo refresh della pagina.
+    // Trattiamo 401 come errore temporaneo (come 5xx) → accodiamo per retry.
+    if (res.status === 401) {
+      console.warn(`[outbox] ${label} — 401 sessione scaduta, accodata per retry al prossimo refresh`);
+      enqueue(url, method, body, label);
+      return true;
+    }
 
     if (res.status >= 400 && res.status < 500) {
-      // Errore "definitivo" — non ha senso ritentare (dati invalidi, non autorizzato, non trovato)
-      console.error(`[outbox] ${label} — errore ${res.status}, non ritento`, await res.text().catch(() => ""));
+      // Errore "definitivo" — 400/403/404/409 (dati invalidi, forbidden, not found, conflict)
+      console.error(`[outbox] ${label} — errore ${res.status} definitivo, non ritento`, await res.text().catch(() => ""));
       return false;
     }
     throw new Error(`HTTP ${res.status}`);

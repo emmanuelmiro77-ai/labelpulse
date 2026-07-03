@@ -1859,7 +1859,7 @@ export const useAppStore = create<AppState>()(
           ),
           lastSavedAt: new Date().toISOString(),
         }));
-        // Cloud sync (upsert su label_personal_data)
+        // Cloud sync (upsert su label_personal_data) — con logging visibile
         apiUpsertLabelData({
           label_id: id,
           is_favorite: newFav,
@@ -1872,7 +1872,15 @@ export const useAppStore = create<AppState>()(
           soundcloud_link: current?.soundcloudLink || "",
           contact_info: current?.contactInfo || "",
           is_custom: current?.isCustom || false,
-        }).catch(() => {/* silent */});
+        }).then((ok) => {
+          if (ok) {
+            console.log(`[favorites] ✅ Sync cloud: label ${id} → is_favorite=${newFav}`);
+          } else {
+            console.error(`[favorites] ❌ Sync cloud FALLITA: label ${id} → is_favorite=${newFav}`);
+          }
+        }).catch((err) => {
+          console.error(`[favorites] ❌ Errore sync cloud label ${id}:`, err);
+        });
       },
 
       deleteLabel: (id) => {
