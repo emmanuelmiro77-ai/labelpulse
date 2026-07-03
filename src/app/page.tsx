@@ -89,14 +89,12 @@ export default function Home() {
   // 🔒 FASE D.5: Realtime subscription per cross-device live updates
   useRealtimeSync();
 
-  // Carica i dati dal cloud dopo la reidratazione da localStorage
+  // 🔒 CLOUD-FIRST: il fetch dal cloud viene fatto da useAuthEffect()
+  // (src/lib/use-auth.ts) appena l'utente è autenticato.
+  // NON facciamo doppio fetch qui — useAuthEffect è l'unico entry point.
   useEffect(() => {
     if (hasRehydrated) {
-      loadFromCloud();
-      // 🔒 FASE C.6: also load from new dedicated tables (cross-device sync)
-      loadFromNewTables();
-      // Load artists from IndexedDB (Phase 2 — scraper v2 data is too large
-      // for localStorage, persisted in IDB instead)
+      // Load artists from IndexedDB (non-bloccante, non cloud)
       loadArtistsOnBoot();
     }
   }, [hasRehydrated]);

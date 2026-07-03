@@ -43,7 +43,6 @@ import { startOutboxAutoFlush } from "./outbox";
  */
 export function useAuthEffect(): void {
   const { data: session, status } = useSession();
-  const hasRehydrated = useAppStore((s) => s.hasRehydrated);
   const lastActedEmailRef = useRef<string | null>(null);
 
   // Step 0: avvia SEMPRE la coda di retry per le scritture verso il cloud,
@@ -60,72 +59,61 @@ export function useAuthEffect(): void {
     setCurrentUserEmail(email);
   }, [session?.user?.email]);
 
-  // Step 2: when a session is authenticated AND the store has rehydrated
-  // AND we haven't already acted for this email, pull from cloud.
+  // Step 2: CLOUD-FIRST BOOT — quando l'utente è autenticato, fetcha
+  // SUBITO dal cloud. NON aspettare hasRehydrated — il cloud è la verità.
   useEffect(() => {
     if (status !== "authenticated") return;
-    if (!hasRehydrated) return; // wait for localStorage to load
     const email = (session?.user?.email ?? null) as string | null;
     if (!email) return;
     if (lastActedEmailRef.current === email) return;
     lastActedEmailRef.current = email;
 
-    // ⚠️ CRITICAL — Multi-user isolation check.
-    // If localStorage currently holds another user's data (because the
-    // previous user logged out without clearing, or this is a shared
-    // device), wipe everything BEFORE we load from cloud. Otherwise the
-    // cloud-merge UNION logic would mix the two users' data.
+    console.info(`[LabelPulse Auth] 🔑 User authenticated (${email}). Cloud-first boot...`);
+
+    // Multi-user isolation: pulisci se il proprietario è diverso
     const wasCleared = verifyStorageOwner(email);
     if (wasCleared) {
-      console.info(
-        `[LabelPulse Auth] Local data was for a different user — cleared. ` +
-        `Loading ${email}'s data from cloud...`
-      );
-      // After clearing, the store is in seed state. Force hasRehydrated=true
-      // so the rest of the app doesn't wait for another rehydration cycle.
-      useAppStore.setState({ hasRehydrated: true });
+      console.info(`[LabelPulse Auth] Local data was for a different user — cleared.`);
     } else {
-      // Same user or first-time — claim ownership if not already set.
       setStorageOwner(email);
     }
 
-    // If Supabase is not configured, log loudly — the user needs to know.
+    // Imposta email per cloud sync
+    setCurrentUserEmail(email);
+
+    // If Supabase is not configured, log loudly
     if (!isSupabaseConfigured()) {
-      console.error(
-        "[LabelPulse Auth] ⚠️ Supabase non configurato! " +
-        "Configura NEXT_PUBLIC_SUPABASE_URL e NEXT_PUBLIC_SUPABASE_ANON_KEY " +
-        "nel file .env.local e riavvia l'app. Senza cloud, i dati saranno " +
-        "persi cambiando dispositivo."
-      );
+      console.error("[LabelPulse Auth] ⚠️ Supabase non configurato!");
       return;
     }
 
-    console.info(
-      `[LabelPulse Auth] User authenticated (${email}). Loading from cloud...`
-    );
-
-    // Track login event for funnel analytics (PostHog + Sentry breadcrumb)
+    // Track login
     identifyUser({
       email,
       artistName: session?.user?.name ?? undefined,
-      isBetaTester: true, // TODO: check against beta_access_codes table
+      isBetaTester: true,
     });
-    trackEvent("signup_completed", {
-      login_method: "google", // TODO: detect beta-code login vs google
-    });
+    trackEvent("signup_completed", { login_method: "google" });
 
-    loadFromCloud().then(() => {
-      // 🔒 Sincronizza immediatamente tutte le tabelle dedicate (demos, personal labels, pitches, profile, releases)
-      loadFromNewTables().catch((err) =>
-        console.error("[LabelPulse Auth] loadFromNewTables failed:", err)
-      );
-      loadArtistsOnBoot().catch((e) =>
-        console.warn("[LabelPulse Auth] loadArtistsOnBoot failed:", e)
-      );
-    }).catch((e) =>
-      console.error("[LabelPulse Auth] loadFromCloud failed:", e)
-    );
-  }, [status, session?.user?.email, hasRehydrated]);
+    // 🔒 CLOUD-FIRST: fetcha TUTTO dal cloud e REPLICE lo stato locale.
+    // Niente merge, niente union. Il cloud è l'unica verità.
+    console.info("[LabelPulse Auth] ☁️ Syncing with Supabase...");
+
+    Promise.all([
+      loadFromCloud(),
+      loadFromNewTables(),
+    ]).then(() => {
+      console.info("[LabelPulse Auth] ✅ Cloud sync complete. State replaced.");
+      // Segna hasRehydrated e hasCloudSynced per sbloccare la UI
+      useAppStore.setState({ hasRehydrated: true, hasCloudSynced: true });
+      // Carica artisti da IDB (non bloccante)
+      loadArtistsOnBoot().catch(() => {});
+    }).catch((err) => {
+      console.error("[LabelPulse Auth] ❌ Cloud sync failed:", err);
+      // Anche se fallisce, sblocca la UI con dati locali
+      useAppStore.setState({ hasRehydrated: true, hasCloudSynced: true });
+    });
+  }, [status, session?.user?.email]);
 
   // Step 3: on logout, wipe ALL local data so the next user starts fresh.
   // This is the second half of the multi-user isolation fix: even if the
