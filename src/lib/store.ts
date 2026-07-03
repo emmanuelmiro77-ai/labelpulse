@@ -2,6 +2,7 @@
 
 import { create } from "zustand";
 import { persist, createJSONStorage, StateStorage } from "zustand/middleware";
+import { get as idbGet, set as idbSet, del as idbDel } from "idb-keyval";
 import type { Locale } from "./i18n";
 import labelData from "./labels-data.json";
 import { saveStateToCloud, loadStateFromCloud, isSupabaseConfigured, isApplyingRemoteUpdate, markLocalProfileEdit } from "./supabase";
@@ -779,6 +780,71 @@ function getUserEditCountFromRaw(raw: string | null): number {
 const MAX_BACKUP_FAILURES = 3;
 let _backupFailures = 0;
 let _backupDisabled = false;
+
+// 🔒 Task 3: Adattatore IndexedDB per Zustand persist.
+// Sostituisce localStorage (5MB limite iOS) con IndexedDB (50MB+ su iOS).
+// Migrazione automatica: al primo avvio, se IndexedDB è vuoto ma localStorage
+// ha dati, li copia e poi pulisce localStorage.
+const idbStorage: StateStorage = {
+  getItem: async (name: string): Promise<string | null> => {
+    try {
+      const val = await idbGet(name);
+      if (val) return val as string;
+
+      // 🔒 Migrazione: se IndexedDB è vuoto, prova localStorage
+      if (typeof window !== "undefined" && window.localStorage) {
+        const localVal = window.localStorage.getItem(name);
+        if (localVal) {
+          console.log(`[LabelPulse IDB] Migrating ${name} from localStorage → IndexedDB (${(localVal.length / 1024).toFixed(1)} KB)`);
+          await idbSet(name, localVal);
+          // NON cancellare localStorage subito — attendi conferma che IDB funziona
+          return localVal;
+        }
+      }
+      return null;
+    } catch (err) {
+      console.error(`[LabelPulse IDB] getItem failed for ${name}:`, err);
+      // Fallback a localStorage se IndexedDB non disponibile
+      if (typeof window !== "undefined" && window.localStorage) {
+        return window.localStorage.getItem(name);
+      }
+      return null;
+    }
+  },
+  setItem: async (name: string, value: string): Promise<void> => {
+    try {
+      await idbSet(name, value);
+      // Pulisci il vecchio localStorage dopo che IDB ha avuto successo
+      if (typeof window !== "undefined" && window.localStorage) {
+        const localVal = window.localStorage.getItem(name);
+        if (localVal) {
+          window.localStorage.removeItem(name);
+          console.log(`[LabelPulse IDB] Cleaned localStorage ${name} after IDB write`);
+        }
+      }
+    } catch (err) {
+      console.error(`[LabelPulse IDB] setItem failed for ${name}:`, err);
+      // Fallback a localStorage se IndexedDB non disponibile
+      if (typeof window !== "undefined" && window.localStorage) {
+        try {
+          window.localStorage.setItem(name, value);
+        } catch (e) {
+          console.error(`[LabelPulse IDB] localStorage fallback also failed:`, e);
+        }
+      }
+    }
+  },
+  removeItem: async (name: string): Promise<void> => {
+    try {
+      await idbDel(name);
+      if (typeof window !== "undefined" && window.localStorage) {
+        window.localStorage.removeItem(name);
+      }
+    } catch (err) {
+      console.error(`[LabelPulse IDB] removeItem failed for ${name}:`, err);
+    }
+  },
+};
 
 const robustStorage: StateStorage = {
   getItem: (name: string): string | null => {
@@ -2779,7 +2845,7 @@ export const useAppStore = create<AppState>()(
     {
       name: PRIMARY_KEY,
       version: 19,  // 🔒 FASE D: bump 18→19 per rimuovere labels dal localStorage (causava QuotaExceededError)
-      storage: createJSONStorage(() => robustStorage),
+      storage: createJSONStorage(() => idbStorage), // 🔒 Task 3: IndexedDB invece di localStorage
       migrate: (persisted: any, version: number) => {
         // 🔒 FASE D FIX v19: rimuovi labels dal persisted state (occupavano 4MB+ inutilmente)
         if (version < 19 && persisted && persisted.labels) {

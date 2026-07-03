@@ -9,6 +9,7 @@ import { PostHogProvider } from "@/components/posthog-provider";
 import { BugsnagErrorBoundary } from "@/components/bugsnag-error-boundary";
 import { CookieConsent } from "@/components/cookie-consent";
 import { StorageQuotaWarning } from "@/components/storage-quota-warning";
+import { BadgeClearer } from "@/components/badge-clearer";
 
 const geistSans = localFont({
   src: [
@@ -98,6 +99,7 @@ export default function RootLayout({
         <SWUpdater />
         <CookieConsent />
         <StorageQuotaWarning />
+        <BadgeClearer />
       </body>
     </html>
   );

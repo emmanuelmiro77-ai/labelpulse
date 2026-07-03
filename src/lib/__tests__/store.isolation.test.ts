@@ -115,7 +115,11 @@ describe("Cross-account data isolation (fix f54bff8)", () => {
       expect(demosAfter ?? []).toEqual([]); // user A's "A-secret" is gone
 
       const backupAfter = localStorage.getItem(BACKUP_KEY);
-      expect(backupAfter).not.toContain("A-secret");
+      // 🔒 Task 3: con IndexedDB, il backup potrebbe non essere in localStorage
+      // Verifica che NON contenga il segreto (null è OK, significa che è stato pulito)
+      if (backupAfter !== null) {
+        expect(backupAfter).not.toMatch(/A-secret/);
+      }
       expect(localStorage.getItem(SNAPSHOTS_BACKUP_KEY)).toBeNull();
       expect(localStorage.getItem(PROFILE_BACKUP_KEY)).toBeNull();
       expect(localStorage.getItem(ARTISTS_SIDECAR_KEY)).toBeNull();

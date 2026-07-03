@@ -1,6 +1,7 @@
 import "@testing-library/jest-dom/vitest";
 import { afterEach, beforeAll, vi } from "vitest";
 import { cleanup } from "@testing-library/react";
+import "fake-indexeddb/auto";
 
 // Clean up RTL between tests
 afterEach(() => {

@@ -403,22 +403,14 @@ export function ProducerProfile() {
 
   return (
     <div className="space-y-6 max-w-2xl mx-auto">
-      {/* Header */}
-      <div className="flex items-center justify-between">
-        <div>
-          <h1 className="text-xl font-bold text-foreground">
-            {t(locale, "profile.title" as any)}
-          </h1>
-          <p className="text-sm text-muted-foreground mt-0.5">
-            {t(locale, "profile.subtitle" as any)}
-          </p>
-        </div>
-        {detailSaved && (
+      {/* Header rimosso — viene già renderizzato da page.tsx (SECTION_TITLES/SECTION_SUBTITLES) */}
+      {detailSaved && (
+        <div className="flex justify-end">
           <span className="text-[10px] text-emerald-400 flex items-center gap-1 animate-pulse">
             <Save className="h-2.5 w-2.5" /> {t(locale, "profile.saved" as any)}
           </span>
-        )}
-      </div>
+        </div>
+      )}
 
       {/* ==================== PHOTO SECTION ==================== */}
       <Card className="bg-card/60 border-border/40">
