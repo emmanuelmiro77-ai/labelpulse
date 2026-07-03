@@ -636,19 +636,19 @@ export function DemoTracker() {
             )
           : "");
     const data = {
-      trackName: formTrackName.trim(),
+      trackName: (formTrackName || "").trim(),
       artists: formArtists.length > 0 ? formArtists : (primaryArtist ? [primaryArtist] : []),
       labelId: formLabelId || "",
       status: formStatus,
       sentDate: formSentDate || null,
-      link: formLink.trim(),
-      links: formLinks.filter(l => l.value.trim()),
-      notes: formNotes.trim(),
+      link: (formLink || "").trim(),
+      links: formLinks.filter(l => (l.value || "").trim()),
+      notes: (formNotes || "").trim(),
       pitchText: pitchToSave,
       artistName: primaryArtist,
-      genre: formGenre.trim(),
-      bpm: formBpm.trim(),
-      key: formKey.trim(),
+      genre: (formGenre || "").trim(),
+      bpm: (formBpm || "").trim(),
+      key: (formKey || "").trim(),
       analysis: formAnalysis || undefined,
     };
     if (editingDemo) { updateDemo(editingDemo.id, data); }
