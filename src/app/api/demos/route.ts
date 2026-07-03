@@ -106,7 +106,21 @@ export async function PATCH(req: NextRequest) {
   }
 
   try {
-    const updates = await req.json();
+    const rawUpdates = await req.json();
+    // 🔒 FIX: Filtra SOLO i campi validi della tabella demo_submissions.
+    // Inviare campi non esistenti (es. artists[], links[], bpm, key, analysis, responses[])
+    // causa errore 500 su Supabase.
+    const VALID_COLUMNS = [
+      "label_id", "label_name", "track_name", "artist_name", "link",
+      "status", "sent_date", "pitch_text", "pitch_subject", "pitch_tracks",
+      "notes", "parent_release_id", "updated_at",
+    ];
+    const updates: Record<string, any> = {};
+    for (const key of VALID_COLUMNS) {
+      if (rawUpdates[key] !== undefined) {
+        updates[key] = rawUpdates[key];
+      }
+    }
     // Remove fields that should never be updated via PATCH
     delete updates.id;
     delete updates.user_email;

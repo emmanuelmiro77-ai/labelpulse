@@ -286,7 +286,7 @@ function ResponseManager({
         <div className="space-y-2 p-3 rounded-lg border border-primary/20 bg-primary/5">
           <div className="grid grid-cols-2 gap-2">
             <div>
-              <Label className="text-[10px] uppercase text-muted-foreground">{locale === "it" ? "Data" : "Date"}</Label>
+              <UILabel className="text-[10px] uppercase text-muted-foreground">{locale === "it" ? "Data" : "Date"}</UILabel>
               <Input
                 type="date"
                 value={respDate}
@@ -295,7 +295,7 @@ function ResponseManager({
               />
             </div>
             <div>
-              <Label className="text-[10px] uppercase text-muted-foreground">{locale === "it" ? "Tipo" : "Type"}</Label>
+              <UILabel className="text-[10px] uppercase text-muted-foreground">{locale === "it" ? "Tipo" : "Type"}</UILabel>
               <Select value={respType} onValueChange={(v) => setRespType(v as DemoResponseType)}>
                 <SelectTrigger className="bg-secondary/50 h-8 text-sm"><SelectValue /></SelectTrigger>
                 <SelectContent>
@@ -307,7 +307,7 @@ function ResponseManager({
             </div>
           </div>
           <div>
-            <Label className="text-[10px] uppercase text-muted-foreground">{locale === "it" ? "Note (opzionale)" : "Note (optional)"}</Label>
+            <UILabel className="text-[10px] uppercase text-muted-foreground">{locale === "it" ? "Note (opzionale)" : "Note (optional)"}</UILabel>
             <Textarea
               value={respNote}
               onChange={(e) => setRespNote(e.target.value)}
