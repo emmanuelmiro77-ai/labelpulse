@@ -212,7 +212,7 @@ function getFollowUpStatus(demo: Demo): { isDue: boolean; dueDate: string | null
 function isDemoLocked(demo: Demo | null): boolean {
   if (!demo) return false;
   // Lock applies once the demo has been sent (or moved past "ready")
-  return _computedStatus !== "ready";
+  return getDemoStatus(demo) !== "ready";
 }
 
 // When opening the edit dialog on a locked demo, show a lock badge instead
