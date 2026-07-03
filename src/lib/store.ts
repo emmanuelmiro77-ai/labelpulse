@@ -47,6 +47,20 @@ export type DemoStatus =
   | "accepted"
   | "rejected";
 
+/**
+ * 🔒 Task B: Risposta event-driven dalla label (stile LabelRadar).
+ * Ogni risposta è un evento con data, tipo e note opzionali.
+ * Lo stato del demo viene calcolato automaticamente da getDemoStatus().
+ */
+export type DemoResponseType = "accepted" | "rejected" | "feedback" | "pending";
+
+export interface DemoResponse {
+  id: string;
+  date: string;       // ISO timestamp
+  type: DemoResponseType;
+  note?: string;
+}
+
 export interface Label {
   id: string;
   name: string;
@@ -251,6 +265,14 @@ export interface Demo {
   // Rilevamento automatico e NLP
   gmailUnreadResponse?: boolean; // se c'è una risposta da visualizzare/gestire
   nlpMatchedTracks?: string[];   // tracce dell'EP che l'NLP pensa siano d'interesse
+  /**
+   * 🔒 Task B: Storico risposte event-driven (stile LabelRadar).
+   * Ogni risposta della label è un evento. Lo status viene calcolato
+   * automaticamente da getDemoStatus(responses) invece di essere editato manualmente.
+   * Migration: se responses è undefined ma status esiste, viene creato
+   * automaticamente il primo record (vedi getDemoStatus).
+   */
+  responses?: DemoResponse[];
 }
 
 // ==================== SAVED PITCHES (Bozze) ====================
@@ -1425,6 +1447,8 @@ interface AppState {
   updateDemo: (id: string, updates: Partial<Demo>) => void;
   deleteDemo: (id: string) => void;
   advanceDemoStatus: (id: string) => void;
+  addDemoResponse: (demoId: string, response: Omit<DemoResponse, "id">) => void; // 🔒 Task B
+  removeDemoResponse: (demoId: string, responseId: string) => void; // 🔒 Task B
 
   // Release (EP / single grouping) actions
   releases: Release[];
@@ -2212,6 +2236,37 @@ export const useAppStore = create<AppState>()(
           }));
           syncToCloud();
         }
+      },
+
+      // 🔒 Task B: Aggiungi risposta event-driven al demo
+      addDemoResponse: (demoId, response) => {
+        const respId = `resp_${Date.now()}_${Math.random().toString(36).slice(2, 8)}`;
+        const newResponse: DemoResponse = { ...response, id: respId };
+        set((state) => ({
+          demos: state.demos.map((d) => {
+            if (d.id !== demoId) return d;
+            const responses = [...(d.responses || []), newResponse];
+            // 🔒 Calcola il nuovo status automaticamente
+            const computedStatus = getDemoStatus({ ...d, responses });
+            return { ...d, responses, status: computedStatus };
+          }),
+          lastSavedAt: new Date().toISOString(),
+        }));
+        syncToCloud();
+      },
+
+      // 🔒 Task B: Rimuovi una risposta dallo storico
+      removeDemoResponse: (demoId, responseId) => {
+        set((state) => ({
+          demos: state.demos.map((d) => {
+            if (d.id !== demoId) return d;
+            const responses = (d.responses || []).filter((r) => r.id !== responseId);
+            const computedStatus = getDemoStatus({ ...d, responses });
+            return { ...d, responses, status: computedStatus };
+          }),
+          lastSavedAt: new Date().toISOString(),
+        }));
+        syncToCloud();
       },
 
       setActiveTab: (tab) => set({ activeTab: tab }),
@@ -3176,6 +3231,74 @@ export const useAppStore = create<AppState>()(
 );
 
 // Helper: get tier for a label in a given genre
+/**
+ * 🔒 Task B: Calcola lo stato del demo dall'array di risposte (event-driven).
+ *
+ * Logica:
+ * - Se esiste almeno una risposta 'accepted' → "accepted"
+ * - Se esiste almeno una risposta 'rejected' → "rejected"
+ * - Se esiste almeno una risposta 'feedback' → "reviewing"
+ * - Se esiste almeno una risposta 'pending' → "reviewing"
+ * - Se non ci sono risposte ma il demo ha una sentDate → "sent"
+ * - Altrimenti → "ready"
+ *
+ * Migration automatica: se responses è undefined/vuoto ma il demo ha
+ * uno status legacy (sent, reviewing, accepted, rejected), viene creato
+ * automaticamente il primo record nell'array responses.
+ */
+export function getDemoStatus(demo: Pick<Demo, "status" | "sentDate" | "responses">): DemoStatus {
+  const responses = demo.responses || [];
+
+  // Se ci sono risposte, calcola dal più recente
+  if (responses.length > 0) {
+    // Ordina per data descendente (più recente prima)
+    const sorted = [...responses].sort(
+      (a, b) => new Date(b.date).getTime() - new Date(a.date).getTime()
+    );
+    const latest = sorted[0];
+    if (latest.type === "accepted") return "accepted";
+    if (latest.type === "rejected") return "rejected";
+    if (latest.type === "feedback" || latest.type === "pending") return "reviewing";
+  }
+
+  // Migration: se non ci sono responses ma c'è uno status legacy
+  if (responses.length === 0 && demo.status) {
+    if (demo.status === "accepted" || demo.status === "rejected" || demo.status === "reviewing") {
+      return demo.status; // Mantieni lo status legacy finché non vengono aggiunte responses
+    }
+  }
+
+  // Nessuna risposta → basato su sentDate
+  if (demo.sentDate) return "sent";
+  return "ready";
+}
+
+/**
+ * 🔒 Task B: Migra il campo status legacy in array responses.
+ * Chiamata quando si apre il dettaglio di un demo che ha status ma non responses.
+ * Ritorna l'array responses da salvare.
+ */
+export function migrateStatusToResponses(demo: Demo): DemoResponse[] {
+  if (demo.responses && demo.responses.length > 0) return demo.responses;
+  if (!demo.status || demo.status === "ready" || demo.status === "sent") return [];
+
+  const typeMap: Record<string, DemoResponseType> = {
+    reviewing: "feedback",
+    accepted: "accepted",
+    rejected: "rejected",
+  };
+
+  const type = typeMap[demo.status];
+  if (!type) return [];
+
+  return [{
+    id: `resp_${Date.now()}_${Math.random().toString(36).slice(2, 8)}`,
+    date: demo.sentDate || new Date().toISOString(),
+    type,
+    note: "Migrato dallo stato precedente",
+  }];
+}
+
 export function getLabelTier(
   label: Label,
   genre?: string

@@ -1,6 +1,6 @@
 "use client";
 
-import { useAppStore, type Demo, type DemoStatus, type Label, type Release } from "@/lib/store";
+import { useAppStore, type Demo, type DemoStatus, type Label, type Release, type DemoResponse, type DemoResponseType, getDemoStatus, migrateStatusToResponses } from "@/lib/store";
 import { t, type Locale } from "@/lib/i18n";
 import { type PitchTrackEntry, type TrackStatus } from "@/lib/pitch-utils";
 import { useState, useMemo, useCallback, useEffect, type ChangeEvent } from "react";
@@ -35,6 +35,9 @@ import {
   Lock,
   Reply,
   MessageSquare,
+  MessageSquareHeart,
+  Trash2,
+  Plus,
 } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Badge } from "@/components/ui/badge";
@@ -211,14 +214,160 @@ function getFollowUpStatus(demo: Demo): { isDue: boolean; dueDate: string | null
 function isDemoLocked(demo: Demo | null): boolean {
   if (!demo) return false;
   // Lock applies once the demo has been sent (or moved past "ready")
-  return demo.status !== "ready";
+  return _computedStatus !== "ready";
 }
 
 // When opening the edit dialog on a locked demo, show a lock badge instead
 // of just silently disabling fields — the user needs to know why.
 
+// 🔒 Task B: ResponseManager — Gestione risposte event-driven (stile LabelRadar)
+function ResponseManager({
+  demo,
+  locale,
+  addDemoResponse,
+  removeDemoResponse,
+}: {
+  demo: Demo;
+  locale: string;
+  addDemoResponse: (demoId: string, response: Omit<DemoResponse, "id">) => void;
+  removeDemoResponse: (demoId: string, responseId: string) => void;
+}) {
+  const [showForm, setShowForm] = useState(false);
+  const [respDate, setRespDate] = useState(new Date().toISOString().split("T")[0]);
+  const [respType, setRespType] = useState<DemoResponseType>("feedback");
+  const [respNote, setRespNote] = useState("");
+
+  const responses = demo.responses || [];
+  const computedStatus = getDemoStatus(demo);
+
+  const handleAdd = () => {
+    if (!respDate) return;
+    addDemoResponse(demo.id, {
+      date: new Date(respDate).toISOString(),
+      type: respType,
+      note: respNote.trim() || undefined,
+    });
+    setRespNote("");
+    setShowForm(false);
+  };
+
+  const RESPONSE_TYPE_LABELS: Record<DemoResponseType, string> = {
+    accepted: locale === "it" ? "Accettata" : "Accepted",
+    rejected: locale === "it" ? "Rifiutata" : "Rejected",
+    feedback: locale === "it" ? "Feedback" : "Feedback",
+    pending: locale === "it" ? "In attesa" : "Pending",
+  };
+
+  const RESPONSE_TYPE_COLORS: Record<DemoResponseType, string> = {
+    accepted: "text-emerald-400 bg-emerald-500/10 border-emerald-500/30",
+    rejected: "text-red-400 bg-red-500/10 border-red-500/30",
+    feedback: "text-cyan-400 bg-cyan-500/10 border-cyan-500/30",
+    pending: "text-amber-400 bg-amber-500/10 border-amber-500/30",
+  };
+
+  return (
+    <div className="space-y-3 mt-4 p-3 rounded-lg border border-border/30 bg-secondary/10">
+      <div className="flex items-center justify-between">
+        <div className="flex items-center gap-2">
+          <MessageSquareHeart className="h-4 w-4 text-primary" />
+          <span className="text-sm font-semibold">
+            {locale === "it" ? "Gestione Risposte" : "Response Management"}
+          </span>
+          <Badge variant="outline" className="text-[10px]">
+            {responses.length} {locale === "it" ? "risposte" : "responses"}
+          </Badge>
+        </div>
+        <Button size="sm" variant="outline" onClick={() => setShowForm(!showForm)} className="text-xs gap-1">
+          <Plus className="h-3 w-3" />
+          {locale === "it" ? "Aggiungi Risposta" : "Add Response"}
+        </Button>
+      </div>
+
+      {/* Form per aggiungere risposta */}
+      {showForm && (
+        <div className="space-y-2 p-3 rounded-lg border border-primary/20 bg-primary/5">
+          <div className="grid grid-cols-2 gap-2">
+            <div>
+              <Label className="text-[10px] uppercase text-muted-foreground">{locale === "it" ? "Data" : "Date"}</Label>
+              <Input
+                type="date"
+                value={respDate}
+                onChange={(e) => setRespDate(e.target.value)}
+                className="bg-secondary/50 h-8 text-sm"
+              />
+            </div>
+            <div>
+              <Label className="text-[10px] uppercase text-muted-foreground">{locale === "it" ? "Tipo" : "Type"}</Label>
+              <Select value={respType} onValueChange={(v) => setRespType(v as DemoResponseType)}>
+                <SelectTrigger className="bg-secondary/50 h-8 text-sm"><SelectValue /></SelectTrigger>
+                <SelectContent>
+                  {(Object.keys(RESPONSE_TYPE_LABELS) as DemoResponseType[]).map((t) => (
+                    <SelectItem key={t} value={t} className="text-sm">{RESPONSE_TYPE_LABELS[t]}</SelectItem>
+                  ))}
+                </SelectContent>
+              </Select>
+            </div>
+          </div>
+          <div>
+            <Label className="text-[10px] uppercase text-muted-foreground">{locale === "it" ? "Note (opzionale)" : "Note (optional)"}</Label>
+            <Textarea
+              value={respNote}
+              onChange={(e) => setRespNote(e.target.value)}
+              placeholder={locale === "it" ? "Es: 'A&R ha chiesto WAV files'" : "Eg: 'A&R asked for WAV files'"}
+              className="bg-secondary/50 text-sm min-h-[60px]"
+              maxLength={500}
+            />
+          </div>
+          <div className="flex gap-2 justify-end">
+            <Button size="sm" variant="ghost" onClick={() => setShowForm(false)} className="text-xs">
+              {locale === "it" ? "Annulla" : "Cancel"}
+            </Button>
+            <Button size="sm" onClick={handleAdd} className="text-xs">
+              {locale === "it" ? "Salva Risposta" : "Save Response"}
+            </Button>
+          </div>
+        </div>
+      )}
+
+      {/* Storico risposte */}
+      {responses.length > 0 ? (
+        <div className="space-y-1.5">
+          {[...responses].reverse().map((resp) => (
+            <div key={resp.id} className="flex items-start gap-2 p-2 rounded-md bg-secondary/20 group">
+              <Badge variant="outline" className={`text-[10px] shrink-0 ${RESPONSE_TYPE_COLORS[resp.type]}`}>
+                {RESPONSE_TYPE_LABELS[resp.type]}
+              </Badge>
+              <div className="flex-1 min-w-0">
+                <span className="text-[10px] text-muted-foreground font-mono">
+                  {new Date(resp.date).toLocaleDateString(locale === "it" ? "it-IT" : "en-US")}
+                </span>
+                {resp.note && <p className="text-xs text-foreground/80 mt-0.5">{resp.note}</p>}
+              </div>
+              <Button
+                size="sm"
+                variant="ghost"
+                className="h-5 w-5 p-0 opacity-0 group-hover:opacity-100 text-muted-foreground hover:text-red-400"
+                onClick={() => removeDemoResponse(demo.id, resp.id)}
+                title={locale === "it" ? "Rimuovi" : "Remove"}
+              >
+                <Trash2 className="h-3 w-3" />
+              </Button>
+            </div>
+          ))}
+        </div>
+      ) : (
+        <p className="text-xs text-muted-foreground/60 text-center py-2">
+          {locale === "it"
+            ? "Nessuna risposta registrata. Lo stato è: " + t(locale as Locale, STATUS_TKEYS[computedStatus])
+            : "No responses recorded. Status: " + t(locale as Locale, STATUS_TKEYS[computedStatus])}
+        </p>
+      )}
+    </div>
+  );
+}
+
 export function DemoTracker() {
-  const { labels, demos, releases, addDemo, updateDemo, deleteDemo, advanceDemoStatus, addRelease, updateRelease, deleteRelease, locale: _locale, getGenres, userProfile, artists, setActiveTab, setSelectedLabelId, setSelectedArtistId, gmailAuth, setGmailAuth, scanGmailReplies, lastReplyScanAt, newRepliesCount } =
+  const { labels, demos, releases, addDemo, updateDemo, deleteDemo, advanceDemoStatus, addDemoResponse, removeDemoResponse, addRelease, updateRelease, deleteRelease, locale: _locale, getGenres, userProfile, artists, setActiveTab, setSelectedLabelId, setSelectedArtistId, gmailAuth, setGmailAuth, scanGmailReplies, lastReplyScanAt, newRepliesCount } =
     useAppStore();
   const locale = _locale as Locale;
   const { toast } = useToast();
@@ -512,7 +661,7 @@ export function DemoTracker() {
         (d.trackName || "").toLowerCase().includes(q) ||
         (d.notes || "").toLowerCase().includes(q) ||
         (Array.isArray(d.artists) && d.artists.some(a => (a || "").toLowerCase().includes(q)));
-      const matchStatus = statusFilter === "all" || d.status === statusFilter;
+      const matchStatus = statusFilter === "all" || getDemoStatus(d) === statusFilter;
       const matchRelease =
         releaseFilter === "all" ? true :
         releaseFilter === "singles" ? !d.parentReleaseId :
@@ -964,7 +1113,7 @@ export function DemoTracker() {
         ) : (
           <div className="space-y-2">
             {labelHistoryDemos.map((demo) => {
-              const config = STATUS_COLORS[demo.status];
+              const _computedStatus = getDemoStatus(demo); const config = STATUS_COLORS[_computedStatus];
               const daysSince = getDaysSince(demo.sentDate);
               return (
                 <Card
@@ -978,8 +1127,8 @@ export function DemoTracker() {
                         <div className="flex items-center gap-2 flex-wrap">
                           <h4 className="text-sm font-semibold text-foreground">{demo.trackName}</h4>
                           <Badge variant="outline" className={`${config.bgColor} ${config.color} ${config.borderColor} text-[10px]`}>
-                            {STATUS_ICONS[demo.status]}
-                            <span className="ml-1">{t(locale, STATUS_TKEYS[demo.status])}</span>
+                            {STATUS_ICONS[_computedStatus]}
+                            <span className="ml-1">{t(locale, STATUS_TKEYS[_computedStatus])}</span>
                           </Badge>
                           {demo.artistName && (
                             <span className="text-[10px] text-muted-foreground font-mono flex items-center gap-0.5">
@@ -1010,7 +1159,7 @@ export function DemoTracker() {
                         <Button variant="ghost" size="icon" className="h-7 w-7" onClick={(e) => { e.stopPropagation(); handleOpenDetail(demo); }} title={t(locale, "demos.viewDetail")}>
                           <Eye className="h-3.5 w-3.5" />
                         </Button>
-                        {canAdvance(demo.status) && (
+                        {canAdvance(_computedStatus) && (
                           <Button variant="ghost" size="icon" className="h-7 w-7" onClick={(e) => { e.stopPropagation(); advanceDemoStatus(demo.id); }} title={t(locale, "demos.advance")}>
                             <ChevronRight className="h-3.5 w-3.5" />
                           </Button>
@@ -1158,7 +1307,7 @@ export function DemoTracker() {
         <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-5 gap-3 min-h-[400px]">
           {STATUS_KEYS.map((status) => {
             const config = STATUS_COLORS[status];
-            const columnDemos = filteredDemos.filter((d) => d.status === status);
+            const columnDemos = filteredDemos.filter((d) => getDemoStatus(d) === status);
             return (
               <div key={status} className={`rounded-xl border ${config.borderColor} ${config.bgColor} p-3 space-y-2`}>
                 <div className="flex items-center gap-2 mb-1">
@@ -1172,7 +1321,7 @@ export function DemoTracker() {
                 </div>
                 {columnDemos.map((demo) => {
                   const daysSince = getDaysSince(demo.sentDate);
-                  const isOverdue = (demo.status === "sent" || demo.status === "reviewing") && daysSince !== null && daysSince > 14;
+                  const isOverdue = (_computedStatus === "sent" || _computedStatus === "reviewing") && daysSince !== null && daysSince > 14;
                   return (
                     <Card
                       key={demo.id}
@@ -1237,14 +1386,14 @@ export function DemoTracker() {
                             <Button variant="ghost" size="icon" className="h-6 w-6" onClick={(e) => { e.stopPropagation(); handleOpenDetail(demo); }} title={t(locale, "demos.viewDetail")}>
                               <Eye className="h-3 w-3" />
                             </Button>
-                            {canAdvance(demo.status) && (
+                            {canAdvance(_computedStatus) && (
                               <Button variant="ghost" size="icon" className="h-6 w-6" onClick={(e) => { e.stopPropagation(); advanceDemoStatus(demo.id); }} title={t(locale, "demos.advance")}>
                                 <ChevronRight className="h-3 w-3" />
                               </Button>
                             )}
                             {/* Clone button — visible only on sent/post-sent demos.
                                 Lets the user reuse the same track for a different label. */}
-                            {demo.status !== "ready" && (
+                            {_computedStatus !== "ready" && (
                               <Button
                                 variant="ghost"
                                 size="icon"
@@ -1378,9 +1527,9 @@ export function DemoTracker() {
               </thead>
               <tbody className="divide-y divide-border/20">
                 {filteredDemos.map((demo) => {
-                  const config = STATUS_COLORS[demo.status];
+                  const _computedStatus = getDemoStatus(demo); const config = STATUS_COLORS[_computedStatus];
                   const daysSince = getDaysSince(demo.sentDate);
-                  const isOverdue = (demo.status === "sent" || demo.status === "reviewing") && daysSince !== null && daysSince > 14;
+                  const isOverdue = (_computedStatus === "sent" || _computedStatus === "reviewing") && daysSince !== null && daysSince > 14;
                   return (
                     <tr
                       key={demo.id}
@@ -1432,8 +1581,8 @@ export function DemoTracker() {
                       </td>
                       <td className="px-4 py-3">
                         <Badge variant="outline" className={`${config.bgColor} ${config.color} ${config.borderColor}`}>
-                          {STATUS_ICONS[demo.status]}
-                          <span className="ml-1">{t(locale, STATUS_TKEYS[demo.status])}</span>
+                          {STATUS_ICONS[_computedStatus]}
+                          <span className="ml-1">{t(locale, STATUS_TKEYS[_computedStatus])}</span>
                         </Badge>
                       </td>
                       <td className="px-4 py-3 text-xs text-muted-foreground font-mono">{formatDemoDate(demo.sentDate, locale)}</td>
@@ -1449,7 +1598,7 @@ export function DemoTracker() {
                           <Button variant="ghost" size="icon" className="h-7 w-7" onClick={(e) => { e.stopPropagation(); handleOpenDetail(demo); }} title={t(locale, "demos.viewDetail")}>
                             <Eye className="h-3.5 w-3.5" />
                           </Button>
-                          {canAdvance(demo.status) && (
+                          {canAdvance(_computedStatus) && (
                             <Button variant="ghost" size="icon" className="h-7 w-7" onClick={(e) => { e.stopPropagation(); advanceDemoStatus(demo.id); }} title={t(locale, "demos.advance")}>
                               <ChevronRight className="h-3.5 w-3.5" />
                             </Button>
@@ -1739,13 +1888,24 @@ export function DemoTracker() {
                 )}
               </div>
               <div className="space-y-1.5">
-                <UILabel className="text-xs font-mono uppercase text-muted-foreground">{t(locale, "labels.status")}</UILabel>
-                <Select value={formStatus} onValueChange={(v) => setFormStatus(v as DemoStatus)}>
-                  <SelectTrigger className="bg-secondary/50"><SelectValue /></SelectTrigger>
-                  <SelectContent>
-                    {STATUS_KEYS.map((s) => (<SelectItem key={s} value={s}>{t(locale, STATUS_TKEYS[s])}</SelectItem>))}
-                  </SelectContent>
-                </Select>
+                <UILabel className="text-xs font-mono uppercase text-muted-foreground">
+                  {locale === "it" ? "Stato (automatico)" : "Status (automatic)"}
+                </UILabel>
+                <div className="text-sm text-muted-foreground italic">
+                  {(() => {
+                    const computed = getDemoStatus({ status: formStatus, sentDate: formSentDate || null, responses: editingDemo?.responses });
+                    const config = STATUS_COLORS[computed];
+                    return (
+                      <span className={`inline-flex items-center gap-1 px-2 py-1 rounded ${config.bgColor} ${config.color}`}>
+                        {STATUS_ICONS[computed]}
+                        {t(locale, STATUS_TKEYS[computed])}
+                      </span>
+                    );
+                  })()}
+                </div>
+                <p className="text-[10px] text-muted-foreground/60">
+                  {locale === "it" ? "Lo stato è calcolato automaticamente dalle risposte ricevute." : "Status is automatically computed from responses."}
+                </p>
               </div>
             </div>
             <div className="space-y-1.5">
@@ -2213,6 +2373,17 @@ export function DemoTracker() {
               </div>
             )}
           </div>
+
+          {/* 🔒 Task B: Gestione Risposte Event-Driven (stile LabelRadar) */}
+          {editingDemo && (
+            <ResponseManager
+              demo={editingDemo}
+              locale={locale}
+              addDemoResponse={addDemoResponse}
+              removeDemoResponse={removeDemoResponse}
+            />
+          )}
+
           <DialogFooter>
             <Button variant="ghost" onClick={() => setShowAddDialog(false)}>{t(locale, "labels.cancel")}</Button>
             <Button onClick={handleSave} disabled={!formTrackName.trim()}>
@@ -4251,7 +4422,7 @@ function DemoDetailDialog({
 
   if (!demo) return null;
 
-  const config = STATUS_COLORS[demo.status];
+  const _computedStatus = getDemoStatus(demo); const config = STATUS_COLORS[_computedStatus];
   const daysSince = getDaysSince(demo.sentDate);
   const labelName = getLabelName(demo.labelId);
   const hasEmails = !!(label?.emails?.length);
@@ -4264,8 +4435,8 @@ function DemoDetailDialog({
             <Music className="h-5 w-5 text-primary" />
             <span>{demo.trackName}</span>
             <Badge variant="outline" className={`${config.bgColor} ${config.color} ${config.borderColor} text-[10px]`}>
-              {STATUS_ICONS[demo.status]}
-              <span className="ml-1">{t(locale, STATUS_TKEYS[demo.status])}</span>
+              {STATUS_ICONS[_computedStatus]}
+              <span className="ml-1">{t(locale, STATUS_TKEYS[_computedStatus])}</span>
             </Badge>
           </DialogTitle>
         </DialogHeader>
@@ -4292,7 +4463,7 @@ function DemoDetailDialog({
             )}
             <div className="bg-secondary/30 rounded-lg p-3">
               <p className="text-[10px] text-muted-foreground uppercase">{t(locale, "labels.status")}</p>
-              <p className={`text-sm font-bold mt-1 ${config.color}`}>{t(locale, STATUS_TKEYS[demo.status])}</p>
+              <p className={`text-sm font-bold mt-1 ${config.color}`}>{t(locale, STATUS_TKEYS[_computedStatus])}</p>
             </div>
           </div>
 
