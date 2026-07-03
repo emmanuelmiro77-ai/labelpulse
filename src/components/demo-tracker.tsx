@@ -1111,7 +1111,7 @@ export function DemoTracker() {
         ) : (
           <div className="space-y-2">
             {labelHistoryDemos.map((demo) => {
-              const _computedStatus = getDemoStatus(demo); const config = STATUS_COLORS[_computedStatus];
+              const computedStatus = getDemoStatus(demo); const config = STATUS_COLORS[computedStatus];
               const daysSince = getDaysSince(demo.sentDate);
               return (
                 <Card
@@ -1125,8 +1125,8 @@ export function DemoTracker() {
                         <div className="flex items-center gap-2 flex-wrap">
                           <h4 className="text-sm font-semibold text-foreground">{demo.trackName}</h4>
                           <Badge variant="outline" className={`${config.bgColor} ${config.color} ${config.borderColor} text-[10px]`}>
-                            {STATUS_ICONS[_computedStatus]}
-                            <span className="ml-1">{t(locale, STATUS_TKEYS[_computedStatus])}</span>
+                            {STATUS_ICONS[computedStatus]}
+                            <span className="ml-1">{t(locale, STATUS_TKEYS[computedStatus])}</span>
                           </Badge>
                           {demo.artistName && (
                             <span className="text-[10px] text-muted-foreground font-mono flex items-center gap-0.5">
@@ -1157,7 +1157,7 @@ export function DemoTracker() {
                         <Button variant="ghost" size="icon" className="h-7 w-7" onClick={(e) => { e.stopPropagation(); handleOpenDetail(demo); }} title={t(locale, "demos.viewDetail")}>
                           <Eye className="h-3.5 w-3.5" />
                         </Button>
-                        {canAdvance(_computedStatus) && (
+                        {canAdvance(computedStatus) && (
                           <Button variant="ghost" size="icon" className="h-7 w-7" onClick={(e) => { e.stopPropagation(); advanceDemoStatus(demo.id); }} title={t(locale, "demos.advance")}>
                             <ChevronRight className="h-3.5 w-3.5" />
                           </Button>
@@ -1319,7 +1319,7 @@ export function DemoTracker() {
                 </div>
                 {columnDemos.map((demo) => {
                   const daysSince = getDaysSince(demo.sentDate);
-                  const isOverdue = (_computedStatus === "sent" || _computedStatus === "reviewing") && daysSince !== null && daysSince > 14;
+                  const isOverdue = (computedStatus === "sent" || computedStatus === "reviewing") && daysSince !== null && daysSince > 14;
                   return (
                     <Card
                       key={demo.id}
@@ -1384,14 +1384,14 @@ export function DemoTracker() {
                             <Button variant="ghost" size="icon" className="h-6 w-6" onClick={(e) => { e.stopPropagation(); handleOpenDetail(demo); }} title={t(locale, "demos.viewDetail")}>
                               <Eye className="h-3 w-3" />
                             </Button>
-                            {canAdvance(_computedStatus) && (
+                            {canAdvance(computedStatus) && (
                               <Button variant="ghost" size="icon" className="h-6 w-6" onClick={(e) => { e.stopPropagation(); advanceDemoStatus(demo.id); }} title={t(locale, "demos.advance")}>
                                 <ChevronRight className="h-3 w-3" />
                               </Button>
                             )}
                             {/* Clone button — visible only on sent/post-sent demos.
                                 Lets the user reuse the same track for a different label. */}
-                            {_computedStatus !== "ready" && (
+                            {computedStatus !== "ready" && (
                               <Button
                                 variant="ghost"
                                 size="icon"
@@ -1525,9 +1525,9 @@ export function DemoTracker() {
               </thead>
               <tbody className="divide-y divide-border/20">
                 {filteredDemos.map((demo) => {
-                  const _computedStatus = getDemoStatus(demo); const config = STATUS_COLORS[_computedStatus];
+                  const computedStatus = getDemoStatus(demo); const config = STATUS_COLORS[computedStatus];
                   const daysSince = getDaysSince(demo.sentDate);
-                  const isOverdue = (_computedStatus === "sent" || _computedStatus === "reviewing") && daysSince !== null && daysSince > 14;
+                  const isOverdue = (computedStatus === "sent" || computedStatus === "reviewing") && daysSince !== null && daysSince > 14;
                   return (
                     <tr
                       key={demo.id}
@@ -1579,8 +1579,8 @@ export function DemoTracker() {
                       </td>
                       <td className="px-4 py-3">
                         <Badge variant="outline" className={`${config.bgColor} ${config.color} ${config.borderColor}`}>
-                          {STATUS_ICONS[_computedStatus]}
-                          <span className="ml-1">{t(locale, STATUS_TKEYS[_computedStatus])}</span>
+                          {STATUS_ICONS[computedStatus]}
+                          <span className="ml-1">{t(locale, STATUS_TKEYS[computedStatus])}</span>
                         </Badge>
                       </td>
                       <td className="px-4 py-3 text-xs text-muted-foreground font-mono">{formatDemoDate(demo.sentDate, locale)}</td>
@@ -1596,7 +1596,7 @@ export function DemoTracker() {
                           <Button variant="ghost" size="icon" className="h-7 w-7" onClick={(e) => { e.stopPropagation(); handleOpenDetail(demo); }} title={t(locale, "demos.viewDetail")}>
                             <Eye className="h-3.5 w-3.5" />
                           </Button>
-                          {canAdvance(_computedStatus) && (
+                          {canAdvance(computedStatus) && (
                             <Button variant="ghost" size="icon" className="h-7 w-7" onClick={(e) => { e.stopPropagation(); advanceDemoStatus(demo.id); }} title={t(locale, "demos.advance")}>
                               <ChevronRight className="h-3.5 w-3.5" />
                             </Button>
@@ -4420,7 +4420,7 @@ function DemoDetailDialog({
 
   if (!demo) return null;
 
-  const _computedStatus = getDemoStatus(demo); const config = STATUS_COLORS[_computedStatus];
+  const computedStatus = getDemoStatus(demo); const config = STATUS_COLORS[computedStatus];
   const daysSince = getDaysSince(demo.sentDate);
   const labelName = getLabelName(demo.labelId);
   const hasEmails = !!(label?.emails?.length);
@@ -4433,8 +4433,8 @@ function DemoDetailDialog({
             <Music className="h-5 w-5 text-primary" />
             <span>{demo.trackName}</span>
             <Badge variant="outline" className={`${config.bgColor} ${config.color} ${config.borderColor} text-[10px]`}>
-              {STATUS_ICONS[_computedStatus]}
-              <span className="ml-1">{t(locale, STATUS_TKEYS[_computedStatus])}</span>
+              {STATUS_ICONS[computedStatus]}
+              <span className="ml-1">{t(locale, STATUS_TKEYS[computedStatus])}</span>
             </Badge>
           </DialogTitle>
         </DialogHeader>
@@ -4461,7 +4461,7 @@ function DemoDetailDialog({
             )}
             <div className="bg-secondary/30 rounded-lg p-3">
               <p className="text-[10px] text-muted-foreground uppercase">{t(locale, "labels.status")}</p>
-              <p className={`text-sm font-bold mt-1 ${config.color}`}>{t(locale, STATUS_TKEYS[_computedStatus])}</p>
+              <p className={`text-sm font-bold mt-1 ${config.color}`}>{t(locale, STATUS_TKEYS[computedStatus])}</p>
             </div>
           </div>
 
