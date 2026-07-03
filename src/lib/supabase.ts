@@ -1471,48 +1471,71 @@ async function applyRemoteData(cloudData: any): Promise<void> {
  * CRITICAL FIX FOR RANKINGS NOT UPDATING ON PHONE:
  * - Previous code called loadStateFromCloud() which is DISABILITATA (DISABLE_OLD_APP_STATE_SYNC = true)
  * - This caused the realtime update to be silently ignored
- * - Now we call loadGlobalRowOnly() + applyGlobalDataToStore() to apply rankings directly
+ */
+
+// 🔒 Task 1: Chiavi dei campi personali (dati utente che vivono nelle 4 nuove tabelle).
+// Usate da applyGlobalDataToStore per preservare dinamicamente i dati personali
+// durante il REPLACE globale delle classifiche Beatport.
+// Aggiungere qui nuovi campi personali — NON hardcodarli nel merge.
+export const PERSONAL_LABEL_FIELDS = [
+  'isFavorite',
+  'notes',
+  'emails',
+  'status',
+  'website',
+  'demoLink',
+  'socialLink',
+  'soundcloudLink',
+  'beatportLink',
+  'contactInfo',
+  'customLinks',
+  'isCustom',
+] as const;
+
+/**
+ * 🔒 Task 1: Merge sicuro — globale vince su Beatport, personale preservato dal locale.
+ * Se localLabel non esiste, ritorna newGlobalData invariato.
+ * Estrae dinamicamente i campi personali usando PERSONAL_LABEL_FIELDS.
+ */
+export function mergeGlobalWithPersonal(existingLabel: any, newGlobalData: any): any {
+  if (!existingLabel) return newGlobalData;
+
+  const preservedPersonalData: Record<string, any> = {};
+
+  for (const field of PERSONAL_LABEL_FIELDS) {
+    if (existingLabel[field] !== undefined) {
+      preservedPersonalData[field] = existingLabel[field];
+    }
+  }
+
+  return {
+    ...newGlobalData,
+    ...preservedPersonalData,
+  };
+}
+
+/**
+ * 🔒 FASE D FIX — Applica i dati globali (classifiche) al store Zustand
  *
  * 🔒 REGOLA ZERO: REPLACE totale, NON merge. Il cloud è l'unica verità.
  * Le label dal cloud sostituiscono completamente quelle locali (preservando
  * solo i campi personali che vivono nelle 4 nuove tabelle dedicate).
  * Gli snapshots vengono sostituiti completamente dal cloud.
  * Niente sidecar restore, niente union, niente merge.
+ *
+ * Chiamata dal realtime GLOBAL quando l'admin pusha nuove classifiche,
+ * e da loadFromCloud al login.
  */
 async function applyGlobalDataToStore(globalData: any): Promise<void> {
   const store = useAppStore.getState();
 
-  // 🔒 REGOLA ZERO: REPLACE totale. Il cloud è l'unica verità.
-  // Niente merge, niente union, niente sidecar restore.
-  // I campi personali (emails, notes) vivono nelle 4 nuove tabelle,
-  // non nel global — quindi possiamo sostituire completamente.
-
+  // 🔒 Task 1: Usa mergeGlobalWithPersonal per preservare DINAMICAMENTE i campi personali
   const cloudLabels = Array.isArray(globalData.labels) ? globalData.labels : [];
-  const localLabels = Array.isArray(store.labels) ? store.labels : [];
-  const localById = new Map(localLabels.map((l: any) => [l.id, l]));
+  const localById = new Map((store.labels || []).map((l: any) => [l.id, l]));
 
-  // REPLIACE: prendi TUTTE le label dal cloud, preserva SOLO i campi personali dal locale
   const finalLabels = cloudLabels.map((cl: any) => {
     const localLabel = localById.get(cl.id);
-    if (localLabel) {
-      return {
-        ...cl,  // TUTTI i campi Beatport dal cloud (REPLACE)
-        // Campi personali dal locale (vivi nelle 4 nuove tabelle):
-        emails: localLabel.emails || [],
-        notes: localLabel.notes || "",
-        status: localLabel.status || "unknown",
-        website: localLabel.website || "",
-        demoLink: localLabel.demoLink || "",
-        socialLink: localLabel.socialLink || "",
-        soundcloudLink: localLabel.soundcloudLink || "",
-        beatportLink: localLabel.beatportLink || "",
-        contactInfo: localLabel.contactInfo || "",
-        customLinks: localLabel.customLinks || [],
-        isCustom: localLabel.isCustom || false,
-        isFavorite: localLabel.isFavorite || false, // 🔒 FIX: preserva preferiti durante REPLACE globale
-      };
-    }
-    return cl;
+    return mergeGlobalWithPersonal(localLabel, cl);
   });
 
   // 🔒 REPLACE snapshots: SEMPRE dal cloud, niente merge, niente union

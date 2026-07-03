@@ -99,11 +99,18 @@ export async function writeWithOutbox(
   body: any,
   label: string
 ): Promise<boolean> {
+  // 🔒 Task 3: Aggiungi timestamp locale per risoluzione conflitti.
+  // Se l'utente modifica offline su due dispositivi, il server può usare
+  // questo timestamp per determinare quale modifica è più recente.
+  const bodyWithTimestamp = body !== undefined
+    ? { ...body, local_updated_at: new Date().toISOString() }
+    : undefined;
+
   try {
     const res = await fetch(url, {
       method,
-      headers: body !== undefined ? { "Content-Type": "application/json" } : undefined,
-      body: body !== undefined ? JSON.stringify(body) : undefined,
+      headers: bodyWithTimestamp !== undefined ? { "Content-Type": "application/json" } : undefined,
+      body: bodyWithTimestamp !== undefined ? JSON.stringify(bodyWithTimestamp) : undefined,
     });
     if (res.ok) {
       console.log(`[outbox] ✅ ${label} — scritta con successo`);
@@ -128,7 +135,9 @@ export async function writeWithOutbox(
   } catch (err) {
     // Errore di rete o 5xx → accoda per retry automatico
     console.warn(`[outbox] ${label} fallita, accodata per retry:`, err);
-    enqueue(url, method, body, label);
+    // 🔒 Task 3: passa bodyWithTimestamp (non body originale) così il timestamp
+    // della modifica originale viene preservato durante i retry
+    enqueue(url, method, bodyWithTimestamp, label);
     return true;
   }
 }
