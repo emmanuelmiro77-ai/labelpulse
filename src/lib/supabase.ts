@@ -1538,16 +1538,21 @@ async function applyGlobalDataToStore(globalData: any): Promise<void> {
     return mergeGlobalWithPersonal(localLabel, cl);
   });
 
+  // 🔒 DEDUPLICAZIONE FORZATA per ID — una Map elimina i duplicati
+  const dedupedFinalLabels = Array.from(
+    new Map(finalLabels.map((l: any) => [l.id, l])).values()
+  );
+
   // 🔒 REPLACE snapshots: SEMPRE dal cloud, niente merge, niente union
   const finalSnapshots = Array.isArray(globalData.rankingSnapshots) ? globalData.rankingSnapshots : [];
 
   useAppStore.setState({
-    labels: finalLabels,
+    labels: dedupedFinalLabels,
     rankingSnapshots: finalSnapshots,
     rankingsUpdatedAt: globalData.rankingsUpdatedAt || null,
   });
 
-  console.log(`[LabelPulse Cloud] ✅ REPLACE completo: labels=${finalLabels.length}, snapshots=${finalSnapshots.length}, updatedAt=${globalData.rankingsUpdatedAt || "none"}`);
+  console.log(`[LabelPulse Cloud] ✅ REPLACE+DEDUP completo: labels=${dedupedFinalLabels.length} (input: ${cloudLabels.length}), snapshots=${finalSnapshots.length}, updatedAt=${globalData.rankingsUpdatedAt || "none"}`);
 }
 
 // ==================== ARTISTS CLOUD SYNC (separate row) ====================

@@ -3207,6 +3207,18 @@ export const useAppStore = create<AppState>()(
         if (error) {
           console.error("[LabelPulse Storage] Rehydration error:", error);
         } else if (state) {
+          // 🔒 DEDUPLICAZIONE FORZATA al boot — pulisce IndexedDB avvelenato
+          if (Array.isArray(state.labels) && state.labels.length > 0) {
+            const before = state.labels.length;
+            const deduped = Array.from(
+              new Map(state.labels.map((l: any) => [l.id, l])).values()
+            );
+            if (deduped.length < before) {
+              console.warn(`[LabelPulse Storage] ⚠️ Deduplication: ${before} → ${deduped.length} labels (rimossi ${before - deduped.length} duplicati)`);
+              state.labels = deduped;
+            }
+          }
+
           const userEditedCount = countUserEditedLabels(state.labels);
           console.log(
             `[LabelPulse Storage] Rehydrated: ${state.labels.length} labels, ${userEditedCount} with user data`
@@ -3517,52 +3529,48 @@ export async function loadFromCloud(): Promise<void> {
           snaps: globalData.rankingSnapshots?.length || 0,
           updatedAt: globalData.rankingsUpdatedAt,
         });
-        // Merge global data (labels with rankings, snapshots) into local state
-        const currentState = useAppStore.getState();
-        // 🔒 BUG FIX: globalLabel deve vincere sui campi Beatport (rank, points, genres)
-        // I campi personali (emails, notes) vengono dalle nuove tabelle via loadFromNewTables
-        // Quindi qui facciamo: prendi locale come base, sovrascrivi con globale per i campi Beatport
+        // 🔒 RACE CONDITION FIX: REPLACE puro con deduplicazione.
+        // Il cloud è l'unica verità. Prendi TUTTE le label dal cloud,
+        // preserva i campi personali dal locale, DEDUPLICA per ID.
+        // Niente merge, niente append, niente concat.
         const globalLabels = globalData.labels || [];
-        const globalById = new Map(globalLabels.map((l: any) => [l.id, l]));
+        const localById = new Map(currentState.labels.map((l: any) => [l.id, l]));
 
-        const mergedLabels = currentState.labels.map((localLabel: any) => {
-          const globalLabel = globalById.get(localLabel.id);
-          if (globalLabel) {
-            // Global vince su campi Beatport, locale mantiene campi personali
+        // Mappa cloud → preserva personali dal locale
+        const finalLabels = globalLabels.map((cl: any) => {
+          const localLabel = localById.get(cl.id);
+          if (localLabel) {
             return {
-              ...localLabel,
-              // Campi Beatport dal globale (più recenti):
-              genres: globalLabel.genres || localLabel.genres,
-              rankByGenre: globalLabel.rankByGenre || localLabel.rankByGenre,
-              pointsByGenre: globalLabel.pointsByGenre || localLabel.pointsByGenre,
-              trending: globalLabel.trending ?? localLabel.trending,
-              trendingRankByGenre: globalLabel.trendingRankByGenre || localLabel.trendingRankByGenre,
-              trendingPointsByGenre: globalLabel.trendingPointsByGenre || localLabel.trendingPointsByGenre,
-              imageUrl: globalLabel.imageUrl || localLabel.imageUrl,
-              slug: globalLabel.slug || localLabel.slug,
-              beatportId: globalLabel.beatportId ?? localLabel.beatportId,
-              prevRankByGenre: globalLabel.prevRankByGenre || localLabel.prevRankByGenre,
+              ...cl, // TUTTI i campi Beatport dal cloud (REPLACE)
+              // Campi personali dal locale:
+              emails: localLabel.emails || [],
+              notes: localLabel.notes || "",
+              status: localLabel.status || "unknown",
+              website: localLabel.website || "",
+              demoLink: localLabel.demoLink || "",
+              socialLink: localLabel.socialLink || "",
+              soundcloudLink: localLabel.soundcloudLink || "",
+              beatportLink: localLabel.beatportLink || "",
+              contactInfo: localLabel.contactInfo || "",
+              customLinks: localLabel.customLinks || [],
+              isCustom: localLabel.isCustom || false,
+              isFavorite: localLabel.isFavorite || false,
             };
           }
-          return localLabel;
+          return cl;
         });
 
-        // Aggiungi label globali che non esistono in locale
-        const localIds = new Set(currentState.labels.map((l: any) => l.id));
-        for (const globalLabel of globalLabels) {
-          if (!localIds.has(globalLabel.id)) {
-            mergedLabels.push(globalLabel);
-          }
-        }
+        // 🔒 DEDUPLICAZIONE FORZATA per ID — una Map elimina i duplicati
+        const dedupedLabels = Array.from(
+          new Map(finalLabels.map((l: any) => [l.id, l])).values()
+        );
 
         useAppStore.setState({
-          labels: mergedLabels.length > 0 ? mergedLabels : currentState.labels,
-          rankingSnapshots: (globalData.rankingSnapshots?.length || 0) > (currentState.rankingSnapshots?.length || 0)
-            ? globalData.rankingSnapshots
-            : currentState.rankingSnapshots,
-          rankingsUpdatedAt: globalData.rankingsUpdatedAt || currentState.rankingsUpdatedAt,
+          labels: dedupedLabels,
+          rankingSnapshots: globalData.rankingSnapshots || [],
+          rankingsUpdatedAt: globalData.rankingsUpdatedAt || null,
         });
-        console.log("[LabelPulse Cloud] Merge completato. Labels totali:", mergedLabels.length);
+        console.log("[LabelPulse Cloud] REPLACE + DEDUP completato. Labels:", dedupedLabels.length, "(era:", currentState.labels.length, ")");
       }
     } catch (err) {
       console.warn("[LabelPulse Cloud] Global row load failed:", err);
