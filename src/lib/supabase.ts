@@ -2014,7 +2014,9 @@ export async function explicitMergeLocalAndCloud(): Promise<{
   useAppStore.setState({ ...merged, hasCloudSynced: true });
 
   // Push merged back to cloud so other devices get it too
-  await forcePushLocalToCloud();
+  // 🔒 RACE CONDITION FIX: RIMOSSO forcePushLocalToCloud — non pushiamo MAI
+  // dati locali al cloud automaticamente. Il cloud è l'unica verità.
+  // await forcePushLocalToCloud();
 
   const beforeLabels = localState.labels?.length || 0;
   const afterLabels = (merged as any).labels?.length || 0;

@@ -4402,7 +4402,7 @@ export async function loadArtistsOnBoot(): Promise<void> {
     }
 
     // Lazy-import the cloud sync functions
-    const { loadArtistsFromCloud, saveArtistsToCloud, mergeArtistsArrays, forcePushArtistsToCloud }
+    const { loadArtistsFromCloud, saveArtistsToCloud, mergeArtistsArrays }
       = await import("./supabase");
 
     const cloudArtists = await loadArtistsFromCloud();
@@ -4431,49 +4431,47 @@ export async function loadArtistsOnBoot(): Promise<void> {
       return;
     }
 
-    // Case B: local has artists, cloud doesn't → UPLOAD
+    // Case B: local has artists, cloud doesn't → NO PUSH (REGOLA ZERO)
+    // 🔒 RACE CONDITION FIX: Non pushiamo MAI i dati locali al cloud automaticamente.
+    // Il cloud vuoto significa che l'admin non ha fatto scrape, non che dobbiamo
+    // riempirlo con dati locali potenzialmente stale.
     if (currentLocal.length > 0 && cloudArtists.length === 0) {
-      console.info(`[LabelPulse] ⬆️  Local has ${currentLocal.length} artists, cloud has 0. UPLOADING local → cloud.`);
-      await forcePushArtistsToCloud(currentLocal);
+      console.info(`[LabelPulse] Local has ${currentLocal.length} artists, cloud has 0. Keeping local (NO auto-push to cloud).`);
       writeArtistsSidecar(currentLocal);
       return;
     }
 
-    // Case C: both have artists → MERGE
+    // Case C: both have artists → CLOUD WINS (REGOLA ZERO)
+    // 🔒 RACE CONDITION FIX: Niente merge, niente push al cloud.
+    // Il cloud è l'unica verità. Se cloud e locale differiscono,
+    // il cloud vince. Il locale viene solo aggiornato in IDB.
     if (currentLocal.length > 0 && cloudArtists.length > 0) {
-      const merged = mergeArtistsArrays(currentLocal, cloudArtists);
-      const changed = merged.length !== currentLocal.length
-        || merged.length !== cloudArtists.length
-        || merged.some((m: any, i: number) => {
-          const cl = cloudArtists.find((c: any) => (c.id || c.artistId) === (m.id || m.artistId));
-          const lo = currentLocal.find((l: any) => (l.id || l.artistId) === (m.id || m.artistId));
-          return cl && lo && JSON.stringify(cl) !== JSON.stringify(lo);
-        });
-
-      if (merged.length > currentLocal.length) {
+      if (cloudArtists.length !== currentLocal.length) {
         console.info(
-          `[LabelPulse] 🔀  Merge: local=${currentLocal.length} + cloud=${cloudArtists.length} → ${merged.length} artists. ` +
-          `Updating local + cloud.`
+          `[LabelPulse] ⬇️  Cloud has ${cloudArtists.length} artists, local has ${currentLocal.length}. ` +
+          `Cloud wins — updating local (NO push to cloud).`
         );
-        useAppStore.setState({ artists: merged });
-        await saveArtistsToIDB(merged);
-        writeArtistsSidecar(merged);
-        // Push merged back to cloud so other devices get the union too
-        await forcePushArtistsToCloud(merged);
-      } else if (changed) {
-        console.info(
-          `[LabelPulse] 🔀  Merge resolved conflicts (same count, different content). Updating local + cloud.`
-        );
-        useAppStore.setState({ artists: merged });
-        await saveArtistsToIDB(merged);
-        writeArtistsSidecar(merged);
-        await forcePushArtistsToCloud(merged);
+        useAppStore.setState({ artists: cloudArtists });
+        await saveArtistsToIDB(cloudArtists);
+        writeArtistsSidecar(cloudArtists);
       } else {
-        console.info(
-          `[LabelPulse] ✅  Artists in sync: local=${currentLocal.length}, cloud=${cloudArtists.length}. No merge needed.`
-        );
-        // Still update sidecar (cheap, and ensures we always have a fresh local backup)
-        writeArtistsSidecar(currentLocal);
+        // Same count — check if content differs
+        const sameContent = cloudArtists.every((c: any, i: number) => {
+          const l = currentLocal[i];
+          return l && JSON.stringify(c) === JSON.stringify(l);
+        });
+        if (!sameContent) {
+          console.info(
+            `[LabelPulse] ⬇️  Same count but different content. Cloud wins — updating local (NO push to cloud).`
+          );
+          useAppStore.setState({ artists: cloudArtists });
+          await saveArtistsToIDB(cloudArtists);
+          writeArtistsSidecar(cloudArtists);
+        } else {
+          console.info(
+            `[LabelPulse] ✅  Artists in sync: local=${currentLocal.length}, cloud=${cloudArtists.length}. No update needed.`
+          );
+        }
       }
       return;
     }
