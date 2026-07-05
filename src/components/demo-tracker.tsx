@@ -1792,12 +1792,20 @@ export function DemoTracker() {
                   </PopoverTrigger>
                   <PopoverContent className="w-[--radix-popover-trigger-width] p-0" align="start">
                     <Command shouldFilter={false}>
+                      {/* FIX IOS: text-base evita lo zoom automatico su iPhone */}
                       <CommandInput
                         placeholder={locale === "it" ? "Cerca label per nome o genere…" : "Search label by name or genre…"}
                         value={labelSearchQuery}
                         onValueChange={setLabelSearchQuery}
+                        className="text-base"
                       />
-                      <CommandList style={{ maxHeight: '300px', WebkitOverflowScrolling: 'touch' }}>
+                      {/* FIX IOS: Altezza responsive + overscroll-behavior */}
+                      <CommandList style={{
+                        maxHeight: 'min(400px, var(--radix-popover-content-available-height, 50vh))',
+                        overflowY: 'auto',
+                        WebkitOverflowScrolling: 'touch',
+                        overscrollBehavior: 'contain'
+                      }}>
                         {(() => {
                           // Pre-filter the labels array here instead of relying
                           // on cmdk's filter function. The filter prop captures
