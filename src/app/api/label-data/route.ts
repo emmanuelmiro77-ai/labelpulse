@@ -60,6 +60,7 @@ export async function POST(req: NextRequest) {
 
   try {
     const body = await req.json();
+    const localUpdatedAt = body?.local_updated_at;
     const {
       label_id, emails, notes, status, website, demo_link,
       social_link, soundcloud_link, beatport_link, contact_info,
@@ -68,6 +69,29 @@ export async function POST(req: NextRequest) {
 
     if (!label_id) {
       return NextResponse.json({ error: "Missing label_id" }, { status: 400 });
+    }
+
+    // 🔒 RACE CONDITION FIX: Pre-flight timestamp check
+    if (localUpdatedAt) {
+      const { data: existing } = await supabase
+        .from("label_personal_data")
+        .select("updated_at")
+        .eq("user_email", email)
+        .eq("label_id", String(label_id))
+        .maybeSingle();
+      
+      if (existing?.updated_at) {
+        const cloudTime = new Date(existing.updated_at).getTime();
+        const localTime = new Date(localUpdatedAt).getTime();
+        if (cloudTime > localTime) {
+          console.warn(`[/api/label-data POST] 409 Conflict — cloud > local for label ${label_id}`);
+          return NextResponse.json({
+            error: "conflict",
+            message: "Cloud has newer data — local write rejected",
+            cloud_updated_at: existing.updated_at,
+          }, { status: 409 });
+        }
+      }
     }
 
     // Upsert: insert or update on conflict (user_email, label_id)

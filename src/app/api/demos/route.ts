@@ -107,9 +107,35 @@ export async function PATCH(req: NextRequest) {
 
   try {
     const rawUpdates = await req.json();
+    const localUpdatedAt = rawUpdates.local_updated_at;
+    
+    // 🔒 RACE CONDITION FIX: Pre-flight timestamp check
+    // Se il cloud ha un updated_at più recente del local_updated_at,
+    // il dato locale è stale → rifiuta la scrittura (409 Conflict)
+    if (localUpdatedAt) {
+      const { data: existing } = await supabase
+        .from("demo_submissions")
+        .select("updated_at")
+        .eq("id", id)
+        .eq("user_email", email)
+        .maybeSingle();
+      
+      if (existing?.updated_at) {
+        const cloudTime = new Date(existing.updated_at).getTime();
+        const localTime = new Date(localUpdatedAt).getTime();
+        if (cloudTime > localTime) {
+          console.warn(`[/api/demos PATCH] 409 Conflict — cloud (${existing.updated_at}) > local (${localUpdatedAt}) for demo ${id}`);
+          return NextResponse.json({
+            error: "conflict",
+            message: "Cloud has newer data — local write rejected",
+            cloud_updated_at: existing.updated_at,
+            local_updated_at: localUpdatedAt,
+          }, { status: 409 });
+        }
+      }
+    }
+    
     // 🔒 FIX: Filtra SOLO i campi validi della tabella demo_submissions.
-    // Inviare campi non esistenti (es. artists[], links[], bpm, key, analysis, responses[])
-    // causa errore 500 su Supabase.
     const VALID_COLUMNS = [
       "label_id", "label_name", "track_name", "artist_name", "link",
       "status", "sent_date", "pitch_text", "pitch_subject", "pitch_tracks",

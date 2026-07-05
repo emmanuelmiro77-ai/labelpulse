@@ -100,8 +100,6 @@ export async function writeWithOutbox(
   label: string
 ): Promise<boolean> {
   // 🔒 Task 3: Aggiungi timestamp locale per risoluzione conflitti.
-  // Se l'utente modifica offline su due dispositivi, il server può usare
-  // questo timestamp per determinare quale modifica è più recente.
   const bodyWithTimestamp = body !== undefined
     ? { ...body, local_updated_at: new Date().toISOString() }
     : undefined;
@@ -117,9 +115,17 @@ export async function writeWithOutbox(
       return true;
     }
 
+    // 🔒 RACE CONDITION FIX: 409 Conflict = cloud ha dati più recenti
+    // Il dato locale è stale → SCARTA (non ritentare) + ricarica dal cloud
+    if (res.status === 409) {
+      const errData = await res.json().catch(() => ({}));
+      console.warn(`[outbox] ⚠️ ${label} — 409 Conflict: cloud ha dati più recenti. Scritture locale scartata.`, errData);
+      // 🔒 Trigger ricaricamento dal cloud per allineare lo stato locale
+      triggerCloudReload();
+      return false; // non ritentare — il dato è stale
+    }
+
     // 🔒 FIX: 401 (sessione scaduta) deve essere ritentato, non scartato.
-    // La sessione NextAuth si rinnova al prossimo refresh della pagina.
-    // Trattiamo 401 come errore temporaneo (come 5xx) → accodiamo per retry.
     if (res.status === 401) {
       console.warn(`[outbox] ${label} — 401 sessione scaduta, accodata per retry al prossimo refresh`);
       enqueue(url, method, body, label);
@@ -127,7 +133,7 @@ export async function writeWithOutbox(
     }
 
     if (res.status >= 400 && res.status < 500) {
-      // Errore "definitivo" — 400/403/404/409 (dati invalidi, forbidden, not found, conflict)
+      // Errore "definitivo" — 400/403/404 (dati invalidi, forbidden, not found)
       console.error(`[outbox] ${label} — errore ${res.status} definitivo, non ritento`, await res.text().catch(() => ""));
       return false;
     }
@@ -135,8 +141,6 @@ export async function writeWithOutbox(
   } catch (err) {
     // Errore di rete o 5xx → accoda per retry automatico
     console.warn(`[outbox] ${label} fallita, accodata per retry:`, err);
-    // 🔒 Task 3: passa bodyWithTimestamp (non body originale) così il timestamp
-    // della modifica originale viene preservato durante i retry
     enqueue(url, method, bodyWithTimestamp, label);
     return true;
   }
@@ -171,6 +175,11 @@ let flushing = false;
 export async function flushOutbox(): Promise<{ pending: number; flushed: number }> {
   if (typeof window === "undefined") return { pending: 0, flushed: 0 };
   if (flushing) return { pending: getPendingCount(), flushed: 0 };
+  // 🔒 CLOUD-FIRST: Non flushare durante il boot cloud-first
+  if (_cloudSyncPaused) {
+    console.log("[outbox] ⏸️ Flush skipped — cloud sync in progress");
+    return { pending: getPendingCount(), flushed: 0 };
+  }
   flushing = true;
   let flushed = 0;
   try {
@@ -211,16 +220,61 @@ export async function flushOutbox(): Promise<{ pending: number; flushed: number 
 }
 
 let autoFlushStarted = false;
+let _cloudSyncPaused = false; // 🔒 Blocca il flush durante il boot cloud-first
+let _isInitialSyncDone = false; // 🔒 True solo dopo il primo loadFromCloud completato
+let _cloudReloadCallback: (() => void) | null = null;
 
 /**
- * Da chiamare una sola volta all'avvio dell'app (es. in un useEffect
- * al top-level, tipo AuthProvider o page.tsx).
+ * 🔒 CLOUD-FIRST: Pausa il flush dell'outbox.
+ */
+export function pauseOutboxFlush(): void {
+  _cloudSyncPaused = true;
+  console.log("[outbox] ⏸️ Flush paused — cloud sync in progress");
+}
+
+/**
+ * 🔒 CLOUD-FIRST: Riprendi il flush dell'outbox.
+ */
+export function resumeOutboxFlush(): void {
+  _cloudSyncPaused = false;
+  _isInitialSyncDone = true;
+  console.log("[outbox] ▶️ Flush resumed — cloud sync complete, initial sync done");
+  void flushOutbox();
+}
+
+/**
+ * 🔒 RACE CONDITION FIX: Registra callback per ricaricare dal cloud su 409.
+ */
+export function onCloudConflict(callback: () => void): void {
+  _cloudReloadCallback = callback;
+}
+
+/**
+ * 🔒 RACE CONDITION FIX: Triggera ricaricamento dal cloud.
+ */
+function triggerCloudReload(): void {
+  if (_cloudReloadCallback) {
+    console.log("[outbox] 🔄 Triggering cloud reload due to 409 conflict");
+    _cloudReloadCallback();
+  }
+}
+
+/**
+ * 🔒 Ritorna true se il primo sync dal cloud è completato.
+ */
+export function isInitialSyncDone(): boolean {
+  return _isInitialSyncDone;
+}
+
+/**
+ * Da chiamare una sola volta all'avvio dell'app.
  */
 export function startOutboxAutoFlush(): void {
   if (typeof window === "undefined" || autoFlushStarted) return;
   autoFlushStarted = true;
 
-  void flushOutbox();
+  // 🔒 NON flushare subito se il cloud sync è in pausa
+  if (!_cloudSyncPaused) void flushOutbox();
 
   window.addEventListener("online", () => void flushOutbox());
   document.addEventListener("visibilitychange", () => {

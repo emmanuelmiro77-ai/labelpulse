@@ -13,7 +13,7 @@ import {
   loadFromNewTables,
 } from "./store";
 import { identifyUser, clearUser, trackEvent } from "./analytics";
-import { startOutboxAutoFlush } from "./outbox";
+import { startOutboxAutoFlush, pauseOutboxFlush, resumeOutboxFlush, onCloudConflict } from "./outbox";
 
 /**
  * Hook that bridges NextAuth session ↔ LabelPulse cloud sync.
@@ -51,6 +51,11 @@ export function useAuthEffect(): void {
   // presto), vanno ritentate appena l'app si riapre.
   useEffect(() => {
     startOutboxAutoFlush();
+    // 🔒 RACE CONDITION FIX: registra callback per ricaricare dal cloud su 409
+    onCloudConflict(() => {
+      console.log("[LabelPulse Auth] 🔄 409 conflict detected — reloading from cloud");
+      loadFromNewTables().catch(() => {});
+    });
   }, []);
 
   // Step 1: keep the cloud-sync module informed about the current user.
@@ -99,19 +104,23 @@ export function useAuthEffect(): void {
     // Niente merge, niente union. Il cloud è l'unica verità.
     console.info("[LabelPulse Auth] ☁️ Syncing with Supabase...");
 
+    // 🔒 CRITICAL: Pausa l'outbox PRIMA del fetch per evitare race condition.
+    pauseOutboxFlush();
+
     Promise.all([
       loadFromCloud(),
       loadFromNewTables(),
     ]).then(() => {
       console.info("[LabelPulse Auth] ✅ Cloud sync complete. State replaced.");
-      // Segna hasRehydrated e hasCloudSynced per sbloccare la UI
       useAppStore.setState({ hasRehydrated: true, hasCloudSynced: true });
-      // Carica artisti da IDB (non bloccante)
+      // 🔒 Riprendi l'outbox — i dati cloud sono arrivati
+      resumeOutboxFlush();
       loadArtistsOnBoot().catch(() => {});
     }).catch((err) => {
       console.error("[LabelPulse Auth] ❌ Cloud sync failed:", err);
-      // Anche se fallisce, sblocca la UI con dati locali
       useAppStore.setState({ hasRehydrated: true, hasCloudSynced: true });
+      // 🔒 Riprendi l'outbox anche in caso di fallimento
+      resumeOutboxFlush();
     });
   }, [status, session?.user?.email]);
 
