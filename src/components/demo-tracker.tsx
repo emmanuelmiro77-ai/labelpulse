@@ -1638,7 +1638,7 @@ export function DemoTracker() {
 
       {/* Add/Edit Dialog */}
       <Dialog open={showAddDialog} onOpenChange={setShowAddDialog}>
-        <DialogContent className="sm:max-w-2xl bg-card border-border/50 max-h-[90vh] overflow-y-auto">
+        <DialogContent className="sm:max-w-2xl bg-card border-border/50 max-h-[90vh] overflow-y-auto" style={{ WebkitOverflowScrolling: "touch" }}>
           <DialogHeader>
             <DialogTitle className="flex items-center gap-2 flex-wrap">
               {editingDemo ? t(locale, "demos.editDemo") : t(locale, "demos.addDemo")}
@@ -1797,7 +1797,7 @@ export function DemoTracker() {
                         value={labelSearchQuery}
                         onValueChange={setLabelSearchQuery}
                       />
-                      <CommandList>
+                      <CommandList style={{ maxHeight: '300px', WebkitOverflowScrolling: 'touch' }}>
                         {(() => {
                           // Pre-filter the labels array here instead of relying
                           // on cmdk's filter function. The filter prop captures
@@ -1827,7 +1827,7 @@ export function DemoTracker() {
                               }
                               return (a.name || "").localeCompare(b.name || "");
                             })
-                            .slice(0, 250);
+                            .slice(0, 500);
 
                           if (filtered.length === 0) {
                             return (
@@ -2416,7 +2416,7 @@ export function DemoTracker() {
 
       {/* Create/Edit EP Dialog */}
       <Dialog open={showEpDialog} onOpenChange={setShowEpDialog}>
-        <DialogContent className="sm:max-w-2xl bg-card border-border/50 max-h-[90vh] overflow-y-auto">
+        <DialogContent className="sm:max-w-2xl bg-card border-border/50 max-h-[90vh] overflow-y-auto" style={{ WebkitOverflowScrolling: "touch" }}>
           <DialogHeader>
             <DialogTitle className="flex items-center gap-2">
               <Disc3 className="h-4 w-4 text-primary" />
@@ -4436,7 +4436,7 @@ function DemoDetailDialog({
 
   return (
     <Dialog open={!!demo} onOpenChange={(open) => { if (!open) onClose(); }}>
-      <DialogContent className="sm:max-w-2xl bg-card border-border/50 max-h-[90vh] overflow-y-auto">
+      <DialogContent className="sm:max-w-2xl bg-card border-border/50 max-h-[90vh] overflow-y-auto" style={{ WebkitOverflowScrolling: "touch" }}>
         <DialogHeader>
           <DialogTitle className="flex items-center gap-2 flex-wrap">
             <Music className="h-5 w-5 text-primary" />
