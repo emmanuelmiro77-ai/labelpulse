@@ -1925,3 +1925,31 @@ Stage Summary:
 - Root cause del falso allarme (diagnostica su sistema morto) risolta
 - TODO aperto: refresh automatico del JWT Supabase lato client per il realtime (non risolto in questa sessione — mitigato con polling di sicurezza)
 - Prossimo: l'utente deve fare `git add -A && git commit && git push origin main`, poi verificare su Vercel che il deploy vada a buon fine e testare il flusso multi-dispositivo
+
+---
+Task ID: ios-menu-bloccati-fix
+Agent: Z-AI (session web-aaf0d6d4)
+Task: Fix emergenza beta tester iPhone/Mac — menu dropdown bloccati su iOS + verifica dati followed_artists
+
+Work Log:
+- Boot completo: letti BOOT.md, AGENT_CONTEXT.md, eseguito scripts/agent-boot.sh (commit HEAD d71ea89, working tree clean)
+- Verificato deploy Vercel produzione: https://labelpulse.vercel.app/ risponde HTTP 200, sw.js disponibile → deploy con fix Apple precedente è online
+- Analizzato demo-tracker.tsx: il commit d71ea89 aveva già invertito Genere→Label con filtro vincolante (formGenre vuoto → activeGenre falsy → tutte le label visibili, NO crash). Stato iniziale corretto.
+- Diagnosi blocco menu iOS:
+  * DialogContent form Add/Edit usava max-h-[90vh] → su iOS Safari vh non gestisce barre dinamiche → form finisce sotto le barre → menu in basso irraggiungibili
+  * CommandList usava var(--radix-popover-content-available-height) che su iOS si calcola male (0 o troppo piccolo) → lista height 0 → niente scroll
+  * Mancava touch-action: pan-y → scroll touch non scattava su alcune versioni iOS
+- Verificato followed_artists: tabella esiste in supabase-schema-snapshots.sql ma NON è usata dal codice LabelPulse (solo commento in snapshots.ts). Gli artisti dell'utente sono salvati nello store Zustand + cloud row (user_data). 0 righe nella tabella followed_artists è NORMALE/PREVISTO, non un bug.
+- Verificato anti-regressione: 31 riferimenti ai fix passati (effectivePitchSubject, displayTracks, handleAnalyzeFile, seekable.end, effectivePitchBody) ancora presenti ✅
+- Applicate modifiche a src/components/demo-tracker.tsx (11 insertions, 9 deletions):
+  * 3 DialogContent: 90vh → 90dvh + overscroll-contain + touchAction pan-y (Add/Edit Demo, Add/Edit EP, DemoDetail)
+  * 2 CommandList (Genere + Label): rimossa var(--radix-popover-content-available-height), maxHeight fisso min(260px/340px, 50vh), aggiunto touchAction pan-y
+  * 2 PopoverContent (Genere + Label): aggiunto onOpenAutoFocus + onCloseAutoFocus preventDefault (evita focus rub iOS)
+- TypeScript check: nessun errore nei file modificati (errori pre-esistenti solo in skills/ e API routes getServerSession types)
+- Build produzione: ✅ completato con successo
+
+Stage Summary:
+- Root cause del blocco menu iOS: combinazione CSS sbagliata (vh invece di dvh + var Radix inaffidabile + touch-action mancante), NON un blocco JavaScript
+- Fix applicato è puramente CSS + props, nessun cambiamento logica → zero rischio regressione funzionale
+- followed_artists è un falso allarme: la tabella non è usata dall'app, gli artisti sono nello store/cloud row
+- Deploy Vercel partirà automaticamente al push su main

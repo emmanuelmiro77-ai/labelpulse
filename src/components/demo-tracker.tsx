@@ -1638,7 +1638,7 @@ export function DemoTracker() {
 
       {/* Add/Edit Dialog */}
       <Dialog open={showAddDialog} onOpenChange={setShowAddDialog}>
-        <DialogContent className="sm:max-w-2xl bg-card border-border/50 max-h-[90vh] overflow-y-auto" style={{ WebkitOverflowScrolling: "touch" }}>
+        <DialogContent className="sm:max-w-2xl bg-card border-border/50 max-h-[90dvh] overflow-y-auto overscroll-contain" style={{ WebkitOverflowScrolling: "touch", touchAction: "pan-y" }}>
           <DialogHeader>
             <DialogTitle className="flex items-center gap-2 flex-wrap">
               {editingDemo ? t(locale, "demos.editDemo") : t(locale, "demos.addDemo")}
@@ -1776,7 +1776,7 @@ export function DemoTracker() {
                       <Filter className="ml-2 h-3.5 w-3.5 shrink-0 opacity-50" />
                     </Button>
                   </PopoverTrigger>
-                  <PopoverContent className="w-[--radix-popover-trigger-width] p-0" align="start">
+                  <PopoverContent className="w-[--radix-popover-trigger-width] p-0" align="start" onOpenAutoFocus={(e) => e.preventDefault()} onCloseAutoFocus={(e) => e.preventDefault()}>
                     <Command shouldFilter={false}>
                       <CommandInput
                         placeholder={locale === "it" ? "Digita per filtrare o creare…" : "Type to filter or create…"}
@@ -1788,10 +1788,11 @@ export function DemoTracker() {
                         className="text-base"
                       />
                       <CommandList style={{
-                        maxHeight: 'min(300px, var(--radix-popover-content-available-height, 50vh))',
+                        maxHeight: 'min(260px, 50vh)',
                         overflowY: 'auto',
                         WebkitOverflowScrolling: 'touch',
-                        overscrollBehavior: 'contain'
+                        overscrollBehavior: 'contain',
+                        touchAction: 'pan-y'
                       }}>
                         {formGenre.trim() && !genres.some(g => g.toLowerCase() === formGenre.trim().toLowerCase()) && (
                           <CommandGroup heading={locale === "it" ? "Personalizzato" : "Custom"}>
@@ -1871,7 +1872,7 @@ export function DemoTracker() {
                       <ChevronsUpDown className="ml-2 h-4 w-4 shrink-0 opacity-50" />
                     </Button>
                   </PopoverTrigger>
-                  <PopoverContent className="w-[--radix-popover-trigger-width] p-0" align="start">
+                  <PopoverContent className="w-[--radix-popover-trigger-width] p-0" align="start" onOpenAutoFocus={(e) => e.preventDefault()} onCloseAutoFocus={(e) => e.preventDefault()}>
                     <Command shouldFilter={false}>
                       <CommandInput
                         placeholder={locale === "it" ? "Cerca label per nome o genere…" : "Search label by name or genre…"}
@@ -1880,10 +1881,11 @@ export function DemoTracker() {
                         className="text-base"
                       />
                       <CommandList style={{
-                        maxHeight: 'min(400px, var(--radix-popover-content-available-height, 50vh))',
+                        maxHeight: 'min(340px, 50vh)',
                         overflowY: 'auto',
                         WebkitOverflowScrolling: 'touch',
-                        overscrollBehavior: 'contain'
+                        overscrollBehavior: 'contain',
+                        touchAction: 'pan-y'
                       }}>
                         {(() => {
                           const q = labelSearchQuery.toLowerCase().trim();
@@ -2431,7 +2433,7 @@ export function DemoTracker() {
 
       {/* Create/Edit EP Dialog */}
       <Dialog open={showEpDialog} onOpenChange={setShowEpDialog}>
-        <DialogContent className="sm:max-w-2xl bg-card border-border/50 max-h-[90vh] overflow-y-auto" style={{ WebkitOverflowScrolling: "touch" }}>
+        <DialogContent className="sm:max-w-2xl bg-card border-border/50 max-h-[90dvh] overflow-y-auto overscroll-contain" style={{ WebkitOverflowScrolling: "touch", touchAction: "pan-y" }}>
           <DialogHeader>
             <DialogTitle className="flex items-center gap-2">
               <Disc3 className="h-4 w-4 text-primary" />
@@ -4451,7 +4453,7 @@ function DemoDetailDialog({
 
   return (
     <Dialog open={!!demo} onOpenChange={(open) => { if (!open) onClose(); }}>
-      <DialogContent className="sm:max-w-2xl bg-card border-border/50 max-h-[90vh] overflow-y-auto" style={{ WebkitOverflowScrolling: "touch" }}>
+      <DialogContent className="sm:max-w-2xl bg-card border-border/50 max-h-[90dvh] overflow-y-auto overscroll-contain" style={{ WebkitOverflowScrolling: "touch", touchAction: "pan-y" }}>
         <DialogHeader>
           <DialogTitle className="flex items-center gap-2 flex-wrap">
             <Music className="h-5 w-5 text-primary" />

@@ -490,3 +490,21 @@ Ogni volta che l'agente (io) fa un fix, dice esplicitamente all'utente:
 > Tutti presenti: ✅. Nuova entry aggiunta a BUG_REGISTRY.md."
 
 Se non può dirlo → non ha seguito il protocollo → chiedere all'utente di pretenderlo.
+
+---
+
+## 📱 iOS / Mobile UI
+
+### Menu dropdown bloccati su iPhone — form Add/Edit Demo non scrolla
+- **Sintomo**: Su iPhone (Safari/PWA), i menu Genere e Label nel form "Aggiungi Demo" sono totalmente bloccati: il tester ha ripulito cache e rifatto login, ma l'interfaccia non reagisce al tocco e i menu non si muovono.
+- **Causa**:
+  1. `DialogContent` del form usava `max-h-[90vh]` — su iOS Safari `vh` non tiene conto delle barre dinamiche (URL bar retractable), quindi il form finiva sotto le barre → i menu in basso erano nella zona non toccabile.
+  2. `CommandList` (cmdk) usava `maxHeight: 'min(300px, var(--radix-popover-content-available-height, 50vh))'` — su iOS la variabile CSS `--radix-popover-content-available-height` viene calcolata male (spesso 0 o troppo piccola quando il Popover si apre vicino al fondo), rendendo la lista height 0 → niente scroll visibile.
+  3. Mancava `touch-action: pan-y` → su alcune versioni iOS Safari lo scroll touch dentro contenitori `overflow-y: auto` non scattava.
+- **Fix**: commit `<NEW>` —
+  - `max-h-[90vh]` → `max-h-[90dvh]` (dynamic viewport height) su tutti e 3 i Dialog del form (Add/Edit Demo, Add/Edit EP, DemoDetail) + `overscroll-contain` + `touchAction: pan-y`
+  - Rimossa `var(--radix-popover-content-available-height)` dai CommandList di Genere e Label, sostituita con `min(260px, 50vh)` / `min(340px, 50vh)` (valore fisso affidabile)
+  - Aggiunto `touchAction: 'pan-y'` su tutti i CommandList per garantire scroll touch verticale
+  - Aggiunto `onOpenAutoFocus={(e) => e.preventDefault()}` + `onCloseAutoFocus` sui PopoverContent per evitare che il focus rubbi lo scroll su iOS
+- **File**: `src/components/demo-tracker.tsx`
+- **⚠️ LEZIONE**: Su iOS Safari, NON usare mai `var(--radix-popover-content-available-height)` per maxHeight di liste scrollabili — si calcola male. Usare `min(Npx, 50vh)` o `Ndvh`. NON usare `vh` per Dialog/Modal height — usare sempre `dvh` (dynamic viewport height) che gestisce le barre iOS.
