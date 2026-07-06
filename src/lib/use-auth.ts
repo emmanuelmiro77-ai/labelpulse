@@ -75,10 +75,6 @@ export function useAuthEffect(): void {
 
     console.info(`[LabelPulse Auth] 🔑 User authenticated (${email}). Cloud-first boot...`);
 
-    // 🔒 FIX: Salva SEMPRE l'email di NextAuth nel userProfile dello store.
-    // L'email non viene dal cloud (user_profiles non ha colonna email).
-    useAppStore.getState().setUserProfile({ email });
-
     // Multi-user isolation: pulisci se il proprietario è diverso
     const wasCleared = verifyStorageOwner(email);
     if (wasCleared) {
@@ -86,6 +82,11 @@ export function useAuthEffect(): void {
     } else {
       setStorageOwner(email);
     }
+
+    // 🔒 FIX: Salva SEMPRE l'email di NextAuth nel userProfile DOPO verifyStorageOwner.
+    // verifyStorageOwner potrebbe chiamare clearAllLocalData() che resetta userProfile.email="".
+    // Chiamando setUserProfile DOPO, l'email viene ripristinata correttamente.
+    useAppStore.getState().setUserProfile({ email });
 
     // Imposta email per cloud sync
     setCurrentUserEmail(email);
