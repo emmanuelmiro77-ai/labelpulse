@@ -890,11 +890,15 @@ export function LabelFinder() {
 
   // Add label form state
   const [formName, setFormName] = useState("");
-  const [formGenre, setFormGenre] = useState(genres[0] || "Techno");
+  const [formGenre, setFormGenre] = useState(genres.find(g => g !== "Top 100 All Genres") || "Techno Peak Time / Driving");
   const [formSubmissionType, setFormSubmissionType] = useState<
     "email" | "webform" | "platform"
   >("email");
   const [formContact, setFormContact] = useState("");
+  const [formWebsite, setFormWebsite] = useState("");
+  const [formDemoLink, setFormDemoLink] = useState("");
+  const [formSocialLink, setFormSocialLink] = useState("");
+  const [formSoundcloudLink, setFormSoundcloudLink] = useState("");
   const [formStatus, setFormStatus] = useState<"open" | "closed" | "unknown">("unknown");
   const [formNotes, setFormNotes] = useState("");
 
@@ -953,9 +957,13 @@ export function LabelFinder() {
 
   const resetForm = () => {
     setFormName("");
-    setFormGenre(genres[0] || "Techno");
+    setFormGenre(genres.find(g => g !== "Top 100 All Genres") || "Techno Peak Time / Driving");
     setFormSubmissionType("email");
     setFormContact("");
+    setFormWebsite("");
+    setFormDemoLink("");
+    setFormSocialLink("");
+    setFormSoundcloudLink("");
     setFormStatus("open");
     setFormNotes("");
   };
@@ -1736,13 +1744,18 @@ export function LabelFinder() {
 
   const handleSave = () => {
     if (!formName.trim()) return;
-    const data = {
+    const data: any = {
       name: formName.trim(),
       genre: formGenre,
       submissionType: formSubmissionType,
       contactInfo: formContact.trim(),
       status: formStatus,
       notes: formNotes.trim(),
+      website: formWebsite.trim(),
+      demoLink: formDemoLink.trim(),
+      socialLink: formSocialLink.trim(),
+      soundcloudLink: formSoundcloudLink.trim(),
+      emails: formContact.trim() && formSubmissionType === "email" ? [formContact.trim()] : [],
     };
     if (editingLabel) {
       updateLabel(editingLabel.id, data);
@@ -3220,7 +3233,9 @@ export function LabelFinder() {
                 <UILabel className="text-xs font-mono uppercase text-muted-foreground">{t(locale, "labels.genre")}</UILabel>
                 <Select value={formGenre} onValueChange={setFormGenre}>
                   <SelectTrigger className="bg-secondary/50"><SelectValue /></SelectTrigger>
-                  <SelectContent>{genres.slice(0, 20).map((g) => (<SelectItem key={g} value={g}>{g}</SelectItem>))}</SelectContent>
+                  <SelectContent style={{ maxHeight: '300px', WebkitOverflowScrolling: 'touch' }}>
+                    {genres.filter(g => g !== "Top 100 All Genres").map((g) => (<SelectItem key={g} value={g}>{g}</SelectItem>))}
+                  </SelectContent>
                 </Select>
               </div>
               <div className="space-y-1.5">
@@ -3234,6 +3249,25 @@ export function LabelFinder() {
             <div className="space-y-1.5">
               <UILabel className="text-xs font-mono uppercase text-muted-foreground">{t(locale, "labels.arContact")}</UILabel>
               <Input value={formContact} onChange={(e) => setFormContact(e.target.value)} placeholder="demos@label.com or https://..." className="bg-secondary/50" />
+            </div>
+            {/* 🔒 FIX: Campi link sbloccati — prima mancavano */}
+            <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
+              <div className="space-y-1.5">
+                <UILabel className="text-xs font-mono uppercase text-muted-foreground">Website</UILabel>
+                <Input value={formWebsite} onChange={(e) => setFormWebsite(e.target.value)} placeholder="https://label.com" className="bg-secondary/50" />
+              </div>
+              <div className="space-y-1.5">
+                <UILabel className="text-xs font-mono uppercase text-muted-foreground">Demo Link</UILabel>
+                <Input value={formDemoLink} onChange={(e) => setFormDemoLink(e.target.value)} placeholder="https://label.com/demos" className="bg-secondary/50" />
+              </div>
+              <div className="space-y-1.5">
+                <UILabel className="text-xs font-mono uppercase text-muted-foreground">Social Link</UILabel>
+                <Input value={formSocialLink} onChange={(e) => setFormSocialLink(e.target.value)} placeholder="https://instagram.com/..." className="bg-secondary/50" />
+              </div>
+              <div className="space-y-1.5">
+                <UILabel className="text-xs font-mono uppercase text-muted-foreground">SoundCloud</UILabel>
+                <Input value={formSoundcloudLink} onChange={(e) => setFormSoundcloudLink(e.target.value)} placeholder="https://soundcloud.com/..." className="bg-secondary/50" />
+              </div>
             </div>
             <div className="space-y-1.5">
               <UILabel className="text-xs font-mono uppercase text-muted-foreground">{t(locale, "labels.status")}</UILabel>

@@ -3529,20 +3529,18 @@ export async function loadFromCloud(): Promise<void> {
           snaps: globalData.rankingSnapshots?.length || 0,
           updatedAt: globalData.rankingsUpdatedAt,
         });
-        // 🔒 RACE CONDITION FIX: REPLACE puro con deduplicazione.
-        // Il cloud è l'unica verità. Prendi TUTTE le label dal cloud,
-        // preserva i campi personali dal locale, DEDUPLICA per ID.
-        // Niente merge, niente append, niente concat.
+        // 🔒 FIX: UPSERT conservativo — mantieni tutte le label locali,
+        // aggiorna quelle esistenti con i dati cloud, aggiungi le nuove.
+        // Non droppare MAI una label acquisita, anche se esce dalla classifica.
         const globalLabels = globalData.labels || [];
         const localById = new Map(currentState.labels.map((l: any) => [l.id, l]));
 
-        // Mappa cloud → preserva personali dal locale
-        const finalLabels = globalLabels.map((cl: any) => {
+        // Step 1: Aggiorna le label cloud preservando i campi personali dal locale
+        const updatedFromCloud = globalLabels.map((cl: any) => {
           const localLabel = localById.get(cl.id);
           if (localLabel) {
             return {
               ...cl, // TUTTI i campi Beatport dal cloud (REPLACE)
-              // Campi personali dal locale:
               emails: localLabel.emails || [],
               notes: localLabel.notes || "",
               status: localLabel.status || "unknown",
@@ -3560,9 +3558,16 @@ export async function loadFromCloud(): Promise<void> {
           return cl;
         });
 
-        // 🔒 DEDUPLICAZIONE FORZATA per ID — una Map elimina i duplicati
+        // Step 2: Aggiungi le label locali che NON sono nel cloud (preservazione storico)
+        const cloudIds = new Set(globalLabels.map((l: any) => l.id));
+        const localOnlyLabels = currentState.labels.filter(
+          (l: any) => !cloudIds.has(l.id)
+        );
+
+        // Step 3: Combina + deduplica per ID (cloud wins su conflitti)
+        const combined = [...updatedFromCloud, ...localOnlyLabels];
         const dedupedLabels = Array.from(
-          new Map(finalLabels.map((l: any) => [l.id, l])).values()
+          new Map(combined.map((l: any) => [l.id, l])).values()
         );
 
         useAppStore.setState({
@@ -3570,7 +3575,7 @@ export async function loadFromCloud(): Promise<void> {
           rankingSnapshots: globalData.rankingSnapshots || [],
           rankingsUpdatedAt: globalData.rankingsUpdatedAt || null,
         });
-        console.log("[LabelPulse Cloud] REPLACE + DEDUP completato. Labels:", dedupedLabels.length, "(era:", currentState.labels.length, ")");
+        console.log("[LabelPulse Cloud] UPSERT+DEDUP: cloud=" + globalLabels.length + " + local_only=" + localOnlyLabels.length + " → total=" + dedupedLabels.length);
       }
     } catch (err) {
       console.warn("[LabelPulse Cloud] Global row load failed:", err);

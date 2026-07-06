@@ -1530,20 +1530,27 @@ async function applyGlobalDataToStore(globalData: any): Promise<void> {
   const store = useAppStore.getState();
 
   // 🔒 Task 1: Usa mergeGlobalWithPersonal per preservare DINAMICAMENTE i campi personali
+  // 🔒 FIX: UPSERT conservativo — mantieni label locali non presenti nel cloud
   const cloudLabels = Array.isArray(globalData.labels) ? globalData.labels : [];
-  const localById = new Map((store.labels || []).map((l: any) => [l.id, l]));
+  const localLabels = Array.isArray(store.labels) ? store.labels : [];
+  const localById = new Map(localLabels.map((l: any) => [l.id, l]));
 
-  const finalLabels = cloudLabels.map((cl: any) => {
+  // Step 1: Aggiorna label cloud preservando campi personali
+  const updatedFromCloud = cloudLabels.map((cl: any) => {
     const localLabel = localById.get(cl.id);
     return mergeGlobalWithPersonal(localLabel, cl);
   });
 
-  // 🔒 DEDUPLICAZIONE FORZATA per ID — una Map elimina i duplicati
+  // Step 2: Preserva label locali non nel cloud (storico)
+  const cloudIds = new Set(cloudLabels.map((l: any) => l.id));
+  const localOnlyLabels = localLabels.filter((l: any) => !cloudIds.has(l.id));
+
+  // Step 3: Combina + deduplica
+  const combined = [...updatedFromCloud, ...localOnlyLabels];
   const dedupedFinalLabels = Array.from(
-    new Map(finalLabels.map((l: any) => [l.id, l])).values()
+    new Map(combined.map((l: any) => [l.id, l])).values()
   );
 
-  // 🔒 REPLACE snapshots: SEMPRE dal cloud, niente merge, niente union
   const finalSnapshots = Array.isArray(globalData.rankingSnapshots) ? globalData.rankingSnapshots : [];
 
   useAppStore.setState({
@@ -1552,7 +1559,7 @@ async function applyGlobalDataToStore(globalData: any): Promise<void> {
     rankingsUpdatedAt: globalData.rankingsUpdatedAt || null,
   });
 
-  console.log(`[LabelPulse Cloud] ✅ REPLACE+DEDUP completo: labels=${dedupedFinalLabels.length} (input: ${cloudLabels.length}), snapshots=${finalSnapshots.length}, updatedAt=${globalData.rankingsUpdatedAt || "none"}`);
+  console.log(`[LabelPulse Cloud] ✅ UPSERT+DEDUP: cloud=${cloudLabels.length} + local_only=${localOnlyLabels.length} → total=${dedupedFinalLabels.length}, snapshots=${finalSnapshots.length}`);
 }
 
 // ==================== ARTISTS CLOUD SYNC (separate row) ====================
