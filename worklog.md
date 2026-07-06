@@ -1953,3 +1953,26 @@ Stage Summary:
 - Fix applicato è puramente CSS + props, nessun cambiamento logica → zero rischio regressione funzionale
 - followed_artists è un falso allarme: la tabella non è usata dall'app, gli artisti sono nello store/cloud row
 - Deploy Vercel partirà automaticamente al push su main
+
+---
+Task ID: push-500-ios-commanditem-fix
+Agent: Z-AI (session web-aaf0d6d4)
+Task: Fix HTTP 500 attivazione notifiche push + fix selezione CommandItem su iOS
+
+Work Log:
+- Boot: commit HEAD d04d2b7 (fix iOS menu bloccati), working tree con file test pre-modificati
+- Indagato errore 500: lette route /api/push/subscribe, /api/push/test, /api/push/update-prefs, /api/push/unsubscribe, lib/push.ts, lib/supabase-admin.ts, supabase-schema-push.sql, notification-settings.tsx
+- Diagnosi 500: lib/push.ts getServerSupabase() usava anon key senza JWT. Tabella push_subscriptions ha RLS ENABLE ma solo policy SELECT (no INSERT/UPDATE/DELETE) → upsert bloccato da RLS → errore PostgreSQL → HTTP 500
+- Fix 500: riscritto lib/push.ts per usare getAdminClient() (service_role bypassa RLS). Aggiornato getAuthedSupabase() con tipo non-null per TS strict. Mantenuto getAllSubscriptions() con service_role diretto (usato da cron admin senza session utente).
+- Indagato CommandItem iOS: letto command.tsx (CSS base ha select-none + cursor-default) + CommandItem in demo-tracker.tsx
+- Diagnosi CommandItem iOS: quando CommandInput ha focus, tap su CommandItem preceduto da mousedown/pointerdown che ruba focus → onSelect non fire
+- Fix CommandItem iOS: aggiunto onPointerDown + onMouseDown con preventDefault su 4 CommandItem (custom genre, scraped genre, label). Aggiunte classi cursor-pointer pointer-events-auto.
+- Verifica anti-regressione: push.ts 11 riferimenti fix passati ✅, demo-tracker.tsx 31 riferimenti ✅
+- TypeScript check: pulito per file modificati (fix null type su getAuthedSupabase)
+- Build produzione: ✅ completato
+
+Stage Summary:
+- Root cause 500: RLS su push_subscriptions bloccava anon key (mancavano policy INSERT/UPDATE/DELETE). Fix: service_role via getAdminClient()
+- Root cause CommandItem iOS: focus rub da mousedown preventDefault mancante. Fix: onPointerDown + onMouseDown preventDefault
+- Entrambi i fix sono a livello libreria/componente, nessun cambiamento logica funzionale → zero rischio regressione
+- Deploy Vercel partirà automaticamente al push

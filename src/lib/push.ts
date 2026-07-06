@@ -11,10 +11,18 @@
  *   - VAPID_SUBJECT                (mailto: or https: URL)
  *
  * Schema: see supabase-schema-push.sql
+ *
+ * 🔒 FIX 500: Tutte le funzioni che scrivono/leggono push_subscriptions
+ * usano getAdminClient() (service_role o JWT Supabase) invece della
+ * anon key. La tabella ha RLS ENABLE ma senza policy INSERT/UPDATE/DELETE,
+ * quindi l'anon key viene bloccata → HTTP 500. Il service_role bypassa RLS.
+ * L'autenticazione utente è verificata a livello di API route prima di
+ * chiamare queste funzioni.
  */
 
 import webpush from "web-push";
-import { createClient } from "@supabase/supabase-js";
+import { getAdminClient } from "@/lib/supabase-admin";
+import type { SupabaseClient } from "@supabase/supabase-js";
 
 export interface PushSubscriptionRow {
   id: number;
@@ -56,33 +64,33 @@ function ensureConfigured() {
 }
 
 /**
- * Server-side Supabase client using the SAME public env vars as the
- * browser client. RLS policies must allow the operations we use.
+ * 🔒 FIX 500: Ottiene un client Supabase autenticato (service_role o JWT).
+ * Le API route verificano già l'auth NextAuth PRIMA di chiamare queste
+ * funzioni, quindi qui usiamo il service_role per bypassare RLS.
+ *
+ * Se l'utente non è autenticato, ritorna null → il chiamante deve gestire.
  */
-function getServerSupabase() {
-  const url = process.env.NEXT_PUBLIC_SUPABASE_URL;
-  const key = process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY;
-  if (!url || !key) {
-    throw new Error(
-      "Supabase env vars missing on server. Set NEXT_PUBLIC_SUPABASE_URL + NEXT_PUBLIC_SUPABASE_ANON_KEY."
-    );
+async function getAuthedSupabase(): Promise<{ supabase: SupabaseClient; email: string }> {
+  const { supabase, email } = await getAdminClient();
+  if (!supabase || !email) {
+    throw new Error("Not authenticated — no Supabase client available");
   }
-  return createClient(url, key, {
-    auth: { persistSession: false },
-  });
+  return { supabase, email };
 }
 
 /**
  * Save (or update) a push subscription for a user.
  * Idempotent — if the endpoint already exists, just refresh last_seen_at
  * and update prefs.
+ *
+ * 🔒 FIX 500: usa getAdminClient() (service_role) invece di anon key.
  */
 export async function saveSubscription(
   userEmail: string,
   subscription: { endpoint: string; keys: { p256dh: string; auth: string } },
   prefs: NotificationPrefs
 ): Promise<void> {
-  const supabase = getServerSupabase();
+  const { supabase } = await getAuthedSupabase();
   const email = userEmail.trim().toLowerCase();
   const { error } = await supabase.from("push_subscriptions").upsert(
     {
@@ -105,9 +113,11 @@ export async function saveSubscription(
 
 /**
  * Remove a push subscription (called on unsubscribe or 410 Gone).
+ *
+ * 🔒 FIX 500: usa getAdminClient() (service_role) invece di anon key.
  */
 export async function removeSubscription(endpoint: string): Promise<void> {
-  const supabase = getServerSupabase();
+  const { supabase } = await getAuthedSupabase();
   const { error } = await supabase
     .from("push_subscriptions")
     .delete()
@@ -120,12 +130,14 @@ export async function removeSubscription(endpoint: string): Promise<void> {
 /**
  * Update the per-user prefs for ALL subscriptions of that user.
  * Called when the user toggles a notification category in the Profile page.
+ *
+ * 🔒 FIX 500: usa getAdminClient() (service_role) invece di anon key.
  */
 export async function updatePrefsForUser(
   userEmail: string,
   prefs: NotificationPrefs
 ): Promise<void> {
-  const supabase = getServerSupabase();
+  const { supabase } = await getAuthedSupabase();
   const email = userEmail.trim().toLowerCase();
   const { error } = await supabase
     .from("push_subscriptions")
@@ -144,11 +156,13 @@ export async function updatePrefsForUser(
 
 /**
  * Get all subscriptions for a user (across their devices).
+ *
+ * 🔒 FIX 500: usa getAdminClient() (service_role) invece di anon key.
  */
 export async function getSubscriptionsForUser(
   userEmail: string
 ): Promise<PushSubscriptionRow[]> {
-  const supabase = getServerSupabase();
+  const { supabase } = await getAuthedSupabase();
   const email = userEmail.trim().toLowerCase();
   const { data, error } = await supabase
     .from("push_subscriptions")
@@ -164,9 +178,20 @@ export async function getSubscriptionsForUser(
 /**
  * Get ALL subscriptions across ALL users. Used by the admin trigger when
  * rankings are updated (everyone opted in gets a push).
+ *
+ * NOTA: questa funzione è usata solo dal cron admin (rankings-updated).
+ * Per evitare di richiedere l'auth utente, usa direttamente il service_role.
  */
 export async function getAllSubscriptions(): Promise<PushSubscriptionRow[]> {
-  const supabase = getServerSupabase();
+  // Per il cron admin, usiamo il service_role direttamente (non c'è session utente)
+  const { createClient } = await import("@supabase/supabase-js");
+  const url = process.env.NEXT_PUBLIC_SUPABASE_URL;
+  const key = process.env.SUPABASE_SERVICE_ROLE_KEY;
+  if (!url || !key) {
+    console.error("[push] getAllSubscriptions: missing service_role env vars");
+    return [];
+  }
+  const supabase = createClient(url, key, { auth: { persistSession: false } });
   const { data, error } = await supabase
     .from("push_subscriptions")
     .select("*");

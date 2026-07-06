@@ -1799,7 +1799,9 @@ export function DemoTracker() {
                             <CommandItem
                               value={`__custom__${formGenre}`}
                               onSelect={() => setGenreComboboxOpen(false)}
-                              className="text-amber-400"
+                              onPointerDown={(e) => { e.preventDefault(); }}
+                              onMouseDown={(e) => { e.preventDefault(); }}
+                              className="text-amber-400 cursor-pointer pointer-events-auto"
                             >
                               <span className="text-sm">+ {locale === "it" ? `Usa "${formGenre}"` : `Use "${formGenre}"`}</span>
                             </CommandItem>
@@ -1816,7 +1818,9 @@ export function DemoTracker() {
                                   setFormGenre(v);
                                   setGenreComboboxOpen(false);
                                 }}
-                                className="flex items-center gap-2"
+                                onPointerDown={(e) => { e.preventDefault(); }}
+                                onMouseDown={(e) => { e.preventDefault(); }}
+                                className="flex items-center gap-2 cursor-pointer pointer-events-auto"
                               >
                                 <Check
                                   className={`h-3.5 w-3.5 ${formGenre.toLowerCase() === g.toLowerCase() ? "opacity-100" : "opacity-0"}`}
@@ -1943,7 +1947,9 @@ export function DemoTracker() {
                                       setFormGenre(l.genres[0]);
                                     }
                                   }}
-                                  className="flex items-center gap-2"
+                                  onPointerDown={(e) => { e.preventDefault(); }}
+                                  onMouseDown={(e) => { e.preventDefault(); }}
+                                  className="flex items-center gap-2 cursor-pointer pointer-events-auto"
                                 >
                                   <Check
                                     className={`h-3.5 w-3.5 ${formLabelId === l.id ? "opacity-100" : "opacity-0"}`}
