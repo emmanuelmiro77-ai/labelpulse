@@ -1754,6 +1754,87 @@ export function DemoTracker() {
             </div>
 
             <div className="grid grid-cols-2 gap-3">
+              {/* 🔒 FIX: Genere PRIMA della Label — la selezione del genere filtra le label */}
+              <div className="space-y-1.5">
+                <UILabel className="text-xs font-mono uppercase text-muted-foreground">
+                  {t(locale, "demos.genre")}
+                </UILabel>
+                <Popover open={genreComboboxOpen} onOpenChange={setGenreComboboxOpen}>
+                  <PopoverTrigger asChild>
+                    <Button
+                      type="button"
+                      variant="outline"
+                      role="combobox"
+                      aria-expanded={genreComboboxOpen}
+                      className="w-full justify-between bg-secondary/50 font-normal h-9 text-base"
+                    >
+                      <span className="truncate text-left">
+                        {formGenre.trim()
+                          ? formGenre
+                          : <span className="text-muted-foreground">{locale === "it" ? "Seleziona o digita…" : "Pick or type…"}</span>}
+                      </span>
+                      <Filter className="ml-2 h-3.5 w-3.5 shrink-0 opacity-50" />
+                    </Button>
+                  </PopoverTrigger>
+                  <PopoverContent className="w-[--radix-popover-trigger-width] p-0" align="start">
+                    <Command shouldFilter={false}>
+                      <CommandInput
+                        placeholder={locale === "it" ? "Digita per filtrare o creare…" : "Type to filter or create…"}
+                        value={formGenre}
+                        onValueChange={(v) => {
+                          setFormGenre(v);
+                          setGenreSearchQuery(v);
+                        }}
+                        className="text-base"
+                      />
+                      <CommandList style={{
+                        maxHeight: 'min(300px, var(--radix-popover-content-available-height, 50vh))',
+                        overflowY: 'auto',
+                        WebkitOverflowScrolling: 'touch',
+                        overscrollBehavior: 'contain'
+                      }}>
+                        {formGenre.trim() && !genres.some(g => g.toLowerCase() === formGenre.trim().toLowerCase()) && (
+                          <CommandGroup heading={locale === "it" ? "Personalizzato" : "Custom"}>
+                            <CommandItem
+                              value={`__custom__${formGenre}`}
+                              onSelect={() => setGenreComboboxOpen(false)}
+                              className="text-amber-400"
+                            >
+                              <span className="text-sm">+ {locale === "it" ? `Usa "${formGenre}"` : `Use "${formGenre}"`}</span>
+                            </CommandItem>
+                          </CommandGroup>
+                        )}
+                        <CommandGroup heading={locale === "it" ? "Generi scrapati" : "Scraped genres"}>
+                          {genres
+                            .filter(g => !formGenre.trim() || g.toLowerCase().includes(formGenre.trim().toLowerCase()))
+                            .map((g) => (
+                              <CommandItem
+                                key={g}
+                                value={g}
+                                onSelect={(v) => {
+                                  setFormGenre(v);
+                                  setGenreComboboxOpen(false);
+                                }}
+                                className="flex items-center gap-2"
+                              >
+                                <Check
+                                  className={`h-3.5 w-3.5 ${formGenre.toLowerCase() === g.toLowerCase() ? "opacity-100" : "opacity-0"}`}
+                                />
+                                <span className="text-sm">{g}</span>
+                              </CommandItem>
+                            ))}
+                          {genres.filter(g => !formGenre.trim() || g.toLowerCase().includes(formGenre.trim().toLowerCase())).length === 0 && (
+                            <CommandEmpty>
+                              {locale === "it" ? "Nessun genere trovato." : "No genre found."}
+                            </CommandEmpty>
+                          )}
+                        </CommandGroup>
+                      </CommandList>
+                    </Command>
+                  </PopoverContent>
+                </Popover>
+              </div>
+
               <div className="space-y-1.5">
                 <div className="flex items-center justify-between">
                   <UILabel className="text-xs font-mono uppercase text-muted-foreground">
@@ -1779,7 +1860,7 @@ export function DemoTracker() {
                       variant="outline"
                       role="combobox"
                       aria-expanded={labelComboboxOpen}
-                      className="w-full justify-between bg-secondary/50 font-normal h-9"
+                      className="w-full justify-between bg-secondary/50 font-normal h-9 text-base"
                       disabled={isDemoLocked(editingDemo)}
                     >
                       <span className="truncate text-left">
@@ -1792,14 +1873,12 @@ export function DemoTracker() {
                   </PopoverTrigger>
                   <PopoverContent className="w-[--radix-popover-trigger-width] p-0" align="start">
                     <Command shouldFilter={false}>
-                      {/* FIX IOS: text-base evita lo zoom automatico su iPhone */}
                       <CommandInput
                         placeholder={locale === "it" ? "Cerca label per nome o genere…" : "Search label by name or genre…"}
                         value={labelSearchQuery}
                         onValueChange={setLabelSearchQuery}
                         className="text-base"
                       />
-                      {/* FIX IOS: Altezza responsive + overscroll-behavior */}
                       <CommandList style={{
                         maxHeight: 'min(400px, var(--radix-popover-content-available-height, 50vh))',
                         overflowY: 'auto',
@@ -1807,27 +1886,27 @@ export function DemoTracker() {
                         overscrollBehavior: 'contain'
                       }}>
                         {(() => {
-                          // Pre-filter the labels array here instead of relying
-                          // on cmdk's filter function. The filter prop captures
-                          // a closure over `labels` at first render — but Zustand
-                          // hasn't hydrated yet at first render, so the closure
-                          // is empty and the filter always returns 0.
                           const q = labelSearchQuery.toLowerCase().trim();
+                          // 🔒 FIX: Se un genere è selezionato, filtra le label per quel genere
+                          const activeGenre = formGenre.trim().toLowerCase();
                           const filtered = labels
                             .filter((l) => {
                               if (!l || !l.name) return false;
+                              // Filtro per genere (vincolante)
+                              if (activeGenre) {
+                                const labelGenres = (l.genres || []).map(g => g.toLowerCase());
+                                if (!labelGenres.includes(activeGenre) && (l.genre || "").toLowerCase() !== activeGenre) {
+                                  return false;
+                                }
+                              }
                               if (!q) return true;
-                              // Match by name (case-insensitive)
                               if ((l.name || "").toLowerCase().includes(q)) return true;
-                              // Match by genre
                               if ((l.genres || []).some((g) => (g || "").toLowerCase().includes(q))) return true;
                               return false;
                             })
                             .sort((a, b) => {
-                              // Open labels first, then alphabetical
                               if (a.status === "open" && b.status !== "open") return -1;
                               if (a.status !== "open" && b.status === "open") return 1;
-                              // When searching, sort by startsWith first
                               if (q) {
                                 const aStarts = (a.name || "").toLowerCase().startsWith(q) ? 0 : 1;
                                 const bStarts = (b.name || "").toLowerCase().startsWith(q) ? 0 : 1;
@@ -1977,79 +2056,7 @@ export function DemoTracker() {
                 : "💡 Add a 'Label form' link when you submitted the demo via the form on the label's own page."}
             </p>
             <div className="grid grid-cols-3 gap-3">
-              <div className="space-y-1.5">
-                <UILabel className="text-xs font-mono uppercase text-muted-foreground">
-                  {t(locale, "demos.genre")}
-                </UILabel>
-                <Popover open={genreComboboxOpen} onOpenChange={setGenreComboboxOpen}>
-                  <PopoverTrigger asChild>
-                    <Button
-                      type="button"
-                      variant="outline"
-                      role="combobox"
-                      aria-expanded={genreComboboxOpen}
-                      className="w-full justify-between bg-secondary/50 font-normal h-9"
-                    >
-                      <span className="truncate text-left">
-                        {formGenre.trim()
-                          ? formGenre
-                          : <span className="text-muted-foreground">{locale === "it" ? "Seleziona o digita…" : "Pick or type…"}</span>}
-                      </span>
-                      <Filter className="ml-2 h-3.5 w-3.5 shrink-0 opacity-50" />
-                    </Button>
-                  </PopoverTrigger>
-                  <PopoverContent className="w-[--radix-popover-trigger-width] p-0" align="start">
-                    <Command shouldFilter={false}>
-                      <CommandInput
-                        placeholder={locale === "it" ? "Digita per filtrare o creare…" : "Type to filter or create…"}
-                        value={formGenre}
-                        onValueChange={(v) => {
-                          setFormGenre(v);
-                          setGenreSearchQuery(v);
-                        }}
-                      />
-                      <CommandList>
-                        {formGenre.trim() && !genres.some(g => g.toLowerCase() === formGenre.trim().toLowerCase()) && (
-                          <CommandGroup heading={locale === "it" ? "Personalizzato" : "Custom"}>
-                            <CommandItem
-                              value={`__custom__${formGenre}`}
-                              onSelect={() => setGenreComboboxOpen(false)}
-                              className="text-amber-400"
-                            >
-                              <span className="text-sm">+ {locale === "it" ? `Usa "${formGenre}"` : `Use "${formGenre}"`}</span>
-                            </CommandItem>
-                          </CommandGroup>
-                        )}
-                        <CommandGroup heading={locale === "it" ? "Generi scrapati" : "Scraped genres"}>
-                          {genres
-                            .filter(g => !formGenre.trim() || g.toLowerCase().includes(formGenre.trim().toLowerCase()))
-                            .map((g) => (
-                              <CommandItem
-                                key={g}
-                                value={g}
-                                onSelect={(v) => {
-                                  setFormGenre(v);
-                                  setGenreComboboxOpen(false);
-                                }}
-                                className="flex items-center gap-2"
-                              >
-                                <Check
-                                  className={`h-3.5 w-3.5 ${formGenre.toLowerCase() === g.toLowerCase() ? "opacity-100" : "opacity-0"}`}
-                                />
-                                <span className="text-sm">{g}</span>
-                              </CommandItem>
-                            ))}
-                          {genres.filter(g => !formGenre.trim() || g.toLowerCase().includes(formGenre.trim().toLowerCase())).length === 0 && (
-                            <CommandEmpty>
-                              {locale === "it" ? "Nessun genere trovato." : "No genre found."}
-                            </CommandEmpty>
-                          )}
-                        </CommandGroup>
-                      </CommandList>
-                    </Command>
-                  </PopoverContent>
-                </Popover>
-              </div>
+              {/* 🔒 Genre rimosso da qui — ora è PRIMA della label (riga 1757) */}
               <div className="space-y-1.5">
                 <UILabel className="text-xs font-mono uppercase text-muted-foreground">
                   BPM
