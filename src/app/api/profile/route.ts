@@ -12,10 +12,13 @@ import { getAdminClient } from "@/lib/supabase-admin";
  */
 
 export async function GET() {
-  const { supabase, email } = await getAdminClient();
+  const { supabase, email, useRls } = await getAdminClient();
   if (!supabase || !email) {
+    console.error("[/api/profile GET] Auth failed — no supabase client or email. Check SUPABASE_SERVICE_ROLE_KEY on Vercel.");
     return NextResponse.json({ error: "Not authenticated" }, { status: 401 });
   }
+
+  console.log(`[/api/profile GET] email=${email} useRls=${useRls}`);
 
   const { data, error } = await supabase
     .from("user_profiles")
@@ -24,7 +27,7 @@ export async function GET() {
     .maybeSingle();
 
   if (error) {
-    console.error("[/api/profile GET]", error);
+    console.error("[/api/profile GET] DB error:", error.message, "(code=" + error.code + ")");
     return NextResponse.json({ error: error.message }, { status: 500 });
   }
 

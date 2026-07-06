@@ -2002,3 +2002,26 @@ Stage Summary:
 - Fix: rileggere useAppStore.getState() dentro il blocco label invece dello snapshot iniziale
 - Fix minimale (13 righe, 1 variabile), nessun cambiamento logica merge → zero rischio regressione
 - Deploy Vercel partirà automaticamente al push
+
+---
+Task ID: emergenza-rls-profilo-vuoto
+Agent: Z-AI (session web-aaf0d6d4)
+Task: Fix emergenza RLS — profilo vuoto + icone label sparite dopo logout/login
+
+Work Log:
+- Allineamento repo: local era indietro a d04d2b7, remote a 45a5fc7. Eseguito git stash + pull per recuperare 3 commit precedenti (c3bfa34 push fix, 45a5fc7 label logos fix, 3f23982 test placeholder).
+- Indagato root cause RLS: letti supabase-schema-fase-c.sql, supabase-admin.ts, auth-options.ts, API route profile/label-data.
+- Diagnosi: policy RLS `FOR ALL USING (user_email = auth.jwt() ->> 'email')` troppo restrittive. Funzionano SOLO con JWT Supabase valido. getAdminClient() tentava JWT poi fallback service_role, MA:
+  1. JWT Supabase scade dopo 1h, non refreshato → getUser() fallisce → fallback
+  2. Se SUPABASE_SERVICE_ROLE_KEY manca su Vercel → fallback null → API 401 → "Profilo vuoto"
+- Fix 1: creato supabase-rls-emergency-fix.sql con policy granularie (SELECT/INSERT/UPDATE/DELETE separate) che permettono auth.role() = 'service_role' O email match. Da eseguire su SQL Editor Supabase.
+- Fix 2: supabase-admin.ts — controlla scadenza JWT (supabaseExpiresAt) PRIMA di usarlo, risparmia getUser() se scaduto, logga errore chiaro se SUPABASE_SERVICE_ROLE_KEY manca.
+- Fix 3: aggiunto logging diagnostico su /api/profile e /api/label-data GET (email, useRls, rows count, error code).
+- Verifica anti-regressione: supabase-admin.ts 14 riferimenti ✅, profile route 10 ✅
+- TypeScript: 2 errori pre-esistenti su session.user (non miei). Build: ✅
+
+Stage Summary:
+- Root cause: RLS policy FOR ALL troppo restrittive + JWT Supabase scaduto + possibile mancanza SUPABASE_SERVICE_ROLE_KEY
+- Fix codice: getAdminClient robusto + logging diagnostico
+- Fix DB: script SQL supabase-rls-emergency-fix.sql (DA ESEGUIRE manualmente su SQL Editor)
+- AZIONE UTENTE OBBLIGATORIA: eseguire supabase-rls-emergency-fix.sql su Supabase SQL Editor + verificare SUPABASE_SERVICE_ROLE_KEY su Vercel

@@ -529,3 +529,17 @@ Se non può dirlo → non ha seguito il protocollo → chiedere all'utente di pr
 - **Fix**: commit `<NEW>` — in `loadFromNewTables` (store.ts), riletto `useAppStore.getState()` all'interno del blocco label (riga 3864) invece di usare lo snapshot `state` iniziale. Questo garantisce che `cleanSeedLabels` contenga le label cloud aggiornate (con imageUrl, slug, beatportId, rankByGenre, etc.) anche se `loadFromCloud` ha completato prima. Il resto del merge preserva tutti i campi Beatport via spread `...l`.
 - **File**: `src/lib/store.ts` (funzione `loadFromNewTables`)
 - **⚠️ LEZIONE**: In `Promise.all` con funzioni che fanno `setState` concorrente, NON catturare lo stato in una variabile all'inizio e riusarla per `setState` alla fine — si ottiene uno snapshot stale che sovrascrive le modifiche parallele. Rileggere `useAppStore.getState()` il più tardi possibile, preferibilmente subito prima del `setState` finale.
+
+### Emergenza RLS: profilo vuoto + icone label sparite dopo logout/login
+- **Sintomo**: Dopo logout/login, la diagnostica mostra "Profilo: vuoto". Bio, link social e icone label sparite. Il database cloud ha i dati (671 label personalizzate, 6 demo) ma il frontend non riesce a leggerli.
+- **Causa**: Le policy RLS su user_profiles, demo_submissions, label_personal_data, pitch_campaigns usavano `USING (user_email = auth.jwt() ->> 'email')` con policy `FOR ALL`. Questo funziona SOLO se il client ha un JWT Supabase valido. `getAdminClient()` tentava prima il JWT Supabase, poi fallback service_role. MA:
+  1. Il JWT Supabase scade dopo 1 ora e NON viene refreshato → `getUser()` fallisce → fallback
+  2. Se `SUPABASE_SERVICE_ROLE_KEY` non è impostato su Vercel → fallback ritorna null → API route 401 → "Profilo vuoto"
+  3. Le policy `FOR ALL` non distinguevano SELECT da INSERT/UPDATE/DELETE
+- **Fix**: commit `<NEW>` —
+  - Creato `supabase-rls-emergency-fix.sql`: policy granularie (SELECT/INSERT/UPDATE/DELETE separate) che permettono `auth.role() = 'service_role'` O `user_email = auth.jwt() ->> 'email'`. Da eseguire sul SQL Editor di Supabase.
+  - Fix `getAdminClient()` (supabase-admin.ts): controlla scadenza JWT PRIMA di usarlo (risparmia getUser() se scaduto), logga errore chiaro se `SUPABASE_SERVICE_ROLE_KEY` manca.
+  - Aggiunto logging diagnostico su `/api/profile` e `/api/label-data` GET (email, useRls, rows count, error code) per identificare future regressioni.
+- **File**: `src/lib/supabase-admin.ts`, `src/app/api/profile/route.ts`, `src/app/api/label-data/route.ts`, `supabase-rls-emergency-fix.sql`
+- **⚠️ LEZIONE**: RLS con `auth.jwt() ->> 'email'` funziona SOLO con JWT Supabase valido. Le API route che usano service_role bypassano RLS, MA il service_role deve essere configurato come fallback esplicito. Aggiungere SEMPRE `OR auth.role() = 'service_role'` nelle policy RLS per defense-in-depth. Controllare scadenza token prima di usarlo per evitare chiamate inutili.
+- **⚠️ AZIONE UTENTE OBBLIGATORIA**: Eseguire `supabase-rls-emergency-fix.sql` sul SQL Editor di Supabase (Dashboard → SQL Editor → incolla → Run). Senza questo, il fix al codice non basta se manca SUPABASE_SERVICE_ROLE_KEY.

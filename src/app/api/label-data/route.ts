@@ -16,8 +16,9 @@ import { getAdminClient } from "@/lib/supabase-admin";
  */
 
 export async function GET(req: NextRequest) {
-  const { supabase, email } = await getAdminClient();
+  const { supabase, email, useRls } = await getAdminClient();
   if (!supabase || !email) {
+    console.error("[/api/label-data GET] Auth failed — no supabase client or email. Check SUPABASE_SERVICE_ROLE_KEY on Vercel.");
     return NextResponse.json({ error: "Not authenticated" }, { status: 401 });
   }
 
@@ -33,7 +34,7 @@ export async function GET(req: NextRequest) {
       .maybeSingle();
 
     if (error) {
-      console.error("[/api/label-data GET single]", error);
+      console.error("[/api/label-data GET single] DB error:", error.message, "(code=" + error.code + ")");
       return NextResponse.json({ error: error.message }, { status: 500 });
     }
     return NextResponse.json({ label_data: data });
@@ -45,10 +46,11 @@ export async function GET(req: NextRequest) {
     .eq("user_email", email);
 
   if (error) {
-    console.error("[/api/label-data GET all]", error);
+    console.error("[/api/label-data GET all] DB error:", error.message, "(code=" + error.code + ")");
     return NextResponse.json({ error: error.message }, { status: 500 });
   }
 
+  console.log(`[/api/label-data GET all] email=${email} useRls=${useRls} returned=${data?.length || 0} rows`);
   return NextResponse.json({ labels: data || [] });
 }
 
