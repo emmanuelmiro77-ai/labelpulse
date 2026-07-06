@@ -1640,7 +1640,7 @@ export const useAppStore = create<AppState>()(
           is_custom: true,
           custom_name: newLabel.name,
           custom_genre: newLabel.genre,
-        }).catch(() => {/* silent */});
+        }).catch((err) => console.error("[cloud sync] failed:", err));
         // Track first label added (only once per user — checked client-side via flag)
         if (typeof window !== "undefined") {
           const firstLabelKey = "lp_first_label_tracked";
@@ -1678,7 +1678,7 @@ export const useAppStore = create<AppState>()(
             is_custom: updated.isCustom || false,
             custom_name: updated.isCustom ? updated.name : undefined,
             custom_genre: updated.isCustom ? updated.genre : undefined,
-          }).catch(() => {/* silent */});
+          }).catch((err) => console.error("[cloud sync] failed:", err));
         }
       },
 
@@ -1723,7 +1723,7 @@ export const useAppStore = create<AppState>()(
         }));
         syncToCloud();
         // 🔒 FASE C.4: dual write — delete from new dedicated table
-        apiDeleteLabelData(id).catch(() => {/* silent */});
+        apiDeleteLabelData(id).catch((err) => console.error("[cloud sync] failed:", err));
       },
 
       addDemo: (demo) => {
@@ -1748,7 +1748,7 @@ export const useAppStore = create<AppState>()(
           pitch_tracks: newDemo.pitchTracks,
           notes: newDemo.notes,
           parent_release_id: newDemo.parentReleaseId,
-        }).catch(() => {/* silent — logged in api-client */});
+        }).catch((err) => console.error("[cloud sync] failed:", err));
         // Track first demo added (only once per user)
         if (typeof window !== "undefined") {
           const firstDemoKey = "lp_first_demo_tracked";
@@ -1785,7 +1785,7 @@ export const useAppStore = create<AppState>()(
             pitch_tracks: updated.pitchTracks,
             notes: updated.notes,
             parent_release_id: updated.parentReleaseId,
-          }).catch(() => {/* silent */});
+          }).catch((err) => console.error("[cloud sync] failed:", err));
         }
       },
 
@@ -1796,7 +1796,7 @@ export const useAppStore = create<AppState>()(
         }));
         syncToCloud();
         // 🔒 FASE C.3: dual write — also delete from new dedicated table
-        apiDeleteDemo(id).catch(() => {/* silent */});
+        apiDeleteDemo(id).catch((err) => console.error("[cloud sync] failed:", err));
       },
 
       addRelease: (release) => {
@@ -1821,7 +1821,7 @@ export const useAppStore = create<AppState>()(
           genre: newRelease.genre,
           notes: newRelease.notes,
           ep_soundcloud_url: newRelease.epSoundCloudUrl,
-        }).catch(() => {/* silente */});
+        }).catch((err) => console.error("[cloud sync] failed:", err));
         return id;
       },
       updateRelease: (id, updates) => {
@@ -1843,7 +1843,7 @@ export const useAppStore = create<AppState>()(
             genre: updated.genre,
             notes: updated.notes,
             ep_soundcloud_url: updated.epSoundCloudUrl,
-          }).catch(() => {/* silente */});
+          }).catch((err) => console.error("[cloud sync] failed:", err));
         }
       },
       deleteRelease: (id) => {
@@ -1857,7 +1857,7 @@ export const useAppStore = create<AppState>()(
         }));
         syncToCloud();
         // Scrittura speculare nel cloud per la cancellazione
-        apiDeleteRelease(id).catch(() => {/* silente */});
+        apiDeleteRelease(id).catch((err) => console.error("[cloud sync] failed:", err));
       },
 
       // ==================== SAVED PITCHES (Bozze) ====================
@@ -1882,7 +1882,7 @@ export const useAppStore = create<AppState>()(
           ep_link_mode: newPitch.epLinkMode,
           ep_soundcloud_url: newPitch.epSoundCloudUrl,
           status: "draft",
-        }).catch(() => {/* silent */});
+        }).catch((err) => console.error("[cloud sync] failed:", err));
         return id;
       },
       updateSavedPitch: (id, updates) => {
@@ -1905,7 +1905,7 @@ export const useAppStore = create<AppState>()(
             pitch_tracks: updated.pitchTracks,
             ep_link_mode: updated.epLinkMode,
             ep_soundcloud_url: updated.epSoundCloudUrl,
-          }).catch(() => {/* silent */});
+          }).catch((err) => console.error("[cloud sync] failed:", err));
         }
       },
       deleteSavedPitch: (id) => {
@@ -1915,7 +1915,7 @@ export const useAppStore = create<AppState>()(
         }));
         syncToCloud();
         // 🔒 FASE C.5: dual write — delete from pitch_campaigns
-        apiDeletePitch(id).catch(() => {/* silent */});
+        apiDeletePitch(id).catch((err) => console.error("[cloud sync] failed:", err));
       },
 
       // ==================== SENT CAMPAIGNS (Inviati) ====================
@@ -1942,7 +1942,7 @@ export const useAppStore = create<AppState>()(
           status: "sent",
           sent_at: now,
           sent_method: newCampaign.sentMethod,
-        }).catch(() => {/* silent */});
+        }).catch((err) => console.error("[cloud sync] failed:", err));
         return id;
       },
       deleteSentCampaign: (id) => {
@@ -1952,7 +1952,7 @@ export const useAppStore = create<AppState>()(
         }));
         syncToCloud();
         // 🔒 FASE C.5: dual write — delete from pitch_campaigns
-        apiDeletePitch(id).catch(() => {/* silent */});
+        apiDeletePitch(id).catch((err) => console.error("[cloud sync] failed:", err));
       },
 
       advanceDemoStatus: (id) => {
@@ -1996,6 +1996,14 @@ export const useAppStore = create<AppState>()(
           lastSavedAt: new Date().toISOString(),
         }));
         syncToCloud();
+        // 🔒 FIX: sincronizza le risposte al cloud (prima mancava!)
+        const updatedDemo = useAppStore.getState().demos.find((d) => d.id === demoId);
+        if (updatedDemo) {
+          apiUpdateDemo(demoId, {
+            responses: updatedDemo.responses,
+            status: updatedDemo.status,
+          }).catch((err) => console.error("[addDemoResponse] cloud sync failed:", err));
+        }
       },
 
       // 🔒 Task B: Rimuovi una risposta dallo storico
@@ -2010,6 +2018,14 @@ export const useAppStore = create<AppState>()(
           lastSavedAt: new Date().toISOString(),
         }));
         syncToCloud();
+        // 🔒 FIX: sincronizza le risposte al cloud (prima mancava!)
+        const updatedDemo = useAppStore.getState().demos.find((d) => d.id === demoId);
+        if (updatedDemo) {
+          apiUpdateDemo(demoId, {
+            responses: updatedDemo.responses,
+            status: updatedDemo.status,
+          }).catch((err) => console.error("[removeDemoResponse] cloud sync failed:", err));
+        }
       },
 
       setActiveTab: (tab) => set({ activeTab: tab }),
@@ -2642,6 +2658,12 @@ export const useAppStore = create<AppState>()(
             }).catch(() => {});
           }
 
+          // 🔒 FIX: dopo l'import delle classifiche, pusha tutto al cloud.
+          // L'import può aver aggiunto rankByGenre, pointsByGenre, imageUrl,
+          // rankingSnapshots. Senza questo push, i dati restano solo in locale.
+          syncToCloud();
+          pushRankingsToCloud();
+
           return true;
         } catch {
           return false;
@@ -3046,6 +3068,35 @@ useAppStore.subscribe((state, prevState) => {
     rankingsUpdatedAt: state.rankingsUpdatedAt,
     locale: state.locale,
   });
+});
+
+// 🔒 SICUREZZA GLOBALE: se le label con classifiche (rankByGenre) cambiano,
+// triggera pushRankingsToCloud (debounced 5s). Questo garantisce che OGNI
+// modifica alle classifiche (import, edit, realtime update) vada al cloud,
+// anche se l'azione specifica dimentica di chiamare pushRankingsToCloud.
+let _rankingsPushTimer: ReturnType<typeof setTimeout> | null = null;
+let _prevLabelsWithRankCount = 0;
+
+useAppStore.subscribe((state) => {
+  if (typeof window === "undefined") return;
+  if (isApplyingRemoteUpdate()) return; // non triggerare su update realtime
+
+  const labelsWithRankCount = state.labels.filter(
+    (l: any) => l.rankByGenre && Object.keys(l.rankByGenre).length > 0
+  ).length;
+
+  // Solo se il numero di label con classifiche è cambiato
+  if (labelsWithRankCount === _prevLabelsWithRankCount) return;
+  _prevLabelsWithRankCount = labelsWithRankCount;
+
+  // Debounce 5s per non spammare il cloud ad ogni singola modifica
+  if (_rankingsPushTimer) clearTimeout(_rankingsPushTimer);
+  _rankingsPushTimer = setTimeout(() => {
+    if (!isApplyingRemoteUpdate()) {
+      console.log(`[auto-cloud] Labels with rank changed (${labelsWithRankCount}) — pushing to cloud`);
+      pushRankingsToCloud();
+    }
+  }, 5000);
 });
 
 // Flush snapshot prima della chiusura dell'app
