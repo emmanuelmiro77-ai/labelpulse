@@ -111,55 +111,97 @@ export function useAuthEffect(): void {
     // Da ora, ogni modifica allo stato viene salvata su IndexedDB keyed per email.
     setAutoBackupEmail(email);
 
-    // 🔒 CLOUD-FIRST: fetcha TUTTO dal cloud e REPLICE lo stato locale.
+    // 🔒 CLOUD-FIRST PURO: fetcha TUTTO dal cloud e REPLICE lo stato locale.
     // Niente merge, niente union. Il cloud è l'unica verità.
+    // Se il cloud fallisce o ritorna vuoto, fallback su auto-backup IndexedDB.
     console.info("[LabelPulse Auth] ☁️ Syncing with Supabase...");
 
     // 🔒 CRITICAL: Pausa l'outbox PRIMA del fetch per evitare race condition.
     pauseOutboxFlush();
 
-    Promise.all([
+    // 🔒 FIX COMMIT 3: Timeout di 15s sul cloud sync. Se Supabase non risponde
+    // (rete lenta, Vercel cold start, Supabase down), fallback su snapshot locale
+    // invece di bloccare l'app indefinitamente.
+    const cloudSyncPromise = Promise.all([
       loadFromCloud(),
       loadFromNewTables(),
-    ]).then(async () => {
-      console.info("[LabelPulse Auth] ✅ Cloud sync complete. State replaced.");
-      useAppStore.setState({ hasRehydrated: true, hasCloudSynced: true });
+    ]);
 
-      // 🔒 AUTO-BACKUP FALLBACK: se il cloud sync ha ritornato stati vuoti
-      // (0 label personalizzate, profilo vuoto, 0 demo), ripristina dall'ultimo snapshot.
-      const state = useAppStore.getState();
-      const hasUserData =
-        (state.userProfile?.artistName && state.userProfile.artistName.trim() !== "") ||
-        (state.userProfile?.bio && state.userProfile.bio.trim() !== "") ||
-        state.demos.length > 0 ||
-        state.savedPitches.length > 0 ||
-        state.sentCampaigns.length > 0;
+    const timeoutPromise = new Promise<never>((_, reject) => {
+      setTimeout(() => reject(new Error("Cloud sync timeout (15s)")), 15000);
+    });
 
-      if (!hasUserData) {
-        console.warn("[LabelPulse Auth] ⚠️ Cloud sync returned empty user data — trying snapshot restore");
+    Promise.race([cloudSyncPromise, timeoutPromise])
+      .then(async () => {
+        console.info("[LabelPulse Auth] ✅ Cloud sync complete. State replaced.");
+
+        // 🔒 DIAGNOSTICA: logga cosa è arrivato dal cloud
+        const state = useAppStore.getState();
+        const labelsWithUserData = state.labels.filter((l: any) =>
+          (l.emails && l.emails.length > 0) ||
+          (l.notes && l.notes.trim() !== "") ||
+          (l.website && l.website.trim() !== "") ||
+          l.isCustom === true
+        ).length;
+
+        console.log("[LabelPulse Auth] Cloud sync result:", {
+          labels: state.labels.length,
+          labelsWithUserData,
+          demos: state.demos.length,
+          savedPitches: state.savedPitches.length,
+          sentCampaigns: state.sentCampaigns.length,
+          hasArtistName: !!state.userProfile?.artistName,
+          hasBio: !!state.userProfile?.bio,
+          hasPhoto: !!state.userProfile?.photoUrl,
+          hasScLink: !!state.userProfile?.scLink,
+          rankingSnapshots: state.rankingSnapshots?.length || 0,
+        });
+
+        useAppStore.setState({ hasRehydrated: true, hasCloudSynced: true });
+
+        // 🔒 AUTO-BACKUP FALLBACK: se il cloud sync ha ritornato stati vuoti
+        // per i dati PERSONALI dell'utente (profilo vuoto, 0 demo, 0 label
+        // personalizzate, 0 pitch), ripristina dall'ultimo snapshot.
+        const hasUserData =
+          (state.userProfile?.artistName && state.userProfile.artistName.trim() !== "") ||
+          (state.userProfile?.bio && state.userProfile.bio.trim() !== "") ||
+          (state.userProfile?.photoUrl && state.userProfile.photoUrl.trim() !== "") ||
+          (state.userProfile?.scLink && state.userProfile.scLink.trim() !== "") ||
+          state.demos.length > 0 ||
+          labelsWithUserData > 0 ||
+          state.savedPitches.length > 0 ||
+          state.sentCampaigns.length > 0;
+
+        if (!hasUserData) {
+          console.warn("[LabelPulse Auth] ⚠️ Cloud sync returned empty user data — trying snapshot restore");
+          const restored = await restoreFromSnapshot(email);
+          if (restored) {
+            console.info("[LabelPulse Auth] ✅ State restored from local snapshot");
+          } else {
+            console.warn("[LabelPulse Auth] No snapshot available for restore — user is new or first device");
+          }
+        }
+
+        // 🔒 Riprendi l'outbox — i dati cloud sono arrivati
+        resumeOutboxFlush();
+        loadArtistsOnBoot().catch(() => {});
+      })
+      .catch(async (err) => {
+        console.error("[LabelPulse Auth] ❌ Cloud sync failed:", err);
+        // 🔒 AUTO-BACKUP FALLBACK: se il cloud sync fallisce o va in timeout,
+        // ripristina dall'ultimo snapshot locale per non bloccare l'utente
+        console.info("[LabelPulse Auth] 🔄 Attempting snapshot restore due to cloud failure");
         const restored = await restoreFromSnapshot(email);
         if (restored) {
-          console.info("[LabelPulse Auth] ✅ State restored from local snapshot");
+          console.info("[LabelPulse Auth] ✅ State restored from local snapshot after cloud failure");
         } else {
-          console.warn("[LabelPulse Auth] No snapshot available for restore");
+          console.warn("[LabelPulse Auth] No snapshot available — starting with seed data");
         }
-      }
-
-      // 🔒 Riprendi l'outbox — i dati cloud sono arrivati
-      resumeOutboxFlush();
-      loadArtistsOnBoot().catch(() => {});
-    }).catch(async (err) => {
-      console.error("[LabelPulse Auth] ❌ Cloud sync failed:", err);
-      // 🔒 AUTO-BACKUP FALLBACK: se il cloud sync fallisce completamente,
-      // ripristina dall'ultimo snapshot locale
-      const restored = await restoreFromSnapshot(email);
-      if (restored) {
-        console.info("[LabelPulse Auth] ✅ State restored from local snapshot after cloud failure");
-      }
-      useAppStore.setState({ hasRehydrated: true, hasCloudSynced: true });
-      // 🔒 Riprendi l'outbox anche in caso di fallimento
-      resumeOutboxFlush();
-    });
+        useAppStore.setState({ hasRehydrated: true, hasCloudSynced: true });
+        // 🔒 Riprendi l'outbox anche in caso di fallimento
+        // (le scritture pendenti verranno ritentate quando la rete torna)
+        resumeOutboxFlush();
+      });
   }, [status, session?.user?.email]);
 
   // Step 3: on logout, wipe ALL local data so the next user starts fresh.
