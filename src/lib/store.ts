@@ -398,34 +398,18 @@ function buildLabelsFromData(): Label[] {
   }));
 }
 
-// ==================== ROBUST STORAGE ====================
-// Custom storage with data protection:
-// 1. Primary localStorage key
-// 2. Backup localStorage key (written IMMEDIATELY on every save — no debounce)
-// 3. Data integrity check on load (auto-recover from backup if data loss detected)
-// 4. Rehydration guard: blocks ALL writes until Zustand persist loads data
+// ==================== STORAGE (cloud-first, IDB-only) ====================
+// 🔒 FIX 2026-07-07: Rimossi tutti i backup localStorage (PRIMARY, BACKUP,
+// SNAPSHOTS_BACKUP, PROFILE_BACKUP). Causevano race condition, QuotaExceededError
+// su iOS, e conflitti con i dati cloud. Ora:
+//   - Zustand persist usa SOLO IndexedDB (idbStorage)
+//   - Auto-backup per-email su IndexedDB (auto-backup.ts) come fallback
+//   - Cloud (Supabase) è la fonte di verità
+//   - localStorage conserva solo OWNER_KEY (multi-user isolation) + config/auth
 
-const PRIMARY_KEY = "labelpulse-storage";
-const BACKUP_KEY = "labelpulse-storage-backup";
-// CRITICAL: dedicated, append-only backup slot for rankingSnapshots.
-// This is the user's "storico caricamenti" — months of Beatport/Beatstats imports.
-// We persist it SEPARATELY from the main store so that even if the main store
-// (or its backup) gets wiped by a bad cloud sync, a rehydrate, a migration bug,
-// or a localStorage quota error, the snapshots survive in their own slot.
-const SNAPSHOTS_BACKUP_KEY = "labelpulse-snapshots-backup";
-
-// ==================== USER PROFILE BACKUP (SIDE CAR) ====================
-// Like SNAPSHOTS_BACKUP_KEY but for the user profile (artistName, bio, email,
-// scLink, photoUrl, links, cyaniteApiToken, supabaseUrl, supabaseAnonKey).
-//
-// This is the user's identity card. Even if cloud sync wipes the main store
-// (rare but has happened), or the user logs in from a new device and the
-// cloud has nothing yet, the user can still recover their profile from this
-// sidecar slot.
-//
-// Strategy: write on every setItem (merged, never overwrite), never clear
-// except via explicit reset.
-const PROFILE_BACKUP_KEY = "labelpulse-profile-backup";
+const PRIMARY_KEY = "labelpulse-storage"; // legacy, kept for migration cleanup only
+const SNAPSHOTS_BACKUP_KEY = "labelpulse-snapshots-backup"; // legacy, read-only per diagnostica
+const PROFILE_BACKUP_KEY = "labelpulse-profile-backup"; // legacy, read-only per diagnostica
 
 // ==================== MULTI-USER ISOLATION (2026-06-26) ====================
 // CRITICAL FIX: previously localStorage was GLOBAL — the same key
@@ -484,14 +468,15 @@ export function setStorageOwner(email: string | null): void {
  *      (different user logging in on the same device).
  *   2. On explicit logout, so the next user starts fresh.
  *
- * Removes:
- *   - Primary localStorage key (full Zustand state)
- *   - Backup localStorage key
- *   - Snapshots backup key
- *   - Profile backup (sidecar) key
- *   - Owner key itself
+ * 🔒 FIX 2026-07-07: Rimossi i backup localStorage (BACKUP_KEY non esiste più).
+ * Ora pulisce solo:
+ *   - OWNER_KEY (multi-user isolation)
+ *   - Legacy keys (per cleanup di installazioni vecchie)
  *   - IndexedDB artists store
  *   - Zustand in-memory state (reset to seed defaults)
+ *
+ * NOTA: NON cancella gli snapshot auto-backup (labelpulse-snapshot-<email>)
+ * su IndexedDB — quelli sopravvivono per il ripristino al prossimo login.
  *
  * After this, the app is in a "fresh install" state. The caller is
  * responsible for triggering cloud sync (loadFromCloud) to repopulate
@@ -500,18 +485,14 @@ export function setStorageOwner(email: string | null): void {
 export function clearAllLocalData(): void {
   console.info("[LabelPulse Storage] Clearing ALL local data (multi-user isolation)");
   try {
-    localStorage.removeItem(PRIMARY_KEY);
-    localStorage.removeItem(BACKUP_KEY);
-    localStorage.removeItem(SNAPSHOTS_BACKUP_KEY);
-    localStorage.removeItem(PROFILE_BACKUP_KEY);
+    // 🔒 FIX: rimuovi solo OWNER_KEY + legacy keys. I backup localStorage
+    // sono stati rimossi (non esistono più BACKUP_KEY, ma puliamo le
+    // chiavi legacy per installazioni vecchie).
     localStorage.removeItem(OWNER_KEY);
-    // ⚠️ CRITICAL (regression caught by store.isolation.test.ts, 2026-06-25):
-    // Also remove the artists sidecar. clearArtistsIDB() below only clears
-    // IndexedDB — the localStorage mirror "labelpulse-artists-backup" was
-    // left behind, leaking the previous user's saved artists into the new
-    // user's session on next reload.
-    // Note: ARTISTS_SIDECAR_KEY is defined later in the file (hoisting does
-    // NOT apply to `const`), so we use the literal string here.
+    localStorage.removeItem(PRIMARY_KEY); // legacy cleanup
+    localStorage.removeItem(SNAPSHOTS_BACKUP_KEY); // legacy cleanup
+    localStorage.removeItem(PROFILE_BACKUP_KEY); // legacy cleanup
+    localStorage.removeItem("labelpulse-storage-backup"); // legacy BACKUP_KEY cleanup
     localStorage.removeItem("labelpulse-artists-backup");
   } catch (e) {
     console.warn("[LabelPulse Storage] Error removing localStorage keys:", e);
@@ -792,17 +773,8 @@ function getUserEditCountFromRaw(raw: string | null): number {
   return countUserEditedLabels(labels);
 }
 
-// (debounced backup removed — we now write backup IMMEDIATELY on every write for maximum data safety)
-
-// Track backup write failures so we can stop spamming the console when
-// localStorage is full. After MAX_BACKUP_FAILURES consecutive QuotaExceeded
-// errors, we disable the backup entirely (until next page reload) and only
-// log a single warning. The primary key keeps being written normally.
-// The backup is a safety net — if it can't fit, we can't do anything about
-// it from the app, so we don't keep retrying every keystroke.
-const MAX_BACKUP_FAILURES = 3;
-let _backupFailures = 0;
-let _backupDisabled = false;
+// 🔒 FIX 2026-07-07: Rimossi MAX_BACKUP_FAILURES, _backupFailures, _backupDisabled.
+// Non servono più — i backup localStorage sono stati eliminati.
 
 // 🔒 Task 3: Adattatore IndexedDB per Zustand persist.
 // Sostituisce localStorage (5MB limite iOS) con IndexedDB (50MB+ su iOS).
@@ -869,249 +841,19 @@ const idbStorage: StateStorage = {
   },
 };
 
-const robustStorage: StateStorage = {
-  getItem: (name: string): string | null => {
-    const primaryRaw = safeLocalStorageGet(PRIMARY_KEY);
-    const backupRaw = safeLocalStorageGet(BACKUP_KEY);
-
-    const primaryData = safeJsonParse(primaryRaw);
-    const backupData = safeJsonParse(backupRaw);
-
-    let result: string | null = null;
-    let usedSidecarSnapshots = false;
-
-    // If primary is missing/corrupt, try backup
-    if (!primaryData) {
-      if (backupData) {
-        console.warn("[LabelPulse Storage] Primary data missing/corrupt, restoring from backup");
-        if (backupRaw) safeLocalStorageSet(PRIMARY_KEY, backupRaw);
-        result = backupRaw;
-      }
-      // Both empty — first visit, result stays null
-    } else if (backupData) {
-      // Both exist — check for data loss
-      const primaryLabelCount = getTotalLabelCount(primaryData);
-      const backupLabelCount = getTotalLabelCount(backupData);
-      const primaryUserEdits = primaryData.state?.labels
-        ? countUserEditedLabels(primaryData.state.labels)
-        : countUserEditedLabels(primaryData.labels || []);
-      const backupUserEdits = backupData.state?.labels
-        ? countUserEditedLabels(backupData.state.labels)
-        : countUserEditedLabels(backupData.labels || []);
-
-      // If primary has fewer labels than backup AND backup has more or equal user data
-      if (backupLabelCount > primaryLabelCount && backupUserEdits >= primaryUserEdits) {
-        console.warn(
-          `[LabelPulse Storage] DATA LOSS DETECTED! Primary: ${primaryLabelCount} labels (${primaryUserEdits} edited), Backup: ${backupLabelCount} labels (${backupUserEdits} edited). Restoring from backup.`
-        );
-        if (backupRaw) safeLocalStorageSet(PRIMARY_KEY, backupRaw);
-        result = backupRaw;
-      } else if (backupUserEdits > primaryUserEdits && backupLabelCount >= primaryLabelCount) {
-        // If primary has fewer user edits than backup, use backup
-        console.warn(
-          `[LabelPulse Storage] More user data in backup (${backupUserEdits} vs ${primaryUserEdits} edited labels). Restoring from backup.`
-        );
-        if (backupRaw) safeLocalStorageSet(PRIMARY_KEY, backupRaw);
-        result = backupRaw;
-      } else {
-        result = primaryRaw;
-      }
-    } else {
-      // Primary exists, no backup — normal case
-      result = primaryRaw;
-    }
-
-    // CRITICAL SAFETY NET for rankingSnapshots:
-    // If the chosen result has 0 snapshots but the dedicated SNAPSHOTS_BACKUP_KEY
-    // has snapshots, splice them in. This handles the scenario where the main
-    // store got wiped (bad cloud sync, migration bug, partial overwrite) but the
-    // snapshots sidecar survived. Without this, the user loses months of
-    // "storico caricamenti" and the Classifiche page resets to "first time".
-    try {
-      const currentSnaps = extractSnapshotsFromRaw(result);
-      const sidecarRaw = safeLocalStorageGet(SNAPSHOTS_BACKUP_KEY);
-      const sidecarSnaps = extractSnapshotsFromRaw(sidecarRaw);
-      if (sidecarSnaps.length > 0 && sidecarSnaps.length > currentSnaps.length) {
-        console.warn(
-          `[LabelPulse Storage] SNAPSHOTS RECOVERY: result has ${currentSnaps.length} snapshots, sidecar has ${sidecarSnaps.length}. Merging sidecar into result.`
-        );
-        const mergedSnaps = mergeSnapshots(currentSnaps, sidecarSnaps);
-        const parsed = result ? safeJsonParse(result) : {};
-        if (parsed && typeof parsed === "object") {
-          if (parsed.state && typeof parsed.state === "object") {
-            parsed.state.rankingSnapshots = mergedSnaps;
-          } else {
-            parsed.rankingSnapshots = mergedSnaps;
-          }
-          result = JSON.stringify(parsed);
-          usedSidecarSnapshots = true;
-        }
-      }
-    } catch (e) {
-      console.warn("[LabelPulse Storage] Snapshots sidecar recovery failed:", e);
-    }
-
-    // CRITICAL SAFETY NET for userProfile:
-    // Same logic as snapshots. If the chosen result has an empty/seed profile
-    // but PROFILE_BACKUP_KEY has real data, splice it in. This is the user's
-    // identity card — losing artistName, bio, email, links is catastrophic.
-    try {
-      const currentProfile = extractProfileFromRaw(result);
-      const sidecarProfile = extractProfileFromRaw(safeLocalStorageGet(PROFILE_BACKUP_KEY));
-      if (sidecarProfile && !currentProfile) {
-        console.warn(
-          `[LabelPulse Storage] PROFILE RECOVERY: result has empty profile, sidecar has data (artistName=${!!sidecarProfile.artistName}, bio=${!!sidecarProfile.bio}). Merging sidecar into result.`
-        );
-        const parsed = result ? safeJsonParse(result) : {};
-        if (parsed && typeof parsed === "object") {
-          if (parsed.state && typeof parsed.state === "object") {
-            parsed.state.userProfile = sidecarProfile;
-          } else {
-            parsed.userProfile = sidecarProfile;
-          }
-          result = JSON.stringify(parsed);
-        }
-      } else if (sidecarProfile && currentProfile) {
-        // Both have data — merge (sidecar fills empty fields in current)
-        const mergedProfile = mergeProfiles(sidecarProfile, currentProfile);
-        const parsed = result ? safeJsonParse(result) : {};
-        if (parsed && typeof parsed === "object" && mergedProfile) {
-          if (parsed.state && typeof parsed.state === "object") {
-            parsed.state.userProfile = mergedProfile;
-          } else {
-            parsed.userProfile = mergedProfile;
-          }
-          result = JSON.stringify(parsed);
-        }
-      }
-    } catch (e) {
-      console.warn("[LabelPulse Storage] Profile sidecar recovery failed:", e);
-    }
-
-    // CRITICAL: Mark rehydrated BEFORE returning — Zustand will call setItem with
-    // merged data immediately after this getItem returns, and we MUST allow that write.
-    // This ensures seed data (initial state) writes are blocked, but merged data writes pass.
-    _rehydrated = true;
-
-    if (usedSidecarSnapshots) {
-      console.info("[LabelPulse Storage] rankingSnapshots restored from sidecar backup.");
-    }
-
-    return result;
-  },
-
-  setItem: (name: string, value: string): void => {
-    // REHYDRATION GUARD: Block ALL writes before Zustand persist has loaded data.
-    // Before rehydration, the store only has seed data — writing it would overwrite
-    // any user data in localStorage. After rehydration, ALL writes are legitimate
-    // (user actions, repairs, imports, etc.) and must ALWAYS be saved.
-    if (!_rehydrated) {
-      console.warn(
-        `[LabelPulse Storage] BLOCKED pre-rehydration write — protecting user data in localStorage`
-      );
-      return;
-    }
-
-    // Write to primary immediately
-    const primaryOk = safeLocalStorageSet(PRIMARY_KEY, value);
-
-    // Write to backup IMMEDIATELY (no debounce) for maximum data safety.
-    // Previous 60s debounce caused data loss if browser crashed before backup was written.
-    // THROTTLE: if backup has failed MAX_BACKUP_FAILURES times in a row (usually
-    // because localStorage quota is exceeded — common when the user has 1900+
-    // labels with user data), stop retrying until next page reload. We log a
-    // single warning instead of spamming console.error on every keystroke.
-    if (!_backupDisabled) {
-      const backupOk = safeLocalStorageSet(BACKUP_KEY, value);
-      if (!backupOk) {
-        _backupFailures += 1;
-        if (_backupFailures >= MAX_BACKUP_FAILURES) {
-          _backupDisabled = true;
-          console.warn(
-            `[LabelPulse Storage] Backup disabled after ${_backupFailures} consecutive failures (localStorage quota exceeded). Primary storage is still working. Consider exporting a manual backup from the Backup Dati button.`
-          );
-        }
-      } else if (_backupFailures > 0) {
-        // Reset on success — transient failure recovered
-        _backupFailures = 0;
-      }
-    }
-
-    // CRITICAL: also persist rankingSnapshots to a dedicated slot.
-    // This is the user's "storico caricamenti" — months of imports that cannot
-    // be regenerated. Keeping it in a separate key means even a catastrophic
-    // main-store wipe (bad cloud sync, migration bug, quota error) leaves the
-    // snapshots recoverable.
-    try {
-      const snaps = extractSnapshotsFromRaw(value);
-      if (snaps.length > 0) {
-        // Merge with whatever's already in the snapshots slot — NEVER overwrite
-        // existing snapshots with fewer snapshots (would happen if the current
-        // write had a partial/empty snapshot array due to some upstream bug).
-        const existing = extractSnapshotsFromRaw(safeLocalStorageGet(SNAPSHOTS_BACKUP_KEY));
-        const merged = mergeSnapshots(existing, snaps);
-        safeLocalStorageSet(
-          SNAPSHOTS_BACKUP_KEY,
-          JSON.stringify(merged)
-        );
-      }
-    } catch (e) {
-      console.warn("[LabelPulse Storage] Snapshots-sidecar write failed:", e);
-    }
-
-    // CRITICAL: also persist userProfile to a dedicated slot.
-    // Same pattern as snapshots. The profile is the user's identity card —
-    // artistName, bio, email, social links, photo. We can NEVER lose this,
-    // even if cloud sync wipes the main store.
-    try {
-      const profile = extractProfileFromRaw(value);
-      if (profile) {
-        const existing = extractProfileFromRaw(safeLocalStorageGet(PROFILE_BACKUP_KEY));
-        const merged = mergeProfiles(existing, profile);
-        if (merged) {
-          safeLocalStorageSet(
-            PROFILE_BACKUP_KEY,
-            JSON.stringify({ userProfile: merged })
-          );
-        }
-      }
-    } catch (e) {
-      console.warn("[LabelPulse Storage] Profile-sidecar write failed:", e);
-    }
-
-    if (!primaryOk) {
-      console.error("[LabelPulse Storage] Primary write failed!");
-    }
-  },
-
-  removeItem: (name: string): void => {
-    safeLocalStorageRemove(PRIMARY_KEY);
-    safeLocalStorageRemove(BACKUP_KEY);
-    // NOTE: do NOT remove SNAPSHOTS_BACKUP_KEY or PROFILE_BACKUP_KEY here.
-    // These are the user's permanent records (months of ranking history +
-    // artist identity) — clearing the main store should NEVER nuke them.
-    // The only way to clear them is an explicit user action ("reset all data"
-    // button) which calls safeLocalStorageRemove directly.
-  },
-};
+// 🔒 FIX 2026-07-07: robustStorage RIMOSSO. Ora usiamo idbStorage direttamente.
+// I backup localStorage (BACKUP_KEY, SNAPSHOTS_BACKUP_KEY, PROFILE_BACKUP_KEY)
+// sono stati eliminati perché cause di race condition e QuotaExceededError.
+// L'auto-backup su IndexedDB (auto-backup.ts) è il fallback per il cloud.
+const robustStorage = idbStorage;
 
 /**
  * Force-write a backup immediately (e.g., on visibility change or before unload).
- * Since backup is now written on every setItem, this is a safety net.
+ * 🔒 FIX 2026-07-07: Ora è no-op. L'auto-backup su IndexedDB (auto-backup.ts)
+ * gestisce il flush automatico. I backup localStorage sono stati rimossi.
  */
 export function forceBackupNow(): void {
-  if (typeof window === "undefined") return;
-  const primaryRaw = safeLocalStorageGet(PRIMARY_KEY);
-  if (primaryRaw) {
-    safeLocalStorageSet(BACKUP_KEY, primaryRaw);
-  }
-  // Also touch the snapshots sidecar so it stays warm.
-  const snaps = extractSnapshotsFromRaw(primaryRaw);
-  if (snaps.length > 0) {
-    const existing = extractSnapshotsFromRaw(safeLocalStorageGet(SNAPSHOTS_BACKUP_KEY));
-    const merged = mergeSnapshots(existing, snaps);
-    safeLocalStorageSet(SNAPSHOTS_BACKUP_KEY, JSON.stringify(merged));
-  }
+  // No-op — auto-backup.ts handle this via flushSnapshot()
 }
 
 /**
