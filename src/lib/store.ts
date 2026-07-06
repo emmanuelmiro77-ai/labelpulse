@@ -8,6 +8,7 @@ import labelData from "./labels-data.json";
 import { saveStateToCloud, loadStateFromCloud, isSupabaseConfigured, isApplyingRemoteUpdate, markLocalProfileEdit } from "./supabase";
 import { saveArtistsToIDB, loadArtistsFromIDB, clearArtistsIDB } from "./artists-idb";
 import type { PitchTrackEntry } from "./pitch-utils";
+import { saveSnapshot, loadSnapshot, flushSnapshot } from "./auto-backup";
 import {
   apiCreateDemo,
   apiUpdateDemo,
@@ -3241,6 +3242,104 @@ export const useAppStore = create<AppState>()(
     }
   )
 );
+
+// ==================== AUTO-BACKUP SUBSCRIBE ====================
+// Salva uno snapshot completo dello stato su IndexedDB ad ogni modifica.
+// Lo snapshot è keyed per email utente — NON viene cancellato al logout
+// (clearAllLocalData non tocca le chiavi labelpulse-snapshot-*).
+// All'apertura, se il cloud sync fallisce, l'ultimo snapshot viene ripristinato.
+
+let _autoBackupEmail: string | null = null;
+
+export function setAutoBackupEmail(email: string | null): void {
+  _autoBackupEmail = email;
+  if (email) {
+    // Forza un salvataggio immediato quando l'email viene impostata
+    const state = useAppStore.getState();
+    saveSnapshot(email, {
+      labels: state.labels,
+      demos: state.demos,
+      releases: state.releases,
+      userProfile: state.userProfile,
+      savedPitches: state.savedPitches,
+      sentCampaigns: state.sentCampaigns,
+      rankingSnapshots: state.rankingSnapshots,
+      rankingsUpdatedAt: state.rankingsUpdatedAt,
+      locale: state.locale,
+    });
+  }
+}
+
+// Subscribe alle modifiche dello stato — salva snapshot debounced
+useAppStore.subscribe((state, prevState) => {
+  if (!_autoBackupEmail) return;
+  // Solo se i dati effettivi sono cambiati (non azioni/metadata)
+  if (
+    state.labels === prevState.labels &&
+    state.demos === prevState.demos &&
+    state.releases === prevState.releases &&
+    state.userProfile === prevState.userProfile &&
+    state.savedPitches === prevState.savedPitches &&
+    state.sentCampaigns === prevState.sentCampaigns &&
+    state.rankingSnapshots === prevState.rankingSnapshots
+  ) {
+    return;
+  }
+  saveSnapshot(_autoBackupEmail, {
+    labels: state.labels,
+    demos: state.demos,
+    releases: state.releases,
+    userProfile: state.userProfile,
+    savedPitches: state.savedPitches,
+    sentCampaigns: state.sentCampaigns,
+    rankingSnapshots: state.rankingSnapshots,
+    rankingsUpdatedAt: state.rankingsUpdatedAt,
+    locale: state.locale,
+  });
+});
+
+// Flush snapshot prima della chiusura dell'app
+if (typeof window !== "undefined") {
+  window.addEventListener("beforeunload", () => {
+    flushSnapshot().catch(() => {});
+  });
+  // Salva anche quando la tab diventa invisibile (mobile background)
+  document.addEventListener("visibilitychange", () => {
+    if (document.visibilityState === "hidden") {
+      flushSnapshot().catch(() => {});
+    }
+  });
+}
+
+/**
+ * Ripristina lo stato dall'ultimo snapshot se disponibile.
+ * Chiamato all'apertura se il cloud sync fallisce o ritorna vuoto.
+ */
+export async function restoreFromSnapshot(email: string): Promise<boolean> {
+  const snapshot = await loadSnapshot(email);
+  if (!snapshot) return false;
+
+  console.log(`[AutoBackup] Restoring from snapshot (${snapshot.labels.length} labels, ${snapshot.demos.length} demos, saved ${snapshot.timestamp})`);
+
+  useAppStore.setState({
+    labels: snapshot.labels,
+    demos: snapshot.demos,
+    releases: snapshot.releases,
+    userProfile: {
+      ...useAppStore.getState().userProfile,
+      ...snapshot.userProfile,
+      // Preserva sempre l'email corrente (dal NextAuth session)
+      email: useAppStore.getState().userProfile.email || snapshot.userProfile?.email || "",
+    },
+    savedPitches: snapshot.savedPitches,
+    sentCampaigns: snapshot.sentCampaigns,
+    rankingSnapshots: snapshot.rankingSnapshots,
+    rankingsUpdatedAt: snapshot.rankingsUpdatedAt,
+    locale: snapshot.locale as Locale,
+  });
+
+  return true;
+}
 
 // Helper: get tier for a label in a given genre
 /**

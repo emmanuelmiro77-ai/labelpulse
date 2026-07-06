@@ -11,6 +11,8 @@ import {
   clearAllLocalData,
   setStorageOwner,
   loadFromNewTables,
+  setAutoBackupEmail,
+  restoreFromSnapshot,
 } from "./store";
 import { identifyUser, clearUser, trackEvent } from "./analytics";
 import { startOutboxAutoFlush, pauseOutboxFlush, resumeOutboxFlush, onCloudConflict } from "./outbox";
@@ -105,6 +107,10 @@ export function useAuthEffect(): void {
     });
     trackEvent("signup_completed", { login_method: "google" });
 
+    // 🔒 AUTO-BACKUP: attiva il salvataggio automatico per questo utente.
+    // Da ora, ogni modifica allo stato viene salvata su IndexedDB keyed per email.
+    setAutoBackupEmail(email);
+
     // 🔒 CLOUD-FIRST: fetcha TUTTO dal cloud e REPLICE lo stato locale.
     // Niente merge, niente union. Il cloud è l'unica verità.
     console.info("[LabelPulse Auth] ☁️ Syncing with Supabase...");
@@ -115,14 +121,41 @@ export function useAuthEffect(): void {
     Promise.all([
       loadFromCloud(),
       loadFromNewTables(),
-    ]).then(() => {
+    ]).then(async () => {
       console.info("[LabelPulse Auth] ✅ Cloud sync complete. State replaced.");
       useAppStore.setState({ hasRehydrated: true, hasCloudSynced: true });
+
+      // 🔒 AUTO-BACKUP FALLBACK: se il cloud sync ha ritornato stati vuoti
+      // (0 label personalizzate, profilo vuoto, 0 demo), ripristina dall'ultimo snapshot.
+      const state = useAppStore.getState();
+      const hasUserData =
+        (state.userProfile?.artistName && state.userProfile.artistName.trim() !== "") ||
+        (state.userProfile?.bio && state.userProfile.bio.trim() !== "") ||
+        state.demos.length > 0 ||
+        state.savedPitches.length > 0 ||
+        state.sentCampaigns.length > 0;
+
+      if (!hasUserData) {
+        console.warn("[LabelPulse Auth] ⚠️ Cloud sync returned empty user data — trying snapshot restore");
+        const restored = await restoreFromSnapshot(email);
+        if (restored) {
+          console.info("[LabelPulse Auth] ✅ State restored from local snapshot");
+        } else {
+          console.warn("[LabelPulse Auth] No snapshot available for restore");
+        }
+      }
+
       // 🔒 Riprendi l'outbox — i dati cloud sono arrivati
       resumeOutboxFlush();
       loadArtistsOnBoot().catch(() => {});
-    }).catch((err) => {
+    }).catch(async (err) => {
       console.error("[LabelPulse Auth] ❌ Cloud sync failed:", err);
+      // 🔒 AUTO-BACKUP FALLBACK: se il cloud sync fallisce completamente,
+      // ripristina dall'ultimo snapshot locale
+      const restored = await restoreFromSnapshot(email);
+      if (restored) {
+        console.info("[LabelPulse Auth] ✅ State restored from local snapshot after cloud failure");
+      }
       useAppStore.setState({ hasRehydrated: true, hasCloudSynced: true });
       // 🔒 Riprendi l'outbox anche in caso di fallimento
       resumeOutboxFlush();
