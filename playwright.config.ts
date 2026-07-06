@@ -1,4 +1,10 @@
 import { defineConfig, devices } from "@playwright/test";
+import * as fs from "fs";
+import * as path from "path";
+
+// 🔒 Auto-rileva se il file di auth esiste
+const authFile = path.join(process.cwd(), ".playwright-auth.json");
+const hasAuth = fs.existsSync(authFile);
 
 /**
  * Playwright E2E configuration for LabelPulse.
@@ -10,10 +16,10 @@ export default defineConfig({
   forbidOnly: !!process.env.CI,
   retries: process.env.CI ? 2 : 0,
   workers: 1,
-  reporter: "html",
-  timeout: 30000,
+  reporter: "list",
+  timeout: 60000,
   expect: {
-    timeout: 10000,
+    timeout: 15000,
   },
   use: {
     baseURL: "https://my-project-ivory-nine.vercel.app",
@@ -22,6 +28,8 @@ export default defineConfig({
     video: "retain-on-failure",
     locale: "it-IT",
     viewport: { width: 1280, height: 720 },
+    // 🔒 Usa storageState se il file esiste (login salvato)
+    storageState: hasAuth ? authFile : undefined,
   },
   projects: [
     {

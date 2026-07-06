@@ -18,3 +18,11 @@ tsconfig.tsbuildinfo
 research-output/s*.json
 research-output/pricing-cache/
 research-output/pricing-cache-fresh/
+
+# Playwright auth (contiene cookie di sessione — NON committare)
+.playwright-auth.json
+/test-results/
+/playwright-report/
+/blob-report/
+/playwright/.cache/
+
