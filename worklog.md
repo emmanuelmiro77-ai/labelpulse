@@ -2025,3 +2025,22 @@ Stage Summary:
 - Fix codice: getAdminClient robusto + logging diagnostico
 - Fix DB: script SQL supabase-rls-emergency-fix.sql (DA ESEGUIRE manualmente su SQL Editor)
 - AZIONE UTENTE OBBLIGATORIA: eseguire supabase-rls-emergency-fix.sql su Supabase SQL Editor + verificare SUPABASE_SERVICE_ROLE_KEY su Vercel
+
+---
+Task ID: emergenza-rls-disabilita-policy-permissive
+Agent: Z-AI (session web-aaf0d6d4)
+Task: Emergenza critica — disabilita RLS + policy permissive + cache-busting sync
+
+Work Log:
+- Sistema inutilizzabile: profilo vuoto, classifiche sparite, sidecar restore niente
+- Creato supabase-rls-disable-emergency.sql: disabilita RLS su 4 tabelle + policy permissive USING(true)
+- Fix supabase-admin.ts: triple fallback (JWT → service_role → anon key)
+- Fix store.ts loadFromNewTables: cache-busting con _t=timestamp + cache:no-store + logging status
+- Build: ✅
+- Commit 82baa05 pushato
+
+Stage Summary:
+- Policy RLS precedenti troppo restrittive → disabilitate e sostituite con USING(true)
+- getAdminClient ora ha fallback anon key (non ritorna mai null se anon key è presente)
+- loadFromNewTables bypassa cache HTTP con timestamp
+- AZIONE UTENTE: eseguire supabase-rls-disable-emergency.sql su SQL Editor Supabase
