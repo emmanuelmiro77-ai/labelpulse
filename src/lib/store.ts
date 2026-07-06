@@ -4419,14 +4419,39 @@ async function pushRankingsToCloud(): Promise<void> {
 
     if (!res.ok) {
       const err = await res.json().catch(() => ({}));
-      console.error("[push-rankings] Failed:", res.status, err);
+      const errorMsg = err?.error || `HTTP ${res.status}`;
+      console.error(`[push-rankings] ❌ Failed (${res.status}):`, errorMsg);
+
+      // 🔒 FEEDBACK UI: emetti evento di errore per il BackupIndicator
+      if (typeof window !== "undefined") {
+        window.dispatchEvent(new CustomEvent("labelpulse-backup", {
+          detail: { status: "error", error: `Push classifiche fallito: ${errorMsg}` },
+        }));
+      }
+
+      // 🔒 RETRY: riprova tra 30 secondi se è un errore temporaneo (5xx, rete)
+      if (res.status >= 500) {
+        console.log("[push-rankings] ⏳ Retry scheduled in 30s (server error)");
+        setTimeout(() => void pushRankingsToCloud(), 30000);
+      }
       return;
     }
 
     const data = await res.json();
     console.log("[push-rankings] ✅ Pushed to cloud:", data);
+
+    // 🔒 FEEDBACK UI: emetti evento di successo per il BackupIndicator
+    if (typeof window !== "undefined") {
+      window.dispatchEvent(new CustomEvent("labelpulse-rankings-pushed", {
+        detail: { labelsPushed: data.labelsPushed, snapshotsPushed: data.snapshotsPushed },
+      }));
+    }
   } catch (err) {
-    console.error("[push-rankings] Error:", err);
+    console.error("[push-rankings] ❌ Network error:", err);
+
+    // 🔒 RETRY: riprova tra 30 secondi (errore di rete)
+    console.log("[push-rankings] ⏳ Retry scheduled in 30s (network error)");
+    setTimeout(() => void pushRankingsToCloud(), 30000);
   }
 }
 

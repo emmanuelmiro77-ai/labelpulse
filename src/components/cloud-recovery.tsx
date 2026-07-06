@@ -247,6 +247,56 @@ export function CloudRecovery({ isAdmin = false }: { isAdmin?: boolean }) {
     }
   };
 
+  const handlePushRankings = async () => {
+    setActionLoading("push-rankings");
+    try {
+      const state = useAppStore.getState();
+      const labelsWithRank = state.labels.filter(
+        (l: any) => l.rankByGenre && Object.keys(l.rankByGenre).length > 0
+      );
+
+      if (labelsWithRank.length === 0) {
+        toast({
+          title: "Niente da pushare",
+          description: "Non ci sono label con classifiche nello store locale.",
+          variant: "destructive",
+        });
+        return;
+      }
+
+      const res = await fetch("/api/admin/push-rankings", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({
+          labels: labelsWithRank,
+          rankingSnapshots: state.rankingSnapshots,
+          rankingsUpdatedAt: state.rankingsUpdatedAt || new Date().toISOString(),
+        }),
+      });
+
+      if (!res.ok) {
+        const err = await res.json().catch(() => ({}));
+        toast({
+          title: `Push fallito (HTTP ${res.status})`,
+          description: err?.error || "Errore sconosciuto. Verifica SUPABASE_SERVICE_ROLE_KEY su Vercel.",
+          variant: "destructive",
+        });
+        return;
+      }
+
+      const data = await res.json();
+      toast({
+        title: "✅ Classifiche pushate al cloud",
+        description: `${data.labelsPushed} label + ${data.snapshotsPushed} snapshot salvati nella riga globale.`,
+      });
+      await refresh();
+    } catch (e: any) {
+      toast({ title: "Errore di rete", description: e?.message || "Operazione fallita.", variant: "destructive" });
+    } finally {
+      setActionLoading(null);
+    }
+  };
+
   const handleDownloadBackup = () => {
     const s = useAppStore.getState();
     const backup = {
@@ -407,6 +457,16 @@ export function CloudRecovery({ isAdmin = false }: { isAdmin?: boolean }) {
           >
             {actionLoading === "sidecar" ? <Loader2 className="h-3.5 w-3.5 animate-spin" /> : <RotateCcw className="h-3.5 w-3.5" />}
             Ripristina classifiche/artisti da sidecar
+          </Button>
+          <Button
+            size="sm"
+            variant="outline"
+            onClick={handlePushRankings}
+            disabled={actionLoading !== null}
+            className="gap-1.5 border-emerald-500/40 text-emerald-400"
+          >
+            {actionLoading === "push-rankings" ? <Loader2 className="h-3.5 w-3.5 animate-spin" /> : <UploadCloud className="h-3.5 w-3.5" />}
+            Push classifiche al cloud (admin)
           </Button>
           <Button
             size="sm"
