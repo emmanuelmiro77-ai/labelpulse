@@ -2329,7 +2329,15 @@ export const useAppStore = create<AppState>()(
             links: current.links,
             cyanite_api_token: current.cyaniteApiToken,
             locale: useAppStore.getState().locale,
-          }).catch(() => {/* silent */});
+          }).then((ok) => {
+            if (ok) {
+              console.log("[setUserProfile] ✅ Profile synced to user_profiles table");
+            } else {
+              console.warn("[setUserProfile] ⚠️ Profile sync returned false (queued or rejected)");
+            }
+          }).catch((err) => {
+            console.error("[setUserProfile] ❌ Profile sync FAILED:", err);
+          });
         }
       },
 

@@ -801,26 +801,18 @@ export async function loadStateFromCloud(): Promise<object | null> {
   if (!supabase) return null;
 
   try {
-    // Fetch both rows in parallel — they're independent.
-    const [personalRes, globalRes] = await Promise.all([
-      supabase
-        .from(CLOUD_TABLE)
-        .select("data, updated_at")
-        .eq("id", getCloudRowId())
-        .single(),
+    // 🔒 FIX BUG 2: La riga personale app_state è STALE (6 giorni fa) e
+    // CONFLIGGE con le tabelle dedicate (demo_submissions, label_personal_data,
+    // user_profiles, pitch_campaigns) che sono la verità attuale.
+    // Leggiamo SOLO la riga globale (classifiche Beatport). I dati personali
+    // vengono dalle tabelle dedicate via loadFromNewTables().
+    const [globalRes] = await Promise.all([
       supabase
         .from(CLOUD_TABLE)
         .select("data, updated_at")
         .eq("id", getGlobalCloudRowId())
-        .single(),
+        .maybeSingle(),
     ]);
-
-    // Personal row: error other than "no rows" is a real failure
-    if (personalRes.error && personalRes.error.code !== "PGRST116") {
-      console.error("[LabelPulse Cloud] Personal load error:", personalRes.error.message);
-      setStatus("error", humanizeCloudError(personalRes.error));
-      return null;
-    }
 
     // Global row: error other than "no rows" is a real failure
     if (globalRes.error && globalRes.error.code !== "PGRST116") {
@@ -829,15 +821,29 @@ export async function loadStateFromCloud(): Promise<object | null> {
       return null;
     }
 
-    const personalData = personalRes.data?.data || null;
     const globalData = globalRes.data?.data || null;
 
-    if (!personalData && !globalData) {
+    if (!globalData) {
       // First-time user: no data anywhere
       return null;
     }
 
-    const merged = mergeGlobalAndPersonalCloud(globalData, personalData);
+    // 🔒 FIX: Non mergiamo più con la riga personale (stale).
+    // Ritorniamo SOLO i dati globali (classifiche). I dati personali
+    // (demo, label personalizzate, profilo, pitch) vengono da loadFromNewTables().
+    const merged = {
+      labels: globalData.labels || [],
+      demos: [],
+      releases: [],
+      savedPitches: [],
+      sentCampaigns: [],
+      userProfile: {},
+      gmailAuth: null,
+      locale: null,
+      rankingSnapshots: globalData.rankingSnapshots || [],
+      rankingsUpdatedAt: globalData.rankingsUpdatedAt || null,
+      lastSavedAt: new Date().toISOString(),
+    };
 
     setStatus("synced");
     return merged;
