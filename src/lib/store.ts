@@ -3957,6 +3957,9 @@ export async function loadFromNewTables(): Promise<void> {
     }
 
     // 4. User profile — Sincronizza il profilo utente
+    // 🔒 L'email NON viene dal cloud (la tabella user_profiles non ha colonna email).
+    // L'email viene da NextAuth session e viene salvata nello store da use-auth.ts.
+    // Qui preserviamo SEMPRE l'email corrente dallo stato locale.
     if (profileRes?.ok) {
       const data = await profileRes.json();
       const p = data.profile;
@@ -3968,6 +3971,8 @@ export async function loadFromNewTables(): Promise<void> {
           useAppStore.setState({
             userProfile: {
               ...current,
+              // 🔒 Preserva SEMPRE l'email dallo stato corrente (viene da NextAuth)
+              email: current.email,
               artistName: p.artist_name || current.artistName,
               bio: p.bio || current.bio,
               photoUrl: p.photo_url || current.photoUrl,
@@ -3977,6 +3982,16 @@ export async function loadFromNewTables(): Promise<void> {
             },
           });
         }
+      } else {
+        // Profile non esiste nel cloud → mantieni l'email dallo stato corrente
+        console.log("[FASE C.6] No user profile in cloud — keeping local profile (email preserved)");
+        const current = state.userProfile;
+        useAppStore.setState({
+          userProfile: {
+            ...current,
+            email: current.email, // 🔒 SEMPRE preservata
+          },
+        });
       }
     }
 
