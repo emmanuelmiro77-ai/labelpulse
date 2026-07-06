@@ -43,9 +43,27 @@ export interface StateSnapshot {
 /**
  * Salva uno snapshot dello stato per l'email specificata.
  * Debounced per evitare troppi scritture (salva al massimo ogni 2 secondi).
+ *
+ * 🔒 FEEDBACK UI: Emette un evento custom 'labelpulse-backup' sul window
+ * object ad ogni salvataggio, così l'UI può mostrare un indicatore.
  */
 let _saveTimeout: ReturnType<typeof setTimeout> | null = null;
 let _pendingSnapshot: StateSnapshot | null = null;
+let _lastSaveAt: number | null = null;
+let _lastSaveStatus: "ok" | "error" | "saving" = "ok";
+
+export function getLastBackupInfo(): { timestamp: number | null; status: "ok" | "error" | "saving" } {
+  return { timestamp: _lastSaveAt, status: _lastSaveStatus };
+}
+
+function emitBackupEvent(status: "ok" | "error" | "saving", timestamp?: number) {
+  if (typeof window === "undefined") return;
+  _lastSaveStatus = status;
+  if (timestamp) _lastSaveAt = timestamp;
+  window.dispatchEvent(new CustomEvent("labelpulse-backup", {
+    detail: { status, timestamp: _lastSaveAt },
+  }));
+}
 
 export function saveSnapshot(
   email: string,
@@ -76,6 +94,7 @@ export function saveSnapshot(
   if (_saveTimeout) clearTimeout(_saveTimeout);
   _saveTimeout = setTimeout(async () => {
     if (!_pendingSnapshot) return;
+    emitBackupEvent("saving");
     try {
       const key = `${SNAPSHOT_PREFIX}${_pendingSnapshot.email}`;
       await idbSet(key, _pendingSnapshot);
@@ -87,9 +106,12 @@ export function saveSnapshot(
         await idbSet(SNAPSHOT_INDEX_KEY, index);
       }
 
-      console.log(`[AutoBackup] Snapshot saved for ${_pendingSnapshot.email} (${_pendingSnapshot.labels.length} labels, ${_pendingSnapshot.demos.length} demos)`);
+      _lastSaveAt = Date.now();
+      emitBackupEvent("ok", _lastSaveAt);
+      console.log(`[AutoBackup] ✅ Snapshot saved for ${_pendingSnapshot.email} (${_pendingSnapshot.labels.length} labels, ${_pendingSnapshot.demos.length} demos)`);
     } catch (err) {
-      console.warn("[AutoBackup] Failed to save snapshot:", err);
+      emitBackupEvent("error");
+      console.warn("[AutoBackup] ❌ Failed to save snapshot:", err);
     }
     _pendingSnapshot = null;
   }, 2000);
@@ -105,12 +127,16 @@ export async function flushSnapshot(): Promise<void> {
     _saveTimeout = null;
   }
   if (!_pendingSnapshot) return;
+  emitBackupEvent("saving");
   try {
     const key = `${SNAPSHOT_PREFIX}${_pendingSnapshot.email}`;
     await idbSet(key, _pendingSnapshot);
-    console.log(`[AutoBackup] Snapshot flushed for ${_pendingSnapshot.email}`);
+    _lastSaveAt = Date.now();
+    emitBackupEvent("ok", _lastSaveAt);
+    console.log(`[AutoBackup] ✅ Snapshot flushed for ${_pendingSnapshot.email} (app closing)`);
   } catch (err) {
-    console.warn("[AutoBackup] Failed to flush snapshot:", err);
+    emitBackupEvent("error");
+    console.warn("[AutoBackup] ❌ Failed to flush snapshot:", err);
   }
   _pendingSnapshot = null;
 }

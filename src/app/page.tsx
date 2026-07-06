@@ -40,6 +40,7 @@ import { AutoSave } from "@/components/auto-save";
 import { RankingsPage } from "@/components/rankings-page";
 import { ProducerProfile } from "@/components/producer-profile";
 import { CloudSyncButton } from "@/components/cloud-sync-button";
+import { BackupIndicator } from "@/components/backup-indicator";
 import { AuthButton } from "@/components/auth-button";
 import { BetaFeedbackButton } from "@/components/beta-feedback-button";
 import { WelcomeOnboarding } from "@/components/welcome-onboarding";
@@ -228,8 +229,9 @@ export default function Home() {
               <GmailSettings />
             </div>
 
-            {/* Cloud Sync — desktop only (mobile: hamburger menu) */}
-            <div className="hidden md:block">
+            {/* Cloud Sync + Backup Indicator — desktop only (mobile: hamburger menu) */}
+            <div className="hidden md:flex items-center gap-2">
+              <BackupIndicator />
               <CloudSyncButton />
             </div>
 
@@ -341,6 +343,9 @@ export default function Home() {
                     inside the mobile menu. They keep their own state and
                     popover behavior. */}
                 <div className="w-full [&>button]:w-full [&>button]:justify-start [&>button]:gap-3 [&>button]:px-4 [&>button]:py-3 [&>button]:rounded-lg [&>button]:text-sm [&>button]:font-medium [&>button]:text-muted-foreground [&>button:hover]:text-foreground [&>button:hover]:bg-secondary/50">
+                  <div className="px-4 py-2">
+                    <BackupIndicator />
+                  </div>
                   <GmailSettings />
                   <CloudSyncButton />
                   <DataBackup />
