@@ -1976,3 +1976,29 @@ Stage Summary:
 - Root cause CommandItem iOS: focus rub da mousedown preventDefault mancante. Fix: onPointerDown + onMouseDown preventDefault
 - Entrambi i fix sono a livello libreria/componente, nessun cambiamento logica funzionale → zero rischio regressione
 - Deploy Vercel partirà automaticamente al push
+
+---
+Task ID: label-loghi-spariti-race-condition
+Agent: Z-AI (session web-aaf0d6d4)
+Task: Fix loghi label spariti (fallback iniziali) nella pagina Label — race condition loadFromNewTables vs loadFromCloud
+
+Work Log:
+- Boot: commit HEAD 3f23982 (commit test placeholder, non tocca codice). Working tree clean su src/.
+- Indagato flusso immagini label: LabelLogo component (label-finder.tsx riga 353) usa label.imageUrl con fallback iniziali. Corretto.
+- Verificato catena cloud: getSupabase() usa anon key, ma policy SELECT su app_state è USING(true) → global row leggibile. RLS non blocca.
+- Verificato merge cloud: mergeGlobalAndPersonalCloud (supabase.ts riga 574) fa spread ...gl (global label) → imageUrl arriva se presente nel global row. mergeGlobalWithPersonal preserva campi personali. Tutto corretto.
+- Verificato buildGlobalPayload: LABEL_BEATPORT_FIELDS include imageUrl, slug, beatportId (riga 463 supabase.ts). Corretto.
+- Verificato seed: labels-data.json NON contiene imageUrl → buildLabelsFromData imposta imageUrl="" per tutte le label seed. Le imageUrl arrivano SOLO dal cloud global row (admin push dopo scrape).
+- Diagnosi root cause: race condition in use-auth.ts riga 115 Promise.all([loadFromCloud(), loadFromNewTables()]).
+  * loadFromCloud() → loadGlobalRowOnly() → carica label cloud CON imageUrl → setState labels con imageUrl ✅
+  * loadFromNewTables() → legge state.labels (snapshot stale PRIMA del merge cloud) riga 3825 → riga 3918 setState con label seed SENZA imageUrl → SOVRASCRIVE label cloud → icone sparite ❌
+- Fix: in loadFromNewTables (store.ts riga 3864), riletto useAppStore.getState() all'interno del blocco label invece di usare state snapshot iniziale. Ora cleanSeedLabels contiene le label cloud aggiornate (con imageUrl, slug, beatportId, rankByGenre, etc.).
+- Verifica anti-regressione: store.ts 10 riferimenti fix passati ✅, supabase.ts 10 ✅
+- TypeScript: 37 errori pre-esistenti in store.ts (incl. currentState non definito in loadFromCloud riga 3536/3563 — bug pre-esistente non mio). Mia modifica non aggiunge errori.
+- Build produzione: ✅ completato
+
+Stage Summary:
+- Root cause: race condition — loadFromNewTables legge snapshot stale di state.labels prima che loadFromCloud mergi le label cloud, poi sovrascrive con seed senza imageUrl
+- Fix: rileggere useAppStore.getState() dentro il blocco label invece dello snapshot iniziale
+- Fix minimale (13 righe, 1 variabile), nessun cambiamento logica merge → zero rischio regressione
+- Deploy Vercel partirà automaticamente al push

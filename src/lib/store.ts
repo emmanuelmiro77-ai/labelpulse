@@ -3855,9 +3855,18 @@ export async function loadFromNewTables(): Promise<void> {
       const data = await labelsRes.json();
       const apiLabels = data.labels || [];
       console.log(`[FASE C.6] Loaded ${apiLabels.length} label personal data from new table`);
-      
+
+      // 🔒 FIX RACE CONDITION: rileggi lo stato AGGIORNATO qui, non lo snapshot
+      // iniziale. loadFromCloud() potrebbe aver già mergiato le label cloud (con
+      // imageUrl, slug, beatportId, rankByGenre, etc.) in setState. Se usiamo
+      // lo snapshot `state.labels` (letto prima del Promise.all), droppiamo
+      // tutti i campi Beatport → le icone label spariscono (fallback iniziali).
+      const currentState = useAppStore.getState();
+
       // Filtriamo via le vecchie label custom (le ricostruiremo dall'API se sono ancora attive)
-      const cleanSeedLabels = state.labels
+      // 🔒 FIX: preserva TUTTI i campi Beatport (imageUrl, slug, beatportId, genres,
+      // rankByGenre, pointsByGenre, trending, etc.) dalle label correnti — NON dropparli.
+      const cleanSeedLabels = currentState.labels
         .filter((l: any) => !l.isCustom)
         .map((l: any) => ({
           ...l,
