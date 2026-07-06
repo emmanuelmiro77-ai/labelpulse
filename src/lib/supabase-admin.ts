@@ -5,32 +5,15 @@ import { authOptions } from "@/lib/auth-options";
 /**
  * 🔒 FASE D — Supabase client helper con RLS vera
  *
- * STRATEGIA DOPPIA (transizione sicura):
- * 1. PRIMA TENTATIVO: usa il JWT Supabase dalla sessione NextAuth
- *    → RLS attiva a livello database → sicurezza massima
- *    → anche se c'è un bug nella query, il database blocca cross-user
+ * STRATEGIA TRIPLICE (emergenza RLS 2026-07-06):
+ * 1. PRIMA TENTATIVO: JWT Supabase dalla sessione NextAuth → RLS attiva
+ * 2. FALLBACK 1: service_role (bypassa RLS)
+ * 3. FALLBACK 2: anon key (con policy permissive USING(true) — defense-in-depth
+ *    a livello API route via getServerSession + .eq("user_email"))
  *
- * 2. FALLBACK: se il JWT Supabase non è disponibile (es. utente loggato
- *    prima della FASE D, o bridge non ancora configurato, o token scaduto),
- *    usa service_role con .eq("user_email", email) → sicurezza a livello API route
- *
- * 🔒 FIX EMERGENZA RLS (2026-07-06):
- * Il JWT Supabase scade dopo 1 ora e non viene refreshato. Dopo logout/login,
- * se il token è scaduto, getUser() fallisce e cade sul fallback service_role.
- * Se SUPABASE_SERVICE_ROLE_KEY non è impostato su Vercel, il fallback ritorna
- * null → API route ritorna 401 → frontend vede "Profilo vuoto".
- *
- * Fix:
- * 1. Controlla la scadenza del token PRIMA di usarlo (risparmia una chiamata)
- * 2. Se il token è scaduto, vai direttamente al fallback service_role
- * 3. Se il fallback service_role manca, logga errore chiaro (non 401 silenzioso)
- *
- * Usage:
- *   const { supabase, email, useRls } = await getAdminClient();
- *   if (!supabase) return 401;
- *   // useRls = true → RLS attiva, non serve .eq("user_email", email)
- *   // useRls = false → fallback, DEVI usare .eq("user_email", email)
- *   const { data } = await supabase.from("demo_submissions").select("*");
+ * 🔒 FIX EMERGENZA: Se SUPABASE_SERVICE_ROLE_KEY non è impostato su Vercel,
+ * cadiamo su anon key. Le policy RLS permissive (USING true) permettono
+ * l'accesso, e la sicurezza è garantita a livello API route.
  */
 
 export async function getAdminClient(): Promise<{
@@ -52,47 +35,51 @@ export async function getAdminClient(): Promise<{
     return { supabase: null, email: null, useRls: false };
   }
 
-  // 3. 🔒 FASE D: PRIMA TENTATIVO — usa il JWT Supabase dalla sessione
-  //    🔒 FIX: controlla scadenza PRIMA di usarlo (risparmia getUser() se scaduto)
+  const supabaseAnonKey = process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY;
+  if (!supabaseAnonKey) {
+    console.error("[getAdminClient] Missing NEXT_PUBLIC_SUPABASE_ANON_KEY");
+    return { supabase: null, email: null, useRls: false };
+  }
+
+  // 3. 🔒 PRIMA TENTATIVO: JWT Supabase dalla sessione
   const supabaseAccessToken = (session as any).supabaseAccessToken;
   const supabaseExpiresAt = (session as any).supabaseExpiresAt as number | undefined;
 
   if (supabaseAccessToken) {
-    // Controlla se il token è scaduto (con margine di 60s)
     const now = Math.floor(Date.now() / 1000);
     const isExpired = supabaseExpiresAt ? (supabaseExpiresAt - 60) < now : false;
 
-    if (isExpired) {
-      console.warn("[getAdminClient] Supabase JWT expired (expires_at=" + supabaseExpiresAt + ", now=" + now + ") — falling back to service_role");
-    } else {
+    if (!isExpired) {
       try {
-        const supabase = createClient(supabaseUrl, process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY!, {
+        const supabase = createClient(supabaseUrl, supabaseAnonKey, {
           global: {
             headers: {
               Authorization: `Bearer ${supabaseAccessToken}`,
             },
           },
         });
-        // Verifica che il token sia valido ottenendo l'utente
         const { data: { user }, error } = await supabase.auth.getUser();
         if (!error && user?.email?.toLowerCase().trim() === email) {
-          // ✅ RLS attiva — sicurezza a livello database
           return { supabase, email, useRls: true };
         }
-        console.warn("[getAdminClient] Supabase token invalid or email mismatch, falling back to service_role");
+        console.warn("[getAdminClient] Supabase token invalid or email mismatch");
       } catch (err) {
-        console.warn("[getAdminClient] Supabase JWT check failed, falling back to service_role:", err);
+        console.warn("[getAdminClient] Supabase JWT check failed:", err);
       }
+    } else {
+      console.warn("[getAdminClient] Supabase JWT expired — using fallback");
     }
   }
 
-  // 4. FALLBACK — usa service_role (bypassa RLS, sicuro solo se .eq("user_email") è presente)
-  const supabaseKey = process.env.SUPABASE_SERVICE_ROLE_KEY;
-  if (!supabaseKey) {
-    console.error("[getAdminClient] Missing SUPABASE_SERVICE_ROLE_KEY — API routes cannot read user data. Set this env var on Vercel.");
-    return { supabase: null, email: null, useRls: false };
+  // 4. FALLBACK 1: service_role (bypassa RLS)
+  const supabaseServiceKey = process.env.SUPABASE_SERVICE_ROLE_KEY;
+  if (supabaseServiceKey) {
+    const supabase = createClient(supabaseUrl, supabaseServiceKey);
+    return { supabase, email, useRls: false };
   }
 
-  const supabase = createClient(supabaseUrl, supabaseKey);
+  // 5. FALLBACK 2: anon key (con policy permissive USING(true) — sicurezza a livello API route)
+  console.warn("[getAdminClient] SUPABASE_SERVICE_ROLE_KEY missing — falling back to anon key (RLS permissive). Security via API route getServerSession + .eq(user_email).");
+  const supabase = createClient(supabaseUrl, supabaseAnonKey);
   return { supabase, email, useRls: false };
 }

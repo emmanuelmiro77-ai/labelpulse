@@ -3813,14 +3813,30 @@ export async function loadFromNewTables(): Promise<void> {
   if (typeof window === "undefined") return;
 
   try {
+    // 🔒 FIX EMERGENZA: cache-busting con timestamp per bypassare cache HTTP
+    // corrotta/vuota. Forza sempre fetch fresco dal server.
+    const cacheBust = `_t=${Date.now()}`;
+    const fetchOpts: RequestInit = {
+      cache: "no-store" as RequestCache,
+      headers: { "Cache-Control": "no-cache, no-store, must-revalidate" },
+    };
+
     // Carica tutti i dati in parallelo dal cloud (incluse le release)
     const [demosRes, labelsRes, pitchesRes, profileRes, releasesRes] = await Promise.all([
-      fetch("/api/demos").catch(() => null),
-      fetch("/api/label-data").catch(() => null),
-      fetch("/api/pitches").catch(() => null),
-      fetch("/api/profile").catch(() => null),
-      fetch("/api/releases").catch(() => null),
+      fetch(`/api/demos?${cacheBust}`, fetchOpts).catch(() => null),
+      fetch(`/api/label-data?${cacheBust}`, fetchOpts).catch(() => null),
+      fetch(`/api/pitches?${cacheBust}`, fetchOpts).catch(() => null),
+      fetch(`/api/profile?${cacheBust}`, fetchOpts).catch(() => null),
+      fetch(`/api/releases?${cacheBust}`, fetchOpts).catch(() => null),
     ]);
+
+    console.log("[FASE C.6] loadFromNewTables fetch status:", {
+      demos: demosRes?.status,
+      labels: labelsRes?.status,
+      pitches: pitchesRes?.status,
+      profile: profileRes?.status,
+      releases: releasesRes?.status,
+    });
 
     const state = useAppStore.getState();
 
