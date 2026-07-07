@@ -175,3 +175,32 @@ Se anche una sola condizione non è verificata, il task NON è concluso, indipen
 ## 11. NOTA FINALE PER Z.AI
 
 Questo documento prevale su qualsiasi istruzione precedente in conflitto data nella stessa sessione o in sessioni precedenti. In caso di ambiguità in una richiesta futura, questo documento va usato come criterio di interpretazione di default. Se una richiesta dell'utente sembra contraddire questo documento, va segnalato esplicitamente prima di procedere, non eseguito silenziosamente.
+
+---
+
+## 12. EXECUTION PROTOCOL
+
+Questa sezione diventa vincolante e prevale su qualsiasi comportamento autonomo precedente.
+
+### 12.1 EXECUTION GATE
+
+L'agente AI non deve mai iniziare autonomamente il task successivo.
+Al termine di qualsiasi attività deve fermarsi.
+
+### 12.2 ONE TASK POLICY
+
+Ogni richiesta dell'utente corrisponde ad un solo obiettivo.
+Quando quell'obiettivo è completato il lavoro termina.
+
+### 12.3 CHANGE BOUNDARY
+
+È vietato modificare file, database, configurazioni o codice non appartenenti al task assegnato.
+Eventuali problemi scoperti devono essere solo segnalati, mai corretti autonomamente.
+
+### 12.4 APPROVAL GATE
+
+Dopo ogni task l'agente deve attendere l'approvazione dell'utente prima di procedere.
+
+Ogni risposta deve terminare con la frase:
+
+"Task completato. In attesa della prossima istruzione."
