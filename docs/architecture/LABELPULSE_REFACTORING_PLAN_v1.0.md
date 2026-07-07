@@ -30,31 +30,161 @@ Il piano è diviso in **7 fasi**. Ogni fase ha:
 
 ---
 
-## FASE 0 — SNAPSHOT PRE-MIGRAZIONE (bloccante)
+## FASE 0 — BACKUP DEL DATABASE (bloccante)
 
-**Obiettivo:** garantire un punto di rollback sicuro prima di toccare qualsiasi cosa.
+**Obiettivo:** creare un backup completo e verificato del database Supabase prima di qualsiasi modifica. Questa fase è esclusivamente dedicata al backup — nessuna modifica al codice, nessuna modifica allo schema, nessuna modifica alle RLS.
 
 **Dipendenze:** nessuna.
 
 **Modifiche database:** nessuna.
 
-**File modificati:** nessuno.
+**Modifiche al codice:** nessuna.
+
+**File modificati:** solo documentazione (istruzioni backup + report verifica).
 
 **Azioni:**
-1. L'utente esegue `Scarica backup JSON` dalla diagnostica LabelPulse su almeno un device con dati completi.
-2. Il file JSON viene salvato in posizione sicura (non nel repo).
-3. L'utente esegue un export completo della tabella `app_state` da Supabase Dashboard (SQL Editor → `SELECT id, data, updated_at FROM app_state;` → export CSV/JSON).
-4. L'utente esegue un export delle tabelle FASE C (`demo_submissions, label_personal_data, pitch_campaigns, user_profiles, user_releases`) da Supabase Dashboard.
-5. Viene creato un tag git `pre-refactor-v1.0` sul commit corrente.
+
+0.1. **Backup completo del database Supabase**
+- Eseguire un dump completo del database (tutte le tabelle, tutti i dati, tutte le righe).
+- Salvare il file in `docs/architecture/backups/` con nome `database-full-backup-<YYYY-MM-DD>.sql` (o `.tar.gz` se compresso).
+- Il backup deve includere:
+  - Tutte le tabelle dello schema `public`
+  - Tutti i dati (righe) di ogni tabella
+  - La tabella `auth.users` (se accessibile via Dashboard)
+  - La tabella `app_state` (riga globale + righe personali)
+  - Le tabelle FASE C (`demo_submissions`, `label_personal_data`, `pitch_campaigns`, `user_profiles`, `user_releases`)
+  - Le tabelle snapshot (`beatport_snapshots`, `beatport_chart_history`, `followed_artists`)
+  - Le tabelle accessorie (`push_subscriptions`, `beta_feedback`, `beta_access_codes`, `agent_memory`)
+- Metodo: Supabase Dashboard → Database → Backups → "Create backup", oppure `pg_dump` se disponibile, oppure script Python con service_role via API REST.
+
+0.2. **Esportazione dello schema SQL (DDL)**
+- Eseguire l'esportazione della sola struttura del database (CREATE TABLE, indici, vincoli, foreign keys).
+- Salvare il file in `docs/architecture/backups/schema-<YYYY-MM-DD>.sql`.
+- Query SQL da eseguire nel SQL Editor di Supabase:
+  ```sql
+  -- Esporta tutte le definizioni DDL dello schema public
+  SELECT 
+    'CREATE TABLE ' || schemaname || '.' || tablename || ' (...);' as ddl
+  FROM pg_tables 
+  WHERE schemaname = 'public'
+  ORDER BY tablename;
+  ```
+- Alternativa: Supabase Dashboard → Database → Tables → "Export schema" (se disponibile).
+
+0.3. **Esportazione delle policy RLS**
+- Eseguire l'esportazione di tutte le policy RLS attive.
+- Salvare il file in `docs/architecture/backups/rls-policies-<YYYY-MM-DD>.sql`.
+- Query SQL da eseguire nel SQL Editor:
+  ```sql
+  -- Esporta tutte le policy RLS
+  SELECT 
+    schemaname,
+    tablename,
+    policyname,
+    permissive,
+    roles,
+    cmd,
+    qual,
+    with_check
+  FROM pg_policies
+  WHERE schemaname = 'public'
+  ORDER BY tablename, cmd;
+  ```
+- Salvare anche lo stato RLS (abilitata/disabilitata) per ogni tabella:
+  ```sql
+  -- Stato RLS per tabella
+  SELECT 
+    schemaname,
+    tablename,
+    rowsecurity as rls_enabled
+  FROM pg_tables
+  WHERE schemaname = 'public'
+  ORDER BY tablename;
+  ```
+
+0.4. **Esportazione delle funzioni SQL**
+- Eseguire l'esportazione di tutte le funzioni SQL personalizzate (se presenti).
+- Salvare il file in `docs/architecture/backups/functions-<YYYY-MM-DD>.sql`.
+- Query SQL da eseguire nel SQL Editor:
+  ```sql
+  -- Esporta tutte le funzioni dello schema public
+  SELECT 
+    routine_name,
+    routine_type,
+    data_type as return_type,
+    routine_definition
+  FROM information_schema.routines
+  WHERE routine_schema = 'public'
+  ORDER BY routine_name;
+  ```
+- Esportare anche i trigger (se presenti):
+  ```sql
+  -- Esporta tutti i trigger
+  SELECT
+    event_object_table as table_name,
+    trigger_name,
+    action_timing,
+    event_manipulation,
+    action_statement
+  FROM information_schema.triggers
+  WHERE trigger_schema = 'public'
+  ORDER BY event_object_table, trigger_name;
+  ```
+
+0.5. **Verifica che il backup sia ripristinabile**
+- Verificare che il backup completo (0.1) possa essere ripristinato in un database di test (o verificare l'integrità del file).
+- Metodo di verifica:
+  - Se `pg_dump` è stato usato: eseguire `pg_restore --list <backup-file>` per verificare che il file sia leggibile.
+  - Se export SQL: aprire il file e verificare che contenga istruzioni `CREATE TABLE` e `INSERT` valide.
+  - Se backup Dashboard: verificare che il file non sia vuoto e che la dimensione sia coerente (almeno qualche MB).
+- Verificare i conteggi delle righe:
+  ```sql
+  -- Conteggi di verifica (da confrontare con il backup)
+  SELECT 'app_state' as t, COUNT(*) FROM app_state
+  UNION ALL SELECT 'demo_submissions', COUNT(*) FROM demo_submissions
+  UNION ALL SELECT 'label_personal_data', COUNT(*) FROM label_personal_data
+  UNION ALL SELECT 'pitch_campaigns', COUNT(*) FROM pitch_campaigns
+  UNION ALL SELECT 'user_profiles', COUNT(*) FROM user_profiles
+  UNION ALL SELECT 'user_releases', COUNT(*) FROM user_releases
+  UNION ALL SELECT 'beatport_snapshots', COUNT(*) FROM beatport_snapshots
+  UNION ALL SELECT 'beatport_chart_history', COUNT(*) FROM beatport_chart_history
+  UNION ALL SELECT 'followed_artists', COUNT(*) FROM followed_artists
+  UNION ALL SELECT 'push_subscriptions', COUNT(*) FROM push_subscriptions
+  UNION ALL SELECT 'beta_feedback', COUNT(*) FROM beta_feedback
+  UNION ALL SELECT 'beta_access_codes', COUNT(*) FROM beta_access_codes
+  UNION ALL SELECT 'agent_memory', COUNT(*) FROM agent_memory
+  ORDER BY t;
+  ```
+- Salvare i conteggi in `docs/architecture/backups/row-counts-<YYYY-MM-DD>.json` per confronto post-migrazione.
+
+0.6. **Commit Git della documentazione aggiornata**
+- Aggiornare questo documento (LABELPULSE_REFACTORING_PLAN_v1.0.md) con la Fase 0 trasformata come sopra.
+- Aggiornare LABELPULSE_MIGRATION_SAFETY_REPORT.md se necessario (riferimenti alla Fase 0).
+- Commit dei soli file di documentazione (nessun codice, nessun backup nel commit — i backup sono in `docs/architecture/backups/` che deve essere nel `.gitignore` per evitare di committare dati sensibili).
+- Messaggio commit: `docs(fase0): backup database — istruzioni e verifica`
+
+**Divieti espliciti:**
+- ❌ Nessuna modifica al codice dell'applicazione (`src/**`)
+- ❌ Nessuna modifica allo schema del database (nessun `ALTER TABLE`, `CREATE TABLE`, `DROP`)
+- ❌ Nessuna modifica alle RLS (nessun `CREATE POLICY`, `DROP POLICY`, `ALTER TABLE ... ENABLE/DISABLE ROW LEVEL SECURITY`)
+- ❌ Nessuna modifica alle funzioni SQL
+- ❌ Nessun commit dei file di backup nel repo (vanno in `.gitignore`)
 
 **Rischi:**
-- Se il backup non viene fatto e una fase successiva corrompe i dati, non c'è ripristino possibile.
-- Se il backup viene fatto su un device con dati stale, si salva uno stato inconsistente.
+- Se il backup non viene eseguito correttamente e una fase successiva corrompe i dati, non c'è ripristino possibile.
+- Se il backup è incompleto (es. manca `auth.users`), il ripristino potrebbe non ricostruire correttamente le relazioni `user_id`.
+- Se i conteggi di verifica non vengono salvati, non c'è baseline per confrontare l'integrità post-migrazione.
 
 **Punto di verifica:**
-- Il file JSON di backup esiste e contiene `labels`, `demos`, `userProfile`, `rankingSnapshots` con conteggi coerenti con la diagnostica.
-- Il tag git `pre-refactor-v1.0` esiste.
-- Gli export Supabase (CSV/JSON) esistono per `app_state` e le 5 tabelle FASE C.
+1. Il file `docs/architecture/backups/database-full-backup-<YYYY-MM-DD>.sql` esiste e non è vuoto.
+2. Il file `docs/architecture/backups/schema-<YYYY-MM-DD>.sql` esiste e contiene istruzioni `CREATE TABLE` per tutte le tabelle `public.*`.
+3. Il file `docs/architecture/backups/rls-policies-<YYYY-MM-DD>.sql` esiste e contiene tutte le policy RLS attive.
+4. Il file `docs/architecture/backups/functions-<YYYY-MM-DD>.sql` esiste (può essere vuoto se non ci sono funzioni personalizzate).
+5. Il file `docs/architecture/backups/row-counts-<YYYY-MM-DD>.json` esiste e contiene i conteggi di tutte le tabelle.
+6. La verifica di ripristinabilità (0.5) è stata eseguita e documentata.
+7. Il file `.gitignore` contiene `docs/architecture/backups/` (i backup non vengono committati).
+8. Il commit Git contiene solo file di documentazione (verificare con `git show --stat`).
+9. Il tag `labelpulse-pre-refactor-v1` esiste (creato nella fase di preparazione repo).
 
 **Stato:** ☐ Da completare
 

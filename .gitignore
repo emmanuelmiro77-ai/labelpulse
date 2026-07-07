@@ -26,3 +26,6 @@ research-output/pricing-cache-fresh/
 /blob-report/
 /playwright/.cache/
 
+
+# Backup del database (Fase 0 refactoring) — non committare
+docs/architecture/backups/
