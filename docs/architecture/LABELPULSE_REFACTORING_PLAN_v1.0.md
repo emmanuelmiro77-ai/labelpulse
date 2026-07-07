@@ -74,16 +74,44 @@ Il piano è diviso in **7 fasi**. Ogni fase ha:
 - Policy `FOR INSERT/UPDATE/DELETE USING (false)` — nessun accesso client in scrittura.
 - Giustificazione: tabella orfana, non referenziata da codice applicativo. Zero impatto funzionale.
 
-0.5.2. **Protezione `agent_memory`** (warning `sensitive_columns_exposed`):
-- RLS già abilitata, sostituire le policy esistenti `USING (true)`.
-- Policy `FOR SELECT USING (false)` — blocca lettura client.
-- Policy `FOR INSERT/UPDATE/DELETE USING (false)` — blocca scrittura client.
-- Giustificazione: tabella usata solo da script admin (`scripts/log-agent-memory.sh`, `scripts/seed-agent-memory.py`) che usano service_role (bypassa RLS). Zero impatto funzionale.
+0.5.2. **Verifica funzionale e classificazione `agent_memory`** (warning `sensitive_columns_exposed`):
+- **NON eseguire modifiche esecutive in questa fase.** La tabella sarà protetta solo dopo la verifica.
+- Verificare e documentare:
+  - Chi la utilizza (componenti UI, API route, script esterni).
+  - Quali componenti dell'app la utilizzano.
+  - Quali API route la utilizzano.
+  - Se viene letta.
+  - Se viene scritta.
+  - Se è admin-only.
+  - Se può essere protetta con RLS senza rompere funzionalità.
+- Esito della verifica (da compilare):
+  - [ ] Componenti UI: ____
+  - [ ] API route: ____
+  - [ ] Letta da: ____
+  - [ ] Scritta da: ____
+  - [ ] Admin-only: ____
+  - [ ] Può essere protetta senza rompere funzionalità: ____
+- Solo se la verifica conferma che può essere protetta senza impatto funzionale, entrerà in una futura fase di Security Hardening esecutivo.
 
-0.5.3. **Verifica `beta_feedback` prima della protezione** (warning `sensitive_columns_exposed`):
-- Verificare se `supabaseKey` in `src/app/api/beta-feedback/route.ts` riga 230 è `SUPABASE_SERVICE_ROLE_KEY` o `NEXT_PUBLIC_SUPABASE_ANON_KEY`.
-- **Se service_role:** applicare policy `FOR SELECT USING (false)` + `FOR UPDATE USING (false)` + mantenere `FOR INSERT WITH CHECK (true)` (la route verifica già `getServerSession` lato server). Zero modifica codice.
-- **Se anon key:** NON applicare RLS in questa fase. Rimandare alla Fase 6 (RLS lato API route con JWT utente). Documentare il rinvio.
+0.5.3. **Verifica funzionale e classificazione `beta_feedback`** (warning `sensitive_columns_exposed`):
+- **NON eseguire modifiche esecutive in questa fase.** La tabella sarà protetta solo dopo la verifica.
+- Verificare e documentare:
+  - Chi la utilizza (componenti UI, API route, script esterni).
+  - Quali componenti dell'app la utilizzano.
+  - Quali API route la utilizzano.
+  - Se viene letta.
+  - Se viene scritta.
+  - Se è admin-only o se è usata anche dagli utenti.
+  - Se può essere protetta con RLS senza rompere funzionalità (in particolare, verificare se `supabaseKey` in `src/app/api/beta-feedback/route.ts` riga 230 è `SUPABASE_SERVICE_ROLE_KEY` o `NEXT_PUBLIC_SUPABASE_ANON_KEY`).
+- Esito della verifica (da compilare):
+  - [ ] Componenti UI: ____
+  - [ ] API route: ____
+  - [ ] Letta da: ____
+  - [ ] Scritta da: ____
+  - [ ] Admin-only o anche utenti: ____
+  - [ ] Tipo di chiave usata dalla route (service_role / anon): ____
+  - [ ] Può essere protetta senza rompere funzionalità: ____
+- Solo se la verifica conferma che può essere protetta senza impatto funzionale, entrerà in una futura fase di Security Hardening esecutivo.
 
 0.5.4. **Protezione route amministrative snapshot Beatport** (warning indiretto: route senza auth):
 - Le route `/api/snapshots/save`, `/api/snapshots/latest`, `/api/snapshots/diff/[date]` non hanno auth check e usano anon key.
@@ -107,10 +135,9 @@ Il piano è diviso in **7 fasi**. Ogni fase ha:
 - I warning residui su `app_state` e tabelle FASE C saranno risolti nella Fase 1 (richiedono modifica architetturale).
 - Documentare i warning residui e la fase in cui saranno risolti.
 
-**File modificati:**
+**File modificati (modifiche esecutive — solo elementi già verificati e indipendenti dal refactoring):**
 - `supabase-schema-snapshots.sql` (RLS abilitata + policy per `beatport_snapshots`, `beatport_chart_history`, `followed_artists`)
-- `supabase-schema-agent-memory.sql` (policy sostituite con `USING (false)`)
-- Nuovo file: `supabase-migration-000-security-hardening.sql` (script consolidato per SQL Editor)
+- Nuovo file: `supabase-migration-000-security-hardening.sql` (script consolidato per SQL Editor — contiene SOLO le policy per `followed_artists`, `beatport_snapshots`, `beatport_chart_history`)
 - `src/lib/snapshots.ts` (`getServerSupabase` → service_role)
 - `src/app/api/snapshots/save/route.ts` (auth check admin + spostamento sotto `/api/admin/snapshots/`)
 - `src/app/api/snapshots/latest/route.ts` (verifica auth o mantenimento pubblico)
@@ -118,31 +145,45 @@ Il piano è diviso in **7 fasi**. Ogni fase ha:
 - Eventualmente: `src/app/api/admin/snapshots/save/route.ts` (nuova posizione)
 - Eventualmente: `src/app/api/admin/snapshots/latest/route.ts`
 - Eventualmente: `src/app/api/admin/snapshots/diff/[date]/route.ts`
-- `src/app/api/beta-feedback/route.ts` (verifica `supabaseKey` — sola ispezione, modifica eventuale)
+- `src/components/rankings-wizard.tsx` (aggiornamento URL fetch da `/api/snapshots/save` a `/api/admin/snapshots/save`)
+
+**File NON modificati in questa fase (solo verificati in 0.5.2 e 0.5.3):**
+- `supabase-schema-agent-memory.sql` — nessuna modifica esecutiva, solo verifica
+- `src/app/api/beta-feedback/route.ts` — nessuna modifica esecutiva, solo verifica
+- `supabase-schema.sql` (policy `beta_feedback`) — nessuna modifica esecutiva, solo verifica
 
 **Rischi:**
-- **R1 (medio):** se 0.5.3 rivela che `beta_feedback` usa anon key e si applica comunque RLS `USING (false)`, la route admin smette di leggere i feedback. Mitigazione: la verifica 0.5.3 è binaria, si applica RLS solo se service_role è confermato.
-- **R2 (medio):** se 0.5.4 non sposta correttamente le route sotto `/api/admin/`, il frontend (`rankings-wizard.tsx` riga 666) chiama ancora `/api/snapshots/save` e ottiene 404. Mitigazione: aggiornare l'URL in `rankings-wizard.tsx` nello stesso commit.
-- **R3 (basso):** se 0.5.5 abilita RLS su `beatport_snapshots` prima che 0.5.4 sia completato, l'import snapshot fallisce. Mitigazione: ordine obbligatorio (0.5.4 prima di 0.5.5).
-- **R4 (basso):** script admin `log-agent-memory.sh` e `seed-agent-memory.py` potrebbero usare anon key invece di service_role. Mitigazione: verificare che usino service_role (dovrebbero, essendo script admin). Se usano anon key, la 0.5.2 blocca la scrittura.
+- **R1 (medio):** se 0.5.4 non sposta correttamente le route sotto `/api/admin/`, il frontend (`rankings-wizard.tsx` riga 666) chiama ancora `/api/snapshots/save` e ottiene 404. Mitigazione: aggiornare l'URL in `rankings-wizard.tsx` nello stesso commit.
+- **R2 (basso):** se 0.5.5 abilita RLS su `beatport_snapshots` prima che 0.5.4 sia completato, l'import snapshot fallisce. Mitigazione: ordine obbligatorio (0.5.4 prima di 0.5.5).
+- **R3 (basso):** le verifiche 0.5.2 e 0.5.3 potrebbero rivelare che le tabelle non possono essere protette senza rompere funzionalità. In quel caso, la protezione viene rinviata a una fase successiva o al refactoring architetturale. Non è un rischio di questa fase, ma un output della verifica.
 
 **Punto di verifica:**
+
+*Modifiche esecutive:*
 1. Supabase Dashboard → Security → Advisor → verificare che i warning `rls_disabled_in_public` per `beatport_snapshots`, `beatport_chart_history`, `followed_artists` siano risolti.
-2. Supabase Dashboard → Security → Advisor → verificare che il warning `sensitive_columns_exposed` per `agent_memory` sia risolto.
-3. Eseguire da SQL Editor:
+2. Eseguire da SQL Editor:
    ```sql
    SELECT tablename, rowsecurity, policyname, qual
    FROM pg_tables t
    LEFT JOIN pg_policies p ON p.tablename = t.tablename
-   WHERE t.tablename IN ('beatport_snapshots', 'beatport_chart_history', 'followed_artists', 'agent_memory')
+   WHERE t.tablename IN ('beatport_snapshots', 'beatport_chart_history', 'followed_artists')
    ORDER BY t.tablename, p.cmd;
    ```
-   Verificare: RLS abilitata per tutte e 4, policy `USING (false)` per `agent_memory`, policy `USING (true)` SELECT + `USING (false)` INSERT/UPDATE/DELETE per le 3 tabelle snapshot.
-4. Test funzionale: login come admin → import classifiche via `rankings-wizard` → deve funzionare (usa service_role tramite la nuova route `/api/admin/snapshots/save`).
-5. Test funzionale: login come utente non-admin → tentare POST `/api/admin/snapshots/save` → deve restituire 401/403.
-6. Test funzionale: verificare che `beta_feedback` insert utente funzioni (se 0.5.3 applicata con service_role confermato).
-7. Eseguire script `scripts/seed-agent-memory.py` → deve funzionare (usa service_role, bypassa RLS).
-8. Documentare i warning residui (su `app_state` e tabelle FASE C) e confermare che saranno risolti nella Fase 1.
+   Verificare: RLS abilitata per tutte e 3, policy `USING (true)` SELECT + `USING (false)` INSERT/UPDATE/DELETE.
+3. Test funzionale: login come admin → import classifiche via `rankings-wizard` → deve funzionare (usa service_role tramite la nuova route `/api/admin/snapshots/save`).
+4. Test funzionale: login come utente non-admin → tentare POST `/api/admin/snapshots/save` → deve restituire 401/403.
+
+*Verifiche non esecutive (0.5.2 e 0.5.3):*
+5. Documento di verifica compilato per `agent_memory` con tutti i campi (componenti, route, lettura, scrittura, admin-only, proteggibilità).
+6. Documento di verifica compilato per `beta_feedback` con tutti i campi (componenti, route, lettura, scrittura, admin-only/utenti, tipo di chiave, proteggibilità).
+7. Decisione documentata per ciascuna delle due tabelle: "protezione possibile in fase successiva" oppure "rinvio al refactoring architetturale".
+
+*Verifica finale:*
+8. Supabase Dashboard → Security → Advisor → documentare i warning residui:
+   - `sensitive_columns_exposed` per `agent_memory` — risolto? (solo se la verifica 0.5.2 ha portato a una protezione esecutiva, altrimenti rimane e sarà risolto in fase successiva)
+   - `sensitive_columns_exposed` per `beta_feedback` — risolto? (solo se la verifica 0.5.3 ha portato a una protezione esecutiva, altrimenti rimane e sarà risolto in fase successiva)
+   - `sensitive_columns_exposed` per `app_state` — sarà risolto nella Fase 1.
+   - Warning su tabelle FASE C (se emergency fix applicato) — saranno risolti nella Fase 1.
 
 **Stato:** ☐ Da completare
 
