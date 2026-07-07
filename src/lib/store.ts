@@ -3433,7 +3433,10 @@ export async function loadFromCloud(): Promise<void> {
         // aggiorna quelle esistenti con i dati cloud, aggiungi le nuove.
         // Non droppare MAI una label acquisita, anche se esce dalla classifica.
         const globalLabels = globalData.labels || [];
-        const localById = new Map(currentState.labels.map((l: any) => [l.id, l]));
+        // 🔒 FIX CRITICO: usa useAppStore.getState() invece di currentState
+        // (currentState non è definito in questa funzione → ReferenceError)
+        const currentStoreState = useAppStore.getState();
+        const localById = new Map(currentStoreState.labels.map((l: any) => [l.id, l]));
 
         // Step 1: Aggiorna le label cloud preservando i campi personali dal locale
         const updatedFromCloud = globalLabels.map((cl: any) => {
@@ -3460,7 +3463,7 @@ export async function loadFromCloud(): Promise<void> {
 
         // Step 2: Aggiungi le label locali che NON sono nel cloud (preservazione storico)
         const cloudIds = new Set(globalLabels.map((l: any) => l.id));
-        const localOnlyLabels = currentState.labels.filter(
+        const localOnlyLabels = currentStoreState.labels.filter(
           (l: any) => !cloudIds.has(l.id)
         );
 
