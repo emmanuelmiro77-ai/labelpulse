@@ -60,11 +60,99 @@ Il piano è diviso in **7 fasi**. Ogni fase ha:
 
 ---
 
+## FASE 0.5 — SECURITY HARDENING
+
+**Obiettivo:** risolvere i warning del Supabase Security Advisor che possono essere corretti senza modificare l'architettura. Queste correzioni sono **indipendenti** dal refactoring strutturale e riducono la superficie di attacco prima di iniziare le fasi migratorie.
+
+**Dipendenze:** FASE 0 completata (backup disponibile come rollback).
+
+**Modifiche database (ordine obbligatorio):**
+
+0.5.1. **Protezione `followed_artists`** (warning `rls_disabled_in_public`):
+- Abilitare RLS (attualmente DISABLED).
+- Policy `FOR SELECT USING (true)` — tutti possono leggere.
+- Policy `FOR INSERT/UPDATE/DELETE USING (false)` — nessun accesso client in scrittura.
+- Giustificazione: tabella orfana, non referenziata da codice applicativo. Zero impatto funzionale.
+
+0.5.2. **Protezione `agent_memory`** (warning `sensitive_columns_exposed`):
+- RLS già abilitata, sostituire le policy esistenti `USING (true)`.
+- Policy `FOR SELECT USING (false)` — blocca lettura client.
+- Policy `FOR INSERT/UPDATE/DELETE USING (false)` — blocca scrittura client.
+- Giustificazione: tabella usata solo da script admin (`scripts/log-agent-memory.sh`, `scripts/seed-agent-memory.py`) che usano service_role (bypassa RLS). Zero impatto funzionale.
+
+0.5.3. **Verifica `beta_feedback` prima della protezione** (warning `sensitive_columns_exposed`):
+- Verificare se `supabaseKey` in `src/app/api/beta-feedback/route.ts` riga 230 è `SUPABASE_SERVICE_ROLE_KEY` o `NEXT_PUBLIC_SUPABASE_ANON_KEY`.
+- **Se service_role:** applicare policy `FOR SELECT USING (false)` + `FOR UPDATE USING (false)` + mantenere `FOR INSERT WITH CHECK (true)` (la route verifica già `getServerSession` lato server). Zero modifica codice.
+- **Se anon key:** NON applicare RLS in questa fase. Rimandare alla Fase 6 (RLS lato API route con JWT utente). Documentare il rinvio.
+
+0.5.4. **Protezione route amministrative snapshot Beatport** (warning indiretto: route senza auth):
+- Le route `/api/snapshots/save`, `/api/snapshots/latest`, `/api/snapshots/diff/[date]` non hanno auth check e usano anon key.
+- Modificare `src/lib/snapshots.ts` funzione `getServerSupabase()` (riga 72) per usare `SUPABASE_SERVICE_ROLE_KEY` invece di `NEXT_PUBLIC_SUPABASE_ANON_KEY`.
+- Aggiungere auth check `getServerSession` + `ADMIN_EMAILS` in:
+  - `/api/snapshots/save/route.ts` (POST) — solo admin può importare snapshot.
+  - `/api/snapshots/latest/route.ts` (GET) — lettura pubblica OK, ma verificare se serve.
+  - `/api/snapshots/diff/[date]/route.ts` (GET) — lettura pubblica OK, ma verificare se serve.
+- Spostare le route sotto `/api/admin/snapshots/*` (coerente con `LABELPULSE_FINAL_ARCHITECTURE.md` sezione 5.4: admin-only usa service_role).
+- Giustificazione: le snapshot sono dati globali scritti solo dall'admin. L'anon key non deve poter scrivere.
+
+0.5.5. **Protezione `beatport_snapshots` e `beatport_chart_history`** (warning `rls_disabled_in_public`):
+- Abilitare RLS (attualmente DISABLED).
+- Policy `FOR SELECT USING (true)` — tutti possono leggere.
+- Policy `FOR INSERT/UPDATE/DELETE USING (false)` — nessun accesso client in scrittura.
+- Giustificazione: dopo 0.5.4, le route usano service_role (bypassa RLS), quindi l'INSERT admin continua a funzionare. Gli utenti non possono scrivere.
+
+0.5.6. **Verifica finale Security Advisor**:
+- Eseguire il Security Advisor da Supabase Dashboard → Security → Advisor.
+- Verificare che i warning `rls_disabled_in_public` e `sensitive_columns_exposed` siano risolti per le tabelle trattate in questa fase.
+- I warning residui su `app_state` e tabelle FASE C saranno risolti nella Fase 1 (richiedono modifica architetturale).
+- Documentare i warning residui e la fase in cui saranno risolti.
+
+**File modificati:**
+- `supabase-schema-snapshots.sql` (RLS abilitata + policy per `beatport_snapshots`, `beatport_chart_history`, `followed_artists`)
+- `supabase-schema-agent-memory.sql` (policy sostituite con `USING (false)`)
+- Nuovo file: `supabase-migration-000-security-hardening.sql` (script consolidato per SQL Editor)
+- `src/lib/snapshots.ts` (`getServerSupabase` → service_role)
+- `src/app/api/snapshots/save/route.ts` (auth check admin + spostamento sotto `/api/admin/snapshots/`)
+- `src/app/api/snapshots/latest/route.ts` (verifica auth o mantenimento pubblico)
+- `src/app/api/snapshots/diff/[date]/route.ts` (verifica auth o mantenimento pubblico)
+- Eventualmente: `src/app/api/admin/snapshots/save/route.ts` (nuova posizione)
+- Eventualmente: `src/app/api/admin/snapshots/latest/route.ts`
+- Eventualmente: `src/app/api/admin/snapshots/diff/[date]/route.ts`
+- `src/app/api/beta-feedback/route.ts` (verifica `supabaseKey` — sola ispezione, modifica eventuale)
+
+**Rischi:**
+- **R1 (medio):** se 0.5.3 rivela che `beta_feedback` usa anon key e si applica comunque RLS `USING (false)`, la route admin smette di leggere i feedback. Mitigazione: la verifica 0.5.3 è binaria, si applica RLS solo se service_role è confermato.
+- **R2 (medio):** se 0.5.4 non sposta correttamente le route sotto `/api/admin/`, il frontend (`rankings-wizard.tsx` riga 666) chiama ancora `/api/snapshots/save` e ottiene 404. Mitigazione: aggiornare l'URL in `rankings-wizard.tsx` nello stesso commit.
+- **R3 (basso):** se 0.5.5 abilita RLS su `beatport_snapshots` prima che 0.5.4 sia completato, l'import snapshot fallisce. Mitigazione: ordine obbligatorio (0.5.4 prima di 0.5.5).
+- **R4 (basso):** script admin `log-agent-memory.sh` e `seed-agent-memory.py` potrebbero usare anon key invece di service_role. Mitigazione: verificare che usino service_role (dovrebbero, essendo script admin). Se usano anon key, la 0.5.2 blocca la scrittura.
+
+**Punto di verifica:**
+1. Supabase Dashboard → Security → Advisor → verificare che i warning `rls_disabled_in_public` per `beatport_snapshots`, `beatport_chart_history`, `followed_artists` siano risolti.
+2. Supabase Dashboard → Security → Advisor → verificare che il warning `sensitive_columns_exposed` per `agent_memory` sia risolto.
+3. Eseguire da SQL Editor:
+   ```sql
+   SELECT tablename, rowsecurity, policyname, qual
+   FROM pg_tables t
+   LEFT JOIN pg_policies p ON p.tablename = t.tablename
+   WHERE t.tablename IN ('beatport_snapshots', 'beatport_chart_history', 'followed_artists', 'agent_memory')
+   ORDER BY t.tablename, p.cmd;
+   ```
+   Verificare: RLS abilitata per tutte e 4, policy `USING (false)` per `agent_memory`, policy `USING (true)` SELECT + `USING (false)` INSERT/UPDATE/DELETE per le 3 tabelle snapshot.
+4. Test funzionale: login come admin → import classifiche via `rankings-wizard` → deve funzionare (usa service_role tramite la nuova route `/api/admin/snapshots/save`).
+5. Test funzionale: login come utente non-admin → tentare POST `/api/admin/snapshots/save` → deve restituire 401/403.
+6. Test funzionale: verificare che `beta_feedback` insert utente funzioni (se 0.5.3 applicata con service_role confermato).
+7. Eseguire script `scripts/seed-agent-memory.py` → deve funzionare (usa service_role, bypassa RLS).
+8. Documentare i warning residui (su `app_state` e tabelle FASE C) e confermare che saranno risolti nella Fase 1.
+
+**Stato:** ☐ Da completare
+
+---
+
 ## FASE 1 — MIGRAZIONE SCHEMA DATABASE (user_id + RLS)
 
 **Obiettivo:** portare lo schema Supabase alla conformità con la specifica: ogni tabella personale usa `user_id UUID REFERENCES auth.users(id)` e RLS basata su `auth.uid()`.
 
-**Dipendenze:** FASE 0 completata.
+**Dipendenze:** FASE 0.5 completata e verificata.
 
 **Modifiche database (ordine obbligatorio):**
 
@@ -397,7 +485,9 @@ ALTER TABLE audit_log ENABLE ROW LEVEL SECURITY;
 ## 2. MATRICE DI DIPENDENZE
 
 ```
-FASE 0 (snapshot)
+FASE 0 (snapshot pre-migrazione)
+  ↓
+FASE 0.5 (security hardening — RLS indipendenti)
   ↓
 FASE 1 (schema: user_id + RLS)
   ↓
