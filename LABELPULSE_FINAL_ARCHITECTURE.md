@@ -10,12 +10,13 @@ Questo documento non descrive lo stato attuale (analizzato in `LABELPULSE_SYSTEM
 
 ### 1.1 Principi fondanti
 
-L'architettura finale si regge su quattro principi non negoziabili, derivati direttamente dalla Costituzione:
+L'architettura finale si regge su cinque principi non negoziabili, derivati direttamente dalla Costituzione:
 
 1. **Single Source of Truth** — ogni dato persistente ha un solo proprietario (Supabase PostgreSQL), una sola tabella, un solo flusso di lettura, un solo flusso di scrittura.
 2. **Cloud-only** — il browser è un visualizzatore. Non memorizza dati utente in modo persistente. L'app funziona solo online.
 3. **RLS come barriera di sicurezza** — l'isolamento multi-tenant è garantito a livello database da Row Level Security, non da filtri lato applicazione.
 4. **Accesso dati unificato** — un solo layer di accesso dati per entità. I componenti UI non parlano mai direttamente con Supabase.
+5. **Decentralizzazione dello stato** — nessun store centrale (né Zustand né Context globale). Lo stato è distribuito per dominio funzionale, gestito da hook e business service dedicati. Context è riservato a stato realmente globale (auth, tema, notifiche).
 
 ### 1.2 Stack tecnologico finale
 
@@ -35,6 +36,7 @@ L'architettura finale si regge su quattro principi non negoziabili, derivati dir
 I seguenti componenti, presenti nell'architettura attuale, **non esistono** nell'architettura finale:
 
 - Zustand `persist` middleware (nessuna persistenza locale)
+- Zustand store centrale `useAppStore` (sostituito da hook per dominio)
 - `idbStorage` adapter (nessun IndexedDB per dati utente)
 - `robustStorage` custom StateStorage (nessun backup localStorage)
 - `auto-backup.ts` (nessuno snapshot locale)
@@ -48,6 +50,19 @@ I seguenti componenti, presenti nell'architettura attuale, **non esistono** nell
 - Sidecar backup (`SNAPSHOTS_BACKUP_KEY`, `PROFILE_BACKUP_KEY`, `ARTISTS_SIDECAR_KEY`)
 - `emergencyClearLocalStorage` (nessun localStorage da svuotare)
 - `markLocalProfileEdit` (nessuna logica "preserva locale per N secondi")
+- **AppStateContext centrale** (sostituito da hook per dominio — vedi sezione 6)
+
+### 1.4 Niente store centrale
+
+L'architettura finale **proibisce esplicitamente** la creazione di uno store centrale dell'applicazione, sia esso Zustand o React Context. Lo stato è distribuito per dominio funzionale (Profile, Labels, Demo Library, Pitch Manager, Statistics, ecc.), e ogni dominio ha i propri hook e business service dedicati.
+
+Context è utilizzato **solo** per stato realmente globale:
+- `AuthProvider` (sessione NextAuth)
+- `ThemeContext` (tema chiaro/scuro, se presente)
+- `ToastContext` (notifiche transient)
+- `LocaleContext` (lingua corrente)
+
+Nessun `AppStateContext` contiene `demos`, `labels`, `profile`, `pitches`, `releases` insieme. Questi dati vivono negli hook dedicati del rispettivo dominio.
 
 ---
 
@@ -230,14 +245,14 @@ Niente da pulire in localStorage/IndexedDB (non c'è nulla da pulire).
 
 ## 4. GESTIONE LETTURA DATI
 
-### 4.1 Pattern unificato
+### 4.1 Pattern per dominio funzionale
 
-Ogni entità ha un hook dedicato che è l'**unico** punto di lettura:
+Ogni dominio funzionale (Profile, Labels, Demo Library, Pitch Manager, Statistics, ecc.) ha un hook dedicato che è l'**unico** punto di lettura per i dati di quel dominio. Gli hook mantengono stato locale (in memoria, `useState`), non condiviso globalmente.
 
 ```typescript
-// Esempio: useDemos
-function useDemos() {
-  const { demos, setDemos } = useAppState();
+// Esempio: useDemoLibrary (dominio Demo Library)
+function useDemoLibrary() {
+  const [demos, setDemos] = useState<Demo[]>([]);
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState<string | null>(null);
 
@@ -254,108 +269,133 @@ function useDemos() {
     } finally {
       setLoading(false);
     }
-  }, [setDemos]);
+  }, []);
+
+  useEffect(() => { refresh(); }, [refresh]);
 
   return { demos, loading, error, refresh };
 }
 ```
 
-### 4.2 Boot iniziale
+L'hook è autonomo: gestisce il proprio stato, il proprio loading, il proprio errore. Non dipende da un Context centrale.
 
-Un hook `useAppData()` (chiamato una sola volta in `layout.tsx`) orchestra il caricamento iniziale:
+### 4.2 Boot iniziale decentralizzato
 
-```typescript
-function useAppData() {
-  const { data: session, status } = useSession();
-  const [bootState, setBootState] = useState<'loading' | 'ready' | 'error'>('loading');
-  const [bootError, setBootError] = useState<string | null>(null);
+Non esiste un hook `useAppData()` centrale che carica tutto. Ogni dominio carica i propri dati indipendentemente quando il suo primo componente viene montato.
 
-  useEffect(() => {
-    if (status !== 'authenticated') return;
-
-    (async () => {
-      try {
-        const [rankings, profile, demos, labels, pitches, releases] = await Promise.all([
-          fetch('/api/rankings').then(r => r.json()),
-          fetch('/api/profile').then(r => r.json()),
-          fetch('/api/demos').then(r => r.json()),
-          fetch('/api/label-data').then(r => r.json()),
-          fetch('/api/pitches').then(r => r.json()),
-          fetch('/api/releases').then(r => r.json()),
-        ]);
-
-        // Singolo setState con tutti i dati
-        useAppState.getState().setAll({
-          labels: mergeGlobalAndPersonal(rankings.labels, labels.labels),
-          demos: demos.demos,
-          userProfile: profile.profile,
-          savedPitches: pitches.pitches.filter(p => p.status === 'draft'),
-          sentCampaigns: pitches.pitches.filter(p => p.status === 'sent'),
-          releases: releases.releases,
-          rankingSnapshots: rankings.snapshots,
-          rankingsUpdatedAt: rankings.updatedAt,
-        });
-
-        setBootState('ready');
-      } catch (err) {
-        setBootError(err.message);
-        setBootState('error');
-      }
-    })();
-  }, [status, session?.user?.email]);
-
-  return { bootState, bootError };
-}
 ```
+Mount App
+  ↓
+AuthProvider verifica sessione
+  ↓ sessione OK
+  ↓
+Render layout (vuoto, solo shell)
+  ↓
+Route corrente monta i componenti del dominio
+  ├─ /dashboard → monta Dashboard, che usa useDemoLibrary + useLabels + useRankings
+  ├─ /labels → monta LabelFinder, che usa useLabels
+  ├─ /demos → monta DemoTracker, che usa useDemoLibrary
+  ├─ /pitch → monta PitchGenerator, che usa usePitchManager
+  └─ /profile → monta ProducerProfile, che usa useProfile
+  ↓
+Ogni hook fa il proprio fetch /api/<entita> al mount
+  ↓
+Stato locale popolato (in memoria)
+```
+
+**Vantaggi del boot decentralizzato:**
+- **Lazy loading** — solo i dati del dominio corrente vengono caricati. Se l'utente va direttamente a /profile, non carica demos/labels/pitches.
+- **Isolamento** — un errore in un dominio non blocca gli altri.
+- **Semplicità** — ogni hook è autonomo, non c'è orchestrazione centrale.
+
+**Trade-off:**
+- **Fetch multipli al mount** — se una pagina usa 3 hook, ci sono 3 fetch. Mitigato da fetch paralleli (`Promise.all`) dentro la pagina se necessario, o da cache HTTP.
+- **Niente stato condiviso** — se due componenti della stessa pagina usano `useDemoLibrary`, fanno 2 fetch. Mitigazione: pattern di cache request (vedi 4.5).
 
 ### 4.3 Lettura classifiche globali
 
-Le classifiche Beatport sono dati globali (sola lettura per gli utenti). Vengono lette dalla riga `app_state id='global'`:
+Le classifiche Beatport sono dati globali (sola lettura per gli utenti). Vengono lette dalla riga `app_state id='global'` dall'hook `useRankings` del dominio Classifiche:
 
-```sql
--- API route /api/rankings GET
-SELECT data, updated_at FROM app_state WHERE id = 'global';
+```typescript
+function useRankings() {
+  const [labels, setLabels] = useState<Label[]>([]);
+  const [snapshots, setSnapshots] = useState<RankingSnapshot[]>([]);
+  const [updatedAt, setUpdatedAt] = useState<string | null>(null);
+
+  // fetch /api/rankings al mount
+  ...
+}
 ```
 
 Policy RLS: `FOR SELECT USING (id = 'global')` — tutti possono leggere la riga globale, nessuno può scriverla (eccetto admin via service_role).
 
-### 4.4 Realtime (opzionale)
+### 4.4 Realtime (opzionale, per dominio)
 
-Per aggiornare le classifiche live quando l'admin pusha nuovi dati:
+Per aggiornare le classifiche live quando l'admin pusha nuovi dati, l'hook `useRankings` sottoscrive il realtime:
 
 ```typescript
-// useRankingsRealtime()
-useEffect(() => {
-  const channel = supabase
-    .channel('global-rankings')
-    .on('postgres_changes',
-      { event: 'UPDATE', schema: 'public', table: 'app_state', filter: 'id=eq.global' },
-      (payload) => {
-        // Aggiorna solo le classifiche, non tutto lo stato
-        useAppState.getState().setLabels(payload.new.data.labels);
-        useAppState.getState().setRankingSnapshots(payload.new.data.rankingSnapshots);
-      }
-    )
-    .subscribe();
-
-  return () => { supabase.removeChannel(channel); };
-}, []);
+function useRankings() {
+  ...
+  useEffect(() => {
+    const channel = supabase
+      .channel('global-rankings')
+      .on('postgres_changes',
+        { event: 'UPDATE', schema: 'public', table: 'app_state', filter: 'id=eq.global' },
+        (payload) => {
+          setLabels(payload.new.data.labels);
+          setSnapshots(payload.new.data.rankingSnapshots);
+          setUpdatedAt(payload.new.data.rankingsUpdatedAt);
+        }
+      )
+      .subscribe();
+    return () => { supabase.removeChannel(channel); };
+  }, []);
+  ...
+}
 ```
 
-Realtime è **solo per la riga globale**. Non ci sono subscription a tabelle personali (l'utente vede i propri cambiamenti immediatamente perché è lui a farli).
+Realtime è **locale al dominio Classifiche**. Non c'è una subscription globale che aggiorna uno store centrale.
+
+### 4.5 Cache request (deduplicazione fetch)
+
+Per evitare fetch duplicati quando più componenti dello stesso dominio sono montati contemporaneamente, si usa una cache request in-memory (non persistente):
+
+```typescript
+// lib/request-cache.ts (in-memory, per sessione)
+const requestCache = new Map<string, Promise<any>>();
+
+export function dedupeFetch(key: string, fetcher: () => Promise<any>): Promise<any> {
+  if (!requestCache.has(key)) {
+    requestCache.set(key, fetcher().finally(() => {
+      // Pulisci dopo 30s (i dati possono cambiare)
+      setTimeout(() => requestCache.delete(key), 30000);
+    }));
+  }
+  return requestCache.get(key)!;
+}
+
+// Uso nell'hook
+const data = await dedupeFetch('demos', () => fetch('/api/demos').then(r => r.json()));
+```
+
+**Caratteristiche:**
+- **In-memory** — non persistente, scompare al refresh
+- **TTL 30s** — i dati vecchi vengono rifetchati
+- **Per-key** — ogni entità ha la propria chiave
+- **Non è una fonte di verità** — è solo ottimizzazione di rete
 
 ---
 
 ## 5. GESTIONE SCRITTURA DATI
 
-### 5.1 Pattern unificato
+### 5.1 Pattern per dominio funzionale
 
-Ogni entità ha un hook dedicato che è l'**unico** punto di scrittura:
+Ogni dominio ha un hook dedicato che è l'**unico** punto di scrittura per i dati di quel dominio. L'hook mantiene lo stato locale e lo aggiorna solo dopo conferma del cloud.
 
 ```typescript
-// Esempio: useDemos
-function useDemos() {
-  const { demos, setDemos } = useAppState();
+// Esempio: useDemoLibrary (dominio Demo Library)
+function useDemoLibrary() {
+  const [demos, setDemos] = useState<Demo[]>([]);
   const [saving, setSaving] = useState(false);
   const [error, setError] = useState<string | null>(null);
 
@@ -382,7 +422,7 @@ function useDemos() {
     } finally {
       setSaving(false);
     }
-  }, [setDemos]);
+  }, []);
 
   return { demos, saving, error, createDemo, updateDemo, deleteDemo };
 }
@@ -394,7 +434,8 @@ function useDemos() {
 - **Stato `saving`** — l'UI mostra "salvataggio..." durante la richiesta.
 - **Errore esplicito** — se la richiesta fallisce, `error` viene settato e propagato al componente.
 - **Nessuna coda** — non c'è retry automatico. L'utente vede l'errore e può ritentare manualmente.
-- **Dato confermato** — lo stato viene aggiornato con il dato ritornato dal cloud, non con quello inviato (il cloud potrebbe aver modificato timestamp, id, ecc.).
+- **Dato confermato** — lo stato viene aggiornato con il dato ritornato dal cloud, non con quello inviato.
+- **Stato locale** — ogni hook mantiene il proprio stato, non c'è Context condiviso.
 
 ### 5.3 API Route pattern
 
@@ -466,76 +507,157 @@ L'uso di service_role è legittimo qui perché:
 
 ## 6. GESTIONE STATO FRONTEND
 
-### 6.1 Stato in memoria per la sessione
+### 6.1 Niente store centrale
 
-Lo stato frontend è **solo in memoria**, non persistito. Vive in un React Context:
+L'architettura finale **non ha uno store centrale**. Non c'è `useAppStore` (Zustand) né `AppStateContext` (Context globale). Lo stato è distribuito per dominio funzionale.
+
+Ogni dominio funzionale ha:
+- Un **business service** (libreria TypeScript con funzioni pure per chiamare le API route)
+- Un **hook dedicato** (React hook che usa il service, mantiene stato locale in `useState`)
+
+### 6.2 Domini funzionali
+
+| Dominio | Service | Hook | Tabelle Supabase |
+|---------|---------|------|------------------|
+| Profile | `services/profile-service.ts` | `useProfile` | `user_profiles` |
+| Labels | `services/labels-service.ts` | `useLabels` | `label_personal_data` + `app_state id='global'` (read) |
+| Demo Library | `services/demos-service.ts` | `useDemoLibrary` | `demo_submissions` |
+| Pitch Manager | `services/pitches-service.ts` | `usePitchManager` | `pitch_campaigns` |
+| Releases | `services/releases-service.ts` | `useReleases` | `user_releases` |
+| Classifiche | `services/rankings-service.ts` | `useRankings` | `app_state id='global'` (read-only) |
+| Artists | `services/artists-service.ts` | `useArtists` | (tabella da definire) |
+| Statistics | `services/statistics-service.ts` | `useStatistics` | aggregato da demo_submissions + label_personal_data |
+| Notifications | `services/notifications-service.ts` | `useNotifications` | `push_subscriptions` |
+
+### 6.3 Struttura di un business service
 
 ```typescript
-// AppStateContext
-interface AppState {
-  // Dati utente (letti dal cloud al boot, modificati dalle azioni)
-  demos: Demo[];
-  labels: Label[];
-  userProfile: UserProfile;
-  savedPitches: SavedPitch[];
-  sentCampaigns: SentCampaign[];
-  releases: Release[];
-  rankingSnapshots: RankingSnapshot[];
-  rankingsUpdatedAt: string | null;
-  locale: Locale;
+// services/demos-service.ts
+export const demosService = {
+  async list(): Promise<Demo[]> {
+    const res = await fetch('/api/demos');
+    if (!res.ok) throw new Error(`HTTP ${res.status}`);
+    const data = await res.json();
+    return data.demos;
+  },
 
-  // Stato UI
-  activeTab: Tab;
-  selectedLabelId: string | null;
-  selectedArtistId: string | null;
+  async create(demo: NewDemo): Promise<Demo> {
+    const res = await fetch('/api/demos', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify(demo),
+    });
+    if (!res.ok) {
+      const err = await res.json();
+      throw new Error(err.error || `HTTP ${res.status}`);
+    }
+    const data = await res.json();
+    return data.demo;
+  },
 
-  // Stato boot
-  bootState: 'loading' | 'ready' | 'error';
-  bootError: string | null;
+  async update(id: string, updates: Partial<Demo>): Promise<Demo> { ... },
+  async delete(id: string): Promise<void> { ... },
+};
+```
+
+Il service è una libreria di funzioni pure (no stato). È l'unico punto che conosce l'URL dell'API route e il formato di richiesta/risposta.
+
+### 6.4 Struttura di un hook dedicato
+
+```typescript
+// hooks/use-demo-library.ts
+export function useDemoLibrary() {
+  const [demos, setDemos] = useState<Demo[]>([]);
+  const [loading, setLoading] = useState(false);
+  const [saving, setSaving] = useState(false);
+  const [error, setError] = useState<string | null>(null);
+
+  const refresh = useCallback(async () => {
+    setLoading(true);
+    setError(null);
+    try {
+      const data = await demosService.list();
+      setDemos(data);
+    } catch (err) {
+      setError(err.message);
+    } finally {
+      setLoading(false);
+    }
+  }, []);
+
+  const createDemo = useCallback(async (demo: NewDemo) => {
+    setSaving(true);
+    setError(null);
+    try {
+      const created = await demosService.create(demo);
+      setDemos(prev => [...prev, created]);
+      return created;
+    } catch (err) {
+      setError(err.message);
+      throw err;
+    } finally {
+      setSaving(false);
+    }
+  }, []);
+
+  useEffect(() => { refresh(); }, [refresh]);
+
+  return { demos, loading, saving, error, refresh, createDemo, updateDemo, deleteDemo };
 }
-
-const AppStateContext = createContext<AppState>();
 ```
 
-### 6.2 Ciclo di vita dello stato
+L'hook è autonomo: stato locale, loading, error, azioni. Non condivide stato con altri hook.
+
+### 6.5 Ciclo di vita dello stato (per dominio)
 
 ```
-Mount app
+Mount componente del dominio (es. DemoTracker)
   ↓
-bootState = 'loading'
+useDemoLibrary() monta
   ↓
-useAppData() fetcha tutto dal cloud
+useEffect → refresh() → fetch /api/demos
   ↓
-setAll(data) → stato popolato
+Stato locale popolato (demos, loading=false)
   ↓
-bootState = 'ready'
+Utente interagisce (createDemo, updateDemo, deleteDemo)
   ↓
-Utente interagisce (modifica, aggiunta, eliminazione)
+Hook chiama service → API route → conferma cloud
   ↓
-Hook dedicato esegue API route
+Stato locale aggiornato con dato confermato
   ↓
-Stato aggiornato con dato confermato (solo se successo)
+Unmount componente (cambio route, chiusura)
   ↓
-Unmount app (chiusura tab, refresh, logout)
+Stato locale perso (non c'è persistenza)
   ↓
-Stato perso (non c'è persistenza)
-  ↓
-Prossima apertura: nuovo boot dal cloud
+Prossimo mount: nuovo fetch dal cloud
 ```
 
-### 6.3 Refresh pagina
+### 6.6 Condivisione stato tra componenti dello stesso dominio
 
-Al refresh (F5), lo stato in memoria viene perso. Il boot ricomincia:
-1. NextAuth verifica cookie sessione (ancora valido)
-2. `useAppData()` rifetcha tutto dal cloud
-3. Stato ripopolato
+Se due componenti della stessa pagina (es. `DemoTracker` + `Dashboard` che mostra conteggio demo) hanno bisogno degli stessi dati, ci sono 3 opzioni:
 
-L'utente vede loading per ~1-2 secondi, poi i dati. Non ci sono "flash" di dati stale perché non c'è persistenza locale.
+1. **Cache request (deduplicazione fetch)** — vedi sezione 4.5. Entrambi i componenti chiamano `useDemoLibrary()`, ma la fetch è deduplicata dalla cache in-memory. Ognuno mantiene il proprio stato locale, ma la rete viene chiamata una volta sola.
 
-### 6.4 Logout
+2. **Lift state up** — il componente padre usa `useDemoLibrary()` e passa i dati come props ai figli. Pattern React standard.
+
+3. **Context locale al dominio** (solo se strettamente necessario) — se il dominio ha molti componenti annidati che condividono stato complesso, si può creare un `DemoLibraryContext` **scoped al dominio**, non globale. Il Context vive solo dentro l'albero del dominio (es. `<DemoLibraryProvider>` avvolge solo i componenti demo).
+
+L'opzione 3 è l'eccezione, non la regola. La maggior parte dei domini usa opzione 1 o 2.
+
+### 6.7 Refresh pagina
+
+Al refresh (F5), tutti gli stati locali vengono persi. Ogni hook rifetcha i propri dati al mount. L'utente vede loading per ogni componente, poi i dati. Non ci sono "flash" di dati stale perché non c'è persistenza locale.
+
+### 6.8 Logout
 
 ```
-Logout → NextAuth signOut → cookie eliminato → stato azzerato → redirect /auth
+Logout → NextAuth signOut → cookie eliminato → redirect /auth
+  ↓
+Tutti i componenti si smontano
+  ↓
+Tutti gli stati locali vengono persi
+  ↓
+Prossimo login: nuovo mount, nuovi fetch
 ```
 
 Niente da pulire in localStorage/IndexedDB. Il prossimo utente che fa login sullo stesso device parte da stato vuoto, popolato dal cloud.
@@ -566,15 +688,31 @@ Niente da pulire in localStorage/IndexedDB. Il prossimo utente che fa login sull
 
 **Perché RLS:** è l'unico meccanismo che garantisce isolamento multi-tenant a livello database. Anche se l'applicazione ha un bug, RLS blocca l'accesso ai dati altrui. La Costituzione (sezione 6) esige RLS, non filtri lato client.
 
-### 7.4 React Context (AppStateContext)
+### 7.4 Business Service (per dominio)
 
-**Perché:** serve un modo per condividere lo stato tra componenti senza prop drilling. Context è il meccanismo nativo React.
+**Perché:** la Costituzione (sezione 4) richiede "un solo layer di accesso dati per tabella". I business service (`demosService`, `labelsService`, ecc.) sono quel layer. Ogni service è l'unico punto che conosce l'URL dell'API route e il formato di richiesta/risposta per la sua entità.
 
-**Perché non Redux/Zustand:** vedi sezione 8.
+**Perché service separato dall'hook:** separazione delle responsabilità. Il service è logica pura (testabile senza React), l'hook è React state management. Se domani si vuole usare il service in un Context o in un componente non-React (es. utility script), è possibile.
 
-### 7.5 Custom hook per entità
+### 7.5 Custom hook per dominio funzionale
 
-**Perché:** la Costituzione (sezione 4) richiede "un solo layer di accesso dati per tabella". Gli hook dedicati (`useDemos`, `useLabels`, ecc.) sono quel layer. I componenti UI usano solo questi hook, non accedono mai direttamente a Supabase o allo store.
+**Perché:** ogni dominio funzionale ha il proprio hook (`useProfile`, `useLabels`, `useDemoLibrary`, ecc.) che usa il service corrispondente. L'hook è l'unico punto dove lo stato del dominio vive in memoria. I componenti UI usano solo questi hook, non accedono mai direttamente a Supabase o a uno store centrale.
+
+**Perché hook separati per dominio (non un hook unico):**
+- **Isolamento** — un errore in `useDemoLibrary` non blocca `useLabels`.
+- **Lazy loading** — solo i dati del dominio corrente vengono caricati.
+- **Semplicità** — ogni hook è autonomo e comprensibile, non un mega-hook che orchesta tutto.
+- **Testabilità** — ogni hook si testa indipendentemente.
+
+### 7.6 React Context (solo per stato realmente globale)
+
+**Perché Context limitato:** Context è il meccanismo React nativo per stato condiviso tra componenti senza prop drilling. Ma non deve diventare un store centrale. È usato **solo** per stato realmente globale:
+- `AuthProvider` (sessione NextAuth)
+- `ThemeContext` (tema)
+- `ToastContext` (notifiche transient)
+- `LocaleContext` (lingua)
+
+Questi sono dati che riguardano l'intera app, non un dominio specifico. Non ci sono `demos`, `labels`, `profile` in un Context globale.
 
 ---
 
@@ -584,80 +722,111 @@ Niente da pulire in localStorage/IndexedDB. Il prossimo utente che fa login sull
 
 Nell'architettura attuale, Zustand è usato con il middleware `persist` per salvare lo stato su IndexedDB. Questo viola direttamente la Costituzione (sezione 3: "Vietati: localStorage persistente, IndexedDB persistente, Zustand persist").
 
-### 8.2 Decisione: rimuovere Zustand
+### 8.2 Decisione: rimuovere Zustand completamente
 
-Nell'architettura finale, **Zustand viene rimosso**. Sostituito da React Context + hook dedicati.
+Nell'architettura finale, **Zustand viene rimosso**. Non sostituito da un altro store globale, ma da hook dedicati per dominio funzionale, ognuno con il proprio stato locale in `useState`.
 
 ### 8.3 Motivazione tecnica
 
-1. **Tentazione della persistenza** — Zustand `persist` è così facile da usare che ogni sviluppatore futuro sarebbe tentato di riattivarlo "solo per un campo". Rimuovendo Zustand, si rimuove la tentazione. React Context non ha middleware persist nativi.
+1. **Tentazione della persistenza** — Zustand `persist` è così facile da usare che ogni sviluppatore futuro sarebbe tentato di riattivarlo "solo per un campo". Rimuovendo Zustand, si rimuove la tentazione.
 
-2. **API implicitamente ottimistica** — Zustand `set()` è sincrono e ottimistico. Nell'architettura finale, le scritture devono essere confermate dal cloud prima di aggiornare lo stato. Context + hook async rendono questo pattern naturale; con Zustand bisognerebbe combattere contro la API nativa.
+2. **Store centrale = anti-pattern** — Zustand incoraggia uno store centrale (`useAppStore`) che contiene tutti i dati. Questo è esattamente il pattern che l'utente vuole evitare: "non voglio che AppStateContext diventi un nuovo store centrale dell'applicazione". Sostituire Zustand con un Context globale sarebbe solo cambiare il nome, non l'architettura.
 
-3. **Single source of truth** — Zustand crea uno "store" che è una fonte di verità separata dal cloud. Anche senza persist, l'abitudine di leggere da `useAppStore(selector)` invece che da `useDemos()` disincentiva l'uso degli hook dedicati. Context è più "verboso" e spinge naturalmente verso hook dedicati.
+3. **API implicitamente ottimistica** — Zustand `set()` è sincrono e ottimistico. Nell'architettura finale, le scritture devono essere confermate dal cloud prima di aggiornare lo stato. Hook con `useState` async rendono questo pattern naturale; con Zustand bisognerebbe combattere contro la API nativa.
 
-4. **Complessità non necessaria** — Zustand eccelle per app con stato complesso e molti aggiornamenti concorrenti. LabelPulse ha stato semplice (liste di dati utente) aggiornato da azioni utente esplicite. Context è sufficiente.
+4. **Single source of truth** — Zustand crea uno "store" che è una fonte di verità separata dal cloud. Anche senza persist, l'abitudine di leggere da `useAppStore(selector)` disincentiva l'uso degli hook dedicati per dominio.
 
-5. **Conformità architetturale** — la Costituzione (sezione 4) descrive l'architettura come "React UI → Custom Hooks → Supabase Client → PostgreSQL". Zustand non compare. La sua presenza è debito tecnico.
+5. **Complessità non necessaria** — Zustand eccelle per app con stato complesso e molti aggiornamenti concorrenti. LabelPulse ha stato semplice (liste di dati utente) aggiornato da azioni utente esplicite. Hook con `useState` sono sufficienti.
+
+6. **Conformità architetturale** — la Costituzione (sezione 4) descrive l'architettura come "React UI → Custom Hooks → Supabase Client → PostgreSQL". Zustand non compare. La sua presenza è debito tecnico.
 
 ### 8.4 Cosa si perde rimuovendo Zustand
 
-- **Selector memoization** — Zustand ottimizza i re-render con selector. Con Context, serve `useMemo` o split context. Soluzione: split context per entità (DemoContext, LabelContext, ecc.) se le performance lo richiedono.
-- **Middleware ecosystem** — Zustand ha middleware per devtools, logging, ecc. Con Context, si implementa manualmente o si usa React DevTools nativo.
+- **Selector memoization** — Zustand ottimizza i re-render con selector. Con hook dedicati, ogni hook ha il proprio stato, i re-render sono limitati al componente che usa quell'hook. Se un dominio ha bisogno di condividere stato tra molti componenti annidati, si usa lift state up o Context scoped al dominio (vedi 6.6).
+- **Middleware ecosystem** — Zustand ha middleware per devtools, logging, ecc. Con hook, si implementa manualmente o si usa React DevTools nativo.
+- **Singola fonte di lettura** — con Zustand, qualsiasi componente legge da `useAppStore(selector)`. Con hook dedicati, ogni componente deve usare l'hook corretto. Più "verboso" ma più esplicito e isolato.
 
-### 8.5 Verifica: Context è sufficiente?
+### 8.5 Verifica: hook dedicati sono sufficienti?
 
 LabelPulse ha:
-- ~6 entità dati (demos, labels, profile, pitches, releases, rankings)
-- ~10 componenti principali che leggono questi dati
+- ~9 domini funzionali (Profile, Labels, Demo Library, Pitch Manager, Releases, Classifiche, Artists, Statistics, Notifications)
+- ~15 componenti principali distribuiti tra i domini
 - Aggiornamenti espliciti (l'utente clicca, non realtime ad alta frequenza)
 
-Context è sufficiente per questo carico. Se in futuro si aggiungono realtime ad alta frequenza (es. chat), si valuterà Zustand per quella specifica entità, ma senza persist.
+Hook dedicati per dominio sono sufficienti per questo carico. Ogni dominio è indipendente, il suo stato vive solo dove serve. Se in futuro un dominio specifico ha bisogno di stato complesso condiviso (es. editor collaborativo realtime), si valuterà Context scoped a quel dominio, mai globale.
 
 ---
 
-## 9. MOTIVAZIONE DEL RIMOZIONE DI CONTEXT ESISTENTI
+## 9. MOTIVAZIONE DELL'USO LIMITATO DI CONTEXT
 
-### 9.1 Stato attuale: AuthProvider + toast + altri Context
+### 9.1 Stato attuale: AuthProvider + store Zustand
 
-L'architettura attuale usa Context per:
-- `AuthProvider` (NextAuth session)
-- Toast notifications
-- Theme (se presente)
+L'architettura attuale usa:
+- `AuthProvider` (NextAuth session) — Context
+- Zustand `useAppStore` — store centrale con persist
+- Toast notifications — Context (se presente)
 
-### 9.2 Decisione: mantenere AuthProvider, aggiungere AppStateContext
+### 9.2 Decisione: mantenere Context solo per stato globale, eliminare store centrale
 
-- **AuthProvider (NextAuth)** — mantenuto. È il bridge sessione browser.
-- **AppStateContext (nuovo)** — aggiunto. Contiene lo stato app in memoria (demos, labels, profile, ecc.).
-- **Toast/Theme Context** — mantenuti se presenti (non sono dati utente, non violano la Costituzione).
+**Context mantenuti (stato realmente globale):**
+- `AuthProvider` (NextAuth) — sessione utente, richiesta da NextAuth
+- `ThemeContext` — tema chiaro/scuro (se presente)
+- `ToastContext` — notifiche transient (se presente)
+- `LocaleContext` — lingua corrente (se presente)
+
+**Context eliminati:**
+- `AppStateContext` (proposto in versione precedente del documento) — **eliminato**. Non deve esistere uno Context centrale per i dati utente.
+
+**Sostituito con:**
+- Hook dedicati per dominio (`useProfile`, `useLabels`, `useDemoLibrary`, ecc.) con stato locale `useState`
+- Business service per dominio (`profileService`, `labelsService`, ecc.) con funzioni pure
 
 ### 9.3 Motivazione
 
-- Context è il meccanismo React nativo per stato condiviso. Non ha persistenza (a differenza di Zustand persist).
-- `AuthProvider` è richiesto da NextAuth, non possiamo rimuoverlo.
-- `AppStateContext` è il sostituto di Zustand per lo stato app in memoria.
+1. **Evitare il nuovo store centrale** — l'utente ha esplicitamente richiesto: "non voglio che AppStateContext diventi un nuovo store centrale dell'applicazione". Sostituire Zustand con un Context globale sarebbe solo cambiare il nome del problema, non risolverlo. L'architettura finale decentralizza lo stato per dominio.
 
-### 9.4 Struttura Context finale
+2. **Context è per stato realmente globale** — auth, tema, notifiche, locale sono dati che riguardano l'intera app e cambiano raramente. Sono il caso d'uso legittimo di Context. Metterci `demos` o `labels` è un abuso: sono dati di un dominio specifico, non globali.
+
+3. **Isolamento del dominio** — se `useDemoLibrary` ha un bug, solo i componenti che usano demo sono affetti. Se `AppStateContext` ha un bug, tutta l'app è affetta. L'isolamento per dominio riduce il blast radius.
+
+4. **Lazy loading naturale** — `useDemoLibrary` carica dati solo quando un componente demo è montato. Un `AppStateContext` globale caricherebbe tutto al boot, anche se l'utente va direttamente a /profile.
+
+5. **Testabilità** — ogni hook si testa indipendentemente. Un Context globale richiede mock dell'intero stato per testare un componente.
+
+### 9.4 Quando Context locale al dominio è legittimo
+
+Context **scoped al dominio** (non globale) è legittimo solo se:
+- Il dominio ha molti componenti annidati (≥3 livelli) che condividono stato complesso
+- Il prop drilling diventa ingestibile
+- Lo stato del dominio cambia frequentemente e serve ottimizzare i re-render
+
+Esempio: se `DemoLibrary` ha `DemoList → DemoCard → DemoActions → DemoResponseManager` che condividono tutti lo stato del demo selezionato, un `<DemoLibraryProvider>` scoped è legittimo. Ma vive solo dentro l'albero demo, non è accessibile globalmente.
+
+Questa è l'eccezione, non la regola. La maggior parte dei domini usa hook dedicati + lift state up.
+
+### 9.5 Struttura Context finale (solo globali)
 
 ```
 AuthProvider (NextAuth)
-  └─ AppStateContext (stato app in memoria)
-       ├─ demos: Demo[]
-       ├─ labels: Label[]
-       ├─ userProfile: UserProfile
-       ├─ savedPitches: SavedPitch[]
-       ├─ sentCampaigns: SentCampaign[]
-       ├─ releases: Release[]
-       ├─ rankingSnapshots: RankingSnapshot[]
-       ├─ activeTab, selectedLabelId, selectedArtistId (UI state)
-       └─ bootState, bootError (boot status)
+  ├─ ThemeContext (tema)
+  ├─ ToastContext (notifiche)
+  ├─ LocaleContext (lingua)
+  └─ [alberi dei componenti, ognuno usa i propri hook dedicati]
+       ├─ /profile → ProducerProfile usa useProfile
+       ├─ /labels → LabelFinder usa useLabels
+       ├─ /demos → DemoTracker usa useDemoLibrary
+       ├─ /pitch → PitchGenerator usa usePitchManager
+       └─ /dashboard → Dashboard usa useDemoLibrary + useLabels + useRankings
 ```
 
 I componenti UI usano:
 ```typescript
-const { demos } = useAppState(); // legge stato
-const { createDemo } = useDemos(); // esegue azione
+const { data: session } = useSession(); // AuthProvider (globale)
+const { theme } = useTheme(); // ThemeContext (globale)
+const { demos, createDemo } = useDemoLibrary(); // hook dedicato (locale al dominio)
 ```
+
+Nessun `useAppState()` globale. Nessun `useAppStore()` Zustand.
 
 ---
 
@@ -716,33 +885,54 @@ Eliminando le cache:
 │                                                                     │
 │  ┌─────────────────────────────────────────────────────────────┐   │
 │  │  React UI (Next.js App Router)                              │   │
-│  │  ┌───────────────────────────────────────────────────────┐  │   │
-│  │  │  Componenti UI                                        │  │   │
-│  │  │  (demo-tracker, label-finder, producer-profile, ...)  │  │   │
-│  │  │  NON parlano direttamente con Supabase                │  │   │
-│  │  └──────────────────────────┬────────────────────────────┘  │   │
-│  │                              │ usano                          │   │
-│  │                              ▼                                │   │
-│  │  ┌───────────────────────────────────────────────────────┐  │   │
-│  │  │  Custom Hook per entità                                │  │   │
-│  │  │  useDemos()  useLabels()  useProfile()  usePitches()   │  │   │
-│  │  │  useReleases()  useRankings()                          │  │   │
-│  │  │  UNICO layer di accesso dati per tabella               │  │   │
-│  │  └──────────────────────────┬────────────────────────────┘  │   │
-│  │                              │ leggono/scrivono               │   │
-│  │                              ▼                                │   │
-│  │  ┌───────────────────────────────────────────────────────┐  │   │
-│  │  │  AppStateContext (React Context, in memoria)           │  │   │
-│  │  │  demos, labels, profile, pitches, releases, rankings   │  │   │
-│  │  │  NESSUNA persistenza (scomparisce al refresh/logout)   │  │   │
-│  │  └───────────────────────────────────────────────────────┘  │   │
-│  └─────────────────────────────────────────────────────────────┘   │
-│                              │                                      │
-│                              │ fetch HTTP (JWT nell'header)         │
-│                              ▼                                      │
-└──────────────────────────────┬──────────────────────────────────────┘
-                               │
-                               ▼ HTTPS
+│  │                                                             │   │
+│  │  ┌─────────────────────────────────────────────────────┐    │   │
+│  │  │  Context GLOBALI (solo stato realmente globale)    │    │   │
+│  │  │  AuthProvider | ThemeContext | ToastContext | Locale │   │   │
+│  │  │  NESSUN AppStateContext centrale                    │    │   │
+│  │  └─────────────────────────────────────────────────────┘    │   │
+│  │                                                             │   │
+│  │  ┌─────────────────────────────────────────────────────┐    │   │
+│  │  │  Componenti UI (per route)                          │    │   │
+│  │  │  /profile → ProducerProfile                         │    │   │
+│  │  │  /labels → LabelFinder                              │    │   │
+│  │  │  /demos → DemoTracker                               │    │   │
+│  │  │  /pitch → PitchGenerator                            │    │   │
+│  │  │  /dashboard → Dashboard                             │    │   │
+│  │  │  NON parlano con Supabase, NON con store centrale   │    │   │
+│  │  └──────────────────────────┬──────────────────────────┘    │   │
+│  │                              │ usano hook dedicati           │   │
+│  │                              ▼                              │   │
+│  │  ┌─────────────────────────────────────────────────────┐    │   │
+│  │  │  Hook per dominio (stato locale useState)          │    │   │
+│  │  │  ┌──────────────┐ ┌──────────────┐ ┌────────────┐ │    │   │
+│  │  │  │useProfile    │ │useLabels     │ │useDemoLib  │ │    │   │
+│  │  │  │  useState    │ │  useState    │ │  useState  │ │    │   │
+│  │  │  │  loading     │ │  loading     │ │  loading   │ │    │   │
+│  │  │  │  error       │ │  error       │ │  error     │ │    │   │
+│  │  │  └──────┬───────┘ └──────┬───────┘ └─────┬──────┘ │    │   │
+│  │  │         │                │               │        │    │   │
+│  │  │  ┌──────┴───────┐ ┌──────┴───────┐ ┌─────┴──────┐ │    │   │
+│  │  │  │usePitchMgr   │ │useReleases   │ │useRankings │ │    │   │
+│  │  │  │  useState    │ │  useState    │ │  useState  │ │    │   │
+│  │  │  └──────────────┘ └──────────────┘ └────────────┘ │    │   │
+│  │  │  Ogni hook è autonomo, stato locale non condiviso│    │   │
+│  │  └──────────────────────────┬──────────────────────────┘    │   │
+│  │                              │ chiamano                      │   │
+│  │                              ▼                              │   │
+│  │  ┌─────────────────────────────────────────────────────┐    │   │
+│  │  │  Business Service per dominio (funzioni pure)       │    │   │
+│  │  │  profileService │ labelsService │ demosService      │    │   │
+│  │  │  pitchesService │ releasesService │ rankingsService │    │   │
+│  │  │  UNICO layer che conosce URL API route + formato   │    │   │
+│  │  └──────────────────────────┬──────────────────────────┘    │   │
+│  │                              │ fetch HTTP (JWT nell'header) │   │
+│  │                              ▼                              │   │
+│  └──────────────────────────────┬──────────────────────────────┘   │
+│                                 │                                    │
+└─────────────────────────────────┼───────────────────────────────────┘
+                                  │ HTTPS
+                                  ▼
 ┌─────────────────────────────────────────────────────────────────────┐
 │                    VERCEL (serverless)                               │
 │                                                                     │
@@ -809,17 +999,18 @@ Eliminando le cache:
 ### 11.1 Flusso di lettura (rappresentazione)
 
 ```
-[Browser] Componente UI
+[Browser] Componente UI (es. DemoTracker su /demos)
     │
-    │ usa useDemos()
+    │ usa useDemoLibrary()
     ▼
-[Browser] useDemos hook
+[Browser] useDemoLibrary hook
     │
-    │ legge da AppStateContext
+    │ stato locale: useState<Demo[]>([])
+    │ useEffect al mount → refresh()
     ▼
-[Browser] AppStateContext (in memoria)
+[Browser] demosService.list() (business service)
     │
-    │ se boot non fatto: fetch /api/demos
+    │ fetch GET /api/demos
     ▼
 [Vercel] /api/demos GET
     │
@@ -835,24 +1026,29 @@ Eliminando le cache:
 [Vercel] 200 OK + { demos: [...] }
     │
     ▼
-[Browser] setDemos(data) → AppStateContext aggiornato
+[Browser] useDemoLibrary: setDemos(data.demos)
     │
+    │ stato locale aggiornato (solo questo hook)
     ▼
-[Browser] Componente UI re-render con dati
+[Browser] DemoTracker re-render con dati
 ```
 
 ### 11.2 Flusso di scrittura (rappresentazione)
 
 ```
-[Browser] Utente clicca "Salva demo"
+[Browser] Utente clicca "Salva demo" su DemoTracker
     │
     ▼
-[Browser] Componente UI chiama await createDemo(demo)
+[Browser] Componente chiama await createDemo(demo)
     │
-    │ UI mostra "salvataggio..."
-    │ stato NON ancora aggiornato
+    │ UI mostra "salvataggio..." (saving=true)
+    │ stato locale NON ancora aggiornato
     ▼
-[Browser] useDemos.createDemo()
+[Browser] useDemoLibrary.createDemo()
+    │
+    │ chiama demosService.create(demo)
+    ▼
+[Browser] demosService.create()
     │
     │ fetch POST /api/demos
     ▼
@@ -871,10 +1067,11 @@ Eliminando le cache:
 [Vercel] 200 OK + { demo: {...} }
     │
     ▼
-[Browser] setDemos(prev => [...prev, demo]) → stato aggiornato
+[Browser] useDemoLibrary: setDemos(prev => [...prev, demo])
     │
+    │ stato locale aggiornato (solo questo hook)
     ▼
-[Browser] UI re-render + "salvato" feedback
+[Browser] DemoTracker re-render + "salvato" feedback
 ```
 
 ---
