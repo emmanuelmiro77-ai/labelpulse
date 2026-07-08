@@ -4,7 +4,7 @@ import { getAdminClient } from "@/lib/supabase-admin";
 /**
  * API /api/profile — CRUD per la tabella user_profiles
  *
- * 🔒 FASE C: autenticate via NextAuth. Una riga per user_email (PK).
+ * 🔒 FASE C: autenticate via NextAuth. Una riga per user_id (PK).
  *
  * GET    /api/profile           → profilo dell'utente autenticato
  * POST   /api/profile           → upsert (insert or update)
@@ -12,8 +12,8 @@ import { getAdminClient } from "@/lib/supabase-admin";
  */
 
 export async function GET() {
-  const { supabase, email, useRls } = await getAdminClient();
-  if (!supabase || !email) {
+  const { supabase, email, userId, useRls } = await getAdminClient();
+  if (!supabase || !email || !userId) {
     console.error("[/api/profile GET] Auth failed — no supabase client or email. Check SUPABASE_SERVICE_ROLE_KEY on Vercel.");
     return NextResponse.json({ error: "Not authenticated" }, { status: 401 });
   }
@@ -23,7 +23,7 @@ export async function GET() {
   const { data, error } = await supabase
     .from("user_profiles")
     .select("*")
-    .eq("user_email", email)
+    .eq("user_id", userId)
     .maybeSingle();
 
   if (error) {
@@ -35,8 +35,8 @@ export async function GET() {
 }
 
 export async function POST(req: NextRequest) {
-  const { supabase, email } = await getAdminClient();
-  if (!supabase || !email) {
+  const { supabase, email, userId } = await getAdminClient();
+  if (!supabase || !email || !userId) {
     return NextResponse.json({ error: "Not authenticated" }, { status: 401 });
   }
 
@@ -50,7 +50,7 @@ export async function POST(req: NextRequest) {
       .from("user_profiles")
       .upsert(
         {
-          user_email: email,
+          user_id: userId,
           artist_name: artist_name || null,
           bio: bio || null,
           photo_url: photo_url || null,
@@ -59,7 +59,7 @@ export async function POST(req: NextRequest) {
           cyanite_api_token: cyanite_api_token || null,
           locale: locale || "it",
         },
-        { onConflict: "user_email" }
+        { onConflict: "user_id" }
       )
       .select()
       .single();
@@ -77,15 +77,15 @@ export async function POST(req: NextRequest) {
 }
 
 export async function DELETE() {
-  const { supabase, email } = await getAdminClient();
-  if (!supabase || !email) {
+  const { supabase, email, userId } = await getAdminClient();
+  if (!supabase || !email || !userId) {
     return NextResponse.json({ error: "Not authenticated" }, { status: 401 });
   }
 
   const { error } = await supabase
     .from("user_profiles")
     .delete()
-    .eq("user_email", email);
+    .eq("user_id", userId);
 
   if (error) {
     console.error("[/api/profile DELETE]", error);
