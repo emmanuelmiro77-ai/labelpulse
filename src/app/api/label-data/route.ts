@@ -5,7 +5,7 @@ import { getAdminClient } from "@/lib/supabase-admin";
  * API /api/label-data — CRUD per la tabella label_personal_data
  *
  * 🔒 FASE C: tutte le operazioni autenticate via NextAuth.
- * Una riga per (user_email, label_id). Se l'utente non ha personalizzato
+ * Una riga per (user_id, label_id). Se l'utente non ha personalizzato
  * una label, non c'è riga.
  *
  * GET    /api/label-data                  → lista tutte le label personalizzate
@@ -16,8 +16,8 @@ import { getAdminClient } from "@/lib/supabase-admin";
  */
 
 export async function GET(req: NextRequest) {
-  const { supabase, email, useRls } = await getAdminClient();
-  if (!supabase || !email) {
+  const { supabase, email, userId, useRls } = await getAdminClient();
+  if (!supabase || !email || !userId) {
     console.error("[/api/label-data GET] Auth failed — no supabase client or email. Check SUPABASE_SERVICE_ROLE_KEY on Vercel.");
     return NextResponse.json({ error: "Not authenticated" }, { status: 401 });
   }
@@ -29,7 +29,7 @@ export async function GET(req: NextRequest) {
     const { data, error } = await supabase
       .from("label_personal_data")
       .select("*")
-      .eq("user_email", email)
+      .eq("user_id", userId)
       .eq("label_id", labelId)
       .maybeSingle();
 
@@ -43,7 +43,7 @@ export async function GET(req: NextRequest) {
   const { data, error } = await supabase
     .from("label_personal_data")
     .select("*")
-    .eq("user_email", email);
+    .eq("user_id", userId);
 
   if (error) {
     console.error("[/api/label-data GET all] DB error:", error.message, "(code=" + error.code + ")");
@@ -55,8 +55,8 @@ export async function GET(req: NextRequest) {
 }
 
 export async function POST(req: NextRequest) {
-  const { supabase, email } = await getAdminClient();
-  if (!supabase || !email) {
+  const { supabase, email, userId } = await getAdminClient();
+  if (!supabase || !email || !userId) {
     return NextResponse.json({ error: "Not authenticated" }, { status: 401 });
   }
 
@@ -78,7 +78,7 @@ export async function POST(req: NextRequest) {
       const { data: existing } = await supabase
         .from("label_personal_data")
         .select("updated_at")
-        .eq("user_email", email)
+        .eq("user_id", userId)
         .eq("label_id", String(label_id))
         .maybeSingle();
       
@@ -96,12 +96,12 @@ export async function POST(req: NextRequest) {
       }
     }
 
-    // Upsert: insert or update on conflict (user_email, label_id)
+    // Upsert: insert or update on conflict (user_id, label_id)
     const { data, error } = await supabase
       .from("label_personal_data")
       .upsert(
         {
-          user_email: email,
+          user_id: userId,
           label_id: String(label_id),
           emails: emails || [],
           notes: notes || null,
@@ -118,7 +118,7 @@ export async function POST(req: NextRequest) {
           custom_genre: custom_genre || null,
           is_favorite: is_favorite ?? false,
         },
-        { onConflict: "user_email,label_id" }
+        { onConflict: "user_id,label_id" }
       )
       .select()
       .single();
@@ -136,8 +136,8 @@ export async function POST(req: NextRequest) {
 }
 
 export async function PATCH(req: NextRequest) {
-  const { supabase, email } = await getAdminClient();
-  if (!supabase || !email) {
+  const { supabase, email, userId } = await getAdminClient();
+  if (!supabase || !email || !userId) {
     return NextResponse.json({ error: "Not authenticated" }, { status: 401 });
   }
 
@@ -150,14 +150,14 @@ export async function PATCH(req: NextRequest) {
   try {
     const updates = await req.json();
     delete updates.id;
-    delete updates.user_email;
+    delete updates.user_id;
     delete updates.label_id;
     delete updates.created_at;
 
     const { data, error } = await supabase
       .from("label_personal_data")
       .update(updates)
-      .eq("user_email", email)
+      .eq("user_id", userId)
       .eq("label_id", labelId)
       .select()
       .single();
@@ -179,8 +179,8 @@ export async function PATCH(req: NextRequest) {
 }
 
 export async function DELETE(req: NextRequest) {
-  const { supabase, email } = await getAdminClient();
-  if (!supabase || !email) {
+  const { supabase, email, userId } = await getAdminClient();
+  if (!supabase || !email || !userId) {
     return NextResponse.json({ error: "Not authenticated" }, { status: 401 });
   }
 
@@ -193,7 +193,7 @@ export async function DELETE(req: NextRequest) {
   const { error } = await supabase
     .from("label_personal_data")
     .delete()
-    .eq("user_email", email)
+    .eq("user_id", userId)
     .eq("label_id", labelId);
 
   if (error) {
