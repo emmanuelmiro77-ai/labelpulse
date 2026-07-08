@@ -46,13 +46,6 @@ export function useAuthEffect(): void {
   const { data: session, status } = useSession();
   const lastActedEmailRef = useRef<string | null>(null);
 
-  // Step 0: registrazione callback per ricaricamento dal cloud su 409 conflict.
-  // L'outbox è stato rimosso — non c'è più coda di retry. Le scritture
-  // falliscono esplicitamente e l'utente deve ritentare manualmente.
-  useEffect(() => {
-    // Niente da fare qui — l'outbox è stato eliminato.
-  }, []);
-
   // Step 1: keep the cloud-sync module informed about the current user.
   useEffect(() => {
     const email = (session?.user?.email ?? null) as string | null;
@@ -108,8 +101,6 @@ export function useAuthEffect(): void {
     // Niente merge, niente union. Il cloud è l'unica verità.
     // Se il cloud fallisce o ritorna vuoto, fallback su auto-backup IndexedDB.
     console.info("[LabelPulse Auth] ☁️ Syncing with Supabase...");
-
-    // L'outbox è stato rimosso — niente pause/resume.
 
     // 🔒 FIX COMMIT 3: Timeout di 15s sul cloud sync. Se Supabase non risponde
     // (rete lenta, Vercel cold start, Supabase down), fallback su snapshot locale
@@ -174,7 +165,6 @@ export function useAuthEffect(): void {
           }
         }
 
-        // L'outbox è stato rimosso — niente resumeOutboxFlush.
         loadArtistsOnBoot().catch(() => {});
       })
       .catch(async (err) => {
@@ -189,7 +179,6 @@ export function useAuthEffect(): void {
           console.warn("[LabelPulse Auth] No snapshot available — starting with seed data");
         }
         useAppStore.setState({ hasRehydrated: true, hasCloudSynced: true });
-        // L'outbox è stato rimosso — niente resumeOutboxFlush.
       });
   }, [status, session?.user?.email]);
 

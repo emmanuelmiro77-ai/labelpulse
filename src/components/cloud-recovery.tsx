@@ -16,17 +16,12 @@
  * Ora il pannello legge `/api/sync-status`, che interroga le tabelle vere
  * (demo_submissions, label_personal_data, pitch_campaigns, user_profiles,
  * user_releases) — la sola fonte di verità secondo REGOLA ZERO.
- *
- * Mostra anche quante operazioni sono in coda nell'outbox locale (vedi
- * src/lib/outbox.ts): se questo numero non è zero, significa che ci sono
- * modifiche fatte su QUESTO dispositivo che non sono ancora arrivate al
- * cloud — verranno ritentate automaticamente in background.
  */
 
 import { useEffect, useState, useCallback } from "react";
 import { useSession } from "next-auth/react";
 import {
-  RefreshCw, AlertTriangle, CheckCircle2, CloudOff,
+  RefreshCw, CheckCircle2,
   Database, Cloud, HardDrive, Loader2, RotateCcw, FileDown, UploadCloud,
 } from "lucide-react";
 import { Button } from "@/components/ui/button";
@@ -89,16 +84,10 @@ export function CloudRecovery({ isAdmin = false }: { isAdmin?: boolean }) {
   const [loading, setLoading] = useState(false);
   const [actionLoading, setActionLoading] = useState<string | null>(null);
   const [cloudError, setCloudError] = useState<string | null>(null);
-  // Outbox rimosso — pendingOutbox sempre 0
-  const pendingOutbox = 0;
   const { data: session, status } = useSession();
   const email = session?.user?.email || null;
 
   const configured = isSupabaseConfigured();
-
-  useEffect(() => {
-    // Outbox rimosso — niente da monitorare
-  }, []);
 
   const refresh = useCallback(async () => {
     setLoading(true);
@@ -212,11 +201,6 @@ export function CloudRecovery({ isAdmin = false }: { isAdmin?: boolean }) {
     }
   };
 
-  const handleFlushOutbox = async () => {
-    // Outbox rimosso — niente da flushare
-    toast({ title: "Niente da inviare", description: "La coda di sincronizzazione è stata rimossa." });
-  };
-
   const handleSidecarRestore = async () => {
     setActionLoading("sidecar");
     try {
@@ -313,25 +297,15 @@ export function CloudRecovery({ isAdmin = false }: { isAdmin?: boolean }) {
   };
 
   return (
-    <Card className={pendingOutbox > 0 ? "border-amber-500/40 bg-amber-500/5" : "border-border/50"}>
+    <Card className="border-border/50">
       <CardHeader>
         <CardTitle className="flex items-center gap-2 text-base">
-          {pendingOutbox > 0 ? (
-            <CloudOff className="h-4 w-4 text-amber-400" />
-          ) : (
-            <CheckCircle2 className="h-4 w-4 text-emerald-400" />
-          )}
+          <CheckCircle2 className="h-4 w-4 text-emerald-400" />
           Diagnosi Sync Cloud
         </CardTitle>
         <CardDescription>
           Il cloud (Supabase) è l&apos;unica fonte di verità: qualsiasi modifica fatta su un dispositivo
           arriva qui e viene ricaricata su ogni altro dispositivo collegato con la stessa email.
-          {pendingOutbox > 0 && (
-            <span className="block mt-1 text-amber-400">
-              {pendingOutbox} modifiche fatte su QUESTO dispositivo sono ancora in coda verso il cloud
-              (rete assente o momentaneamente non raggiungibile) — verranno inviate automaticamente appena possibile.
-            </span>
-          )}
         </CardDescription>
       </CardHeader>
       <CardContent className="space-y-4">
@@ -358,7 +332,6 @@ export function CloudRecovery({ isAdmin = false }: { isAdmin?: boolean }) {
                 <StatRow label="Demo" value={localState.demos} />
                 <StatRow label="Profilo" value={localState.profileHasData ? "OK" : "vuoto"} highlight={!localState.profileHasData} />
                 <StatRow label="Ultima modifica" value={formatRelativeTime(localState.lastSavedAt)} />
-                <StatRow label="In coda verso cloud" value={pendingOutbox} highlight={pendingOutbox > 0} />
               </div>
             ) : (
               <div className="text-xs text-muted-foreground">Niente dati</div>
@@ -424,18 +397,6 @@ export function CloudRecovery({ isAdmin = false }: { isAdmin?: boolean }) {
             {actionLoading === "reload" ? <Loader2 className="h-3.5 w-3.5 animate-spin" /> : <RefreshCw className="h-3.5 w-3.5" />}
             Ricarica dal cloud (versione più recente)
           </Button>
-          {pendingOutbox > 0 && (
-            <Button
-              size="sm"
-              variant="outline"
-              onClick={handleFlushOutbox}
-              disabled={actionLoading !== null}
-              className="gap-1.5 border-amber-500/40 text-amber-400"
-            >
-              {actionLoading === "flush" ? <Loader2 className="h-3.5 w-3.5 animate-spin" /> : <UploadCloud className="h-3.5 w-3.5" />}
-              Invia {pendingOutbox} modifiche in sospeso
-            </Button>
-          )}
           <Button
             size="sm"
             variant="outline"
@@ -482,9 +443,8 @@ export function CloudRecovery({ isAdmin = false }: { isAdmin?: boolean }) {
           <p className="mb-1"><strong>Come funziona ora:</strong></p>
           <ol className="list-decimal list-inside space-y-0.5 ml-2">
             <li>Ogni modifica che fai (demo, pitch, note su una label, profilo, release) viene inviata subito al cloud.</li>
-            <li>Se la rete manca, la modifica resta in coda su questo dispositivo (vedi &quot;In coda verso cloud&quot; sopra) e riparte da sola appena torna la connessione.</li>
             <li>Il cloud è sempre la versione ufficiale: al login su un altro dispositivo, o cliccando &quot;Ricarica dal cloud&quot;, vedi sempre l&apos;ultima modifica fatta, da qualunque dispositivo sia arrivata.</li>
-            <li>Se &quot;In coda verso cloud&quot; resta &gt; 0 per molto tempo con connessione attiva, scarica il backup JSON e contatta il supporto.</li>
+            <li>Se una modifica non riesce al primo tentativo (rete assente), vedrai un toast di errore esplicito: ritenta manualmente appena possibile.</li>
           </ol>
         </div>
       </CardContent>

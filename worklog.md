@@ -2044,3 +2044,40 @@ Stage Summary:
 - getAdminClient ora ha fallback anon key (non ritorna mai null se anon key è presente)
 - loadFromNewTables bypassa cache HTTP con timestamp
 - AZIONE UTENTE: eseguire supabase-rls-disable-emergency.sql su SQL Editor Supabase
+
+---
+Task ID: micro-fase-3D-disaccoppiamento-outbox
+Agent: Z-AI (session continua)
+Task: Micro-Fase 3D — Disaccoppiare use-auth.ts, cloud-recovery.tsx, api-client.ts da outbox.ts
+
+Work Log:
+- Boot: ripresa sessione da context summary. Letti i 3 file target per stato attuale.
+- Verifica imports: NESSUN file nel codebase importa più da outbox.ts (grep conferma). I riferimenti residui erano tutti commenti transitori o codice morto.
+- use-auth.ts:
+  * Rimosso useEffect "Step 0" vuoto (righe 49-54, ex registrazione callback outbox)
+  * Rimossi 3 commenti transitori "L'outbox è stato rimosso..." (righe 112, 177, 192) — il disaccoppiamento è completo, i commenti non servono più
+- cloud-recovery.tsx:
+  * Rimosso paragrafo docblock che menzionava outbox.ts
+  * Rimossi imports non più usati: AlertTriangle (morto preesistente), CloudOff
+  * Rimossa costante `pendingOutbox = 0` (sempre false, dead code)
+  * Rimosso useEffect vuoto per monitoraggio outbox
+  * Rimossa funzione `handleFlushOutbox` (no-op toast)
+  * Semplificato Card className (rimosso ternario su pendingOutbox)
+  * Semplificato CardTitle icon (rimosso ternario, sempre CheckCircle2)
+  * Rimosso blocco span ambra in CardDescription (mai renderizzato)
+  * Rimossa StatRow "In coda verso cloud" (sempre 0)
+  * Rimosso Button "Invia N modifiche in sospeso" (mai renderizzato)
+  * Aggiornata sezione "Come funziona ora": rimosso item #2 (coda outbox) e #4 (contatto supporto), aggiunto item #3 nuovo (toast di errore esplicito su retry manuale)
+- api-client.ts:
+  * Già pulito dalla fase 3C — nessun import writeWithOutbox, solo commento docblock "senza coda outbox" (informativo, lasciato)
+- TypeScript check: 0 errori nei 3 file modificati
+- Build produzione: ✓ completato in 24s
+
+Stage Summary:
+- Disaccoppiamento outbox.ts COMPLETO: use-auth.ts, cloud-recovery.tsx e api-client.ts non hanno più NESSUN riferimento a outbox (né imports, né codice morto, né commenti transitori)
+- outbox.ts NON è stato eliminato (vincolo rispettato) — file ancora presente ma non referenziato
+- store.ts, auto-backup.ts e API routes NON sono stati modificati (vincoli CHANGE BOUNDARY rispettati)
+- UI CloudRecovery più pulita: niente più stat "In coda verso cloud" sempre a 0, niente bottone flush mai visibile, niente card con bordo ambra mai attivo
+- Build OK, nessuna regressione
+- Deploy Vercel partirà automaticamente al push
+
