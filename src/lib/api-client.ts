@@ -2,22 +2,14 @@
  * 🔒 API client per le tabelle dedicate (demo_submissions, label_personal_data,
  * pitch_campaigns, user_profiles, user_releases).
  *
- * 🔒 AFFIDABILITÀ (fix definitivo sync multi-dispositivo):
- * Tutte le scritture (create/update/delete) passano da `writeWithOutbox()`.
- * Se il salvataggio fallisce per un motivo temporaneo (rete assente, tab in
- * background, 5xx momentaneo di Vercel/Supabase), l'operazione NON viene
- * persa: viene messa in coda in localStorage e ritentata automaticamente
- * (su riconnessione, su tab tornata visibile, e ogni 15s) finché non va a
- * buon fine. Solo così il cloud può davvero essere l'unica fonte di verità:
- * se una scrittura può sparire nel nulla, "cloud is source of truth" è solo
- * una speranza, non una garanzia.
+ * Tutte le scritture (create/update/delete) passano da `writeDirect()`.
+ * Se il salvataggio fallisce, l'errore viene propagato al chiamante.
+ * Nessuna coda offline, nessun retry automatico.
  *
  * Le funzioni GET restano letture normali: se falliscono, chi chiama
  * (loadFromNewTables) semplicemente non aggiorna quel pezzo di stato e
  * riprova al giro successivo.
  */
-
-import { writeWithOutbox } from "./outbox";
 
 const API_BASE = "";
 

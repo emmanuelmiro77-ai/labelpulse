@@ -39,7 +39,6 @@ import {
   restoreArtistsFromSidecar, loadFromNewTables,
 } from "@/lib/store";
 import { isSupabaseConfigured } from "@/lib/supabase";
-import { getPendingCount, onOutboxChange, flushOutbox } from "@/lib/outbox";
 
 interface LocalState {
   labels: number;
@@ -90,15 +89,15 @@ export function CloudRecovery({ isAdmin = false }: { isAdmin?: boolean }) {
   const [loading, setLoading] = useState(false);
   const [actionLoading, setActionLoading] = useState<string | null>(null);
   const [cloudError, setCloudError] = useState<string | null>(null);
-  const [pendingOutbox, setPendingOutbox] = useState<number>(0);
+  // Outbox rimosso — pendingOutbox sempre 0
+  const pendingOutbox = 0;
   const { data: session, status } = useSession();
   const email = session?.user?.email || null;
 
   const configured = isSupabaseConfigured();
 
   useEffect(() => {
-    setPendingOutbox(getPendingCount());
-    return onOutboxChange(setPendingOutbox);
+    // Outbox rimosso — niente da monitorare
   }, []);
 
   const refresh = useCallback(async () => {
@@ -214,19 +213,8 @@ export function CloudRecovery({ isAdmin = false }: { isAdmin?: boolean }) {
   };
 
   const handleFlushOutbox = async () => {
-    setActionLoading("flush");
-    try {
-      const { pending, flushed } = await flushOutbox();
-      toast({
-        title: flushed > 0 ? "Sincronizzazione completata" : "Niente da inviare",
-        description: `${flushed} operazioni inviate al cloud. ${pending} ancora in coda.`,
-      });
-      await refresh();
-    } catch (e: any) {
-      toast({ title: "Errore", description: e?.message || "Invio fallito.", variant: "destructive" });
-    } finally {
-      setActionLoading(null);
-    }
+    // Outbox rimosso — niente da flushare
+    toast({ title: "Niente da inviare", description: "La coda di sincronizzazione è stata rimossa." });
   };
 
   const handleSidecarRestore = async () => {
