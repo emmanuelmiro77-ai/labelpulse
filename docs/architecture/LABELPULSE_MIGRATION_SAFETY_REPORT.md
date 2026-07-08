@@ -4,25 +4,33 @@ Documento di analisi del rischio di perdita dati per il `LABELPULSE_REFACTORING_
 
 **Principio fondamentale:** nessun dato utente può essere perso durante il refactoring. Se una fase presenta anche un minimo rischio, deve essere evidenziata chiaramente.
 
+**Allineamento:** questo report copre tutte le fasi del Refactoring Plan: Fase 0 (backup database), Fase 0.5 (security hardening), Fasi 1-7 (migrazione architetturale). È allineato al tag git `labelpulse-pre-refactor-v1` (baseline pre-refactoring).
+
 ---
 
 ## 0. INVENTARIO DATI PRE-MIGRAZIONE
 
 ### 0.1 Dati su Supabase (cloud, fonte di verità attuale)
 
-| Tabella | Chiave | Contenuto | Volume stimato |
-|---------|--------|-----------|----------------|
-| `app_state` riga `id='global'` | id | Classifiche Beatport, label globali, artisti, snapshots | ~2.37 MB (1821 labels, 18 snapshots) |
-| `app_state` riga `id='<email>'` | id | Blob JSON: labels personalizzate, demos, releases, savedPitches, sentCampaigns, userProfile, gmailAuth, rankingSnapshots, artists | ~2.60 MB per utente (2123 labels, 311 custom) |
-| `demo_submissions` | user_email + id | Demo utente (6 righe per utente attivo) | Basso |
-| `label_personal_data` | user_email + label_id | Contatti/note/link per-label (671 righe per utente attivo) | Medio |
-| `pitch_campaigns` | user_email + id | Pitch bozze + inviate | Basso (0 per utente attivo) |
-| `user_profiles` | user_email (PK) | Profilo utente (artist_name, bio, photo, sc_link, links) | 1 riga per utente |
-| `user_releases` | user_email + id | EP/release utente | Basso (0 per utente attivo) |
-| `push_subscriptions` | user_email + endpoint | Notifiche push per device | 1+ righe per utente |
-| `beta_feedback` | — | Feedback beta tester | Basso |
-| `beta_access_codes` | — | Codici accesso beta | Basso |
-| `beatport_snapshots`, `beatport_chart_history`, `followed_artists` | — | Dati scraping globali | Medio |
+| Tabella | Chiave | Contenuto | Volume stimato | RLS |
+|---------|--------|-----------|----------------|-----|
+| `app_state` riga `id='global'` | id | Classifiche Beatport, label globali, artisti, snapshots | ~2.37 MB | ENABLE, `USING(true)` |
+| `app_state` riga `id='<email>'` | id | Blob JSON: labels personalizzate, demos, releases, savedPitches, sentCampaigns, userProfile, gmailAuth, rankingSnapshots, artists | ~2.60 MB per utente | ENABLE, `USING(true)` |
+| `app_state` riga `id='default'` | id | Backward compatibility single-user | ~0 | ENABLE, `USING(true)` |
+| `demo_submissions` | user_email + id | Demo utente (6 righe per utente attivo) | Basso | ENABLE, emergency fix `USING(true)` |
+| `label_personal_data` | user_email + label_id | Contatti/note/link per-label (671 righe per utente attivo) | Medio | ENABLE, emergency fix |
+| `pitch_campaigns` | user_email + id | Pitch bozze + inviate | Basso | ENABLE, emergency fix |
+| `user_profiles` | user_email (PK) | Profilo utente | 1 riga per utente | ENABLE, emergency fix |
+| `user_releases` | user_email + id | EP/release utente | Basso | ENABLE, jwt email |
+| `push_subscriptions` | user_email + endpoint | Notifiche push per device | 1+ righe per utente | ENABLE, partial |
+| `beta_feedback` | id | Feedback beta tester | Basso | ENABLE, INSERT anon |
+| `beta_access_codes` | id | Codici accesso beta | Basso | ENABLE, scoped |
+| `beatport_snapshots` | id | Snapshot sessioni scraping | Medio | DISABLE |
+| `beatport_chart_history` | id | Storico posizioni tracce | Medio | DISABLE |
+| `followed_artists` | id | Tracking user → artist (orfana) | 0 righe | DISABLE |
+| `agent_memory` | id | Memoria AI bug fix | Basso | ENABLE, `USING(true)` |
+| `v_beta_tester_status` | view | View admin | N/A | Eredita |
+| `auth.users` | UUID id | Utenti registrati Google OAuth | Basso | N/A (auth schema) |
 
 ### 0.2 Dati su localStorage (browser, da eliminare)
 
@@ -36,9 +44,9 @@ Documento di analisi del rischio di perdita dati per il `LABELPULSE_REFACTORING_
 | `labelpulse-storage-owner` | Email owner per multi-user isolation | Config |
 | `labelpulse-outbox-v2` | Coda scritture fallite | Dato utente temporaneo |
 | `labelpulse-snapshot-<email>` | Auto-backup snapshot completo | Dato utente duplicato |
-| `labelpulse-onboarded-v2:<email>` | Flag onboarding | Config |
-| `labelpulse-cookie-consent` | Preferenza cookie | Config |
-| `beta_admin_token` | Token auth admin | Auth |
+| `labelpulse-onboarded-v2:<email>` | Flag onboarding | Config (mantenuto) |
+| `labelpulse-cookie-consent` | Preferenza cookie | Config (mantenuto) |
+| `beta_admin_token` | Token auth admin | Auth (mantenuto) |
 
 ### 0.3 Dati su IndexedDB (browser, da eliminare)
 
@@ -52,9 +60,15 @@ Documento di analisi del rischio di perdita dati per il `LABELPULSE_REFACTORING_
 
 | Fonte | Contenuto |
 |-------|-----------|
-| `auth.users` | Utenti registrati via Google (emmanuel.miro77@gmail.com + beta tester) |
+| `auth.users` | Utenti registrati via Google (UUID id, email). È la chiave che verrà usata come `user_id` nelle tabelle migrate. |
 
-**Critico:** `auth.users.id` (UUID) è la chiave che verrà usata come `user_id` nelle tabelle migrate. Ogni `user_email` nelle tabelle FASE C deve avere un corrispondente `auth.users.email`.
+**Critico:** ogni `user_email` nelle tabelle FASE C deve avere un corrispondente `auth.users.email` per la migrazione `user_id`.
+
+### 0.5 Tag Git baseline
+
+| Tag | Commit | Scopo |
+|-----|--------|-------|
+| `labelpulse-pre-refactor-v1` | `dc04b1e` | Baseline pre-refactoring, punto di rollback codice |
 
 ---
 
@@ -69,29 +83,75 @@ Per ogni fase del piano di refactoring:
 
 ---
 
-## FASE 0 — SNAPSHOT PRE-MIGRAZIONE
+## FASE 0 — BACKUP DEL DATABASE
 
 ### Dati toccati
-Nessuno. Fase di sola lettura e backup.
+- **Letto:** tutte le tabelle dello schema `public` + `auth.users` (se accessibile)
+- **Scritto:** file di backup in `docs/architecture/backups/` (database-full-backup, schema, rls-policies, functions, row-counts)
+- **Non eliminato:** nulla
 
 ### Rischio perdita dati
 **Nessuno** (la fase stessa è la prevenzione).
 
 ### Prevenzione
 Questa fase CREA il backup di rollback per tutte le fasi successive. Comprende:
-1. Export JSON da LabelPulse (`Scarica backup JSON`) — contiene labels, demos, userProfile, rankingSnapshots
-2. Export `app_state` da Supabase SQL Editor (CSV/JSON) — riga globale + righe personali
-3. Export tabelle FASE C da Supabase (CSV/JSON per ognuna)
-4. Tag git `pre-refactor-v1.0`
+1. Backup completo database (dump SQL)
+2. Esportazione schema DDL
+3. Esportazione policy RLS
+4. Esportazione funzioni SQL + trigger
+5. Verifica ripristinabilità + conteggi righe
+6. Commit Git della documentazione
 
 ### Rollback
 N/A (la fase è il rollback).
 
 ### Verifica
-- Il file JSON di backup esiste e contiene conteggi coerenti (labels > 1000, demos > 0, userProfile con email)
-- Il tag git esiste: `git tag | grep pre-refactor-v1.0`
-- 6 export Supabase esistono (app_state + 5 tabelle FASE C)
-- Aprire il JSON di backup e verificare che `data.demos[0]` abbia `id`, `labelId`, `trackName` non vuoti
+1. File `database-full-backup-<date>.sql` esiste e non è vuoto
+2. File `schema-<date>.sql` contiene `CREATE TABLE` per tutte le tabelle `public.*`
+3. File `rls-policies-<date>.sql` contiene tutte le policy
+4. File `functions-<date>.sql` esiste
+5. File `row-counts-<date>.json` contiene conteggi per tutte le tabelle
+6. Verifica ripristinabilità eseguita e documentata
+7. `.gitignore` contiene `docs/architecture/backups/`
+8. Commit Git contiene solo documentazione
+9. Tag `labelpulse-pre-refactor-v1` esiste
+
+**Esito:** ☐ Verificato
+
+---
+
+## FASE 0.5 — SECURITY HARDENING
+
+### Dati toccati
+- **Modificato (codice):** `src/lib/snapshots.ts`, route `/api/snapshots/*` → `/api/admin/snapshots/*`, `rankings-wizard.tsx`
+- **Modificato (database):** policy RLS su `followed_artists`, `beatport_snapshots`, `beatport_chart_history` (RLS abilitata + policy read-only)
+- **Non modificato (database):** `agent_memory`, `beta_feedback` (solo verifica, nessuna modifica esecutiva)
+- **Non eliminato:** nessun dato
+
+### Rischio perdita dati
+**Basso** — la fase modifica policy RLS e codice route, non dati.
+
+### Rischio specifico — scritture snapshot interrotte
+Se 0.5.4 (spostamento route + service_role) non è completato prima di 0.5.5 (abilitazione RLS su beatport_snapshots), l'import classifiche fallisce perché la route usa ancora anon key e RLS blocca la scrittura.
+
+### Prevenzione
+1. **Ordine obbligatorio** — 0.5.4 prima di 0.5.5
+2. **Test funzionale** dopo 0.5.4: login admin → import classifiche → deve funzionare con service_role
+3. **Verifica `beta_feedback`** (0.5.3) prima di qualsiasi protezione: verificare se `supabaseKey` è service_role o anon. Se anon, NON applicare RLS in questa fase.
+4. **`agent_memory`** (0.5.2): solo verifica, nessuna modifica. Gli script admin usano service_role (bypassa RLS), quindi anche se la tabella resta permissive, gli script continuano a funzionare.
+
+### Rollback
+- Codice: `git revert` del commit Fase 0.5
+- Database: ripristinare vecchie policy RLS dal backup Fase 0 (file `rls-policies-<date>.sql`)
+- Le tabelle `beatport_snapshots`, `beatport_chart_history`, `followed_artists` non perdono dati (solo policy cambiano)
+
+### Verifica
+1. Security Advisor: warning `rls_disabled_in_public` risolto per `beatport_snapshots`, `beatport_chart_history`, `followed_artists`
+2. Test admin: import classifiche funziona (service_role)
+3. Test utente non-admin: POST `/api/admin/snapshots/save` → 401/403
+4. Documento verifica compilato per `agent_memory` (0.5.2)
+5. Documento verifica compilato per `beta_feedback` (0.5.3)
+6. Warning residui documentati (su `app_state`, tabelle FASE C, `agent_memory`, `beta_feedback`)
 
 **Esito:** ☐ Verificato
 
@@ -108,13 +168,6 @@ N/A (la fase è il rollback).
 ### Rischio perdita dati
 **Medio** — il rischio non è perdita diretta, ma righe orfane (email non più in `auth.users`).
 
-### Prevenzione
-1. **Colonna nullable** — `user_id` viene aggiunta come `UUID` nullable (nessun `NOT NULL` iniziale). Le righe esistenti non vengono rifiutate.
-2. **Popolamento conservativo** — il join `user_email → auth.users.email` viene fatto per tutte le righe. Le righe senza match vengono **messe in una tabella `_orphans`** (creata appositamente), non eliminate.
-3. **Solo dopo popolamento** si aggiunge `NOT NULL` (se tutte le righe hanno `user_id`) o si lascia nullable con vincolo CHECK che accetta NULL solo per righe orfane documentate.
-4. **Indici paralleli** — i nuovi indici su `user_id` vengono creati prima di rimuovere i vecchi indici su `user_email`.
-5. **Policy RLS** — le nuove policy con `auth.uid()` vengono aggiunte PRIMA di rimuovere le vecchie. C'è una finestra di transizione dove entrambe le policy coesistono.
-
 ### Rischio specifico — righe orfane
 Se un utente ha dati in `demo_submissions` con `user_email = 'old@email.com'` ma quell'email non esiste più in `auth.users` (utente cancellato, email cambiata), la riga non può ricevere `user_id`. Queste righe:
 - Vengono copiate in `_orphans` (stessa struttura + colonna `original_table`, `original_email`)
@@ -122,40 +175,31 @@ Se un utente ha dati in `demo_submissions` con `user_email = 'old@email.com'` ma
 - Vengono segnalate per revisione manuale
 - **Non vengono eliminate**
 
+### Prevenzione
+1. **Colonna nullable** — `user_id` viene aggiunta come `UUID` nullable (nessun `NOT NULL` iniziale)
+2. **Popolamento conservativo** — il join `user_email → auth.users.email` per tutte le righe. Righe senza match → `_orphans`
+3. **Solo dopo popolamento** si aggiunge `NOT NULL` (se tutte le righe hanno `user_id`)
+4. **Indici paralleli** — nuovi indici su `user_id` creati prima di rimuovere i vecchi su `user_email`
+5. **Policy RLS** — nuove policy con `auth.uid()` aggiunte PRIMA di rimuovere le vecchie
+
 ### Rollback
 ```sql
 -- Rimuovere nuove policy
 DROP POLICY IF EXISTS "...new..." ON demo_submissions; -- (e altre 4 tabelle)
--- Ripristinare vecchie policy (dal backup Fase 0)
--- (vedi export SQL della Fase 0)
+-- Ripristinare vecchie policy dal backup Fase 0
+-- (vedi file rls-policies-<date>.sql)
 -- Rimuovere colonna user_id
 ALTER TABLE demo_submissions DROP COLUMN user_id; -- (e altre 4 tabelle)
 -- Eliminare tabella _orphans
 DROP TABLE _orphans;
 ```
-Il tag git `pre-refactor-v1.0` permette di tornare al codice pre-Fase 1.
+Tag git `labelpulse-pre-refactor-v1` permette di tornare al codice pre-refactoring.
 
 ### Verifica
-1. Contare righe totali prima e dopo:
-   ```sql
-   SELECT 'demo_submissions' as t, COUNT(*) FROM demo_submissions
-   UNION ALL SELECT 'label_personal_data', COUNT(*) FROM label_personal_data
-   UNION ALL SELECT 'pitch_campaigns', COUNT(*) FROM pitch_campaigns
-   UNION ALL SELECT 'user_profiles', COUNT(*) FROM user_profiles
-   UNION ALL SELECT 'user_releases', COUNT(*) FROM user_releases;
-   ```
-   I conteggi devono essere **identici** a quelli pre-migrazione (dal backup Fase 0).
-2. Contare righe orfane:
-   ```sql
-   SELECT COUNT(*) FROM _orphans;
-   ```
-   Documentare il numero. Ogni riga orfana deve essere revisionata (non è perdita, è dato non attribuibile).
-3. Verificare `user_id` popolato:
-   ```sql
-   SELECT COUNT(*) FROM demo_submissions WHERE user_id IS NOT NULL;
-   ```
-   Deve essere uguale al totale meno gli orfani.
-4. Verificare RLS attiva con `set role anon` — deve restituire 0 righe (anon non vede nulla senza JWT).
+1. Contare righe totali prima e dopo — devono essere identiche ai conteggi del backup Fase 0
+2. Contare righe orfane: `SELECT COUNT(*) FROM _orphans;` — documentare il numero
+3. Verificare `user_id` popolato: `SELECT COUNT(*) FROM demo_submissions WHERE user_id IS NOT NULL;` — deve essere uguale al totale meno orfani
+4. Verificare RLS con `set role anon` — deve restituire 0 righe (anon non vede nulla senza JWT)
 
 **Esito:** ☐ Verificato
 
@@ -170,7 +214,10 @@ Il tag git `pre-refactor-v1.0` permette di tornare al codice pre-Fase 1.
 - **Non eliminato:** la riga `app_state id='<email>'` resta fisicamente nel DB (per rollback)
 
 ### Rischio perdita dati
-**Alto** — se `loadFromNewTables` non carica tutti i dati che erano nella riga personale, quei dati diventano inaccessibili (anche se non eliminati fisicamente).
+**Alto** — se `loadFromNewTables` non carica tutti i dati che erano nella riga personale, quei dati diventano inaccessibili (anche se non eliminati).
+
+### Rischio specifico — gmailAuth e dati non tabellati
+Se `gmailAuth` (token Gmail OAuth) viveva solo nella riga `app_state` personale e non ha una tabella dedicata, eliminare `loadStateFromCloud` perde l'accesso Gmail dell'utente. **Da verificare prima della fase.**
 
 ### Prevenzione
 1. **Prima di eliminare il codice**, verificare che `loadFromNewTables` carichi TUTTI i tipi di dato che erano nella riga personale:
@@ -189,20 +236,17 @@ Il tag git `pre-refactor-v1.0` permette di tornare al codice pre-Fase 1.
    - Se i conteggi differiscono, **fermarsi** e investigare
 3. **La riga `app_state id='<email>'` non viene eliminata** in questa fase. Resta come backup dormiente. Verrà eliminata solo in Fase 7 (dopo verifica completa).
 
-### Rischio specifico — gmailAuth e dati non tabellati
-Se `gmailAuth` (token Gmail OAuth) viveva solo nella riga `app_state` personale e non ha una tabella dedicata, eliminare `loadStateFromCloud` perde l'accesso Gmail dell'utente. **Da verificare prima della fase.**
-
 ### Rollback
 - Codice: `git revert` del commit Fase 2
 - Database: la riga `app_state id='<email>'` è ancora presente (non eliminata), ripristinando il codice si riattiva la lettura
 
 ### Verifica
 1. Login → verificare che tutti i dati siano presenti (demo, label personalizzate, profilo, pitch, release, classifiche)
-2. Confronto numerico:
-   - `demos.length` deve essere uguale a quanto visto prima della Fase 2
-   - `labels.filter(l => l.emails.length > 0 || l.notes !== '').length` deve essere uguale
-   - `userProfile.artistName` deve essere uguale
-3. Supabase Dashboard → `SELECT updated_at FROM app_state WHERE id='<email>';` — il timestamp **non** si aggiorna dopo modifiche utente (la riga è dormiente)
+2. Confronto numerico con backup Fase 0:
+   - `demos.length` uguale a prima
+   - `labels.filter(l => l.emails.length > 0 || l.notes !== '').length` uguale
+   - `userProfile.artistName` uguale
+3. Supabase Dashboard → `SELECT updated_at FROM app_state WHERE id='<email>';` — il timestamp **non** si aggiorna dopo modifiche utente (riga dormiente)
 4. Modificare un demo → verificare che compaia in `demo_submissions` (non in `app_state`)
 
 **Esito:** ☐ Verificato
@@ -280,9 +324,9 @@ Gli artisti (~3400, ~9MB) vivono su IndexedDB e in `app_state` riga `<email>_art
    - Confrontare: `loadArtistsFromIDB().length` vs count su Supabase
    - Se differiscono, sincronizzare prima
    - **Se non esiste una tabella dedicata per gli artists** (solo riga app_state), valutare se creare `user_artists` tabella FASE C prima di questa fase
-2. **Flag di config/auth** — decisione da prendere:
-   - **Opzione conservativa (consigliata):** mantenere `labelpulse-onboarded-v2:<email>`, `labelpulse-cookie-consent`, `beta_admin_token`, `next-auth.session-token` in localStorage. Non sono dati utente, sono flag di config/auth. La specifica vieta "localStorage persistente" per dati utente, non per flag di config.
-   - **Opzione rigorosa:** migrare anche i flag a una tabella `user_preferences` su Supabase. Più costoso, ma totalmente conforme.
+2. **Flag di config/auth** — decisione presa (allineata a Final Architecture sezione 9.5):
+   - **Mantenere in localStorage:** `labelpulse-onboarded-v2:<email>`, `labelpulse-cookie-consent`, `beta_admin_token`, `next-auth.session-token`
+   - Non sono dati utente, sono flag di config/auth. La specifica vieta "localStorage persistente" per dati utente, non per flag di config.
 3. **Backup localStorage** — prima di eliminare, esportare tutti i `labelpulse-*` keys su file JSON (DevTools → Application → Local Storage → export)
 4. **Verifica post-eliminazione** — dopo aver rimosso il persist, fare login e verificare che TUTTI i dati siano caricati dal cloud (non da cache locale)
 
@@ -297,7 +341,7 @@ Se gli artists non sono mai stati sincronizzati al cloud (es. utente ha fatto sc
 ### Verifica
 1. `grep -r "persist\|createJSONStorage\|idb-keyval\|idbStorage" src/ | grep -v "__tests__\|//"` → 0 risultati
 2. DevTools → Application → IndexedDB → solo database non-LabelPulse (o vuoto)
-3. DevTools → Application → Local Storage → solo flag di config/auth (se opzione conservativa)
+3. DevTools → Application → Local Storage → solo flag di config/auth (mantenuti)
 4. Login → tutti i dati presenti (demo, label, profile, pitch, release, classifiche, artists)
 5. **Verifica artists:** il numero di artists visibili nell'Artist Explorer deve essere uguale a prima della Fase 4
 6. Refresh pagina → loading visibile → poi dati dal cloud (non flash di dati locali)
@@ -387,7 +431,10 @@ Utenti loggati prima della Fase 6 potrebbero non avere `supabaseAccessToken` nel
 - **Eliminato (codice):** endpoint diagnostici temporanei (`/api/debug-profile`, `/api/debug-rankings`, `/api/debug-cloud-state`, `/api/auth-debug`, `/api/cloud-debug`)
 - **Eliminato (codice):** `src/lib/db.ts` se Prisma inutilizzato, `prisma/` se inutilizzato
 - **Eliminato (database):** `app_state` righe personali `id='<email>'` (ora dormienti dalla Fase 2) — **solo dopo verifica completa**
+- **Eliminato (database):** `app_state` riga `id='default'` (legacy single-user)
+- **Eliminato (database):** `followed_artists` (tabella orfana, mai usata)
 - **Creato (database):** tabella `audit_log` + trigger
+- **Creato (codice):** business service per dominio (`src/services/<dominio>-service.ts`) + hook dedicati (`src/hooks/use-<dominio>.ts`)
 
 ### Rischio perdita dati
 **Alto** — l'eliminazione delle righe `app_state id='<email>'` è l'unica eliminazione di dati del piano. Deve essere fatto solo dopo verifica assoluta.
@@ -413,12 +460,20 @@ Utenti loggati prima della Fase 6 potrebbero non avere `supabaseAccessToken` nel
 ### Rischio specifico — dati in `app_state` non presenti nelle tabelle FASE C
 Se alcuni dati (es. `gmailAuth`, `artists`, `rankingSnapshots` personali) erano nella riga `app_state` ma non hanno una tabella FASE C dedicata, eliminarli = perderli. **Verifica obbligatoria prima dell'eliminazione.**
 
+### Rischio specifico — `followed_artists` eliminazione
+La tabella `followed_artists` è orfana (mai usata nel codice). L'eliminazione è sicura — nessun dato utente viene perso. Ma verificare prima con:
+```sql
+SELECT COUNT(*) FROM followed_artists;
+```
+Se il count è > 0, documentare le righe prima di eliminare.
+
 ### Rollback
 - Codice: `git revert` del commit Fase 7
 - Database: ripristinare da `backup_app_state_personal_<date>`:
    ```sql
    INSERT INTO app_state SELECT * FROM backup_app_state_personal_<date>;
    ```
+- Per `followed_artists`: ripristinare dal backup Fase 0 (database-full-backup)
 
 ### Verifica
 1. Per ogni utente attivo, confrontare i conteggi pre e post:
@@ -431,6 +486,7 @@ Se alcuni dati (es. `gmailAuth`, `artists`, `rankingSnapshots` personali) erano 
 3. `grep -r "useAppStore\." src/components/` → 0 risultati (componenti usano hook dedicati)
 4. Endpoint diagnostici eliminati: `curl /api/debug-profile` → 404
 5. Test cross-device completo: modifica su device A → login su device B → dato identico
+6. Verifica `followed_artists` eliminata: `SELECT EXISTS (SELECT FROM pg_tables WHERE tablename = 'followed_artists');` → false
 
 **Esito:** ☐ Verificato
 
@@ -442,7 +498,8 @@ Se alcuni dati (es. `gmailAuth`, `artists`, `rankingSnapshots` personali) erano 
 |-----------------|----------------|--------------|----------------|---------------------|
 | `app_state` riga `id='global'` | `app_state` riga `id='global'` (invariata) | Nessuno (resta dov'è) | Nessuno | — |
 | `app_state` riga `id='<email>'` | (eliminata in Fase 7) | demos → `demo_submissions`; labels personalizzate → `label_personal_data`; pitches → `pitch_campaigns`; profile → `user_profiles`; releases → `user_releases`; rankingSnapshots → riga globale | Riga JSON blob personale (dopo verifica migrazione completa) | Doppia fonte di verità eliminata — i dati vivono nelle tabelle dedicate |
-| `demo_submissions` | `demo_submissions` (con `user_id` aggiunto) | `user_id` popolato da join con `auth.users` | Nessuno | — |
+| `app_state` riga `id='default'` | (eliminata in Fase 7) | N/A | Riga legacy single-user | Backward compatibility non più necessaria |
+| `demo_submissions` | `demo_submissions` (con `user_id` aggiunto in Fase 1) | `user_id` popolato da join con `auth.users` | Nessuno | — |
 | `label_personal_data` | `label_personal_data` (con `user_id`) | `user_id` popolato | Nessuno | — |
 | `pitch_campaigns` | `pitch_campaigns` (con `user_id`) | `user_id` popolato | Nessuno | — |
 | `user_profiles` | `user_profiles` (con `user_id`) | `user_id` popolato | Nessuno | — |
@@ -450,9 +507,11 @@ Se alcuni dati (es. `gmailAuth`, `artists`, `rankingSnapshots` personali) erano 
 | `push_subscriptions` | `push_subscriptions` (invariata) | Nessuno | Nessuno | — |
 | `beta_feedback` | `beta_feedback` (invariata) | Nessuno | Nessuno | — |
 | `beta_access_codes` | `beta_access_codes` (invariata) | Nessuno | Nessuno | — |
-| `beatport_snapshots` | `beatport_snapshots` (invariata) | Nessuno | Nessuno | — |
-| `beatport_chart_history` | `beatport_chart_history` (invariata) | Nessuno | Nessuno | — |
-| `followed_artists` | `followed_artists` (invariata) | Nessuno | Nessuno | — |
+| `beatport_snapshots` | `beatport_snapshots` (invariata, RLS abilitata in Fase 0.5) | Nessuno | Nessuno | — |
+| `beatport_chart_history` | `beatport_chart_history` (invariata, RLS abilitata in Fase 0.5) | Nessuno | Nessuno | — |
+| `followed_artists` | (eliminata in Fase 7) | N/A | Tabella orfana (0 righe verificate) | Tabella mai usata nel codice, orfana |
+| `agent_memory` | `agent_memory` (invariata) | Nessuno | Nessuno | — |
+| `v_beta_tester_status` | `v_beta_tester_status` (invariata) | Nessuno | Nessuno | — |
 | (nessuna) | `audit_log` (nuova, Fase 7) | Nuova tabella | Nessuno | Conformità specifica sezione 12 |
 | `_orphans` (nuova, temporanea) | (eliminata dopo revisione manuale) | Righe con `user_email` non più in `auth.users` | Righe orfane dopo revisione | Dati non attribuibili a utente esistente |
 | localStorage `labelpulse-storage` | (eliminata) | Dati erano duplicati di Supabase | Mirror Zustand persist | Doppia fonte di verità eliminata |
@@ -463,7 +522,7 @@ Se alcuni dati (es. `gmailAuth`, `artists`, `rankingSnapshots` personali) erano 
 | localStorage `labelpulse-outbox-v2` | (eliminata) | Scritture sincronizzate prima della Fase 3 | Coda scritture (dopo sync) | Logica offline eliminata |
 | localStorage `labelpulse-snapshot-<email>` | (eliminata) | Dati erano duplicati di Supabase | Auto-backup snapshot | Doppia fonte di verità eliminata |
 | localStorage `labelpulse-storage-owner` | (eliminata) | Config multi-user | Flag owner | RLS garantisce isolamento |
-| localStorage `labelpulse-onboarded-v2:<email>` | (mantenuta, vedere Fase 4) | N/A | Nessuno (se opzione conservativa) | Flag config, non dato utente |
+| localStorage `labelpulse-onboarded-v2:<email>` | (mantenuta) | N/A | Nessuno | Flag config, non dato utente |
 | localStorage `labelpulse-cookie-consent` | (mantenuta) | N/A | Nessuno | Preferenza, non dato utente |
 | localStorage `beta_admin_token` | (mantenuta) | N/A | Nessuno | Auth, non dato utente |
 | IndexedDB `keyval-store` | (eliminata) | Dati erano duplicati di Supabase | Mirror Zustand persist | Doppia fonte di verità eliminata |
@@ -507,6 +566,12 @@ Righe con email non più valide non ricevono `user_id`. Vanno in `_orphans`.
 - **Prevenzione:** tabella `_orphans`, nessuna eliminazione, revisione manuale.
 - **Verifica:** `SELECT COUNT(*) FROM _orphans` documentato, ogni riga revisionata.
 
+### RT6 (medio) — Followed_artists con righe inattese
+La tabella `followed_artists` è orfana nel codice ma potrebbe contenere righe se qualcuno l'ha popolata manualmente.
+- **Fasi interessate:** Fase 7
+- **Prevenzione:** verificare `SELECT COUNT(*) FROM followed_artists` prima dell'eliminazione. Se > 0, documentare le righe in un backup prima di eliminare.
+- **Verifica:** backup delle righe esiste se count > 0.
+
 ---
 
 ## 4. PROTOCOLLO DI ROLLBACK GLOBALE
@@ -515,14 +580,16 @@ Se il refactor fallisce a qualsiasi fase e si decide di tornare all'architettura
 
 ### 4.1 Codice
 ```bash
-git checkout pre-refactor-v1.0
+git checkout labelpulse-pre-refactor-v1
 # oppure
 git revert <commit-fase-N>..<HEAD>
 ```
 
 ### 4.2 Database
-- **Fase 1 fallita:** ripristinare vecchie policy RLS dal backup, rimuovere colonna `user_id`, eliminare `_orphans`
-- **Fase 7 fallita:** ripristinare righe `app_state id='<email>'` da `backup_app_state_personal_<date>`
+- **Fase 0 fallita:** N/A (la fase è il backup)
+- **Fase 0.5 fallita:** ripristinare vecchie policy RLS dal backup Fase 0 (file `rls-policies-<date>.sql`)
+- **Fase 1 fallita:** ripristinare vecchie policy RLS, rimuovere colonna `user_id`, eliminare `_orphans`
+- **Fase 7 fallita:** ripristinare righe `app_state id='<email>'` da `backup_app_state_personal_<date>`, ripristinare `followed_artists` dal backup Fase 0
 - **Altre fasi:** nessuna modifica al database, solo `git revert`
 
 ### 4.3 localStorage / IndexedDB
@@ -538,18 +605,21 @@ Se il rollback avviene dopo la Fase 6 (JWT), comunicare ai beta tester di fare r
 
 Il refactor è completato senza perdita dati solo se TUTTE queste condizioni sono vere:
 
-1. ☐ Backup Fase 0 esiste (JSON + export Supabase + tag git)
-2. ☐ Fase 1: conteggi tabelle FASE C invariati, `_orphans` documentato
-3. ☐ Fase 2: tutti i dati utente accessibili dalle tabelle FASE C, riga `app_state` personale dormiente
-4. ☐ Fase 3: outbox vuoto su tutti i device prima dell'eliminazione, nessuna scrittura pendente persa
-5. ☐ Fase 4: artists sincronizzati al cloud prima dell'eliminazione IndexedDB, numero artists invariato
-6. ☐ Fase 5: nessun dato toccato (solo refactor boot)
-7. ☐ Fase 6: JWT refreshato, nessun dato perso (solo accesso temporaneo negato)
-8. ☐ Fase 7: righe `app_state` personali eliminate SOLO dopo verifica conteggi identici, backup conservato 30 giorni
-9. ☐ Test cross-device: modifica su device A → login su device B → dato identico (per ogni tipo di dato)
-10. ☐ Test multi-user: utente B non vede dati di utente A
-11. ☐ Audit log popolato per ogni modifica
-12. ☐ Nessun `grep` di `localStorage\|IndexedDB\|outbox\|auto-backup` in codice utente (esclusi flag config/auth)
+1. ☐ Backup Fase 0 esiste (dump database + schema + policy + funzioni + conteggi)
+2. ☐ Tag git `labelpulse-pre-refactor-v1` esiste
+3. ☐ Fase 0.5: warning Security Advisor risolti per tabelle snapshot, `agent_memory` e `beta_feedback` verificati
+4. ☐ Fase 1: conteggi tabelle FASE C invariati, `_orphans` documentato
+5. ☐ Fase 2: tutti i dati utente accessibili dalle tabelle FASE C, riga `app_state` personale dormiente
+6. ☐ Fase 3: outbox vuoto su tutti i device prima dell'eliminazione, nessuna scrittura pendente persa
+7. ☐ Fase 4: artists sincronizzati al cloud prima dell'eliminazione IndexedDB, numero artists invariato
+8. ☐ Fase 5: nessun dato toccato (solo refactor boot)
+9. ☐ Fase 6: JWT refreshato, nessun dato perso (solo accesso temporaneo negato)
+10. ☐ Fase 7: righe `app_state` personali eliminate SOLO dopo verifica conteggi identici, backup conservato 30 giorni
+11. ☐ Fase 7: `followed_artists` eliminata solo dopo verifica count = 0 o backup delle righe
+12. ☐ Test cross-device: modifica su device A → login su device B → dato identico (per ogni tipo di dato)
+13. ☐ Test multi-user: utente B non vede dati di utente A
+14. ☐ Audit log popolato per ogni modifica
+15. ☐ Nessun `grep` di `localStorage\|IndexedDB\|outbox\|auto-backup` in codice utente (esclusi flag config/auth)
 
 Se anche una sola condizione non è verificata, il refactor NON è completato e si deve investigare.
 
