@@ -16,8 +16,8 @@ import { getAdminClient } from "@/lib/supabase-admin";
  */
 
 export async function GET(req: NextRequest) {
-  const { supabase, email } = await getAdminClient();
-  if (!supabase || !email) {
+  const { supabase, email, userId } = await getAdminClient();
+  if (!supabase || !email || !userId) {
     return NextResponse.json({ error: "Not authenticated" }, { status: 401 });
   }
 
@@ -27,7 +27,7 @@ export async function GET(req: NextRequest) {
   let query = supabase
     .from("pitch_campaigns")
     .select("*")
-    .eq("user_email", email)
+    .eq("user_id", userId)
     .order("created_at", { ascending: false });
 
   if (status === "draft" || status === "sent") {
@@ -45,8 +45,8 @@ export async function GET(req: NextRequest) {
 }
 
 export async function POST(req: NextRequest) {
-  const { supabase, email } = await getAdminClient();
-  if (!supabase || !email) {
+  const { supabase, email, userId } = await getAdminClient();
+  if (!supabase || !email || !userId) {
     return NextResponse.json({ error: "Not authenticated" }, { status: 401 });
   }
 
@@ -65,7 +65,7 @@ export async function POST(req: NextRequest) {
       .from("pitch_campaigns")
       .insert({
         id: String(id),
-        user_email: email,
+        user_id: userId,
         label_id: label_id || null,
         label_name: label_name || null,
         demo_id: demo_id || null,
@@ -94,8 +94,8 @@ export async function POST(req: NextRequest) {
 }
 
 export async function PATCH(req: NextRequest) {
-  const { supabase, email } = await getAdminClient();
-  if (!supabase || !email) {
+  const { supabase, email, userId } = await getAdminClient();
+  if (!supabase || !email || !userId) {
     return NextResponse.json({ error: "Not authenticated" }, { status: 401 });
   }
 
@@ -108,14 +108,14 @@ export async function PATCH(req: NextRequest) {
   try {
     const updates = await req.json();
     delete updates.id;
-    delete updates.user_email;
+    delete updates.user_id;
     delete updates.created_at;
 
     const { data, error } = await supabase
       .from("pitch_campaigns")
       .update(updates)
       .eq("id", id)
-      .eq("user_email", email)
+      .eq("user_id", userId)
       .select()
       .single();
 
@@ -136,8 +136,8 @@ export async function PATCH(req: NextRequest) {
 }
 
 export async function DELETE(req: NextRequest) {
-  const { supabase, email } = await getAdminClient();
-  if (!supabase || !email) {
+  const { supabase, email, userId } = await getAdminClient();
+  if (!supabase || !email || !userId) {
     return NextResponse.json({ error: "Not authenticated" }, { status: 401 });
   }
 
@@ -151,7 +151,7 @@ export async function DELETE(req: NextRequest) {
     .from("pitch_campaigns")
     .delete()
     .eq("id", id)
-    .eq("user_email", email);
+    .eq("user_id", userId);
 
   if (error) {
     console.error("[/api/pitches DELETE]", error);
