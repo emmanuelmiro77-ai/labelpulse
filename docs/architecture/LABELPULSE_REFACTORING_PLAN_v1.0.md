@@ -11,16 +11,17 @@ Questo piano è **vincolante**. Prima di ogni modifica futura al codice, il pian
 1. **Ordine vincolante** — le fasi vanno eseguite nell'ordine indicato. Le dipendenze tra fasi sono esplicite.
 2. **Verifica obbligatoria** — dopo ogni fase, il punto di verifica deve essere superato prima di procedere. La verifica è binaria (pass/fail), non "buona parte funziona".
 3. **No codice in questo documento** — il piano descrive cosa fare, non come. Il codice sarà scritto solo dopo approvazione esplicita della singola fase.
-4. **Backup del dato reale** — prima della Fase 1, l'utente deve eseguire un export completo JSON (`Scarica backup JSON` nella diagnostica) e salvarlo localmente. È l'unica rollback possibile.
+4. **Backup del dato reale** — la Fase 0 produce un backup completo del database Supabase (dump + schema + policy RLS + funzioni + conteggi righe). È l'unica rollback possibile per i dati.
 5. **Una fase = un commit** — ogni fase produce un commit atomico con messaggio `refactor(faseN): descrizione`. Nessuna fase può essere spezzata in più commit.
 6. **No workaround** — se una fase rivela un blocco imprevisto, l'esecuzione si ferma, si documenta il blocco, si decide. Non si introducono patch temporanee.
 7. **Rollback** — se il punto di verifica di una fase fallisce, si fa `git revert` del commit della fase e si riflette prima di riprovare. Non si accumulano fix sopra a una fase fallita.
+8. **Lead Developer / Project Owner / Architect** — l'esecutore del piano è il Lead Developer. Il Project Owner autorizza l'inizio di ogni fase. Il Software Architect (ChatGPT) svolge review tecnica. Nessuna fase può iniziare senza autorizzazione esplicita del Project Owner.
 
 ---
 
 ## 1. STRUTTURA DELLE FASI
 
-Il piano è diviso in **7 fasi**. Ogni fase ha:
+Il piano è diviso in **9 fasi** (0, 0.5, 1, 2, 3, 4, 5, 5.5, 6, 7). Ogni fase ha:
 - **Obiettivo** — cosa si raggiunge
 - **Dipendenze** — quali fasi devono essere già completate
 - **Modifiche database** — cosa cambia su Supabase
@@ -60,16 +61,9 @@ Il piano è diviso in **7 fasi**. Ogni fase ha:
 0.2. **Esportazione dello schema SQL (DDL)**
 - Eseguire l'esportazione della sola struttura del database (CREATE TABLE, indici, vincoli, foreign keys).
 - Salvare il file in `docs/architecture/backups/schema-<YYYY-MM-DD>.sql`.
-- Query SQL da eseguire nel SQL Editor di Supabase:
-  ```sql
-  -- Esporta tutte le definizioni DDL dello schema public
-  SELECT 
-    'CREATE TABLE ' || schemaname || '.' || tablename || ' (...);' as ddl
-  FROM pg_tables 
-  WHERE schemaname = 'public'
-  ORDER BY tablename;
-  ```
-- Alternativa: Supabase Dashboard → Database → Tables → "Export schema" (se disponibile).
+- Metodo preferito: `pg_dump --schema-only --no-owner --no-privileges -U postgres -h <host> -p <port> -d <dbname> > schema-<date>.sql` (se pg_dump disponibile).
+- Metodo alternativo (Supabase Dashboard): Database → Tables → selezionare ogni tabella → "Export DDL" (se disponibile nella versione Dashboard).
+- ⚠️ **NOTA**: la query `SELECT 'CREATE TABLE ' || schemaname || '.' || tablename || ' (...);' FROM pg_tables` produce solo placeholder testuali, NON il DDL reale. Non usarla per il backup. L'export schema è per documentazione; il ripristino reale usa il dump completo del punto 0.1.
 
 0.3. **Esportazione delle policy RLS**
 - Eseguire l'esportazione di tutte le policy RLS attive.
@@ -248,10 +242,24 @@ Il piano è diviso in **7 fasi**. Ogni fase ha:
 - Modificare `src/lib/snapshots.ts` funzione `getServerSupabase()` (riga 72) per usare `SUPABASE_SERVICE_ROLE_KEY` invece di `NEXT_PUBLIC_SUPABASE_ANON_KEY`.
 - Aggiungere auth check `getServerSession` + `ADMIN_EMAILS` in:
   - `/api/snapshots/save/route.ts` (POST) — solo admin può importare snapshot.
-  - `/api/snapshots/latest/route.ts` (GET) — lettura pubblica OK, ma verificare se serve.
-  - `/api/snapshots/diff/[date]/route.ts` (GET) — lettura pubblica OK, ma verificare se serve.
-- Spostare le route sotto `/api/admin/snapshots/*` (coerente con `LABELPULSE_FINAL_ARCHITECTURE.md` sezione 5.4: admin-only usa service_role).
-- Giustificazione: le snapshot sono dati globali scritti solo dall'admin. L'anon key non deve poter scrivere.
+  - `/api/snapshots/latest/route.ts` (GET) — **resta pubblico**: restituisce solo metadati (data, count tracce, count generi), nessun dato sensibile.
+  - `/api/snapshots/diff/[date]/route.ts` (GET) — **resta pubblico**: restituisce solo diff aggregati (climbers, droppers, new entries), nessun dato sensibile.
+- Spostare la route `save` sotto `/api/admin/snapshots/save` (coerente con `LABELPULSE_FINAL_ARCHITECTURE.md` sezione 5.4: admin-only usa service_role).
+- Le route `latest` e `diff` restano sotto `/api/snapshots/*` (pubbliche, sola lettura metadati).
+- Giustificazione: le snapshot sono dati globali scritti solo dall'admin. L'anon key non deve poter scrivere. La lettura di metadati è pubblica.
+
+⚠️ **ATTENZIONE — Impatto scraper Beatport (verifica obbligatoria prima della fase):**
+- Lo scraper Beatport nel browser fa POST diretta a `/api/snapshots/save` con CORS `ALLOWED_ORIGINS = ['https://www.beatport.com', ...]`.
+- Se la route `save` si sposta sotto `/api/admin/snapshots/save` con auth check `getServerSession`, lo scraper NON ha sessione NextAuth → 401 → lo scraper smette di funzionare.
+- **Verifica obbligatoria prima della fase:** analizzare `src/app/api/snapshots/save/route.ts` righe 23-39 (CORS config) e `src/components/rankings-wizard.tsx` riga 666 (fetch call). Determinare:
+  1. Lo scraper è uno script browser separato (bookmarklet/extension) o è `rankings-wizard.tsx` dentro l'app?
+  2. Se è separato: come ottiene la sessione? Serve un token condiviso (es. header `X-Scraper-Token`) invece di `getServerSession`.
+  3. Se è `rankings-wizard.tsx`: l'utente è già loggato come admin, `getServerSession` funziona.
+- **Decisione da documentare prima della fase:** come gestire l'auth dello scraper. Opzioni:
+  - A) Lo scraper include la sessione NextAuth (se è parte dell'app)
+  - B) Lo scraper usa un token condiviso `X-Scraper-Token` validato server-side
+  - C) La route `save` resta sotto `/api/snapshots/save` ma con auth tramite token instead of session
+- Non procedere con 0.5.4 finché questa decisione non è documentata.
 
 0.5.5. **Protezione `beatport_snapshots` e `beatport_chart_history`** (warning `rls_disabled_in_public`):
 - Abilitare RLS (attualmente DISABLED).
@@ -346,8 +354,10 @@ Il piano è diviso in **7 fasi**. Ogni fase ha:
 
 1.5. Riscrivere RLS su `app_state`:
 - La riga `id='global'` resta leggibile da tutti (`FOR SELECT USING (id = 'global')`).
-- Le righe personali `id='<email>'` diventano **obsolete** (verranno rimosse nella Fase 2). In questa fase vengono solo bloccate in scrittura.
-- Policy: `FOR SELECT USING (id = 'global')` + `FOR INSERT/UPDATE/DELETE USING (false)` (nessuno può scrivere righe personali).
+- Le righe personali `id='<email>'` diventano **obsolete** (verranno rimosse nella Fase 2). In questa fase vengono solo bloccate in scrittura, MA restano leggibili temporaneamente per non rompere `loadStateFromCloud` (eliminato solo in Fase 2).
+- Policy temporanea Fase 1: `FOR SELECT USING (id = 'global' OR id = auth.jwt() ->> 'email')` + `FOR INSERT/UPDATE/DELETE USING (false)` (nessuno può scrivere righe personali, ma la lettura della propria riga resta permessa finché la Fase 2 elimina `loadStateFromCloud`).
+- **Policy finale Fase 2** (dopo eliminazione `loadStateFromCloud`): `FOR SELECT USING (id = 'global')` + `FOR INSERT/UPDATE/DELETE USING (false)` (lettura personale bloccata definitivamente).
+- ⚠️ **NOTA**: questa policy temporanea evita il problema identificato nella review tecnica: bloccare la lettura personale in Fase 1 romperebbe l'accesso a `gmailAuth`, `artists`, `rankingSnapshots` personali che vivono ancora nel JSON blob e sono letti da `loadStateFromCloud` (non ancora eliminato).
 
 1.6. Verificare che `SUPABASE_SERVICE_ROLE_KEY` sia configurata su Vercel (necessaria per le API route in transizione).
 
@@ -414,6 +424,10 @@ Il piano è diviso in **7 fasi**. Ogni fase ha:
   - Eliminare i merge multipli che coinvolgevano la riga personale
 - `src/lib/use-auth.ts`
   - Sostituire `Promise.all([loadFromCloud(), loadFromNewTables()])` con sola chiamata a `loadFromNewTables` + lettura riga globale per classifiche
+- `src/components/producer-profile.tsx` (e tutti i componenti che chiamano `forceCloudSync` direttamente)
+  - Sostituire le chiamate a `forceCloudSync` con chiamate alle API route specifiche (`/api/profile`, `/api/demos`, ecc.)
+  - ⚠️ Questi componenti sono parte integrante della Fase 2, non modifiche collaterali — senza questa migrazione, perdono la funzionalità di salvataggio
+- Aggiornare la policy `app_state` alla **policy finale Fase 2** (vedi punto 1.5): `FOR SELECT USING (id = 'global')` + `FOR INSERT/UPDATE/DELETE USING (false)` (lettura personale bloccata definitivamente, ora che `loadStateFromCloud` è eliminato)
 
 **Rischi:**
 - **R1 (alto):** se `loadFromNewTables` non copre tutti i dati che erano nella riga personale, si perdono dati. Mitigazione: prima di eliminare `loadStateFromCloud`, verificare che `loadFromNewTables` carichi: demos, label personal data, pitches, profile, releases, **e le classifiche dalla riga globale**. Se manca qualcosa, aggiungerlo a `loadFromNewTables`.
@@ -478,7 +492,7 @@ Il piano è diviso in **7 fasi**. Ogni fase ha:
 
 ## FASE 4 — ELIMINAZIONE ZUSTAND PERSIST + IDB STORAGE
 
-**Obiettivo:** lo store Zustand diventa solo stato in memoria per la sessione. Nessuna persistenza locale.
+**Obiettivo:** rimuovere il middleware `persist` da Zustand e tutta la persistenza locale. Zustand resta temporaneamente in-memory (solo per questa fase), ma verrà eliminato completamente nella Fase 7. Nessuna persistenza locale.
 
 **Dipendenze:** FASE 3 completata e verificata.
 
@@ -493,7 +507,7 @@ Il piano è diviso in **7 fasi**. Ogni fase ha:
   - Eliminare `getStorageOwner`, `setStorageOwner`, `verifyStorageOwner`, `clearAllLocalData` (o semplificarle drasticamente — non c'è più nulla da pulire)
   - Eliminare `forceBackupNow`, `readSnapshotsSidecar`, `restoreSnapshotsFromSidecar`, `readProfileSidecar`, `restoreProfileFromSidecar`, `writeArtistsSidecar`, `readArtistsSidecar`, `restoreArtistsFromSidecar`
   - Eliminare `emergencyClearLocalStorage`
-  - Lo store viene popolato **solo** dal flusso di boot (Fase 5) e dalle azioni async (Fase 3)
+  - Lo store Zustand (in-memory, senza persist) viene popolato **solo** dal flusso di boot (Fase 5) e dalle azioni async (Fase 3). Sarà eliminato completamente nella Fase 7.
 - `src/lib/artists-idb.ts` — **eliminato** (intero file)
 - `src/lib/supabase.ts`
   - `saveArtistsToCloud`/`loadArtistsFromCloud` — verificare se servono ancora o se gli artisti vanno in una tabella dedicata (valutare in fase di esecuzione)
@@ -502,15 +516,18 @@ Il piano è diviso in **7 fasi**. Ogni fase ha:
 - `src/components/cloud-recovery.tsx`
   - Eliminare tutti i riferimenti a sidecar localStorage (diagnostica semplificata)
 - `src/components/welcome-onboarding.tsx`
-  - Il flag `labelpulse-onboarded-v2:<email>` resta in localStorage (è un flag UI, non un dato utente) — verificare conformità con la specifica
+  - Il flag `labelpulse-onboarded-v2:<email>` resta in localStorage (è un flag UI, non un dato utente) — decisione allineata a `LABELPULSE_FINAL_ARCHITECTURE.md` sezione 9.5
 - `src/components/cookie-consent.tsx`, `src/components/posthog-provider.tsx`
-  - Il flag cookie consent resta in localStorage (preferenza, non dato utente) — verificare conformità
+  - Il flag cookie consent resta in localStorage (preferenza, non dato utente) — decisione allineata a `LABELPULSE_FINAL_ARCHITECTURE.md` sezione 9.5
+
+**Decisione sui flag config/auth (allineata a Final Architecture 9.5):**
+- **Mantenere in localStorage:** `labelpulse-onboarded-v2:<email>`, `labelpulse-cookie-consent`, `beta_admin_token`, `next-auth.session-token`
+- Non sono dati utente, sono flag di config/auth. La specifica vieta "localStorage persistente" per dati utente, non per flag di config.
 
 **Rischi:**
 - **R1 (critico):** senza persist, ogni refresh della pagina perde lo stato se il cloud sync non ha completato. Mitigazione: il boot (Fase 5) deve completare prima del render. La UI mostra loading finché il cloud non risponde.
 - **R2 (alto):** `verifyStorageOwner` era il guardiano del multi-user isolation. Senza localStorage, l'isolamento è garantito solo da RLS (corretto per la specifica). Mitigazione: la Fase 1 ha già reso RLS per-user rigorosa.
 - **R3 (medio):** gli artisti su IndexedDB (~9MB) vengono persi. Mitigazione: devono essere migrati a una tabella Supabase prima di questa fase, oppure accettati come perdita (verificare con l'utente).
-- **R4 (medio):** i flag `onboarded`, `cookie-consent`, `beta_admin_token` in localStorage — la specifica vieta "localStorage persistente" ma questi sono flag di configurazione/auth, non dati utente. Decisione da prendere in fase di esecuzione: tenerli (interpretazione lata) o migrarli (interpretazione stretta).
 
 **Punto di verifica:**
 - `grep -r "persist\|createJSONStorage\|idb-keyval\|idbStorage\|localStorage\.setItem.*labelpulse" src/` → 0 risultati (esclusi flag di config/auth documentati).
@@ -563,11 +580,46 @@ Il piano è diviso in **7 fasi**. Ogni fase ha:
 
 ---
 
+## FASE 5.5 — JWT REFRESH TOKEN FLOW
+
+**Obiettivo:** implementare il refresh del JWT Supabase scaduto usando il refresh token salvato nella sessione NextAuth. Questa fase è prerequisito per la Fase 6 (eliminazione service_role): senza refresh, ogni sessione > 1 ora si bloccherebbe con 401 su tutte le API route.
+
+**Dipendenze:** FASE 5 completata e verificata.
+
+**Modifiche database:** nessuna.
+
+**File modificati:**
+- `src/lib/auth-options.ts`
+  - Nel callback `jwt({ token, account, user })`, quando `account` è undefined (sessione esistente, non nuovo login):
+    - Leggere `token.supabaseExpiresAt`
+    - Se scaduto (o in scadenza entro 60s):
+      - Usare `token.supabaseRefreshToken` per chiamare `supabase.auth.refreshSession({ refresh_token: token.supabaseRefreshToken })`
+      - Se successo: aggiornare `token.supabaseAccessToken`, `token.supabaseRefreshToken`, `token.supabaseExpiresAt`
+      - Se fallito: loggare warning, lasciare il token scaduto (l'API route risponderà 401 e l'utente rifà login)
+- `src/lib/supabase-admin.ts`
+  - Aggiungere funzione `refreshSupabaseToken(session)`: se il JWT è scaduto, usa il refresh token per ottenerne uno nuovo prima di creare il client Supabase
+  - `getAdminClient` chiama `refreshSupabaseToken` prima di creare il client
+
+**Rischi:**
+- **R1 (alto):** se `refreshSession` fallisce (refresh token scaduto o invalidato), l'utente viene sloggato. Mitigazione: questo è il comportamento corretto — il refresh token ha una scadenza (settimane), se scade l'utente rifà login.
+- **R2 (medio):** race condition tra multiple API route concorrenti che tentano il refresh simultaneamente. Mitigazione: usare un lock in-memory (module-level variable) per serializzare i refresh.
+- **R3 (basso):** il refresh token rotato (Supabase potrebbe ritornare un nuovo refresh token ad ogni refresh). Mitigazione: aggiornare sempre `token.supabaseRefreshToken` con il valore ritornato.
+
+**Punto di verifica:**
+1. Login → attendere > 1 ora (o modificare `token.supabaseExpiresAt` per simulare scadenza) → fare una modifica (es. aggiungere un demo) → deve funzionare senza re-login
+2. Console browser: nessun errore 401 dopo scadenza JWT
+3. Supabase Dashboard → Logs → Auth → verificare che `refreshSession` venga chiamato periodicamente
+4. Test fallimento: invalidare manualmente il refresh token su Supabase → la prossima modifica deve fallire con 401 esplicito → l'utente rifà login → funziona
+
+**Stato:** ☐ Da completare
+
+---
+
 ## FASE 6 — RLS LATO API ROUTE (ELIMINAZIONE SERVICE_ROLE)
 
 **Obiettivo:** le API route usano il JWT Supabase dell'utente (RLS attiva a livello database). `service_role` viene eliminato dal lato client. `getAdminClient` non fa più fallback.
 
-**Dipendenze:** FASE 5 completata e verificata.
+**Dipendenze:** FASE 5.5 completata e verificata (JWT refresh token flow implementato).
 
 **Modifiche database:**
 6.1. Verificare che tutte le tabelle FASE C abbiano RLS con `user_id = auth.uid()` (da Fase 1).
@@ -625,18 +677,35 @@ ALTER TABLE audit_log ENABLE ROW LEVEL SECURITY;
 -- Admin can read all, users can read own
 ```
 7.2. Aggiungere trigger PostgreSQL su `demo_submissions, label_personal_data, pitch_campaigns, user_profiles, user_releases` per popolare `audit_log`.
+7.3. Verificare ed eliminare `followed_artists`:
+- Eseguire `SELECT COUNT(*) FROM followed_artists;`
+- Se count > 0: esportare le righe in `docs/architecture/backups/followed_artists-<date>.sql` prima di procedere
+- Se count = 0: procedere direttamente
+- Eseguire `DROP TABLE followed_artists;`
+- Giustificazione: tabella orfana, mai referenziata nel codice applicativo (verificato in `DATABASE_CURRENT_STATE.md` sezione 2.10)
+7.4. Eliminare righe legacy `app_state id='default'` (single-user backward compat):
+- `DELETE FROM app_state WHERE id = 'default';`
 
 **File modificati:**
-- `src/hooks/use-demos.ts` (nuovo) — hook dedicato per demo: `useDemos()`, `createDemo()`, `updateDemo()`, `deleteDemo()`
-- `src/hooks/use-labels.ts` (nuovo) — hook per label: `useLabels()`, `useLabelPersonalData()`, `upsertLabelData()`
-- `src/hooks/use-profile.ts` (nuovo) — hook per profilo
-- `src/hooks/use-pitches.ts` (nuovo) — hook per pitch
-- `src/hooks/use-rankings.ts` (nuovo) — hook per classifiche (lettura globale)
+- `src/services/profile-service.ts` (nuovo) — business service per profilo: `profileService.list()`, `profileService.upsert()`, `profileService.delete()`
+- `src/services/labels-service.ts` (nuovo) — business service per label: `labelsService.list()`, `labelsService.upsert()`, `labelsService.delete()`
+- `src/services/demos-service.ts` (nuovo) — business service per demo
+- `src/services/pitches-service.ts` (nuovo) — business service per pitch
+- `src/services/releases-service.ts` (nuovo) — business service per release
+- `src/services/rankings-service.ts` (nuovo) — business service per classifiche (lettura globale)
+- `src/hooks/use-profile.ts` (nuovo) — hook `useProfile()` che usa `profileService`
+- `src/hooks/use-labels.ts` (nuovo) — hook `useLabels()` che usa `labelsService`
+- `src/hooks/use-demo-library.ts` (nuovo) — hook `useDemoLibrary()` che usa `demosService` (nome allineato a `LABELPULSE_FINAL_ARCHITECTURE.md` sezione 6.2)
+- `src/hooks/use-pitch-manager.ts` (nuovo) — hook `usePitchManager()` che usa `pitchesService`
+- `src/hooks/use-releases.ts` (nuovo) — hook `useReleases()` che usa `releasesService`
+- `src/hooks/use-rankings.ts` (nuovo) — hook `useRankings()` che usa `rankingsService`
 - `src/components/*.tsx` — tutti i componenti migrano da `useAppStore` diretto agli hook dedicati
-- `src/lib/store.ts` — lo store diventa un semplice contenitore in memoria, popolato dagli hook, non più scritto direttamente dai componenti
+- `src/lib/store.ts` — **ELIMINATO COMPLETAMENTE** (Zustand rimosso, non più mantenuto in-memory). Lo stato vive negli hook dedicati con `useState` locale. (Allineato a `LABELPULSE_FINAL_ARCHITECTURE.md` sezione 8.2: "Zustand viene rimosso. Non sostituito da un altro store globale, ma da hook dedicati per dominio funzionale, ognuno con il proprio stato locale in useState.")
+- `src/lib/api-client.ts` — **eliminato** (sostituito dai business service per dominio)
 - Eliminare codice morto: `src/app/api/debug-profile/`, `src/app/api/debug-rankings/`, `src/app/api/debug-cloud-state/`, `src/app/api/auth-debug/`, `src/app/api/cloud-debug/` (endpoint diagnostici temporanei)
 - `src/lib/db.ts` — verificare se Prisma è ancora usato (era per schema precedente); se inutilizzato, eliminare
 - `prisma/` — verificare se ancora necessario; se inutilizzato, eliminare
+- `package.json` — rimuovere `zustand`, `idb-keyval` dalle dipendenze (se non più usati)
 
 **Rischi:**
 - **R1 (alto):** la migrazione dei componenti a hook dedicati è il refactor più grande (tutti i componenti toccati). Mitigazione: farlo componente per componente, con verifica dopo ognuno.
@@ -656,7 +725,7 @@ ALTER TABLE audit_log ENABLE ROW LEVEL SECURITY;
 ## 2. MATRICE DI DIPENDENZE
 
 ```
-FASE 0 (snapshot pre-migrazione)
+FASE 0 (backup database pre-migrazione)
   ↓
 FASE 0.5 (security hardening — RLS indipendenti)
   ↓
@@ -670,9 +739,11 @@ FASE 4 (elimina Zustand persist + IDB)
   ↓
 FASE 5 (boot sequenziale)
   ↓
+FASE 5.5 (JWT refresh token flow)
+  ↓
 FASE 6 (RLS lato API route, no service_role)
   ↓
-FASE 7 (unificazione access + cleanup)
+FASE 7 (unificazione access + cleanup + eliminazione Zustand)
 ```
 
 Nessuna fase può essere parallelizzata. Ogni fase dipende dal punto di verifica della precedente.
@@ -695,8 +766,8 @@ Questi rischi non appartengono a una singola fase, ma attraversano l'intero refa
 
 Il piano è completato solo se **tutte** queste condizioni sono vere:
 
-1. Tutte le 7 fasi hanno stato "completato" con punto di verifica superato.
-2. `grep -r "localStorage\|IndexedDB\|idb-keyval\|persist\|outbox\|auto-backup\|saveSnapshot" src/ | grep -v "__tests__\|//\|/\*"` → 0 risultati (esclusi flag di config/auth documentati).
+1. Tutte le 9 fasi (0, 0.5, 1, 2, 3, 4, 5, 5.5, 6, 7) hanno stato "completato" con punto di verifica superato.
+2. `grep -r "localStorage\|IndexedDB\|idb-keyval\|persist\|outbox\|auto-backup\|saveSnapshot\|zustand\|useAppStore" src/ | grep -v "__tests__\|//\|/\*"` → 0 risultati (esclusi flag di config/auth documentati).
 3. `grep -r "SUPABASE_SERVICE_ROLE_KEY" src/ | grep -v "admin\|cron"` → 0 risultati.
 4. `grep -r "app_state" src/lib/supabase.ts | grep -v "global\|//"` → 0 risultati (nessun riferimento alla riga personale).
 5. Supabase Dashboard → tutte le tabelle FASE C hanno colonna `user_id` popolata, RLS con `auth.uid()`, policy per SELECT/INSERT/UPDATE/DELETE.
@@ -705,15 +776,21 @@ Il piano è completato solo se **tutte** queste condizioni sono vere:
 8. Test multi-user: login utente A → logout → login utente B sullo stesso device → B non vede dati di A.
 9. Audit log popolato per ogni modifica.
 10. Endpoint diagnostici temporanei eliminati.
+11. `followed_artists` eliminata (verificare `SELECT EXISTS (SELECT FROM pg_tables WHERE tablename = 'followed_artists');` → false).
+12. Zustand eliminato completamente (`grep -r "zustand" src/ package.json | grep -v node_modules` → 0 risultati).
+13. Business service per dominio creati (`src/services/*-service.ts` esistono per: profile, labels, demos, pitches, releases, rankings).
+14. Hook per dominio creati (`src/hooks/use-*.ts` esistono per: profile, labels, demo-library, pitch-manager, releases, rankings).
 
 ---
 
 ## 5. NOTE OPERATIVE
 
-- **Branch dedicato:** tutto il refactor avviene su branch `refactor/v1.0-architecture`. Il `main` resta stabile finché il piano non è completato.
+- **Branch dedicato:** tutto il refactor avviene su branch `refactor/cloud-first-v1`. Il `main` resta stabile finché il piano non è completato.
+- **Tag baseline:** `labelpulse-pre-refactor-v1` punta all'ultimo commit di `main` prima del refactoring (punto di rollback).
 - **Comunicazione beta tester:** prima della Fase 6, comunicare ai beta tester che dovranno fare re-login.
 - **Finestra di manutenzione:** le fasi che modificano il database (1, 7) vanno eseguite in finestra di basso traffico.
 - **Rollback:** se una fase fallisce e il rollback è necessario, si fa `git revert` del commit della fase + ripristino del backup database (dalla Fase 0). Non si accumulano fix.
+- **Protocollo di esecuzione:** il Lead Developer attende l'autorizzazione esplicita del Project Owner prima di iniziare ogni fase. Dopo ogni fase, il Lead Developer si ferma e attende l'approvazione prima di procedere alla fase successiva. Nessuna fase può iniziare automaticamente.
 
 ---
 
