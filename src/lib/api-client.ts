@@ -21,6 +21,41 @@ import { writeWithOutbox } from "./outbox";
 
 const API_BASE = "";
 
+/**
+ * 🔒 writeDirect — fetch diretta senza coda outbox.
+ *
+ * Esegue la chiamata API immediatamente. Se fallisce, propaga l'errore
+ * al chiamante (nessun retry, nessuna coda, nessun salvataggio locale).
+ * L'errore deve essere gestito esplicitamente dal chiamante.
+ *
+ * Ritorna la risposta JSON se ok, altrimenti lancia un Error.
+ */
+export async function writeDirect<T = any>(
+  url: string,
+  method: "POST" | "PATCH" | "DELETE",
+  body?: any,
+): Promise<T> {
+  const bodyWithTimestamp = body !== undefined
+    ? { ...body, local_updated_at: new Date().toISOString() }
+    : undefined;
+
+  const res = await fetch(url, {
+    method,
+    headers: bodyWithTimestamp !== undefined ? { "Content-Type": "application/json" } : undefined,
+    body: bodyWithTimestamp !== undefined ? JSON.stringify(bodyWithTimestamp) : undefined,
+  });
+
+  if (!res.ok) {
+    const errData = await res.json().catch(() => ({}));
+    const err = new Error(errData?.error || `HTTP ${res.status}`) as any;
+    err.status = res.status;
+    err.body = errData;
+    throw err;
+  }
+
+  return res.json();
+}
+
 export interface DemoRow {
   id: string;
   label_id: string;
