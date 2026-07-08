@@ -160,7 +160,8 @@ export const authOptions: AuthOptions = {
                 (token as any).supabaseAccessToken = data.session.access_token;
                 (token as any).supabaseRefreshToken = data.session.refresh_token;
                 (token as any).supabaseExpiresAt = data.session.expires_at;
-                console.log("[NextAuth→Supabase] ✅ Sessione Supabase creata per:", data.user?.email);
+                (token as any).supabaseUserId = data.user?.id || null;
+                console.log("[NextAuth→Supabase] ✅ Sessione Supabase creata per:", data.user?.email, "userId:", data.user?.id);
               } else {
                 console.warn("[NextAuth→Supabase] signInWithIdToken returned no session, no error");
               }
@@ -214,6 +215,7 @@ export const authOptions: AuthOptions = {
       (session as any).isBetaCode = !!token.isBetaCode;
       // 🔒 FASE D: esponi i token Supabase alla sessione client
       (session as any).supabaseAccessToken = (token as any).supabaseAccessToken;
+      (session as any).supabaseUserId = (token as any).supabaseUserId || null;
       return session;
     },
   },
