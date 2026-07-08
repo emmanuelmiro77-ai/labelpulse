@@ -15,17 +15,17 @@ import { getAdminClient } from "@/lib/supabase-admin";
  * nuove tabelle — generando falsi allarmi.
  */
 export async function GET() {
-  const { supabase, email } = await getAdminClient();
-  if (!supabase || !email) {
+  const { supabase, email, userId } = await getAdminClient();
+  if (!supabase || !email || !userId) {
     return NextResponse.json({ error: "Not authenticated" }, { status: 401 });
   }
 
   const [demos, labelData, pitches, profile, releases] = await Promise.all([
-    supabase.from("demo_submissions").select("id, updated_at", { count: "exact" }).eq("user_email", email),
-    supabase.from("label_personal_data").select("label_id, updated_at", { count: "exact" }).eq("user_email", email),
-    supabase.from("pitch_campaigns").select("id, status, updated_at", { count: "exact" }).eq("user_email", email),
-    supabase.from("user_profiles").select("artist_name, bio, photo_url, sc_link, updated_at").eq("user_email", email).maybeSingle(),
-    supabase.from("user_releases").select("id, updated_at", { count: "exact" }).eq("user_email", email),
+    supabase.from("demo_submissions").select("id, updated_at", { count: "exact" }).eq("user_id", userId),
+    supabase.from("label_personal_data").select("label_id, updated_at", { count: "exact" }).eq("user_id", userId),
+    supabase.from("pitch_campaigns").select("id, status, updated_at", { count: "exact" }).eq("user_id", userId),
+    supabase.from("user_profiles").select("artist_name, bio, photo_url, sc_link, updated_at").eq("user_id", userId).maybeSingle(),
+    supabase.from("user_releases").select("id, updated_at", { count: "exact" }).eq("user_id", userId),
   ]);
 
   const latestUpdatedAt = [
