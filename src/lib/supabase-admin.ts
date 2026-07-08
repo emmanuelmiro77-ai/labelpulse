@@ -3,17 +3,17 @@ import { getServerSession } from "next-auth";
 import { authOptions } from "@/lib/auth-options";
 
 /**
- * 🔒 FASE D — Supabase client helper con RLS vera
+ * 🔒 Supabase client helper con RLS vera.
  *
- * STRATEGIA TRIPLICE (emergenza RLS 2026-07-06):
- * 1. PRIMA TENTATIVO: JWT Supabase dalla sessione NextAuth → RLS attiva
- * 2. FALLBACK 1: service_role (bypassa RLS)
- * 3. FALLBACK 2: anon key (con policy permissive USING(true) — defense-in-depth
- *    a livello API route via getServerSession + .eq("user_email"))
+ * Flusso:
+ * 1. Verifica sessione NextAuth
+ * 2. Tenta JWT Supabase dalla sessione → RLS attiva
+ * 3. Se JWT non disponibile o scaduto, tenta service_role (bypassa RLS)
+ * 4. Se nessun percorso funziona, restituisce null (fail esplicito)
  *
- * 🔒 FIX EMERGENZA: Se SUPABASE_SERVICE_ROLE_KEY non è impostato su Vercel,
- * cadiamo su anon key. Le policy RLS permissive (USING true) permettono
- * l'accesso, e la sicurezza è garantita a livello API route.
+ * Il fallback anon key è stato eliminato: le policy RLS basate su
+ * user_id = auth.uid() bloccano l'anon key, quindi restituire un client
+ * anon darebbe dati vuoti silenziosi invece di un errore esplicito.
  */
 
 export async function getAdminClient(): Promise<{
@@ -41,7 +41,7 @@ export async function getAdminClient(): Promise<{
     return { supabase: null, email: null, useRls: false };
   }
 
-  // 3. 🔒 PRIMA TENTATIVO: JWT Supabase dalla sessione
+  // 3. 🔒 PERCORSO PRINCIPALE: JWT Supabase dalla sessione
   const supabaseAccessToken = (session as any).supabaseAccessToken;
   const supabaseExpiresAt = (session as any).supabaseExpiresAt as number | undefined;
 
@@ -67,19 +67,19 @@ export async function getAdminClient(): Promise<{
         console.warn("[getAdminClient] Supabase JWT check failed:", err);
       }
     } else {
-      console.warn("[getAdminClient] Supabase JWT expired — using fallback");
+      console.warn("[getAdminClient] Supabase JWT expired — using service_role fallback");
     }
   }
 
-  // 4. FALLBACK 1: service_role (bypassa RLS)
+  // 4. FALLBACK: service_role (bypassa RLS)
+  // TODO Fase 6: eliminare questo fallback quando il refresh token flow sarà implementato.
   const supabaseServiceKey = process.env.SUPABASE_SERVICE_ROLE_KEY;
   if (supabaseServiceKey) {
     const supabase = createClient(supabaseUrl, supabaseServiceKey);
     return { supabase, email, useRls: false };
   }
 
-  // 5. FALLBACK 2: anon key (con policy permissive USING(true) — sicurezza a livello API route)
-  console.warn("[getAdminClient] SUPABASE_SERVICE_ROLE_KEY missing — falling back to anon key (RLS permissive). Security via API route getServerSession + .eq(user_email).");
-  const supabase = createClient(supabaseUrl, supabaseAnonKey);
-  return { supabase, email, useRls: false };
+  // 5. FAIL ESPLICITO: nessun client disponibile
+  console.error("[getAdminClient] No valid JWT and no service_role key — cannot create Supabase client");
+  return { supabase: null, email: null, useRls: false };
 }
