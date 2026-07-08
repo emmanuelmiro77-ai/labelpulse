@@ -11,15 +11,15 @@ import { getAdminClient } from "@/lib/supabase-admin";
  */
 
 export async function GET() {
-  const { supabase, email } = await getAdminClient();
-  if (!supabase || !email) {
+  const { supabase, email, userId } = await getAdminClient();
+  if (!supabase || !email || !userId) {
     return NextResponse.json({ error: "Not authenticated" }, { status: 401 });
   }
 
   const { data, error } = await supabase
     .from("user_releases")
     .select("*")
-    .eq("user_email", email)
+    .eq("user_id", userId)
     .order("created_at", { ascending: false });
 
   if (error) {
@@ -31,8 +31,8 @@ export async function GET() {
 }
 
 export async function POST(req: NextRequest) {
-  const { supabase, email } = await getAdminClient();
-  if (!supabase || !email) {
+  const { supabase, email, userId } = await getAdminClient();
+  if (!supabase || !email || !userId) {
     return NextResponse.json({ error: "Not authenticated" }, { status: 401 });
   }
 
@@ -49,7 +49,7 @@ export async function POST(req: NextRequest) {
       .from("user_releases")
       .insert({
         id: String(finalId),
-        user_email: email,
+        user_id: userId,
         type: type || "ep",
         title: String(title),
         artists: Array.isArray(artists) ? artists : [],
@@ -74,8 +74,8 @@ export async function POST(req: NextRequest) {
 }
 
 export async function PATCH(req: NextRequest) {
-  const { supabase, email } = await getAdminClient();
-  if (!supabase || !email) {
+  const { supabase, email, userId } = await getAdminClient();
+  if (!supabase || !email || !userId) {
     return NextResponse.json({ error: "Not authenticated" }, { status: 401 });
   }
 
@@ -88,14 +88,14 @@ export async function PATCH(req: NextRequest) {
   try {
     const updates = await req.json();
     delete updates.id;
-    delete updates.user_email;
+    delete updates.user_id;
     delete updates.created_at;
 
     const { data, error } = await supabase
       .from("user_releases")
       .update(updates)
       .eq("id", id)
-      .eq("user_email", email)
+      .eq("user_id", userId)
       .select()
       .single();
 
@@ -116,8 +116,8 @@ export async function PATCH(req: NextRequest) {
 }
 
 export async function DELETE(req: NextRequest) {
-  const { supabase, email } = await getAdminClient();
-  if (!supabase || !email) {
+  const { supabase, email, userId } = await getAdminClient();
+  if (!supabase || !email || !userId) {
     return NextResponse.json({ error: "Not authenticated" }, { status: 401 });
   }
 
@@ -132,7 +132,7 @@ export async function DELETE(req: NextRequest) {
       .from("user_releases")
       .delete()
       .eq("id", id)
-      .eq("user_email", email)
+      .eq("user_id", userId)
       .select();
 
     if (error) {
