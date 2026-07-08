@@ -201,7 +201,13 @@ export async function apiFetchAllPitches(): Promise<PitchRow[] | null> {
 // ==================== PROFILE ====================
 
 export async function apiUpsertProfile(profile: ProfileRow): Promise<boolean> {
-  return writeWithOutbox(`${API_BASE}/api/profile`, "POST", profile, "profile:upsert");
+  try {
+    await writeDirect(`${API_BASE}/api/profile`, "POST", profile);
+    return true;
+  } catch (err) {
+    console.error("[apiUpsertProfile] failed:", err);
+    return false;
+  }
 }
 
 export async function apiFetchProfile(): Promise<ProfileRow | null> {
