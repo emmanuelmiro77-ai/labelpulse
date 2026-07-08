@@ -118,15 +118,33 @@ export interface ProfileRow {
 // ==================== DEMOS ====================
 
 export async function apiCreateDemo(demo: DemoRow): Promise<boolean> {
-  return writeWithOutbox(`${API_BASE}/api/demos`, "POST", demo, `demo:create:${demo.id}`);
+  try {
+    await writeDirect(`${API_BASE}/api/demos`, "POST", demo);
+    return true;
+  } catch (err) {
+    console.error("[apiCreateDemo] failed:", err);
+    return false;
+  }
 }
 
 export async function apiUpdateDemo(id: string, updates: Partial<DemoRow>): Promise<boolean> {
-  return writeWithOutbox(`${API_BASE}/api/demos?id=${encodeURIComponent(id)}`, "PATCH", updates, `demo:update:${id}`);
+  try {
+    await writeDirect(`${API_BASE}/api/demos?id=${encodeURIComponent(id)}`, "PATCH", updates);
+    return true;
+  } catch (err) {
+    console.error("[apiUpdateDemo] failed:", err);
+    return false;
+  }
 }
 
 export async function apiDeleteDemo(id: string): Promise<boolean> {
-  return writeWithOutbox(`${API_BASE}/api/demos?id=${encodeURIComponent(id)}`, "DELETE", undefined, `demo:delete:${id}`);
+  try {
+    await writeDirect(`${API_BASE}/api/demos?id=${encodeURIComponent(id)}`, "DELETE");
+    return true;
+  } catch (err) {
+    console.error("[apiDeleteDemo] failed:", err);
+    return false;
+  }
 }
 
 export async function apiFetchAllDemos(): Promise<DemoRow[] | null> {
@@ -147,11 +165,23 @@ export async function apiFetchAllDemos(): Promise<DemoRow[] | null> {
 // ==================== LABEL DATA ====================
 
 export async function apiUpsertLabelData(labelData: LabelDataRow): Promise<boolean> {
-  return writeWithOutbox(`${API_BASE}/api/label-data`, "POST", labelData, `label-data:upsert:${labelData.label_id}`);
+  try {
+    await writeDirect(`${API_BASE}/api/label-data`, "POST", labelData);
+    return true;
+  } catch (err) {
+    console.error("[apiUpsertLabelData] failed:", err);
+    return false;
+  }
 }
 
 export async function apiDeleteLabelData(labelId: string): Promise<boolean> {
-  return writeWithOutbox(`${API_BASE}/api/label-data?label_id=${encodeURIComponent(labelId)}`, "DELETE", undefined, `label-data:delete:${labelId}`);
+  try {
+    await writeDirect(`${API_BASE}/api/label-data?label_id=${encodeURIComponent(labelId)}`, "DELETE");
+    return true;
+  } catch (err) {
+    console.error("[apiDeleteLabelData] failed:", err);
+    return false;
+  }
 }
 
 export async function apiFetchAllLabelData(): Promise<LabelDataRow[] | null> {
@@ -172,15 +202,33 @@ export async function apiFetchAllLabelData(): Promise<LabelDataRow[] | null> {
 // ==================== PITCHES ====================
 
 export async function apiCreatePitch(pitch: PitchRow): Promise<boolean> {
-  return writeWithOutbox(`${API_BASE}/api/pitches`, "POST", pitch, `pitch:create:${pitch.id}`);
+  try {
+    await writeDirect(`${API_BASE}/api/pitches`, "POST", pitch);
+    return true;
+  } catch (err) {
+    console.error("[apiCreatePitch] failed:", err);
+    return false;
+  }
 }
 
 export async function apiUpdatePitch(id: string, updates: Partial<PitchRow>): Promise<boolean> {
-  return writeWithOutbox(`${API_BASE}/api/pitches?id=${encodeURIComponent(id)}`, "PATCH", updates, `pitch:update:${id}`);
+  try {
+    await writeDirect(`${API_BASE}/api/pitches?id=${encodeURIComponent(id)}`, "PATCH", updates);
+    return true;
+  } catch (err) {
+    console.error("[apiUpdatePitch] failed:", err);
+    return false;
+  }
 }
 
 export async function apiDeletePitch(id: string): Promise<boolean> {
-  return writeWithOutbox(`${API_BASE}/api/pitches?id=${encodeURIComponent(id)}`, "DELETE", undefined, `pitch:delete:${id}`);
+  try {
+    await writeDirect(`${API_BASE}/api/pitches?id=${encodeURIComponent(id)}`, "DELETE");
+    return true;
+  } catch (err) {
+    console.error("[apiDeletePitch] failed:", err);
+    return false;
+  }
 }
 
 export async function apiFetchAllPitches(): Promise<PitchRow[] | null> {
@@ -239,13 +287,31 @@ export interface ReleaseRow {
 }
 
 export async function apiCreateRelease(release: ReleaseRow): Promise<boolean> {
-  return writeWithOutbox(`${API_BASE}/api/releases`, "POST", release, `release:create:${release.id}`);
+  try {
+    await writeDirect(`${API_BASE}/api/releases`, "POST", release);
+    return true;
+  } catch (err) {
+    console.error("[apiCreateRelease] failed:", err);
+    return false;
+  }
 }
 
 export async function apiUpdateRelease(id: string, updates: Partial<ReleaseRow>): Promise<boolean> {
-  return writeWithOutbox(`${API_BASE}/api/releases?id=${encodeURIComponent(id)}`, "PATCH", updates, `release:update:${id}`);
+  try {
+    await writeDirect(`${API_BASE}/api/releases?id=${encodeURIComponent(id)}`, "PATCH", updates);
+    return true;
+  } catch (err) {
+    console.error("[apiUpdateRelease] failed:", err);
+    return false;
+  }
 }
 
 export async function apiDeleteRelease(id: string): Promise<boolean> {
-  return writeWithOutbox(`${API_BASE}/api/releases?id=${encodeURIComponent(id)}`, "DELETE", undefined, `release:delete:${id}`);
+  try {
+    await writeDirect(`${API_BASE}/api/releases?id=${encodeURIComponent(id)}`, "DELETE");
+    return true;
+  } catch (err) {
+    console.error("[apiDeleteRelease] failed:", err);
+    return false;
+  }
 }
