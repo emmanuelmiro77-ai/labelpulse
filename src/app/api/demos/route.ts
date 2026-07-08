@@ -5,7 +5,7 @@ import { getAdminClient } from "@/lib/supabase-admin";
  * API /api/demos — CRUD per la tabella demo_submissions
  *
  * 🔒 FASE C: tutte le operazioni sono autenticate via NextAuth session.
- * L'email della sessione viene usata come partition key.
+ * Lo userId della sessione viene usato come partition key.
  * Impossibile leggere/scrivere demo di un altro utente.
  *
  * GET    /api/demos              → lista tutti i demo dell'utente
@@ -15,15 +15,15 @@ import { getAdminClient } from "@/lib/supabase-admin";
  */
 
 export async function GET() {
-  const { supabase, email } = await getAdminClient();
-  if (!supabase || !email) {
+  const { supabase, email, userId } = await getAdminClient();
+  if (!supabase || !email || !userId) {
     return NextResponse.json({ error: "Not authenticated" }, { status: 401 });
   }
 
   const { data, error } = await supabase
     .from("demo_submissions")
     .select("*")
-    .eq("user_email", email)
+    .eq("user_id", userId)
     .order("created_at", { ascending: false });
 
   if (error) {
@@ -35,8 +35,8 @@ export async function GET() {
 }
 
 export async function POST(req: NextRequest) {
-  const { supabase, email } = await getAdminClient();
-  if (!supabase || !email) {
+  const { supabase, email, userId } = await getAdminClient();
+  if (!supabase || !email || !userId) {
     return NextResponse.json({ error: "Not authenticated" }, { status: 401 });
   }
 
@@ -63,7 +63,7 @@ export async function POST(req: NextRequest) {
       .from("demo_submissions")
       .insert({
         id: String(finalId),
-        user_email: email,
+        user_id: userId,
         label_id: label_id ? String(label_id) : "no_target",
         label_name: label_name || null,
         track_name: String(track_name),
@@ -94,8 +94,8 @@ export async function POST(req: NextRequest) {
 }
 
 export async function PATCH(req: NextRequest) {
-  const { supabase, email } = await getAdminClient();
-  if (!supabase || !email) {
+  const { supabase, email, userId } = await getAdminClient();
+  if (!supabase || !email || !userId) {
     return NextResponse.json({ error: "Not authenticated" }, { status: 401 });
   }
 
@@ -117,7 +117,7 @@ export async function PATCH(req: NextRequest) {
         .from("demo_submissions")
         .select("updated_at")
         .eq("id", id)
-        .eq("user_email", email)
+        .eq("user_id", userId)
         .maybeSingle();
       
       if (existing?.updated_at) {
@@ -149,14 +149,14 @@ export async function PATCH(req: NextRequest) {
     }
     // Remove fields that should never be updated via PATCH
     delete updates.id;
-    delete updates.user_email;
+    delete updates.user_id;
     delete updates.created_at;
 
     const { data, error } = await supabase
       .from("demo_submissions")
       .update(updates)
       .eq("id", id)
-      .eq("user_email", email)
+      .eq("user_id", userId)
       .select()
       .single();
 
@@ -177,8 +177,8 @@ export async function PATCH(req: NextRequest) {
 }
 
 export async function DELETE(req: NextRequest) {
-  const { supabase, email } = await getAdminClient();
-  if (!supabase || !email) {
+  const { supabase, email, userId } = await getAdminClient();
+  if (!supabase || !email || !userId) {
     return NextResponse.json({ error: "Not authenticated" }, { status: 401 });
   }
 
@@ -192,7 +192,7 @@ export async function DELETE(req: NextRequest) {
     .from("demo_submissions")
     .delete()
     .eq("id", id)
-    .eq("user_email", email);
+    .eq("user_id", userId);
 
   if (error) {
     console.error("[/api/demos DELETE]", error);
