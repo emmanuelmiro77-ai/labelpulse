@@ -20,6 +20,10 @@
 -- =====================================================================
 DROP POLICY IF EXISTS "demo_submissions_all_access" ON demo_submissions;
 DROP POLICY IF EXISTS "Users can CRUD own demos" ON demo_submissions;
+DROP POLICY IF EXISTS "demo_submissions_select_own" ON demo_submissions;
+DROP POLICY IF EXISTS "demo_submissions_insert_own" ON demo_submissions;
+DROP POLICY IF EXISTS "demo_submissions_update_own" ON demo_submissions;
+DROP POLICY IF EXISTS "demo_submissions_delete_own" ON demo_submissions;
 
 CREATE POLICY "demo_submissions_select_own" ON demo_submissions
   FOR SELECT USING (user_id = auth.uid());
@@ -38,6 +42,10 @@ CREATE POLICY "demo_submissions_delete_own" ON demo_submissions
 -- =====================================================================
 DROP POLICY IF EXISTS "label_personal_data_all_access" ON label_personal_data;
 DROP POLICY IF EXISTS "Users can CRUD own label data" ON label_personal_data;
+DROP POLICY IF EXISTS "label_personal_data_select_own" ON label_personal_data;
+DROP POLICY IF EXISTS "label_personal_data_insert_own" ON label_personal_data;
+DROP POLICY IF EXISTS "label_personal_data_update_own" ON label_personal_data;
+DROP POLICY IF EXISTS "label_personal_data_delete_own" ON label_personal_data;
 
 CREATE POLICY "label_personal_data_select_own" ON label_personal_data
   FOR SELECT USING (user_id = auth.uid());
@@ -56,6 +64,10 @@ CREATE POLICY "label_personal_data_delete_own" ON label_personal_data
 -- =====================================================================
 DROP POLICY IF EXISTS "pitch_campaigns_all_access" ON pitch_campaigns;
 DROP POLICY IF EXISTS "Users can CRUD own pitches" ON pitch_campaigns;
+DROP POLICY IF EXISTS "pitch_campaigns_select_own" ON pitch_campaigns;
+DROP POLICY IF EXISTS "pitch_campaigns_insert_own" ON pitch_campaigns;
+DROP POLICY IF EXISTS "pitch_campaigns_update_own" ON pitch_campaigns;
+DROP POLICY IF EXISTS "pitch_campaigns_delete_own" ON pitch_campaigns;
 
 CREATE POLICY "pitch_campaigns_select_own" ON pitch_campaigns
   FOR SELECT USING (user_id = auth.uid());
@@ -74,6 +86,10 @@ CREATE POLICY "pitch_campaigns_delete_own" ON pitch_campaigns
 -- =====================================================================
 DROP POLICY IF EXISTS "user_profiles_all_access" ON user_profiles;
 DROP POLICY IF EXISTS "Users can CRUD own profile" ON user_profiles;
+DROP POLICY IF EXISTS "user_profiles_select_own" ON user_profiles;
+DROP POLICY IF EXISTS "user_profiles_insert_own" ON user_profiles;
+DROP POLICY IF EXISTS "user_profiles_update_own" ON user_profiles;
+DROP POLICY IF EXISTS "user_profiles_delete_own" ON user_profiles;
 
 CREATE POLICY "user_profiles_select_own" ON user_profiles
   FOR SELECT USING (user_id = auth.uid());
@@ -92,6 +108,10 @@ CREATE POLICY "user_profiles_delete_own" ON user_profiles
 -- =====================================================================
 DROP POLICY IF EXISTS "Users can CRUD own releases" ON user_releases;
 DROP POLICY IF EXISTS "user_releases_all_access" ON user_releases;
+DROP POLICY IF EXISTS "user_releases_select_own" ON user_releases;
+DROP POLICY IF EXISTS "user_releases_insert_own" ON user_releases;
+DROP POLICY IF EXISTS "user_releases_update_own" ON user_releases;
+DROP POLICY IF EXISTS "user_releases_delete_own" ON user_releases;
 
 CREATE POLICY "user_releases_select_own" ON user_releases
   FOR SELECT USING (user_id = auth.uid());
