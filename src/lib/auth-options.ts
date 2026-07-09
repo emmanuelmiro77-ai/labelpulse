@@ -153,9 +153,6 @@ export const authOptions: AuthOptions = {
                 provider: "google",
                 token: account.id_token,
               });
-              console.log("[AUTH DEBUG] data.user =", data.user);
-              console.log("[AUTH DEBUG] data.session.user =", data.session?.user);
-              console.log("[AUTH DEBUG] data.session =", !!data.session);
               if (error) {
                 console.error("[NextAuth→Supabase] signInWithIdToken failed:", error.message, error.status);
               } else if (data.session) {
@@ -163,8 +160,54 @@ export const authOptions: AuthOptions = {
                 (token as any).supabaseAccessToken = data.session.access_token;
                 (token as any).supabaseRefreshToken = data.session.refresh_token;
                 (token as any).supabaseExpiresAt = data.session.expires_at;
-                (token as any).supabaseUserId = data.user?.id || null;
-                console.log("[NextAuth→Supabase] ✅ Sessione Supabase creata per:", data.user?.email, "userId:", data.user?.id);
+
+                // 🔒 FIX bug "supabaseUserId = null": l'UUID dell'utente Supabase
+                // deve essere letto dalla sorgente corretta.
+                //
+                // signInWithIdToken() ritorna { data: { user, session }, error }.
+                // L'oggetto User è accessibile da DUE sorgenti equivalenti:
+                //
+                //   1. data.user — sorgente primaria, popolata da GoTrue nella
+                //      risposta HTTP _response.user_ e promossa da supabase-js
+                //      al top-level del risultato.
+                //
+                //   2. data.session.user — sorgente secondaria. La Session
+                //      contiene SEMPRE un riferimento allo stesso oggetto User
+                //      (è una proprietà obbligatoria del tipo Session in
+                //      @supabase/supabase-js). Quando data.session è presente,
+                //      data.session.user è garantito essere lo stesso utente.
+                //
+                // In alcune condizioni (versioni di supabase-js con bug noto,
+                // GoTrue che omette _user_ dal body, proxy che alterano la
+                // risposta), data.user può essere null anche quando
+                // data.session è popolato e contiene un utente valido.
+                //
+                // Se entrambe le sorgenti sono assenti, l'UUID non è
+                // recuperabile in modo affidabile senza decodificare il JWT
+                // (claim "sub"). Quello è considerato workaround temporaneo
+                // e NON viene applicato qui: la causa corretta è un problema
+                // lato Supabase Auth o supabase-js da investigare a parte.
+                // In tal caso logghiamo esplicitamente l'anomalia.
+                const supabaseUserId =
+                  data.user?.id ||
+                  data.session?.user?.id ||
+                  null;
+                (token as any).supabaseUserId = supabaseUserId;
+
+                const supabaseUserEmail =
+                  data.user?.email ||
+                  data.session?.user?.email ||
+                  null;
+
+                if (!supabaseUserId) {
+                  console.error(
+                    "[NextAuth→Supabase] ⚠️ UUID utente non disponibile ne' da data.user ne' da data.session.user. " +
+                    "Sessione creata ma userId resta null. Possibile bug supabase-js o GoTrue. " +
+                    "Investigare la response completa di signInWithIdToken()."
+                  );
+                } else {
+                  console.log("[NextAuth→Supabase] ✅ Sessione Supabase creata per:", supabaseUserEmail, "userId:", supabaseUserId);
+                }
               } else {
                 console.warn("[NextAuth→Supabase] signInWithIdToken returned no session, no error");
               }
