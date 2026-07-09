@@ -1230,6 +1230,19 @@ interface AppState {
   // User Profile
   setUserProfile: (profile: Partial<UserProfile>) => void;
 
+  // 🔒 FASE 6A: Autosave cloud-first per il profilo.
+  // Il componente UI non chiama mai apiUpsertProfile direttamente.
+  // Chiama solo setUserProfile(). Il debounce + writeDirect è gestito
+  // internamente dallo store (logica in _doSaveProfile).
+  // retrySaveProfile() è l'unica azione manuale esposta: serve al
+  // bottone "Riprova" nell'UI quando status="error".
+  // flushProfileSave() è usato dai listener di unload per forzare
+  // il salvataggio prima che la tab venga chiusa (keepalive fetch).
+  profileSaveStatus: "idle" | "pending" | "saving" | "saved" | "error";
+  profileSaveError: string | null;
+  retrySaveProfile: () => void;
+  flushProfileSave: () => void;
+
   // Available genres
   getGenres: () => string[];
 
@@ -1573,6 +1586,159 @@ function repairLabelData(labels: Label[]): Label[] {
   });
 }
 
+// ==================== 🔒 FASE 6A: AUTOSAVE CLOUD-FIRST (PROFILE) ====================
+//
+// Architettura:
+//   UI (producer-profile.tsx)
+//     → setUserProfile({ bio: value })            [azione store]
+//       → set() locale + markLocalProfileEdit()    [stato aggiornato]
+//       → _profileIsDirty = true                   [flag dirty]
+//       → debounce timer 600ms                     [ritardo salvataggio]
+//
+//   Al fire del timer:
+//     → _doSaveProfile()                           [funzione interna]
+//       → status = "saving"                        [UI mostra "Salvataggio..."]
+//       → apiUpsertProfile(currentProfile)         [service → writeDirect → fetch]
+//         → ok=true: status="saved", dirty=false   [successo]
+//         → ok=false: status="error", error=msg    [fallimento, NO retry auto]
+//
+//   retrySaveProfile()  → bottone "Riprova" nell'UI (manuale, no coda, no outbox)
+//   flushProfileSave()  → listener unload (pagehide/beforeunload) con keepalive
+//
+// Regole:
+//   - Nessun retry automatico. Una sola richiesta per modifica.
+//   - Se il valore cambia durante un save in corso, si riprogramma un nuovo
+//     debounce dopo la fine del save (inFlightRef + needsResave pattern).
+//   - Niente JSON.stringify per confronto: si usa un dirty flag boolean.
+//   - Lo store è l'unico responsabile del cloud sync. La UI non conosce
+//     apiUpsertProfile.
+//
+// Nota tecnica: le variabili sono module-level (non nello stato Zustand)
+// perché sono dettaglio implementativo del controller di autosave, non
+// dati che la UI deve leggere. Lo stato esposto alla UI è profileSaveStatus
+// + profileSaveError.
+
+const PROFILE_AUTOSAVE_DEBOUNCE_MS = 600;
+const PROFILE_AUTOSAVE_SAVED_INDICATOR_MS = 2000;
+
+let _profileSaveTimer: ReturnType<typeof setTimeout> | null = null;
+let _profileIsDirty = false;
+let _profileIsSaving = false;
+let _profileNeedsResave = false;
+let _profileSavedTimeout: ReturnType<typeof setTimeout> | null = null;
+
+/**
+ * Funzione interna di salvataggio. NON esportata. Chiamata solo dal
+ * debounce timer, da retrySaveProfile(), e da flushProfileSave().
+ *
+ * Usa lo stato CORRENTE del store al momento del fire, non uno snapshot
+ * preso al momento della modifica. Questo garantisce che venga sempre
+ * salvata l'ultima versione disponibile.
+ *
+ * Se keepalive=true, la fetch sottostante userà keepalive per completare
+ * anche in caso di chiusura tab.
+ */
+async function _doSaveProfile(opts?: { keepalive?: boolean }): Promise<void> {
+  // Se un salvataggio è già in corso, segnala che serve un altro salvataggio
+  // dopo la fine di quello corrente. NON avviare un secondo save in parallelo.
+  if (_profileIsSaving) {
+    _profileNeedsResave = true;
+    return;
+  }
+
+  _profileIsSaving = true;
+  _profileIsDirty = false; // stiamo per salvare lo stato corrente
+  useAppStore.setState({
+    profileSaveStatus: "saving",
+    profileSaveError: null,
+  });
+
+  try {
+    const current = useAppStore.getState().userProfile;
+    if (!current) {
+      throw new Error("No userProfile in store");
+    }
+
+    const ok = await apiUpsertProfile(
+      {
+        artist_name: current.artistName,
+        bio: current.bio,
+        photo_url: current.photoUrl,
+        sc_link: current.scLink,
+        links: current.links,
+        cyanite_api_token: current.cyaniteApiToken,
+        locale: useAppStore.getState().locale,
+      },
+      { keepalive: opts?.keepalive === true },
+    );
+
+    if (ok) {
+      useAppStore.setState({ profileSaveStatus: "saved", profileSaveError: null });
+      // Dopo 2s, torna a "idle" se non ci sono nuove modifiche
+      if (_profileSavedTimeout) clearTimeout(_profileSavedTimeout);
+      _profileSavedTimeout = setTimeout(() => {
+        _profileSavedTimeout = null;
+        const st = useAppStore.getState().profileSaveStatus;
+        if (st === "saved") {
+          useAppStore.setState({ profileSaveStatus: "idle" });
+        }
+      }, PROFILE_AUTOSAVE_SAVED_INDICATOR_MS);
+    } else {
+      // apiUpsertProfile ritorna false su errore di rete/HTTP. Nessun retry
+      // automatico: l'utente vede "Error" + "Riprova" e clicca manualmente.
+      useAppStore.setState({
+        profileSaveStatus: "error",
+        profileSaveError: "Salvataggio fallito — controlla la connessione",
+      });
+    }
+  } catch (err) {
+    console.error("[profileAutosave] save failed:", err);
+    useAppStore.setState({
+      profileSaveStatus: "error",
+      profileSaveError: err instanceof Error ? err.message : "Errore sconosciuto",
+    });
+  } finally {
+    _profileIsSaving = false;
+    // Se il valore è cambiato durante il save, riprogramma un nuovo debounce
+    if (_profileNeedsResave || _profileIsDirty) {
+      _profileNeedsResave = false;
+      if (_profileSaveTimer) clearTimeout(_profileSaveTimer);
+      _profileSaveTimer = setTimeout(() => {
+        _profileSaveTimer = null;
+        void _doSaveProfile();
+      }, PROFILE_AUTOSAVE_DEBOUNCE_MS);
+      useAppStore.setState({ profileSaveStatus: "pending" });
+    }
+  }
+}
+
+/**
+ * Inizializza i listener per flushare il profilo su unload.
+ * Da chiamare UNA VOLTA sola all'avvio dell'app (es. in use-auth.ts).
+ * Registra listener su visibilitychange, pagehide, beforeunload.
+ * Se il profilo è dirty al momento dell'unload, lancia una fetch
+ * keepalive per garantire il salvataggio.
+ */
+export function initProfileAutosave(): void {
+  if (typeof window === "undefined") return;
+
+  const flush = () => {
+    if (_profileIsDirty && !_profileIsSaving) {
+      if (_profileSaveTimer) {
+        clearTimeout(_profileSaveTimer);
+        _profileSaveTimer = null;
+      }
+      void _doSaveProfile({ keepalive: true });
+    }
+  };
+
+  document.addEventListener("visibilitychange", () => {
+    if (document.visibilityState === "hidden") flush();
+  });
+  window.addEventListener("pagehide", flush);
+  window.addEventListener("beforeunload", flush);
+}
+
 export const useAppStore = create<AppState>()(
   persist(
     (set, get) => ({
@@ -1596,6 +1762,8 @@ export const useAppStore = create<AppState>()(
       hasRehydrated: false as boolean,
       hasCloudSynced: false as boolean,
       rankingSnapshots: [] as RankingSnapshot[],
+      profileSaveStatus: "idle" as "idle" | "pending" | "saving" | "saved" | "error",
+      profileSaveError: null as string | null,
 
       addLabel: (label) => {
         const newId = genId();
@@ -2062,41 +2230,54 @@ export const useAppStore = create<AppState>()(
         // arrives with a stale photoUrl/artistName/etc. Fixes the
         // "photo reverts to old one on iPhone" bug.
         try { markLocalProfileEdit(); } catch {}
+        // 🔒 FASE 6A: syncToCloud() mantenuto per backward compat con il
+        // vecchio sistema app_state (sarà rimosso in fase successiva).
+        // NON chiama apiUpsertProfile qui: il cloud sync verso user_profiles
+        // è gestito dal controller di autosave (_doSaveProfile) con debounce.
         syncToCloud();
-        // ⚠️ CRITICAL: also trigger an IMMEDIATE (non-debounced) cloud sync.
-        // syncToCloud is debounced 3 seconds — if the user saves and closes
-        // the window within 3s, the cloud sync never fires and the profile
-        // is lost. forceCloudSync uploads right now so the cloud always has
-        // the latest profile, even if the user closes immediately after.
-        // Use a tiny timeout (0ms) to let the state settle before reading.
-        setTimeout(() => {
-          try {
-            forceCloudSync();
-          } catch (e) {
-            console.warn("[LabelPulse] Immediate profile sync failed:", e);
-          }
-        }, 0);
-        // 🔒 FASE C.7: dual write — also push to user_profiles table
-        const current = useAppStore.getState().userProfile;
-        if (current) {
-          apiUpsertProfile({
-            artist_name: current.artistName,
-            bio: current.bio,
-            photo_url: current.photoUrl,
-            sc_link: current.scLink,
-            links: current.links,
-            cyanite_api_token: current.cyaniteApiToken,
-            locale: useAppStore.getState().locale,
-          }).then((ok) => {
-            if (ok) {
-              console.log("[setUserProfile] ✅ Profile synced to user_profiles table");
-            } else {
-              console.warn("[setUserProfile] ⚠️ Profile sync returned false (queued or rejected)");
-            }
-          }).catch((err) => {
-            console.error("[setUserProfile] ❌ Profile sync FAILED:", err);
-          });
+
+        // 🔒 FASE 6A: marca il profilo come dirty e programma il debounce.
+        // Il save vero e proprio (apiUpsertProfile → writeDirect → fetch)
+        // parte 600ms dopo l'ultima modifica, gestito da _doSaveProfile.
+        _profileIsDirty = true;
+        if (_profileIsSaving) {
+          // Un save è in corso: segnala che serve un altro save dopo.
+          // NON avviare timer qui (ci pensa il finally di _doSaveProfile).
+          _profileNeedsResave = true;
+          useAppStore.setState({ profileSaveStatus: "pending" });
+          return;
         }
+        if (_profileSaveTimer) clearTimeout(_profileSaveTimer);
+        useAppStore.setState({ profileSaveStatus: "pending", profileSaveError: null });
+        _profileSaveTimer = setTimeout(() => {
+          _profileSaveTimer = null;
+          void _doSaveProfile();
+        }, PROFILE_AUTOSAVE_DEBOUNCE_MS);
+      },
+
+      // 🔒 FASE 6A: retry manuale. Da chiamare dal bottone "Riprova"
+      // nell'UI quando profileSaveStatus === "error".
+      // Cancella il debounce pendente (se presente) e lancia subito un save.
+      retrySaveProfile: () => {
+        if (_profileIsSaving) return; // già in corso, ignora
+        if (_profileSaveTimer) {
+          clearTimeout(_profileSaveTimer);
+          _profileSaveTimer = null;
+        }
+        void _doSaveProfile();
+      },
+
+      // 🔒 FASE 6A: flush forzato. Da chiamare dai listener di unload
+      // (pagehide/beforeunload) per garantire il salvataggio prima che
+      // la tab venga chiusa. Usa keepalive per completare la request.
+      flushProfileSave: () => {
+        if (_profileIsSaving) return; // save in corso, lascia che completi
+        if (!_profileIsDirty) return; // nulla da salvare
+        if (_profileSaveTimer) {
+          clearTimeout(_profileSaveTimer);
+          _profileSaveTimer = null;
+        }
+        void _doSaveProfile({ keepalive: true });
       },
 
       getGenres: () => labelData.genres,

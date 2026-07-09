@@ -180,119 +180,36 @@ function compressImageToDataUrl(
 // ==================== COMPONENT ====================
 
 export function ProducerProfile() {
-  const { userProfile, setUserProfile, locale } = useAppStore();
+  const { userProfile, setUserProfile, locale, profileSaveStatus, profileSaveError, retrySaveProfile } = useAppStore();
   const { data: session } = useSession();
   const isAdmin = isAdminEmail(session?.user?.email as string | undefined);
-  const [detailSaved, setDetailSaved] = useState(false);
   const [showPhotoInput, setShowPhotoInput] = useState(false);
-  const [photoUrlDraft, setPhotoUrlDraft] = useState(userProfile.photoUrl);
   const [photoUploading, setPhotoUploading] = useState(false);
   const [photoUploadError, setPhotoUploadError] = useState<string | null>(null);
   const fileInputRef = useRef<HTMLInputElement | null>(null);
 
-  // Local drafts for profile fields so we can flush them on app background/close.
-  const [artistNameDraft, setArtistNameDraft] = useState(userProfile.artistName);
-  const [emailDraft, setEmailDraft] = useState(userProfile.email);
-  const [bioDraft, setBioDraft] = useState(userProfile.bio);
-  const [scLinkDraft, setScLinkDraft] = useState(userProfile.scLink);
-
-  // Local links state for editing before blur-save
+  // 🔒 FASE 6A: i link mantengono uno stato locale per editing fluido
+  // (add/remove richiede UX interattiva prima del commit). Il commit su blur
+  // continua a chiamare setUserProfile({ links }), che triggera l'autosave.
   const [localLinks, setLocalLinks] = useState<{ type: string; value: string }[]>(
     userProfile.links?.length ? userProfile.links : []
   );
 
-  // Auto-save indicator trigger
-  const triggerSaved = useCallback(() => {
-    setDetailSaved(true);
-    setTimeout(() => setDetailSaved(false), 1500);
-  }, []);
+  useEffect(() => {
+    setLocalLinks(userProfile.links?.length ? userProfile.links : []);
+  }, [userProfile.links]);
 
   // ==================== HANDLERS ====================
-
-  const handleFieldBlur = useCallback(
-    (field: "artistName" | "email" | "bio" | "scLink" | "photoUrl", value: string) => {
-      // Only save if value actually changed
-      if (userProfile[field] !== value) {
-        setUserProfile({ [field]: value });
-        triggerSaved();
-        // Track profile completion on first meaningful field save
-        // (artistName is the strongest signal of "user is using the app")
-        if (field === "artistName" && value && !userProfile.artistName) {
-          void import("@/lib/analytics").then(({ trackEvent }) => {
-            trackEvent("profile_completed", { field });
-          });
-        }
-      }
-    },
-    [userProfile, setUserProfile, triggerSaved]
-  );
-
-  const handlePhotoUrlBlur = useCallback(() => {
-    if (photoUrlDraft !== userProfile.photoUrl) {
-      setUserProfile({ photoUrl: photoUrlDraft });
-      triggerSaved();
-    }
-    setShowPhotoInput(false);
-  }, [photoUrlDraft, userProfile.photoUrl, setUserProfile, triggerSaved]);
-
-  const flushProfileDrafts = useCallback(() => {
-    if (artistNameDraft !== userProfile.artistName) {
-      setUserProfile({ artistName: artistNameDraft });
-    }
-    if (emailDraft !== userProfile.email) {
-      setUserProfile({ email: emailDraft });
-    }
-    if (bioDraft !== userProfile.bio) {
-      setUserProfile({ bio: bioDraft });
-    }
-    if (scLinkDraft !== userProfile.scLink) {
-      setUserProfile({ scLink: scLinkDraft });
-    }
-  }, [artistNameDraft, bioDraft, emailDraft, scLinkDraft, setUserProfile, userProfile]);
-
-  useEffect(() => {
-    setArtistNameDraft(userProfile.artistName);
-    setEmailDraft(userProfile.email);
-    setBioDraft(userProfile.bio);
-    setScLinkDraft(userProfile.scLink);
-    setPhotoUrlDraft(userProfile.photoUrl);
-    setLocalLinks(userProfile.links?.length ? userProfile.links : []);
-  }, [userProfile.artistName, userProfile.email, userProfile.bio, userProfile.scLink, userProfile.photoUrl, userProfile.links]);
-
-  useEffect(() => {
-    const handleVisibilityChange = () => {
-      if (document.visibilityState === "hidden") {
-        flushProfileDrafts();
-      }
-    };
-    const handleBeforeUnload = () => {
-      flushProfileDrafts();
-    };
-    const handlePageHide = () => {
-      flushProfileDrafts();
-    };
-
-    document.addEventListener("visibilitychange", handleVisibilityChange);
-    window.addEventListener("beforeunload", handleBeforeUnload);
-    window.addEventListener("pagehide", handlePageHide);
-
-    return () => {
-      document.removeEventListener("visibilitychange", handleVisibilityChange);
-      window.removeEventListener("beforeunload", handleBeforeUnload);
-      window.removeEventListener("pagehide", handlePageHide);
-    };
-  }, [flushProfileDrafts]);
 
   const handlePhotoUrlKeyDown = useCallback(
     (e: React.KeyboardEvent<HTMLInputElement>) => {
       if (e.key === "Enter") {
         e.currentTarget.blur();
       } else if (e.key === "Escape") {
-        setPhotoUrlDraft(userProfile.photoUrl);
         setShowPhotoInput(false);
       }
     },
-    [userProfile.photoUrl]
+    []
   );
 
   // ==================== PHOTO FILE UPLOAD ====================
@@ -330,8 +247,6 @@ export function ProducerProfile() {
       try {
         const dataUrl = await compressImageToDataUrl(file, 256, 0.85);
         setUserProfile({ photoUrl: dataUrl });
-        setPhotoUrlDraft(dataUrl);
-        triggerSaved();
       } catch (err) {
         console.error("[LabelPulse Profile] Photo upload failed:", err);
         setPhotoUploadError(
@@ -343,7 +258,7 @@ export function ProducerProfile() {
         setPhotoUploading(false);
       }
     },
-    [locale, setUserProfile, triggerSaved]
+    [locale, setUserProfile]
   );
 
   const triggerFilePicker = useCallback(() => {
@@ -362,24 +277,24 @@ export function ProducerProfile() {
     []
   );
 
+  // 🔒 FASE 6A: i link sono ancora gestiti con localLinks + commit su blur.
+  // Questo perché l'UX di add/remove/edit di array richiede uno stato locale
+  // per fluidità. Il commit chiama setUserProfile({ links }) che triggera
+  // l'autosave con debounce, come gli altri campi.
   const saveLinksOnBlur = useCallback(() => {
-    // Filter out empty links before saving
     const cleaned = localLinks.filter((l) => l.value?.trim());
     if (JSON.stringify(cleaned) !== JSON.stringify(userProfile.links)) {
       setUserProfile({ links: cleaned });
-      triggerSaved();
     }
-  }, [localLinks, userProfile.links, setUserProfile, triggerSaved]);
+  }, [localLinks, userProfile.links, setUserProfile]);
 
   const removeLink = useCallback(
     (idx: number) => {
       setLocalLinks((prev) => prev.filter((_, i) => i !== idx));
-      // Save immediately on remove
       const updated = localLinks.filter((_, i) => i !== idx).filter((l) => l.value?.trim());
       setUserProfile({ links: updated });
-      triggerSaved();
     },
-    [localLinks, setUserProfile, triggerSaved]
+    [localLinks, setUserProfile]
   );
 
   const addLink = useCallback(() => {
@@ -403,14 +318,50 @@ export function ProducerProfile() {
 
   return (
     <div className="space-y-6 max-w-2xl mx-auto">
-      {/* Header rimosso — viene già renderizzato da page.tsx (SECTION_TITLES/SECTION_SUBTITLES) */}
-      {detailSaved && (
-        <div className="flex justify-end">
-          <span className="text-[10px] text-emerald-400 flex items-center gap-1 animate-pulse">
+      {/* 🔒 FASE 6A: Indicatore permanente di stato salvataggio (Google Docs style).
+          Mostra sempre lo stato corrente: pending/saving/saved/error.
+          In caso di error, mostra il bottone "Riprova" che chiama retrySaveProfile(). */}
+      <div className="flex justify-end items-center gap-2 min-h-[16px]">
+        {profileSaveStatus === "pending" && (
+          <span className="text-[10px] text-muted-foreground flex items-center gap-1">
+            <span className="inline-block h-1.5 w-1.5 rounded-full bg-amber-400/70" />
+            {locale === "it" ? "Modifiche non salvate…" : "Unsaved changes…"}
+          </span>
+        )}
+        {profileSaveStatus === "saving" && (
+          <span className="text-[10px] text-amber-400 flex items-center gap-1">
+            <Loader2 className="h-2.5 w-2.5 animate-spin" />
+            {locale === "it" ? "Salvataggio…" : "Saving…"}
+          </span>
+        )}
+        {profileSaveStatus === "saved" && (
+          <span className="text-[10px] text-emerald-400 flex items-center gap-1">
             <Save className="h-2.5 w-2.5" /> {t(locale, "profile.saved" as any)}
           </span>
-        </div>
-      )}
+        )}
+        {profileSaveStatus === "error" && (
+          <span className="flex items-center gap-2">
+            <span className="text-[10px] text-red-400 flex items-center gap-1">
+              <CloudOff className="h-2.5 w-2.5" />
+              {locale === "it" ? "Errore salvataggio" : "Save failed"}
+            </span>
+            <Button
+              type="button"
+              size="sm"
+              variant="outline"
+              onClick={retrySaveProfile}
+              className="h-5 px-2 text-[10px] gap-1"
+            >
+              {locale === "it" ? "Riprova" : "Retry"}
+            </Button>
+            {profileSaveError && (
+              <span className="text-[9px] text-muted-foreground truncate max-w-[200px]" title={profileSaveError}>
+                {profileSaveError}
+              </span>
+            )}
+          </span>
+        )}
+      </div>
 
       {/* ==================== PHOTO SECTION ==================== */}
       <Card className="bg-card/60 border-border/40">
@@ -476,10 +427,7 @@ export function ProducerProfile() {
               {!photoUploading && (
                 <button
                   type="button"
-                  onClick={() => {
-                    setPhotoUrlDraft(userProfile.photoUrl);
-                    setShowPhotoInput(true);
-                  }}
+                  onClick={() => setShowPhotoInput(true)}
                   className="absolute inset-0 flex items-center justify-center rounded-full bg-black/50 opacity-0 group-hover:opacity-100 transition-opacity cursor-pointer"
                   aria-label={locale === "it" ? "Modifica URL foto" : "Edit photo URL"}
                   title={locale === "it" ? "Inserisci URL foto" : "Paste photo URL"}
@@ -493,9 +441,13 @@ export function ProducerProfile() {
             <div className="flex-1 space-y-2">
               {showPhotoInput ? (
                 <Input
-                  value={photoUrlDraft}
-                  onChange={(e) => setPhotoUrlDraft(e.target.value)}
-                  onBlur={handlePhotoUrlBlur}
+                  defaultValue={userProfile.photoUrl}
+                  onBlur={(e) => {
+                    if (userProfile.photoUrl !== e.target.value) {
+                      setUserProfile({ photoUrl: e.target.value });
+                    }
+                    setShowPhotoInput(false);
+                  }}
                   onKeyDown={handlePhotoUrlKeyDown}
                   placeholder="https://example.com/photo.jpg"
                   className="bg-secondary/50 text-sm"
@@ -504,10 +456,7 @@ export function ProducerProfile() {
               ) : (
                 <div
                   className="flex items-center gap-2 text-sm text-muted-foreground cursor-pointer hover:text-foreground transition-colors min-h-9"
-                  onClick={() => {
-                    setPhotoUrlDraft(userProfile.photoUrl);
-                    setShowPhotoInput(true);
-                  }}
+                  onClick={() => setShowPhotoInput(true)}
                 >
                   {userProfile.photoUrl ? (
                     <span className="truncate font-mono text-xs">
@@ -548,15 +497,14 @@ export function ProducerProfile() {
       {/* ==================== BASIC INFO SECTION ==================== */}
       <Card className="bg-card/60 border-border/40">
         <CardContent className="p-6 space-y-5">
-          {/* Artist Name */}
+          {/* Artist Name — 🔒 FASE 6A: onChange diretto su store, autosave gestito dal debounce interno */}
           <div className="space-y-2">
             <UILabel className="text-[10px] uppercase tracking-wider font-medium text-muted-foreground">
               {t(locale, "profile.artistName" as any)}
             </UILabel>
             <Input
-              value={artistNameDraft}
-              onChange={(e) => setArtistNameDraft(e.target.value)}
-              onBlur={(e) => handleFieldBlur("artistName", e.target.value)}
+              value={userProfile.artistName}
+              onChange={(e) => setUserProfile({ artistName: e.target.value })}
               placeholder="Your artist name"
               className="bg-secondary/50 text-sm"
             />
@@ -569,9 +517,8 @@ export function ProducerProfile() {
             </UILabel>
             <Input
               type="email"
-              value={emailDraft}
-              onChange={(e) => setEmailDraft(e.target.value)}
-              onBlur={(e) => handleFieldBlur("email", e.target.value)}
+              value={userProfile.email}
+              onChange={(e) => setUserProfile({ email: e.target.value })}
               placeholder="your@email.com"
               className="bg-secondary/50 text-sm"
             />
@@ -583,9 +530,8 @@ export function ProducerProfile() {
               {t(locale, "profile.bio" as any)}
             </UILabel>
             <Textarea
-              value={bioDraft}
-              onChange={(e) => setBioDraft(e.target.value)}
-              onBlur={(e) => handleFieldBlur("bio", e.target.value)}
+              value={userProfile.bio}
+              onChange={(e) => setUserProfile({ bio: e.target.value })}
               placeholder={t(locale, "profile.bioPlaceholder" as any)}
               rows={3}
               className="bg-secondary/50 text-sm resize-none"
@@ -755,7 +701,6 @@ export function ProducerProfile() {
                   onBlur={(e) => {
                     if ((userProfile.cyaniteApiToken || "") !== e.target.value) {
                       setUserProfile({ cyaniteApiToken: e.target.value.trim() });
-                      triggerSaved();
                     }
                   }}
                   placeholder="Token API Cyanite (opzionale) — inizia per sb_publishable_..."
@@ -786,7 +731,6 @@ export function ProducerProfile() {
                     className="h-6 text-[10px] text-destructive hover:bg-destructive/10"
                     onClick={() => {
                       setUserProfile({ cyaniteApiToken: "" });
-                      triggerSaved();
                     }}
                   >
                     Rimuovi token

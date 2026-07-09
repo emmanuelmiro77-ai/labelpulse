@@ -21,11 +21,16 @@ const API_BASE = "";
  * L'errore deve essere gestito esplicitamente dal chiamante.
  *
  * Ritorna la risposta JSON se ok, altrimenti lancia un Error.
+ *
+ * 🔒 FASE 6A: opzione `keepalive` per flush su unload (pagehide/beforeunload).
+ * Quando true, fetch usa { keepalive: true } per garantire che la request
+ * completi anche se la tab viene chiusa. Limite: 64KB body.
  */
 export async function writeDirect<T = any>(
   url: string,
   method: "POST" | "PATCH" | "DELETE",
   body?: any,
+  options?: { keepalive?: boolean },
 ): Promise<T> {
   const bodyWithTimestamp = body !== undefined
     ? { ...body, local_updated_at: new Date().toISOString() }
@@ -35,6 +40,7 @@ export async function writeDirect<T = any>(
     method,
     headers: bodyWithTimestamp !== undefined ? { "Content-Type": "application/json" } : undefined,
     body: bodyWithTimestamp !== undefined ? JSON.stringify(bodyWithTimestamp) : undefined,
+    keepalive: options?.keepalive === true,
   });
 
   if (!res.ok) {
@@ -240,9 +246,12 @@ export async function apiFetchAllPitches(): Promise<PitchRow[] | null> {
 
 // ==================== PROFILE ====================
 
-export async function apiUpsertProfile(profile: ProfileRow): Promise<boolean> {
+export async function apiUpsertProfile(
+  profile: ProfileRow,
+  options?: { keepalive?: boolean },
+): Promise<boolean> {
   try {
-    await writeDirect(`${API_BASE}/api/profile`, "POST", profile);
+    await writeDirect(`${API_BASE}/api/profile`, "POST", profile, options);
     return true;
   } catch (err) {
     console.error("[apiUpsertProfile] failed:", err);
