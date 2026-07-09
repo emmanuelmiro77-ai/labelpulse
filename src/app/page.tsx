@@ -4,6 +4,7 @@ import { useAppStore, loadFromCloud, forceCloudSync, loadArtistsOnBoot, loadFrom
 import { useRealtimeSync } from "@/hooks/use-realtime-sync";
 import { t, LOCALE_NAMES, LOCALE_FLAGS, type Locale } from "@/lib/i18n";
 import { useAuthEffect } from "@/lib/use-auth";
+import { useProfileAutosave } from "@/lib/use-profile-autosave";
 import { useSession } from "next-auth/react";
 import { isSupabaseConfigured } from "@/lib/supabase";
 import {
@@ -86,6 +87,11 @@ export default function Home() {
   // Bridge NextAuth session ↔ cloud sync. Mounts the email-based row id,
   // triggers loadFromCloud() on login, and resets state on logout.
   useAuthEffect();
+
+  // 🔒 FASE 6A: registra i listener di unload per l'autosave del profilo
+  // (visibilitychange / pagehide / beforeunload → flushProfileSave con
+  // keepalive). Modulo dedicato, separato dalla logica di autenticazione.
+  useProfileAutosave();
 
   // 🔒 FASE D.5: Realtime subscription per cross-device live updates
   useRealtimeSync();

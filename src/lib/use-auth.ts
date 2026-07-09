@@ -13,7 +13,6 @@ import {
   loadFromNewTables,
   setAutoBackupEmail,
   restoreFromSnapshot,
-  initProfileAutosave,
 } from "./store";
 import { identifyUser, clearUser, trackEvent } from "./analytics";
 
@@ -52,14 +51,6 @@ export function useAuthEffect(): void {
     const email = (session?.user?.email ?? null) as string | null;
     setCurrentUserEmail(email);
   }, [session?.user?.email]);
-
-  // 🔒 FASE 6A: registra i listener di unload per il profile autosave.
-  // Una tantum al mount. I listener (visibilitychange/pagehide/beforeunload)
-  // chiamano flushProfileSave() con keepalive per garantire il salvataggio
-  // prima che la tab venga chiusa.
-  useEffect(() => {
-    initProfileAutosave();
-  }, []);
 
   // Step 2: CLOUD-FIRST BOOT — quando l'utente è autenticato, fetcha
   // SUBITO dal cloud. NON aspettare hasRehydrated — il cloud è la verità.
