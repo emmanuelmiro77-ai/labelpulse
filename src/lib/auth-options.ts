@@ -153,6 +153,9 @@ export const authOptions: AuthOptions = {
                 provider: "google",
                 token: account.id_token,
               });
+              console.log("[AUTH DEBUG] data.user =", data.user);
+              console.log("[AUTH DEBUG] data.session.user =", data.session?.user);
+              console.log("[AUTH DEBUG] data.session =", !!data.session);
               if (error) {
                 console.error("[NextAuth→Supabase] signInWithIdToken failed:", error.message, error.status);
               } else if (data.session) {
