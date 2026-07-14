@@ -38,7 +38,7 @@ export async function POST(req: NextRequest) {
 
   try {
     const body = await req.json();
-    const { id, type, title, artists, track_ids, genre, notes, ep_soundcloud_url, label, beatport_url, promo_link } = body || {};
+    const { id, type, title, artists, track_ids, genre, notes, ep_soundcloud_url, label, beatport_url, promo_link, spotify_url } = body || {};
 
     const finalId = id || `release_${Date.now()}_${Math.random().toString(36).slice(2, 8)}`;
     if (!title) {
@@ -60,6 +60,7 @@ export async function POST(req: NextRequest) {
         label: label || null,
         beatport_url: beatport_url || null,
         promo_link: promo_link || null,
+        spotify_url: spotify_url || null,
       })
       .select()
       .single();

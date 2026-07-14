@@ -289,6 +289,7 @@ export interface ReleaseRow {
   label?: string;
   beatport_url?: string;
   promo_link?: string;
+  spotify_url?: string;
 }
 
 export async function apiCreateRelease(release: ReleaseRow): Promise<boolean> {

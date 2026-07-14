@@ -397,6 +397,7 @@ export function DemoTracker() {
   const [epLabel, setEpLabel] = useState("");
   const [epBeatportUrl, setEpBeatportUrl] = useState("");
   const [epPromoLink, setEpPromoLink] = useState("");
+  const [epSpotifyUrl, setEpSpotifyUrl] = useState("");
   const [deleteConfirmId, setDeleteConfirmId] = useState<string | null>(null);
   const [scanningReplies, setScanningReplies] = useState(false);
 
@@ -830,6 +831,7 @@ export function DemoTracker() {
     setEpLabel("");
     setEpBeatportUrl("");
     setEpPromoLink("");
+    setEpSpotifyUrl("");
     setEditingReleaseId(null);
     setShowEpDialog(true);
   };
@@ -845,6 +847,7 @@ export function DemoTracker() {
     setEpLabel(release.label || "");
     setEpBeatportUrl(release.beatportUrl || "");
     setEpPromoLink(release.promoLink || "");
+    setEpSpotifyUrl(release.spotifyUrl || "");
     setEditingReleaseId(release.id);
     setShowEpDialog(true);
   };
@@ -880,6 +883,7 @@ export function DemoTracker() {
       label: epLabel.trim() || undefined,
       beatportUrl: epBeatportUrl.trim() || undefined,
       promoLink: epPromoLink.trim() || undefined,
+      spotifyUrl: epSpotifyUrl.trim() || undefined,
     };
     if (editingReleaseId) {
       // Update existing release: first detach all demos that were previously
@@ -906,10 +910,10 @@ export function DemoTracker() {
       // L'utente può salvare e iniziare la promozione in un click aggiuntivo.
       setEditingReleaseId(newId);
       toast({
-        title: locale === "it" ? "EP creato" : "EP created",
+        title: locale === "it" ? "Release creata" : "Release created",
         description: locale === "it"
-          ? `"${epTitle.trim()}" con ${trackIds.length} tracce. Clicca INIZIA PROMOZIONE per trovare i target.`
-          : `"${epTitle.trim()}" with ${trackIds.length} tracks. Click START PROMOTION to find targets.`,
+          ? `"${epTitle.trim()}" salvata. Clicca 🎯 TROVA DJ per iniziare.`
+          : `"${epTitle.trim()}" saved. Click 🎯 FIND DJs to start.`,
       });
       return;
     }
@@ -2680,37 +2684,13 @@ export function DemoTracker() {
               )}
             </div>
 
-            {/* EP SoundCloud URL — optional single link for the whole EP */}
-            <div className="space-y-1.5">
-              <UILabel className="text-xs font-mono uppercase text-muted-foreground flex items-center gap-1">
-                <Disc3 className="h-3 w-3" />
-                {locale === "it" ? "Link EP SoundCloud" : "EP SoundCloud URL"}
-                <span className="ml-1 text-[10px] text-muted-foreground/60 normal-case font-sans">
-                  ({locale === "it" ? "opzionale" : "optional"})
-                </span>
-              </UILabel>
-              <Input
-                value={epSoundCloudUrl}
-                onChange={(e) => setEpSoundCloudUrl(e.target.value)}
-                placeholder={locale === "it"
-                  ? "https://soundcloud.com/.../sets/ep-title"
-                  : "https://soundcloud.com/.../sets/ep-title"}
-                className="bg-secondary/50 text-[12px]"
-              />
-              <p className="text-[10px] text-muted-foreground/60 leading-tight">
-                {locale === "it"
-                  ? "Se hai creato l'EP come album/set privato su SoundCloud, incolla qui l'URL. I pitch che includono questo EP useranno questo link unico invece dei link separati di ogni traccia — la label potrà ascoltare l'EP come un viaggio continuo. Lascia vuoto se le tracce sono separate su SoundCloud."
-                  : "If you've created the EP as a private album/set on SoundCloud, paste the URL here. Pitches that include this EP will use this single link instead of each track's individual link — the label can preview the EP as a continuous journey. Leave empty if the tracks are separate on SoundCloud."}
-              </p>
-            </div>
-
-            {/* 🔒 RP-007 — Live Release fields: Label, Beatport URL, PromoLink URL */}
-            <div className="grid grid-cols-1 sm:grid-cols-3 gap-3">
+            {/* 🔒 RP-007A — Live Release fields: release pubblicata con label, URL */}
+            <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
               <div className="space-y-1.5">
                 <UILabel className="text-xs font-mono uppercase text-muted-foreground">
                   {locale === "it" ? "Label" : "Label"}
-                  <span className="ml-1 text-[10px] text-muted-foreground/60 normal-case font-sans">
-                    ({locale === "it" ? "opzionale" : "optional"})
+                  <span className="ml-1 text-[10px] text-primary normal-case font-sans">
+                    *
                   </span>
                 </UILabel>
                 <Input
@@ -2723,8 +2703,8 @@ export function DemoTracker() {
               <div className="space-y-1.5">
                 <UILabel className="text-xs font-mono uppercase text-muted-foreground">
                   {locale === "it" ? "Beatport URL" : "Beatport URL"}
-                  <span className="ml-1 text-[10px] text-muted-foreground/60 normal-case font-sans">
-                    ({locale === "it" ? "opzionale" : "optional"})
+                  <span className="ml-1 text-[10px] text-primary normal-case font-sans">
+                    *
                   </span>
                 </UILabel>
                 <Input
@@ -2737,8 +2717,8 @@ export function DemoTracker() {
               <div className="space-y-1.5">
                 <UILabel className="text-xs font-mono uppercase text-muted-foreground">
                   {locale === "it" ? "PromoLink URL" : "PromoLink URL"}
-                  <span className="ml-1 text-[10px] text-muted-foreground/60 normal-case font-sans">
-                    ({locale === "it" ? "opzionale" : "optional"})
+                  <span className="ml-1 text-[10px] text-primary normal-case font-sans">
+                    *
                   </span>
                 </UILabel>
                 <Input
@@ -2748,6 +2728,44 @@ export function DemoTracker() {
                   className="bg-secondary/50 text-[12px]"
                 />
               </div>
+              <div className="space-y-1.5">
+                <UILabel className="text-xs font-mono uppercase text-muted-foreground">
+                  {locale === "it" ? "Spotify URL" : "Spotify URL"}
+                  <span className="ml-1 text-[10px] text-muted-foreground/60 normal-case font-sans">
+                    ({locale === "it" ? "facoltativo" : "optional"})
+                  </span>
+                </UILabel>
+                <Input
+                  value={epSpotifyUrl}
+                  onChange={(e) => setEpSpotifyUrl(e.target.value)}
+                  placeholder="https://open.spotify.com/album/..."
+                  className="bg-secondary/50 text-[12px]"
+                />
+              </div>
+            </div>
+
+            {/* SoundCloud URL (facoltativo, separato da PromoLink) */}
+            <div className="space-y-1.5">
+              <UILabel className="text-xs font-mono uppercase text-muted-foreground flex items-center gap-1">
+                <Disc3 className="h-3 w-3" />
+                {locale === "it" ? "SoundCloud URL" : "SoundCloud URL"}
+                <span className="ml-1 text-[10px] text-muted-foreground/60 normal-case font-sans">
+                  ({locale === "it" ? "facoltativo" : "optional"})
+                </span>
+              </UILabel>
+              <Input
+                value={epSoundCloudUrl}
+                onChange={(e) => setEpSoundCloudUrl(e.target.value)}
+                placeholder={locale === "it"
+                  ? "https://soundcloud.com/.../sets/ep-title"
+                  : "https://soundcloud.com/.../sets/ep-title"}
+                className="bg-secondary/50 text-[12px]"
+              />
+              <p className="text-[10px] text-muted-foreground/60 leading-tight">
+                {locale === "it"
+                  ? "URL SoundCloud della release (album/set privato). Separato dal PromoLink."
+                  : "SoundCloud URL of the release (private album/set). Separate from PromoLink."}
+              </p>
             </div>
 
             {/* EP notes */}
@@ -2786,7 +2804,7 @@ export function DemoTracker() {
             <Button variant="ghost" onClick={() => setShowEpDialog(false)}>
               {t(locale, "labels.cancel")}
             </Button>
-            {/* 🔒 RP-007: INIZIA PROMOZIONE — visibile solo quando si sta modificando una release esistente.
+            {/* 🔒 RP-007A: TROVA DJ — visibile solo quando si sta modificando una release esistente.
                 Salva le modifiche correnti, chiude il dialog, e apre il Promotion Workspace. */}
             {editingReleaseId && (
               <Button
@@ -2799,7 +2817,7 @@ export function DemoTracker() {
                 className="bg-emerald-600 hover:bg-emerald-700 text-white"
               >
                 <Rocket className="h-3.5 w-3.5 mr-1.5" />
-                {locale === "it" ? "INIZIA PROMOZIONE" : "START PROMOTION"}
+                🎯 {locale === "it" ? "TROVA DJ" : "FIND DJs"}
               </Button>
             )}
             <Button

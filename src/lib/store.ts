@@ -185,7 +185,8 @@ export interface Release {
   // 🔒 RP-007 — Live Release fields (per promozione di release reali)
   label?: string;          // es. "IAMT"
   beatportUrl?: string;    // URL diretto release su Beatport
-  promoLink?: string;      // URL promo (es. SoundCloud private, Hypeddit)
+  promoLink?: string;      // URL promo (es. Hypeddit, LabelWorx)
+  spotifyUrl?: string;     // URL Spotify della release
 }
 
 export interface Demo {
@@ -2001,6 +2002,7 @@ export const useAppStore = create<AppState>()(
           label: newRelease.label,
           beatport_url: newRelease.beatportUrl,
           promo_link: newRelease.promoLink,
+          spotify_url: newRelease.spotifyUrl,
         }).catch((err) => console.error("[cloud sync] failed:", err));
         return id;
       },
@@ -2026,6 +2028,7 @@ export const useAppStore = create<AppState>()(
             label: updated.label,
             beatport_url: updated.beatportUrl,
             promo_link: updated.promoLink,
+            spotify_url: updated.spotifyUrl,
           }).catch((err) => console.error("[cloud sync] failed:", err));
         }
       },
