@@ -1148,6 +1148,10 @@ interface AppState {
   artists: Artist[]; // persisted in IndexedDB, loaded asynchronously on boot
   selectedArtistId: string | null; // for Artist Explorer detail view
   selectedLabelId: string | null; // cross-tab navigation: clicking a label name from Artist Explorer sets this, then LabelFinder opens the detail dialog
+  // 🔒 RP-001: release selezionata per la vista ReleaseDetail (Top Targets).
+  // Quando è settato, il tab Music mostra <ReleaseDetail> invece della lista demo.
+  selectedReleaseId: string | null;
+  setSelectedReleaseId: (id: string | null) => void;
   /**
    * Navigation return-to state. When the user navigates from Label detail →
    * Artist detail (via handleOpenArtist), we stash `{ kind: 'label', labelId }`
@@ -1747,6 +1751,7 @@ export const useAppStore = create<AppState>()(
       artists: [] as Artist[], // populated from IndexedDB on boot (see loadArtistsFromIDB)
       selectedArtistId: null as string | null,
       selectedLabelId: null as string | null,
+      selectedReleaseId: null as string | null, // 🔒 RP-001: vista ReleaseDetail
       navigationReturnTo: null as { kind: "label"; labelId: string; labelName?: string } | null,
       activeTab: "dashboard" as const,
       locale: "it" as Locale,
@@ -2201,6 +2206,8 @@ export const useAppStore = create<AppState>()(
       setSelectedArtistId: (id) => set({ selectedArtistId: id }),
 
       setSelectedLabelId: (id) => set({ selectedLabelId: id }),
+      // 🔒 RP-001: setter per la release selezionata (vista ReleaseDetail con Top Targets)
+      setSelectedReleaseId: (id) => set({ selectedReleaseId: id }),
       setNavigationReturnTo: (target) => set({ navigationReturnTo: target }),
 
       setArtists: (artists) => {

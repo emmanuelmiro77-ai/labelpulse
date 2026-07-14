@@ -41,6 +41,7 @@ import { Button } from "@/components/ui/button";
 import { Badge } from "@/components/ui/badge";
 import { Card, CardContent } from "@/components/ui/card";
 import { Input } from "@/components/ui/input";
+import { ReleaseDetail } from "@/components/release-detail";
 import {
   Dialog,
   DialogContent,
@@ -365,7 +366,7 @@ function ResponseManager({
 }
 
 export function DemoTracker() {
-  const { labels, demos, releases, addDemo, updateDemo, deleteDemo, advanceDemoStatus, addDemoResponse, removeDemoResponse, addRelease, updateRelease, deleteRelease, locale: _locale, getGenres, userProfile, artists, setActiveTab, setSelectedLabelId, setSelectedArtistId, gmailAuth, setGmailAuth, scanGmailReplies, lastReplyScanAt, newRepliesCount } =
+  const { labels, demos, releases, addDemo, updateDemo, deleteDemo, advanceDemoStatus, addDemoResponse, removeDemoResponse, addRelease, updateRelease, deleteRelease, locale: _locale, getGenres, userProfile, artists, setActiveTab, setSelectedLabelId, setSelectedArtistId, gmailAuth, setGmailAuth, scanGmailReplies, lastReplyScanAt, newRepliesCount, selectedReleaseId, setSelectedReleaseId } =
     useAppStore();
   const locale = _locale as Locale;
   const { toast } = useToast();
@@ -1188,6 +1189,17 @@ export function DemoTracker() {
     );
   }
 
+  // 🔒 RP-001: se è selezionata una release, mostra la vista ReleaseDetail
+  // con Top Targets invece della lista demo standard.
+  if (selectedReleaseId) {
+    return (
+      <ReleaseDetail
+        releaseId={selectedReleaseId}
+        onBack={() => setSelectedReleaseId(null)}
+      />
+    );
+  }
+
   return (
     <div className="space-y-4">
       {/* Controls */}
@@ -1291,17 +1303,31 @@ export function DemoTracker() {
           {releases.length > 0 && (
             <div className="flex flex-wrap items-center gap-1.5">
               {releases.map((r) => (
-                <button
+                <div
                   key={r.id}
-                  type="button"
-                  onClick={() => openEditEp(r)}
-                  title={locale === "it" ? "Modifica EP" : "Edit EP"}
-                  className="inline-flex items-center gap-1.5 rounded-full border border-primary/30 bg-primary/5 hover:bg-primary/10 px-2 py-1 text-[10px] font-medium text-primary"
+                  className="inline-flex items-center gap-0.5 rounded-full border border-primary/30 bg-primary/5 hover:bg-primary/10 pl-2 py-0.5 pr-0.5 text-[10px] font-medium text-primary transition-colors group"
                 >
-                  <Disc3 className="h-3 w-3" />
-                  {r.title}
-                  <span className="text-[9px] opacity-70">{r.trackIds.length}tracce</span>
-                </button>
+                  {/* 🔒 RP-001: click sul titolo apre la vista ReleaseDetail con Top Targets */}
+                  <button
+                    type="button"
+                    onClick={() => setSelectedReleaseId(r.id)}
+                    title={locale === "it" ? "Vedi Top Targets" : "View Top Targets"}
+                    className="inline-flex items-center gap-1.5 py-0.5 hover:text-primary-foreground transition-colors"
+                  >
+                    <Disc3 className="h-3 w-3" />
+                    {r.title}
+                    <span className="text-[9px] opacity-70">{r.trackIds.length}tracce</span>
+                  </button>
+                  {/* Edit button — apre il dialog di modifica EP */}
+                  <button
+                    type="button"
+                    onClick={() => openEditEp(r)}
+                    title={locale === "it" ? "Modifica EP" : "Edit EP"}
+                    className="inline-flex items-center justify-center h-5 w-5 rounded-full hover:bg-primary/20 transition-colors"
+                  >
+                    <Pencil className="h-2.5 w-2.5" />
+                  </button>
+                </div>
               ))}
             </div>
           )}
