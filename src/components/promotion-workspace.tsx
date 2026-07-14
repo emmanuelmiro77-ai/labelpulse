@@ -118,6 +118,28 @@ function buildGoogleSearchUrl(artistName: string, querySuffix: string): string {
   return `https://www.google.com/search?q=${encodeURIComponent(query)}`;
 }
 
+/**
+ * Normalizza un nome artista in un handle Instagram plausibile:
+ * lowercase, rimuove spazi e caratteri speciali, lascia solo [a-z0-9._].
+ * Es. "Bart Skils" → "bartskils", "K?D" → "kd", "Deadmau5" → "deadmau5"
+ */
+function normalizeForInstagramHandle(name: string): string {
+  return (name || "")
+    .toLowerCase()
+    .replace(/[^a-z0-9._]/g, "")
+    .trim();
+}
+
+/**
+ * Costruisce URL Instagram diretto: instagram.com/<handle>
+ * Se il nome normalizzato è vuoto, ritorna null (fallback a Google).
+ */
+function buildInstagramDirectUrl(artistName: string): string | null {
+  const handle = normalizeForInstagramHandle(artistName);
+  if (!handle) return null;
+  return `https://www.instagram.com/${handle}/`;
+}
+
 // ==================== COMPONENT ====================
 
 interface PromotionWorkspaceProps {
@@ -190,6 +212,54 @@ export function PromotionWorkspace({ release, targets, locale }: PromotionWorksp
     if (!currentArtistId) return;
     setStatuses(prev => ({ ...prev, [currentArtistId]: newStatus }));
   }, [currentArtistId]);
+
+  /**
+   * 🔒 RP-006 — APRI INSTAGRAM & AVANZA
+   * Un solo click per fare 4 cose in sequenza:
+   *   1. Aprire Instagram (URL diretto o fallback Google search)
+   *   2. Impostare lo stato a "DM inviato"
+   *   3. Salvare su Supabase
+   *   4. Passare al miglior target successivo non lavorato
+   *
+   * Riduce la sequenza operativa da 5 step a 1 click per target.
+   */
+  const handleOpenInstagramAndAdvance = useCallback(async () => {
+    if (!currentTarget || !currentArtistId) return;
+
+    // 1. Apri Instagram — diretto se possibile, fallback Google
+    const directUrl = buildInstagramDirectUrl(currentTarget.artist.name);
+    const googleUrl = buildGoogleSearchUrl(currentTarget.artist.name, "instagram");
+    const url = directUrl || googleUrl;
+    window.open(url, "_blank", "noopener,noreferrer");
+
+    // 2. Imposta stato DM inviato
+    const newStatus: PromotionStatus = "dm_sent";
+    const updatedStatuses = { ...statuses, [currentArtistId]: newStatus };
+    setStatuses(updatedStatuses);
+
+    // 3. Salva su Supabase (non bloccante per l'UX)
+    setSaving(true);
+    const ok = await apiUpsertPromotionTarget({
+      release_id: release.id,
+      artist_id: currentArtistId,
+      artist_name: currentTarget.artist.name,
+      status: newStatus,
+    });
+    setSaving(false);
+
+    if (ok) {
+      setSavedFlash(true);
+      setTimeout(() => setSavedFlash(false), 1500);
+
+      // 4. Passa al miglior target non lavorato
+      const nextIdx = dailyMission.findIndex(
+        (t) => !updatedStatuses[t.artist.id] || updatedStatuses[t.artist.id] === "pending"
+      );
+      if (nextIdx >= 0 && nextIdx !== currentIndex) {
+        setCurrentIndex(nextIdx);
+      }
+    }
+  }, [currentTarget, currentArtistId, release.id, statuses, dailyMission, currentIndex]);
 
   // 🔒 RP-005 review: SALVA E PASSA AL PROSSIMO apre il MIGLIOR target
   // ancora non lavorato. Poiché dailyMission è ordinata per score decrescente,
@@ -356,6 +426,8 @@ export function PromotionWorkspace({ release, targets, locale }: PromotionWorksp
           target={currentTarget}
           status={currentStatus}
           onStatusChange={handleStatusChange}
+          onOpenInstagramAndAdvance={handleOpenInstagramAndAdvance}
+          saving={saving}
           locale={locale}
         />
       )}
@@ -404,14 +476,17 @@ interface TargetCardProps {
   target: ScoredArtist;
   status: PromotionStatus;
   onStatusChange: (status: PromotionStatus) => void;
+  onOpenInstagramAndAdvance: () => void;
+  saving: boolean;
   locale: Locale;
 }
 
-function TargetCard({ target, status, onStatusChange, locale }: TargetCardProps) {
+function TargetCard({ target, status, onStatusChange, onOpenInstagramAndAdvance, saving, locale }: TargetCardProps) {
   const { artist, priority, confidenceLabel, confidence, reasons } = target;
   const meta = PRIORITY_LABELS[priority];
   const confMeta = CONFIDENCE_LABELS[confidenceLabel];
   const beatportUrl = getArtistBeatportUrl(artist);
+  const instagramDirectUrl = buildInstagramDirectUrl(artist.name);
 
   const genresToShow = (artist.genres || []).slice(0, 3);
   const labelsToShow = (artist.labelsPublishedOn || []).slice(0, 3);
@@ -449,6 +524,35 @@ function TargetCard({ target, status, onStatusChange, locale }: TargetCardProps)
               conf {confidence}%
             </span>
           </div>
+        </div>
+
+        {/* === RP-006: APRI INSTAGRAM & AVANZA (azione primaria) === */}
+        <div className="space-y-2">
+          <Button
+            onClick={onOpenInstagramAndAdvance}
+            disabled={saving}
+            className="w-full h-12 gap-2 text-sm font-semibold"
+            size="lg"
+          >
+            {saving ? (
+              <Loader2 className="h-4 w-4 animate-spin" />
+            ) : (
+              <>
+                <Instagram className="h-5 w-5" />
+                {locale === "it" ? "APRI INSTAGRAM & AVANZA" : "OPEN INSTAGRAM & ADVANCE"}
+                <ArrowRight className="h-4 w-4 ml-1" />
+              </>
+            )}
+          </Button>
+          <p className="text-[10px] text-muted-foreground text-center">
+            {instagramDirectUrl
+              ? (locale === "it"
+                  ? "Apre il profilo diretto · salva · passa al prossimo"
+                  : "Opens direct profile · saves · moves to next")
+              : (locale === "it"
+                  ? "Nome non standardizzato · apre ricerca Google · salva · passa al prossimo"
+                  : "Non-standard name · opens Google search · saves · moves to next")}
+          </p>
         </div>
 
         {/* === MOTIVAZIONI === */}
