@@ -251,11 +251,25 @@ export function PromotionWorkspace({ release, targets, locale }: PromotionWorksp
       setSavedFlash(true);
       setTimeout(() => setSavedFlash(false), 1500);
 
-      // 4. Passa al miglior target non lavorato
-      const nextIdx = dailyMission.findIndex(
-        (t) => !updatedStatuses[t.artist.id] || updatedStatuses[t.artist.id] === "pending"
-      );
-      if (nextIdx >= 0 && nextIdx !== currentIndex) {
+      // 4. Passa al miglior target non lavorato (FIX BUG 3: skip currentIndex)
+      let nextIdx = -1;
+      for (let i = currentIndex + 1; i < dailyMission.length; i++) {
+        const t = dailyMission[i];
+        if (!updatedStatuses[t.artist.id] || updatedStatuses[t.artist.id] === "pending") {
+          nextIdx = i;
+          break;
+        }
+      }
+      if (nextIdx === -1) {
+        for (let i = 0; i < currentIndex; i++) {
+          const t = dailyMission[i];
+          if (!updatedStatuses[t.artist.id] || updatedStatuses[t.artist.id] === "pending") {
+            nextIdx = i;
+            break;
+          }
+        }
+      }
+      if (nextIdx >= 0) {
         setCurrentIndex(nextIdx);
       }
     }
@@ -282,15 +296,36 @@ export function PromotionWorkspace({ release, targets, locale }: PromotionWorksp
       const updatedStatuses = { ...statuses, [currentArtistId]: currentStatus };
       setStatuses(updatedStatuses);
 
-      // Trova il miglior target non lavorato (primo con status pending/assente)
-      const nextIdx = dailyMission.findIndex(
-        (t) => !updatedStatuses[t.artist.id] || updatedStatuses[t.artist.id] === "pending"
-      );
+      // Trova il miglior target non lavorato a partire da currentIndex + 1.
+      // FIX BUG 3: se l'utente non ha cambiato stato (rimasto pending), il target
+      // corrente risulterebbe ancora "non lavorato" e findIndex ritroverebbe se stesso.
+      // Cerchiamo prima DOPO currentIndex, poi (wrap-around) PRIMA di currentIndex.
+      let nextIdx = -1;
 
-      if (nextIdx >= 0 && nextIdx !== currentIndex) {
+      // Prima: cerca dopo currentIndex
+      for (let i = currentIndex + 1; i < dailyMission.length; i++) {
+        const t = dailyMission[i];
+        if (!updatedStatuses[t.artist.id] || updatedStatuses[t.artist.id] === "pending") {
+          nextIdx = i;
+          break;
+        }
+      }
+
+      // Se non trovato dopo, cerca dall'inizio fino a currentIndex (escluso)
+      if (nextIdx === -1) {
+        for (let i = 0; i < currentIndex; i++) {
+          const t = dailyMission[i];
+          if (!updatedStatuses[t.artist.id] || updatedStatuses[t.artist.id] === "pending") {
+            nextIdx = i;
+            break;
+          }
+        }
+      }
+
+      if (nextIdx >= 0) {
         setCurrentIndex(nextIdx);
       }
-      // Se nextIdx === -1, la missione è completata — la UI mostrerà la completion screen
+      // Se nextIdx === -1, tutti i target sono lavorati → completion screen
     }
   }, [currentTarget, currentArtistId, currentStatus, release.id, currentIndex, dailyMission, statuses]);
 
