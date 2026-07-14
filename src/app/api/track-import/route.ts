@@ -1,24 +1,16 @@
 import { NextRequest, NextResponse } from "next/server";
-import { chromium } from "playwright";
+import { chromium } from "playwright-core";
+import chromiumLambda from "@sparticuz/chromium";
 
 /**
- * 🔒 RP-013 — Universal Track Importer
+ * 🔒 RP-013 + RP-014 — Universal Track Importer
  *
- * Punto di ingresso unico per importare metadati da qualsiasi URL.
- * Riconosce automaticamente la sorgente e instrada verso l'importer corretto.
+ * Usa playwright-core + @sparticuz/chromium per compatibilità Vercel Lambda.
+ * @sparticuz/chromium è una build minimale di chromium (~130MB) progettata
+ * per AWS Lambda / Vercel serverless functions.
  *
- * Sorgenti supportate:
- *   - PromoLink (promolink.app)
- *   - Beatport Release (beatport.com/release/...)
- *   - Beatport Track (beatport.com/track/...)
- *   - Spotify (open.spotify.com)
- *   - SoundCloud (soundcloud.com)
- *   - Linktree (linktr.ee)
- *
- * Se la sorgente non è riconosciuta: "Formato non ancora supportato"
- *
- * Tutte le sorgenti vengono elaborate con Playwright (headless browser)
- * perché la maggior parte sono SPA con rendering client-side.
+ * In development (locale), usa chromium di sistema se disponibile.
+ * In production (Vercel), usa @sparticuz/chromium.
  */
 
 // ==================== SOURCE DETECTION ====================
@@ -111,10 +103,28 @@ async function extractWithPlaywright(url: string): Promise<{ extracted: Extracte
     timeout: false,
   };
 
-  const browser = await chromium.launch({
-    headless: true,
-    args: ["--no-sandbox", "--disable-setuid-sandbox"],
-  });
+  // Detect environment: Vercel Lambda (production) vs locale (development)
+  const isVercel = !!process.env.VERCEL;
+  const isProduction = process.env.NODE_ENV === "production";
+
+  let browser;
+
+  if (isVercel || isProduction) {
+    // Vercel Lambda: usa @sparticuz/chromium
+    // chromiumLambda.executablePath() ritorna il path al binario chromium
+    // estratto dal layer @sparticuz/chromium (compatibile Lambda)
+    browser = await chromium.launch({
+      args: chromiumLambda.args,
+      executablePath: await chromiumLambda.executablePath(),
+      headless: true,
+    });
+  } else {
+    // Development locale: usa chromium di sistema (installato via `npx playwright install`)
+    browser = await chromium.launch({
+      headless: true,
+      args: ["--no-sandbox", "--disable-setuid-sandbox"],
+    });
+  }
 
   try {
     const page = await browser.newPage({
