@@ -68,7 +68,7 @@ export function ReleaseDetail({ releaseId, onBack }: ReleaseDetailProps) {
     [releases, releaseId]
   );
 
-  // Calcolo top targets — memoizzato, ricalcolato solo se cambia release o artists
+  // Calcolo top targets con Musical Interest Score
   const topTargets = useMemo<ScoredArtist[]>(() => {
     if (!release) return [];
     return calculateTopTargets(release, artists);
@@ -76,6 +76,15 @@ export function ReleaseDetail({ releaseId, onBack }: ReleaseDetailProps) {
 
   const summary = useMemo(() => summarizeByPriority(topTargets), [topTargets]);
   const confidenceSummary = useMemo(() => summarizeByConfidence(topTargets), [topTargets]);
+
+  // Funnel metrics per la Mission
+  const funnel = useMemo(() => {
+    const analyzed = artists.length;
+    const compatible = topTargets.length;
+    const highInterest = topTargets.filter(t => t.score >= 60).length;
+    const priority = topTargets.filter(t => t.priority === "max" || t.priority === "high").length;
+    return { analyzed, compatible, highInterest, priority };
+  }, [artists.length, topTargets]);
 
   // Demo appartenenti alla release (per mostrare le tracce)
   const releaseDemos = useMemo(() => {
@@ -146,28 +155,47 @@ export function ReleaseDetail({ releaseId, onBack }: ReleaseDetailProps) {
         </div>
       </div>
 
-      {/* ============ TOP TARGETS ============ */}
+      {/* ============ FUNNEL MISSIONE PROMOZIONE ============ */}
       <Card className="bg-card/60 border-border/40">
         <CardContent className="p-6">
-          <div className="flex items-center justify-between mb-4">
-            <div className="flex items-center gap-2">
-              <Sparkles className="h-4 w-4 text-primary" />
-              <h2 className="text-sm font-semibold uppercase tracking-wider">
-                {locale === "it" ? "Top Targets" : "Top Targets"}
-              </h2>
-            </div>
-            <div className="text-xs text-muted-foreground">
-              {topTargets.length} {locale === "it" ? "artisti trovati" : "artists found"}
-            </div>
+          <div className="flex items-center gap-2 mb-4">
+            <Sparkles className="h-4 w-4 text-primary" />
+            <h2 className="text-sm font-semibold uppercase tracking-wider">
+              {locale === "it" ? "Missione Promozione" : "Promotion Mission"}
+            </h2>
           </div>
 
-          {/* Riepilogo bucket priorità + confidence */}
+          {/* Funnel metrics */}
+          <div className="grid grid-cols-2 sm:grid-cols-4 gap-3 mb-5">
+            <FunnelMetric
+              label={locale === "it" ? "Analizzati" : "Analyzed"}
+              value={funnel.analyzed}
+              color="text-muted-foreground"
+            />
+            <FunnelMetric
+              label={locale === "it" ? "Compatibili" : "Compatible"}
+              value={funnel.compatible}
+              color="text-blue-400"
+            />
+            <FunnelMetric
+              label={locale === "it" ? "Alto interesse" : "High interest"}
+              value={funnel.highInterest}
+              color="text-emerald-400"
+            />
+            <FunnelMetric
+              label={locale === "it" ? "Prioritari" : "Priority"}
+              value={funnel.priority}
+              color="text-red-400"
+            />
+          </div>
+
+          {/* Riepilogo bucket interesse + confidence */}
           {topTargets.length > 0 && (
             <div className="space-y-2 mb-5 text-xs">
-              {/* Priorità */}
+              {/* Interesse */}
               <div className="flex flex-wrap gap-2">
                 <span className="text-[10px] uppercase tracking-wider text-muted-foreground self-center mr-1">
-                  {locale === "it" ? "Priorità:" : "Priority:"}
+                  {locale === "it" ? "Interesse:" : "Interest:"}
                 </span>
                 {PRIORITY_ORDER.map((bucket) => {
                   const count = summary[bucket];
@@ -439,6 +467,25 @@ function TargetRow({ rank, target, onOpenArtist, onOpenBeatport, locale }: Targe
           <ThumbsDown className="h-3 w-3" />
         </Button>
       </div>
+    </div>
+  );
+}
+
+// ==================== FUNNEL METRIC ====================
+
+interface FunnelMetricProps {
+  label: string;
+  value: number;
+  color: string;
+}
+
+function FunnelMetric({ label, value, color }: FunnelMetricProps) {
+  return (
+    <div className="space-y-1 p-3 rounded-lg bg-secondary/30 border border-border/30">
+      <p className="text-[10px] uppercase tracking-wider text-muted-foreground">
+        {label}
+      </p>
+      <p className={`text-xl font-bold ${color}`}>{value}</p>
     </div>
   );
 }
