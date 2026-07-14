@@ -1,16 +1,23 @@
 import { NextRequest, NextResponse } from "next/server";
-import { chromium } from "playwright-core";
-import chromiumLambda from "@sparticuz/chromium";
+import * as cheerio from "cheerio";
 
 /**
- * 🔒 RP-013 + RP-014 — Universal Track Importer
+ * 🔒 RP-016 — Universal Track Importer (fetch + cheerio, NO Playwright)
  *
- * Usa playwright-core + @sparticuz/chromium per compatibilità Vercel Lambda.
- * @sparticuz/chromium è una build minimale di chromium (~130MB) progettata
- * per AWS Lambda / Vercel serverless functions.
+ * Strategia:
+ *   1. fetch HTTP dell'URL (server-side, no CORS)
+ *   2. Parsing HTML con cheerio
+ *   3. Estrazione metadati da:
+ *      - og: meta tags (og:title, og:description, og:image)
+ *      - JSON-LD structured data (schema.org MusicRecording/MusicAlbum)
+ *      - title tag
+ *      - <a> tags per URL store (Beatport, Spotify, Apple Music, ecc.)
+ *      - regex su description per genre/label
  *
- * In development (locale), usa chromium di sistema se disponibile.
- * In production (Vercel), usa @sparticuz/chromium.
+ * Se la pagina è protetta da Cloudflare (403) o è una SPA pura senza
+ * metadati server-rendered, ritorna errore esplicito.
+ *
+ * NON usa Playwright. NON usa headless browser.
  */
 
 // ==================== SOURCE DETECTION ====================
@@ -45,7 +52,6 @@ function detectSource(url: URL): SourceInfo {
     if (path.includes("/track/")) {
       return { type: "beatport_track", label: "Beatport Track", supported: true };
     }
-    // Generic Beatport — try anyway
     return { type: "beatport_release", label: "Beatport", supported: true };
   }
 
@@ -84,182 +90,252 @@ interface Diagnostics {
   source: string;
   httpStatus: number | null;
   htmlLength: number;
-  renderedTextLength: number;
-  storeLinksFound: number;
+  hasOgTags: boolean;
+  hasJsonLd: boolean;
+  hasNextData: boolean;
+  cloudflareBlocked: boolean;
   fetchError: string | null;
   timeout: boolean;
 }
 
-// ==================== EXTRACTOR ====================
+// ==================== EXTRACTOR (fetch + cheerio) ====================
 
-async function extractWithPlaywright(url: string): Promise<{ extracted: ExtractedMetadata; diagnostics: Diagnostics }> {
+async function extractWithFetch(
+  url: string,
+  sourceInfo: SourceInfo
+): Promise<{ extracted: ExtractedMetadata; diagnostics: Diagnostics }> {
   const diagnostics: Diagnostics = {
-    source: "",
+    source: sourceInfo.label,
     httpStatus: null,
     htmlLength: 0,
-    renderedTextLength: 0,
-    storeLinksFound: 0,
+    hasOgTags: false,
+    hasJsonLd: false,
+    hasNextData: false,
+    cloudflareBlocked: false,
     fetchError: null,
     timeout: false,
   };
 
-  // Detect environment: Vercel Lambda (production) vs locale (development)
-  const isVercel = !!process.env.VERCEL;
-  const isProduction = process.env.NODE_ENV === "production";
+  const controller = new AbortController();
+  const timeoutId = setTimeout(() => controller.abort(), 15000);
 
-  let browser;
-
-  if (isVercel || isProduction) {
-    // Vercel Lambda: usa @sparticuz/chromium
-    // chromiumLambda.executablePath() ritorna il path al binario chromium
-    // estratto dal layer @sparticuz/chromium (compatibile Lambda)
-    browser = await chromium.launch({
-      args: chromiumLambda.args,
-      executablePath: await chromiumLambda.executablePath(),
-      headless: true,
-    });
-  } else {
-    // Development locale: usa chromium di sistema (installato via `npx playwright install`)
-    browser = await chromium.launch({
-      headless: true,
-      args: ["--no-sandbox", "--disable-setuid-sandbox"],
-    });
-  }
-
+  let html: string;
   try {
-    const page = await browser.newPage({
-      userAgent: "Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36",
+    const res = await fetch(url, {
+      headers: {
+        "User-Agent": "Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36",
+        "Accept": "text/html,application/xhtml+xml,application/xml;q=0.9,*/*;q=0.8",
+        "Accept-Language": "en-US,en;q=0.9",
+        "Accept-Encoding": "gzip, deflate, br",
+        "Connection": "keep-alive",
+        "Upgrade-Insecure-Requests": "1",
+      },
+      redirect: "follow",
+      signal: controller.signal,
     });
 
-    const response = await page.goto(url, { waitUntil: "networkidle", timeout: 20000 });
-    diagnostics.httpStatus = response?.status() || null;
-
-    // Extra wait for client-side rendering
-    await page.waitForTimeout(2000);
-
-    const html = await page.content();
+    clearTimeout(timeoutId);
+    diagnostics.httpStatus = res.status;
+    html = await res.text();
     diagnostics.htmlLength = html.length;
 
-    // Extract metadata from rendered DOM
-    const extracted: ExtractedMetadata = await page.evaluate(() => {
-      const getMeta = (sel: string): string | null =>
-        document.querySelector(sel)?.getAttribute("content") || null;
-
-      const ogTitle = getMeta('meta[property="og:title"]');
-      const ogImage = getMeta('meta[property="og:image"]');
-      const titleTag = document.title;
-
-      const result: ExtractedMetadata = {
-        title: null,
-        artists: [],
-        label: null,
-        genre: null,
-        cover: ogImage,
-        beatportUrl: null,
-        spotifyUrl: null,
-        appleMusicUrl: null,
-        youtubeUrl: null,
-        soundcloudUrl: null,
-        otherStores: [],
-      };
-
-      // Parse title — usually "Artist - Title" or "Artist1, Artist2 - Title"
-      const titleSource = ogTitle || titleTag || "";
-      const cleanedTitle = titleSource
-        .replace(/\s*[|\-–—]\s*(PromoLink|Beatport|Spotify|SoundCloud|Linktree)\s*$/i, "")
-        .replace(/\s*[|\-–—]\s*YouTube\s*$/i, "")
-        .trim();
-
-      if (cleanedTitle.includes(" - ")) {
-        const parts = cleanedTitle.split(" - ");
-        result.artists = parts[0].split(",").map((s) => s.trim()).filter(Boolean);
-        result.title = parts.slice(1).join(" - ").trim();
-      } else if (cleanedTitle) {
-        result.title = cleanedTitle;
-      }
-
-      // Scan all <a> tags for store URLs
-      const storePatterns: { platform: string; pattern: RegExp; field: keyof ExtractedMetadata }[] = [
-        { platform: "Beatport", pattern: /beatport\.com/i, field: "beatportUrl" },
-        { platform: "Spotify", pattern: /open\.spotify\.com/i, field: "spotifyUrl" },
-        { platform: "Apple Music", pattern: /music\.apple\.com|itunes\.apple\.com/i, field: "appleMusicUrl" },
-        { platform: "YouTube", pattern: /youtube\.com|youtu\.be/i, field: "youtubeUrl" },
-        { platform: "SoundCloud", pattern: /soundcloud\.com/i, field: "soundcloudUrl" },
-      ];
-
-      const otherStorePatterns = [
-        { platform: "Deezer", pattern: /deezer\.com/i },
-        { platform: "Tidal", pattern: /tidal\.com/i },
-        { platform: "Bandcamp", pattern: /bandcamp\.com/i },
-        { platform: "Amazon Music", pattern: /music\.amazon\./i },
-      ];
-
-      const foundPlatforms = new Set<string>();
-
-      document.querySelectorAll("a[href]").forEach((a) => {
-        const href = (a as HTMLAnchorElement).href;
-        if (!href) return;
-
-        for (const store of storePatterns) {
-          if (store.pattern.test(href) && !foundPlatforms.has(store.platform)) {
-            foundPlatforms.add(store.platform);
-            (result[store.field] as string) = href;
-          }
-        }
-
-        for (const store of otherStorePatterns) {
-          if (store.pattern.test(href) && !foundPlatforms.has(store.platform)) {
-            foundPlatforms.add(store.platform);
-            result.otherStores.push({ platform: store.platform, url: href });
-          }
-        }
-      });
-
-      // Extract label and genre from visible body text
-      const bodyText = document.body.innerText || "";
-      const lines = bodyText.split("\n").map((l) => l.trim()).filter(Boolean);
-
-      // Find the title line index
-      let titleIdx = -1;
-      if (result.title) {
-        titleIdx = lines.findIndex((l) => l === result.title || l.includes(result.title!));
-      }
-
-      if (titleIdx >= 0 && titleIdx + 3 < lines.length) {
-        const labelCandidate = lines[titleIdx + 2];
-        const genreCandidate = lines[titleIdx + 3];
-
-        if (labelCandidate && !result.label && labelCandidate.length < 50 &&
-            !/spotify|beatport|apple|youtube|soundcloud|deezer|tidal|powered|listen|play/i.test(labelCandidate)) {
-          result.label = labelCandidate;
-        }
-
-        if (genreCandidate && !result.genre && genreCandidate.length < 80 &&
-            !/spotify|beatport|apple|youtube|soundcloud|deezer|tidal|powered|listen|play/i.test(genreCandidate)) {
-          result.genre = genreCandidate;
-        }
-      }
-
-      // Fallback: regex search for genre patterns
-      if (!result.genre) {
-        const genreMatch = bodyText.match(
-          /(Techno|House|Trance|Progressive|Deep|Tech|Melodic|Minimal|Electro|Dubstep|Drum.?n.?Bass|Ambient|Breakbeat|Hardcore|Psytrance|Garage|Funky|Soulful|Afro|Amapiano|Downtempo|Indie Dance|Nu Disco|Bass|Hard)[^\n]*?(?:\([^)]*\))?/i
-        );
-        if (genreMatch) result.genre = genreMatch[0].trim();
-      }
-
-      return result;
-    });
-
-    diagnostics.renderedTextLength = (await page.evaluate(() => document.body.innerText.length)) || 0;
-    diagnostics.storeLinksFound =
-      [extracted.beatportUrl, extracted.spotifyUrl, extracted.appleMusicUrl, extracted.youtubeUrl, extracted.soundcloudUrl]
-        .filter(Boolean).length + extracted.otherStores.length;
-
-    return { extracted, diagnostics };
-  } finally {
-    await browser.close();
+    // Cloudflare detection
+    if (res.status === 403 && html.includes("cloudflare")) {
+      diagnostics.cloudflareBlocked = true;
+    }
+  } catch (err: any) {
+    clearTimeout(timeoutId);
+    diagnostics.fetchError = err.message;
+    diagnostics.timeout = err.name === "AbortError";
+    throw new Error(
+      diagnostics.timeout
+        ? "Timeout — la pagina non ha risposto entro 15 secondi"
+        : `Errore fetch: ${err.message}`
+    );
   }
+
+  // Parse HTML with cheerio
+  const $ = cheerio.load(html);
+
+  const ogTags = $('meta[property^="og:"]');
+  diagnostics.hasOgTags = ogTags.length > 0;
+
+  const jsonLdScripts = $('script[type="application/ld+json"]');
+  diagnostics.hasJsonLd = jsonLdScripts.length > 0;
+
+  const nextData = $("#__NEXT_DATA__");
+  diagnostics.hasNextData = nextData.length > 0;
+
+  // ==================== EXTRACT METADATA ====================
+
+  const extracted: ExtractedMetadata = {
+    title: null,
+    artists: [],
+    label: null,
+    genre: null,
+    cover: null,
+    beatportUrl: null,
+    spotifyUrl: null,
+    appleMusicUrl: null,
+    youtubeUrl: null,
+    soundcloudUrl: null,
+    otherStores: [],
+  };
+
+  // --- og: tags ---
+  const ogTitle = $('meta[property="og:title"]').attr("content") || null;
+  const ogDescription = $('meta[property="og:description"]').attr("content") || null;
+  const ogImage = $('meta[property="og:image"]').attr("content") || null;
+
+  if (ogTitle) {
+    const parts = ogTitle.split(" - ");
+    if (parts.length >= 2) {
+      extracted.artists = [parts[0].trim()];
+      extracted.title = parts.slice(1).join(" - ").trim();
+    } else {
+      extracted.title = ogTitle.trim();
+    }
+  }
+
+  if (ogImage) extracted.cover = ogImage;
+
+  // --- JSON-LD ---
+  const jsonLdItems: any[] = [];
+  jsonLdScripts.each((_, script) => {
+    try {
+      const raw = $(script).html();
+      if (!raw) return;
+      const data = JSON.parse(raw);
+      const items = Array.isArray(data) ? data : [data];
+      jsonLdItems.push(...items);
+    } catch {}
+  });
+
+  for (const item of jsonLdItems) {
+    if (!item || typeof item !== "object") continue;
+    if (item.name && !extracted.title) extracted.title = item.name;
+    if (item.byArtist) {
+      if (typeof item.byArtist === "string" && extracted.artists.length === 0) {
+        extracted.artists = [item.byArtist];
+      } else if (item.byArtist.name && extracted.artists.length === 0) {
+        extracted.artists = [item.byArtist.name];
+      } else if (Array.isArray(item.byArtist) && extracted.artists.length === 0) {
+        extracted.artists = item.byArtist.map((a: any) => a?.name).filter(Boolean);
+      }
+    }
+    if (item.publisher?.name && !extracted.label) extracted.label = item.publisher.name;
+    if (item.recordLabel?.name && !extracted.label) extracted.label = item.recordLabel.name;
+    if (item.recordLabel && typeof item.recordLabel === "string" && !extracted.label) {
+      extracted.label = item.recordLabel;
+    }
+    if (item.genre && !extracted.genre) {
+      extracted.genre = Array.isArray(item.genre) ? item.genre[0] : item.genre;
+    }
+    if (item.image && !extracted.cover) {
+      extracted.cover = Array.isArray(item.image) ? item.image[0] : item.image;
+    }
+  }
+
+  // --- title tag fallback ---
+  if (!extracted.title) {
+    const titleTag = $("title").text().trim();
+    if (titleTag) {
+      const cleaned = titleTag.replace(/\s*[|\-–—]\s*(PromoLink|Beatport|Spotify|SoundCloud|Linktree)\s*$/i, "").trim();
+      if (cleaned.includes(" - ")) {
+        const parts = cleaned.split(" - ");
+        if (extracted.artists.length === 0) extracted.artists = [parts[0].trim()];
+        extracted.title = parts.slice(1).join(" - ").trim();
+      } else if (cleaned) {
+        extracted.title = cleaned;
+      }
+    }
+  }
+
+  // --- __NEXT_DATA__ (per SPA Next.js come PromoLink) ---
+  if (diagnostics.hasNextData) {
+    try {
+      const nextDataRaw = nextData.html();
+      if (nextDataRaw) {
+        const nextDataObj = JSON.parse(nextDataRaw);
+        const pageProps = nextDataObj?.props?.pageProps;
+        if (pageProps) {
+          const releaseData = pageProps.release || pageProps.track || pageProps.campaign ||
+                             pageProps.data?.release || pageProps.data?.track || pageProps.data;
+          if (releaseData && typeof releaseData === "object") {
+            if (releaseData.title && !extracted.title) extracted.title = releaseData.title;
+            if (releaseData.artist && extracted.artists.length === 0) {
+              extracted.artists = Array.isArray(releaseData.artist) ? releaseData.artist : [releaseData.artist];
+            }
+            if (releaseData.label && !extracted.label) extracted.label = releaseData.label;
+            if (releaseData.genre && !extracted.genre) extracted.genre = releaseData.genre;
+            if (releaseData.coverArt && !extracted.cover) extracted.cover = releaseData.coverArt;
+          }
+        }
+      }
+    } catch {}
+  }
+
+  // --- Scan <a> tags for store URLs ---
+  const storePatterns: { platform: string; pattern: RegExp; field: keyof ExtractedMetadata }[] = [
+    { platform: "Beatport", pattern: /beatport\.com/i, field: "beatportUrl" },
+    { platform: "Spotify", pattern: /open\.spotify\.com/i, field: "spotifyUrl" },
+    { platform: "Apple Music", pattern: /music\.apple\.com|itunes\.apple\.com/i, field: "appleMusicUrl" },
+    { platform: "YouTube", pattern: /youtube\.com|youtu\.be/i, field: "youtubeUrl" },
+    { platform: "SoundCloud", pattern: /soundcloud\.com/i, field: "soundcloudUrl" },
+  ];
+  const otherStorePatterns = [
+    { platform: "Deezer", pattern: /deezer\.com/i },
+    { platform: "Tidal", pattern: /tidal\.com/i },
+    { platform: "Bandcamp", pattern: /bandcamp\.com/i },
+    { platform: "Amazon Music", pattern: /music\.amazon\./i },
+  ];
+  const foundPlatforms = new Set<string>();
+  const parsedUrl = new URL(url);
+
+  $("a[href]").each((_, el) => {
+    const href = $(el).attr("href");
+    if (!href) return;
+    let absoluteUrl: string;
+    try {
+      absoluteUrl = new URL(href, parsedUrl.origin).href;
+    } catch { return; }
+
+    for (const store of storePatterns) {
+      if (store.pattern.test(absoluteUrl) && !foundPlatforms.has(store.platform)) {
+        foundPlatforms.add(store.platform);
+        (extracted[store.field] as string) = absoluteUrl;
+      }
+    }
+    for (const store of otherStorePatterns) {
+      if (store.pattern.test(absoluteUrl) && !foundPlatforms.has(store.platform)) {
+        foundPlatforms.add(store.platform);
+        extracted.otherStores.push({ platform: store.platform, url: absoluteUrl });
+      }
+    }
+  });
+
+  // --- genre/label from description ---
+  const descSource = ogDescription || $('meta[name="description"]').attr("content") || "";
+  if (descSource) {
+    if (!extracted.genre) {
+      const genreMatch = descSource.match(/(?:genre|genere)\s*[:\-]\s*([^\n,;]+)/i);
+      if (genreMatch) extracted.genre = genreMatch[1].trim();
+    }
+    if (!extracted.label) {
+      const labelMatch = descSource.match(/(?:label|etichetta)\s*[:\-]\s*([^\n,;]+)/i);
+      if (labelMatch) extracted.label = labelMatch[1].trim();
+    }
+  }
+
+  // --- genre regex fallback ---
+  if (!extracted.genre) {
+    const genreMatch = descSource.match(
+      /(Techno|House|Trance|Progressive|Deep|Tech|Melodic|Minimal|Electro|Dubstep|Drum.?n.?Bass|Ambient|Breakbeat|Hardcore|Psytrance|Garage|Funky|Soulful|Afro|Amapiano|Downtempo|Indie Dance|Nu Disco|Bass|Hard)[^\n]*?(?:\([^)]*\))?/i
+    );
+    if (genreMatch) extracted.genre = genreMatch[0].trim();
+  }
+
+  return { extracted, diagnostics };
 }
 
 // ==================== ROUTE HANDLER ====================
@@ -279,7 +355,6 @@ export async function POST(req: NextRequest) {
     return NextResponse.json({ error: "Formato URL non valido", url }, { status: 400 });
   }
 
-  // 1. Detect source
   const sourceInfo = detectSource(parsedUrl);
 
   if (!sourceInfo.supported) {
@@ -291,10 +366,34 @@ export async function POST(req: NextRequest) {
     }, { status: 400 });
   }
 
-  // 2. Extract metadata using Playwright (universal extractor)
   try {
-    const { extracted, diagnostics } = await extractWithPlaywright(url);
-    diagnostics.source = sourceInfo.label;
+    const { extracted, diagnostics } = await extractWithFetch(url, sourceInfo);
+
+    // Cloudflare block detection (Beatport)
+    if (diagnostics.cloudflareBlocked) {
+      return NextResponse.json({
+        error: "Beatport blocca l'accesso automatico (Cloudflare bot detection)",
+        reason: "Beatport utilizza Cloudflare per bloccare richieste server-side. Non è possibile estrarre metadati automaticamente da URL Beatport con fetch HTTP.",
+        url,
+        source: sourceInfo.label,
+        sourceType: sourceInfo.type,
+        diagnostics,
+        possibleReason: "Beatport richiede un browser reale per superare Cloudflare. Per ora incolla manualmente i metadati nella schermata di revisione.",
+      }, { status: 403 });
+    }
+
+    // SPA detection — if HTML is very short and no og: tags, likely a SPA
+    if (diagnostics.htmlLength < 3000 && !diagnostics.hasOgTags && !diagnostics.hasJsonLd) {
+      return NextResponse.json({
+        error: "La pagina è una SPA (Single Page Application) senza metadati server-rendered",
+        reason: "Il contenuto viene renderizzato lato client via JavaScript. Un semplice fetch HTTP non può estrarre i metadati.",
+        url,
+        source: sourceInfo.label,
+        sourceType: sourceInfo.type,
+        diagnostics,
+        possibleReason: "Per questa sorgente serve un headless browser (Playwright). Per ora incolla manualmente i metadati nella schermata di revisione.",
+      }, { status: 422 });
+      }
 
     return NextResponse.json({
       success: true,
@@ -306,13 +405,8 @@ export async function POST(req: NextRequest) {
       extracted,
     });
   } catch (err: any) {
-    const isTimeout = err.message.includes("Timeout") || err.message.includes("timeout");
-
     return NextResponse.json({
-      error: isTimeout
-        ? "Timeout — la pagina non si è caricata entro 20s"
-        : "Estrazione fallita",
-      reason: err.message,
+      error: err.message,
       url,
       source: sourceInfo.label,
       sourceType: sourceInfo.type,
@@ -320,16 +414,13 @@ export async function POST(req: NextRequest) {
         source: sourceInfo.label,
         httpStatus: null,
         htmlLength: 0,
-        renderedTextLength: 0,
-        storeLinksFound: 0,
+        hasOgTags: false,
+        hasJsonLd: false,
+        hasNextData: false,
+        cloudflareBlocked: false,
         fetchError: err.message,
-        timeout: isTimeout,
+        timeout: err.message.includes("Timeout"),
       },
-      possibleReason: isTimeout
-        ? "Il server non ha risposto entro 20 secondi, oppure il rendering JavaScript è troppo lento."
-        : err.message.includes("Target closed")
-          ? "Il browser headless è stato chiuso inaspettatamente (possibile out of memory)."
-          : "Errore sconosciuto durante il rendering della pagina.",
     }, { status: 500 });
   }
 }

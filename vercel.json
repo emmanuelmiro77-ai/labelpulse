@@ -1,11 +1,6 @@
 {
   "version": 2,
   "buildCommand": "npm run build",
-  "functions": {
-    "src/app/api/track-import/route.ts": {
-      "maxDuration": 60
-    }
-  },
   "crons": [
     {
       "path": "/api/cron/follow-up-reminders",
