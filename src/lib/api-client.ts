@@ -290,6 +290,9 @@ export interface ReleaseRow {
   beatport_url?: string;
   promo_link?: string;
   spotify_url?: string;
+  // 🔒 RP-008 — Track import
+  source_url?: string;
+  status?: string;
 }
 
 export async function apiCreateRelease(release: ReleaseRow): Promise<boolean> {

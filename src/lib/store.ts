@@ -187,6 +187,9 @@ export interface Release {
   beatportUrl?: string;    // URL diretto release su Beatport
   promoLink?: string;      // URL promo (es. Hypeddit, LabelWorx)
   spotifyUrl?: string;     // URL Spotify della release
+  // 🔒 RP-008 — Track import: URL originale incollato dall'utente
+  sourceUrl?: string;      // URL originale (qualsiasi piattaforma)
+  status?: string;         // 'imported' per track create da URL
 }
 
 export interface Demo {
@@ -1167,7 +1170,7 @@ interface AppState {
    * list (existing behavior).
    */
   navigationReturnTo: { kind: "label"; labelId: string; labelName?: string } | null;
-  activeTab: "dashboard" | "labels" | "artists" | "rankings" | "demos" | "pitch" | "profile";
+  activeTab: "dashboard" | "labels" | "artists" | "rankings" | "demos" | "pitch" | "profile" | "tracks";
   locale: Locale;
   userProfile: UserProfile;
   gmailAuth: GmailAuth;
@@ -2003,6 +2006,8 @@ export const useAppStore = create<AppState>()(
           beatport_url: newRelease.beatportUrl,
           promo_link: newRelease.promoLink,
           spotify_url: newRelease.spotifyUrl,
+          source_url: newRelease.sourceUrl,
+          status: newRelease.status,
         }).catch((err) => console.error("[cloud sync] failed:", err));
         return id;
       },
@@ -2029,6 +2034,8 @@ export const useAppStore = create<AppState>()(
             beatport_url: updated.beatportUrl,
             promo_link: updated.promoLink,
             spotify_url: updated.spotifyUrl,
+            source_url: updated.sourceUrl,
+            status: updated.status,
           }).catch((err) => console.error("[cloud sync] failed:", err));
         }
       },

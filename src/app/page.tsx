@@ -22,6 +22,7 @@ import {
   Users,
   AlertTriangle,
   CloudOff,
+  Plus,
 } from "lucide-react";
 import { useState, useEffect } from "react";
 import { Button } from "@/components/ui/button";
@@ -33,6 +34,7 @@ import {
 import { Dashboard } from "@/components/dashboard";
 import { LabelFinder } from "@/components/label-finder";
 import { DemoTracker } from "@/components/demo-tracker";
+import { TrackImporter } from "@/components/track-importer";
 import { PitchGenerator } from "@/components/pitch-generator";
 import { HelpModal } from "@/components/help-modal";
 import { GmailSettings } from "@/components/gmail-settings";
@@ -54,6 +56,7 @@ const NAV_KEYS = [
   { id: "artists" as const, labelKey: "nav.artists" as const, icon: Users },
   { id: "rankings" as const, labelKey: "nav.rankings" as const, icon: BarChart3 },
   { id: "demos" as const, labelKey: "nav.demos" as const, icon: Send },
+  { id: "tracks" as const, labelKey: "nav.tracks" as const, icon: Plus },
   { id: "pitch" as const, labelKey: "nav.pitch" as const, icon: Megaphone },
   { id: "profile" as const, labelKey: "nav.profile" as const, icon: User },
 ];
@@ -64,6 +67,7 @@ const SECTION_TITLES = {
   artists: "artists.title",
   rankings: "rankings.title",
   demos: "demos.title",
+  tracks: "tracks.title",
   pitch: "campaign.title",
   profile: "profile.title",
 } as const;
@@ -74,6 +78,7 @@ const SECTION_SUBTITLES = {
   artists: "artists.subtitle",
   rankings: "rankings.subtitle",
   demos: "demos.subtitle",
+  tracks: "tracks.subtitle",
   pitch: "campaign.subtitle",
   profile: "profile.subtitle",
 } as const;
@@ -399,6 +404,7 @@ export default function Home() {
             {activeTab === "artists" && <Users className="h-5 w-5 text-primary" />}
             {activeTab === "rankings" && <BarChart3 className="h-5 w-5 text-primary" />}
             {activeTab === "demos" && <Send className="h-5 w-5 text-primary" />}
+            {activeTab === "tracks" && <Plus className="h-5 w-5 text-primary" />}
             {activeTab === "pitch" && <Megaphone className="h-5 w-5 text-primary" />}
             {activeTab === "profile" && <User className="h-5 w-5 text-primary" />}
             <h2 className="text-xl font-bold text-foreground">
@@ -413,6 +419,7 @@ export default function Home() {
         {activeTab === "dashboard" && <Dashboard />}
         {activeTab === "artists" && <ArtistExplorer />}
         {activeTab === "demos" && <DemoTracker />}
+        {activeTab === "tracks" && <TrackImporter />}
         {activeTab === "pitch" && <PitchGenerator />}
         {activeTab === "profile" && <ProducerProfile />}
         {/*

@@ -27,6 +27,7 @@ type TranslationKeys = {
   "nav.artists": string;
   "nav.demos": string;
   "nav.pitch": string;
+  "nav.tracks": string;
   "nav.rankings": string;
   "nav.help": string;
   "nav.profile": string;
@@ -129,6 +130,8 @@ type TranslationKeys = {
   // Demos
   "demos.title": string;
   "demos.subtitle": string;
+  "tracks.title": string;
+  "tracks.subtitle": string;
   "demos.search": string;
   "demos.allStatuses": string;
   "demos.addDemo": string;
@@ -474,6 +477,7 @@ const translations: Record<Locale, TranslationKeys> = {
     "nav.artists": "Artisti",
     "nav.demos": "Demo",
     "nav.pitch": "Pitch",
+    "nav.tracks": "Nuova Traccia",
     "nav.rankings": "Classifiche",
     "nav.help": "Guida",
     "dash.title": "Dashboard",
@@ -569,6 +573,8 @@ const translations: Record<Locale, TranslationKeys> = {
     "labels.hidePitch": "Nascondi Pitch",
     "demos.title": "Demo Submission Tracker",
     "demos.subtitle": "Traccia lo stato di ogni demo che hai inviato.",
+    "tracks.title": "Nuova Traccia",
+    "tracks.subtitle": "Incolla un link e trova subito i DJ da contattare.",
     "demos.search": "Cerca demo...",
     "demos.allStatuses": "Tutti gli stati",
     "demos.addDemo": "Aggiungi Demo",
@@ -883,6 +889,7 @@ const translations: Record<Locale, TranslationKeys> = {
     "nav.artists": "Artists",
     "nav.demos": "Demos",
     "nav.pitch": "Pitch",
+    "nav.tracks": "New Track",
     "nav.rankings": "Rankings",
     "nav.help": "Help",
     "dash.title": "Dashboard",
@@ -978,6 +985,8 @@ const translations: Record<Locale, TranslationKeys> = {
     "labels.hidePitch": "Hide Pitch",
     "demos.title": "Demo Submission Tracker",
     "demos.subtitle": "Track the status of every demo you've sent out.",
+    "tracks.title": "New Track",
+    "tracks.subtitle": "Paste a link and instantly find DJs to contact.",
     "demos.search": "Search demos...",
     "demos.allStatuses": "All Statuses",
     "demos.addDemo": "Add Demo",
@@ -1292,6 +1301,7 @@ const translations: Record<Locale, TranslationKeys> = {
     "nav.artists": "Artistas",
     "nav.demos": "Demos",
     "nav.pitch": "Pitch",
+    "nav.tracks": "Nueva Pista",
     "nav.rankings": "Clasificaciones",
     "nav.help": "Guía",
     "dash.title": "Panel",
@@ -1387,6 +1397,8 @@ const translations: Record<Locale, TranslationKeys> = {
     "labels.hidePitch": "Ocultar Pitch",
     "demos.title": "Seguimiento de Demos",
     "demos.subtitle": "Rastrea el estado de cada demo que has enviado.",
+    "tracks.title": "Nueva Pista",
+    "tracks.subtitle": "Pega un enlace y encuentra DJs al instante.",
     "demos.search": "Buscar demos...",
     "demos.allStatuses": "Todos los estados",
     "demos.addDemo": "Añadir Demo",
@@ -1701,6 +1713,7 @@ const translations: Record<Locale, TranslationKeys> = {
     "nav.artists": "Artistes",
     "nav.demos": "Démos",
     "nav.pitch": "Pitch",
+    "nav.tracks": "Nouvelle Piste",
     "nav.rankings": "Classements",
     "nav.help": "Guide",
     "dash.title": "Tableau de bord",
@@ -1796,6 +1809,8 @@ const translations: Record<Locale, TranslationKeys> = {
     "labels.hidePitch": "Masquer le Pitch",
     "demos.title": "Suivi des Démos",
     "demos.subtitle": "Suivez l'état de chaque démo envoyée.",
+    "tracks.title": "Nouvelle Piste",
+    "tracks.subtitle": "Collez un lien et trouvez des DJ à contacter.",
     "demos.search": "Rechercher des démos...",
     "demos.allStatuses": "Tous les statuts",
     "demos.addDemo": "Ajouter une Démo",
@@ -2110,6 +2125,7 @@ const translations: Record<Locale, TranslationKeys> = {
     "nav.artists": "Künstler",
     "nav.demos": "Demos",
     "nav.pitch": "Pitch",
+    "nav.tracks": "Neuer Track",
     "nav.rankings": "Ranglisten",
     "nav.help": "Hilfe",
     "dash.title": "Übersicht",
@@ -2205,6 +2221,8 @@ const translations: Record<Locale, TranslationKeys> = {
     "labels.hidePitch": "Pitch ausblenden",
     "demos.title": "Demo-Tracker",
     "demos.subtitle": "Verfolge den Status jeder eingereichten Demo.",
+    "tracks.title": "Neuer Track",
+    "tracks.subtitle": "Füge einen Link ein und finde sofort DJs zum Kontaktieren.",
     "demos.search": "Demos suchen...",
     "demos.allStatuses": "Alle Status",
     "demos.addDemo": "Demo hinzufügen",
@@ -2519,6 +2537,7 @@ const translations: Record<Locale, TranslationKeys> = {
     "nav.artists": "Artistas",
     "nav.demos": "Demos",
     "nav.pitch": "Pitch",
+    "nav.tracks": "Nova Faixa",
     "nav.rankings": "Rankings",
     "nav.help": "Guia",
     "dash.title": "Painel",
@@ -2614,6 +2633,8 @@ const translations: Record<Locale, TranslationKeys> = {
     "labels.hidePitch": "Ocultar Pitch",
     "demos.title": "Rastreador de Demos",
     "demos.subtitle": "Acompanhe o status de cada demo que você enviou.",
+    "tracks.title": "Nova Faixa",
+    "tracks.subtitle": "Cole um link e encontre DJs para contatar.",
     "demos.search": "Buscar demos...",
     "demos.allStatuses": "Todos os status",
     "demos.addDemo": "Adicionar Demo",
