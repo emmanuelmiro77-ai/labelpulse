@@ -373,18 +373,73 @@ function ReviewScreen({
                 ({locale === "it" ? "obbligatorio per TROVA DJ" : "required for FIND DJs"})
               </span>
             </UILabel>
-            {reviewData.genre ? (
-              // Genre was extracted — show as read-only badge with option to change
-              <div className="flex items-center gap-2">
-                <Badge variant="secondary" className="text-xs font-mono px-2 py-1 bg-emerald-500/10 text-emerald-400 border-emerald-500/20">
-                  {reviewData.genre}
-                </Badge>
+            {(() => {
+              // Verifica se il genre estratto corrisponde a un genere Beatport valido.
+              // Se non corrisponde (es. "Techno (Peak Time / Driving)" con parentesi),
+              // trattalo come mancante e forza la selezione manuale.
+              const genreIsValid = reviewData.genre && beatportGenres.includes(reviewData.genre);
+
+              if (genreIsValid) {
+                // Genre valido — badge + Select per cambio opzionale
+                return (
+                  <div className="flex items-center gap-2">
+                    <Badge variant="secondary" className="text-xs font-mono px-2 py-1 bg-emerald-500/10 text-emerald-400 border-emerald-500/20">
+                      {reviewData.genre}
+                    </Badge>
+                    <Select
+                      value={reviewData.genre}
+                      onValueChange={(v) => setReviewData((prev) => ({ ...prev, genre: v }))}
+                    >
+                      <SelectTrigger className="h-8 text-xs flex-1 bg-secondary/50">
+                        <SelectValue placeholder={locale === "it" ? "Cambia genere..." : "Change genre..."} />
+                      </SelectTrigger>
+                      <SelectContent>
+                        {beatportGenres.map((g) => (
+                          <SelectItem key={g} value={g}>{g}</SelectItem>
+                        ))}
+                      </SelectContent>
+                    </Select>
+                  </div>
+                );
+              }
+
+              if (reviewData.genre && !genreIsValid) {
+                // Genre estratto ma NON valido (non nella lista Beatport)
+                // Mostra warning + Select forzata
+                return (
+                  <div className="space-y-1.5">
+                    <div className="flex items-center gap-2 p-2 rounded-md bg-amber-500/10 border border-amber-500/30">
+                      <span className="text-[10px] text-amber-400">
+                        {locale === "it"
+                          ? `Genere estratto ("${reviewData.genre}") non standard Beatport. Selezionane uno dalla lista:`
+                          : `Extracted genre ("${reviewData.genre}") is not a standard Beatport genre. Select one from the list:`}
+                      </span>
+                    </div>
+                    <Select
+                      value=""
+                      onValueChange={(v) => setReviewData((prev) => ({ ...prev, genre: v }))}
+                    >
+                      <SelectTrigger className="h-10 text-sm bg-red-500/5 border-red-500/40">
+                        <SelectValue placeholder={locale === "it" ? "⚠️ Seleziona genere Beatport" : "⚠️ Select Beatport genre"} />
+                      </SelectTrigger>
+                      <SelectContent>
+                        {beatportGenres.map((g) => (
+                          <SelectItem key={g} value={g}>{g}</SelectItem>
+                        ))}
+                      </SelectContent>
+                    </Select>
+                  </div>
+                );
+              }
+
+              // Genre mancante — Select rossa
+              return (
                 <Select
-                  value={reviewData.genre}
+                  value=""
                   onValueChange={(v) => setReviewData((prev) => ({ ...prev, genre: v }))}
                 >
-                  <SelectTrigger className="h-8 text-xs flex-1 bg-secondary/50">
-                    <SelectValue placeholder={locale === "it" ? "Cambia genere..." : "Change genre..."} />
+                  <SelectTrigger className="h-10 text-sm bg-red-500/5 border-red-500/40">
+                    <SelectValue placeholder={locale === "it" ? "⚠️ Seleziona genere Beatport" : "⚠️ Select Beatport genre"} />
                   </SelectTrigger>
                   <SelectContent>
                     {beatportGenres.map((g) => (
@@ -392,23 +447,8 @@ function ReviewScreen({
                     ))}
                   </SelectContent>
                 </Select>
-              </div>
-            ) : (
-              // Genre missing — highlight red, force selection
-              <Select
-                value={reviewData.genre}
-                onValueChange={(v) => setReviewData((prev) => ({ ...prev, genre: v }))}
-              >
-                <SelectTrigger className="h-10 text-sm bg-red-500/5 border-red-500/40">
-                  <SelectValue placeholder={locale === "it" ? "⚠️ Seleziona genere Beatport" : "⚠️ Select Beatport genre"} />
-                </SelectTrigger>
-                <SelectContent>
-                  {beatportGenres.map((g) => (
-                    <SelectItem key={g} value={g}>{g}</SelectItem>
-                  ))}
-                </SelectContent>
-              </Select>
-            )}
+              );
+            })()}
           </div>
 
           {/* Label */}
