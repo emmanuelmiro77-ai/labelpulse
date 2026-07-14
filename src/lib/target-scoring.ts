@@ -636,6 +636,70 @@ export function calculateTopTargets(
     .slice(0, limit);
 }
 
+// ==================== FUNNEL (RP-017) ====================
+
+export interface TargetingFunnel {
+  totalArtists: number;       // Step 0: tutti gli artisti nel DB
+  sameGenre: number;          // Step 1: filtro per genere Beatport
+  recentlyActive: number;     // Step 2: filtro per attività recente (90gg)
+  labelCompatible: number;    // Step 3: filtro per affinità label
+  scored: number;             // Step 4: calcolo score (superano minimo)
+  recommended: number;        // Step 5: migliori target (top 50)
+}
+
+/**
+ * RP-017 — Calcola il funnel di targeting a 5 step.
+ *
+ * Pipeline:
+ *   1. Filtro per genere Beatport (match esatto o parziale)
+ *   2. Filtro per attività recente (ultimi 90 giorni)
+ *   3. Filtro per affinità label (3+ label note)
+ *   4. Calcolo score (Musical Interest Score ≥ 10)
+ *   5. Restituisce soltanto i migliori 50 target
+ */
+export function calculateFunnel(
+  release: Release,
+  artists: Artist[]
+): TargetingFunnel {
+  const totalArtists = artists.length;
+
+  // Step 1: filtro per genere Beatport
+  const genreFiltered = artists.filter((a) =>
+    hasGenreMatch(release, a) || hasPartialGenreMatch(release, a)
+  );
+  const sameGenre = genreFiltered.length;
+
+  // Step 2: filtro per attività recente (ultimi 90 giorni)
+  const activeFiltered = genreFiltered.filter((a) => {
+    const d = daysSince(a.lastSeenAt);
+    return d !== null && d <= 90;
+  });
+  const recentlyActive = activeFiltered.length;
+
+  // Step 3: filtro per affinità label (3+ label note)
+  const labelFiltered = activeFiltered.filter((a) =>
+    (a.labelsPublishedOn?.length || 0) >= 1
+  );
+  const labelCompatible = labelFiltered.length;
+
+  // Step 4: calcolo score
+  const scored = labelFiltered
+    .map((a) => scoreArtistForRelease(release, a))
+    .filter((s) => s.score >= MIN_SCORE_TO_INCLUDE);
+
+  // Step 5: migliori target (top 50, ordinati per score)
+  const recommended = Math.min(scored.length, DEFAULT_LIMIT);
+
+  return {
+    totalArtists,
+    sameGenre,
+    recentlyActive,
+    labelCompatible,
+    scored: scored.length,
+    recommended,
+  };
+}
+
 // ==================== UI HELPERS ====================
 
 export const PRIORITY_LABELS: Record<InterestBucket, { icon: string; label: string; color: string }> = {

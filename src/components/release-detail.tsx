@@ -34,9 +34,11 @@ import {
   ThumbsUp,
   ThumbsDown,
   Check,
+  ChevronDown,
 } from "lucide-react";
 import {
   calculateTopTargets,
+  calculateFunnel,
   getArtistBeatportUrl,
   PRIORITY_LABELS,
   CONFIDENCE_LABELS,
@@ -78,14 +80,11 @@ export function ReleaseDetail({ releaseId, onBack }: ReleaseDetailProps) {
   const summary = useMemo(() => summarizeByPriority(topTargets), [topTargets]);
   const confidenceSummary = useMemo(() => summarizeByConfidence(topTargets), [topTargets]);
 
-  // Funnel metrics per la Mission
+  // RP-017: Funnel di targeting a 5 step
   const funnel = useMemo(() => {
-    const analyzed = artists.length;
-    const compatible = topTargets.length;
-    const highInterest = topTargets.filter(t => t.score >= 60).length;
-    const priority = topTargets.filter(t => t.priority === "max" || t.priority === "high").length;
-    return { analyzed, compatible, highInterest, priority };
-  }, [artists.length, topTargets]);
+    if (!release) return null;
+    return calculateFunnel(release, artists);
+  }, [release, artists]);
 
   // Demo appartenenti alla release (per mostrare le tracce)
   const releaseDemos = useMemo(() => {
@@ -166,29 +165,41 @@ export function ReleaseDetail({ releaseId, onBack }: ReleaseDetailProps) {
             </h2>
           </div>
 
-          {/* Funnel metrics */}
-          <div className="grid grid-cols-2 sm:grid-cols-4 gap-3 mb-5">
-            <FunnelMetric
-              label={locale === "it" ? "Analizzati" : "Analyzed"}
-              value={funnel.analyzed}
-              color="text-muted-foreground"
-            />
-            <FunnelMetric
-              label={locale === "it" ? "Compatibili" : "Compatible"}
-              value={funnel.compatible}
-              color="text-blue-400"
-            />
-            <FunnelMetric
-              label={locale === "it" ? "Alto interesse" : "High interest"}
-              value={funnel.highInterest}
-              color="text-emerald-400"
-            />
-            <FunnelMetric
-              label={locale === "it" ? "Prioritari" : "Priority"}
-              value={funnel.priority}
-              color="text-red-400"
-            />
-          </div>
+          {/* RP-017: Funnel di targeting a 5 step */}
+          {funnel && (
+            <div className="space-y-2 mb-5">
+              <FunnelStep
+                label={locale === "it" ? "Artisti nel database" : "Artists in database"}
+                value={funnel.totalArtists}
+                color="text-muted-foreground"
+              />
+              <FunnelArrow />
+              <FunnelStep
+                label={locale === "it" ? "Stesso genere" : "Same genre"}
+                value={funnel.sameGenre}
+                color="text-blue-400"
+              />
+              <FunnelArrow />
+              <FunnelStep
+                label={locale === "it" ? "Attivi (90gg)" : "Active (90d)"}
+                value={funnel.recentlyActive}
+                color="text-cyan-400"
+              />
+              <FunnelArrow />
+              <FunnelStep
+                label={locale === "it" ? "Compatibili (label)" : "Compatible (label)"}
+                value={funnel.labelCompatible}
+                color="text-amber-400"
+              />
+              <FunnelArrow />
+              <FunnelStep
+                label={locale === "it" ? "Consigliati" : "Recommended"}
+                value={funnel.recommended}
+                color="text-emerald-400"
+                bold
+              />
+            </div>
+          )}
 
           {/* Riepilogo bucket interesse + confidence */}
           {topTargets.length > 0 && (
@@ -462,21 +473,21 @@ function TargetRow({ rank, target, onOpenArtist, onOpenBeatport, locale }: Targe
   );
 }
 
-// ==================== FUNNEL METRIC ====================
+// ==================== FUNNEL STEP (RP-017) ====================
 
-interface FunnelMetricProps {
-  label: string;
-  value: number;
-  color: string;
+function FunnelStep({ label, value, color, bold }: { label: string; value: number; color: string; bold?: boolean }) {
+  return (
+    <div className="flex items-center justify-between px-4 py-2.5 rounded-lg bg-secondary/30 border border-border/30">
+      <span className="text-xs text-muted-foreground">{label}</span>
+      <span className={`text-lg font-bold ${color} ${bold ? "text-xl" : ""}`}>{value}</span>
+    </div>
+  );
 }
 
-function FunnelMetric({ label, value, color }: FunnelMetricProps) {
+function FunnelArrow() {
   return (
-    <div className="space-y-1 p-3 rounded-lg bg-secondary/30 border border-border/30">
-      <p className="text-[10px] uppercase tracking-wider text-muted-foreground">
-        {label}
-      </p>
-      <p className={`text-xl font-bold ${color}`}>{value}</p>
+    <div className="flex justify-center">
+      <ChevronDown className="h-4 w-4 text-muted-foreground/50" />
     </div>
   );
 }
