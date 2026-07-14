@@ -37,8 +37,7 @@ import {
   ChevronDown,
 } from "lucide-react";
 import {
-  calculateTopTargets,
-  calculateFunnel,
+  calculateTargets,
   getArtistBeatportUrl,
   PRIORITY_LABELS,
   CONFIDENCE_LABELS,
@@ -71,20 +70,17 @@ export function ReleaseDetail({ releaseId, onBack }: ReleaseDetailProps) {
     [releases, releaseId]
   );
 
-  // Calcolo top targets con Musical Interest Score
-  const topTargets = useMemo<ScoredArtist[]>(() => {
-    if (!release) return [];
-    return calculateTopTargets(release, artists);
+  // RP-020: Pipeline unica — calcola targets e funnel in una sola chiamata
+  const targetingResult = useMemo(() => {
+    if (!release) return null;
+    return calculateTargets(release, artists);
   }, [release, artists]);
+
+  const topTargets = targetingResult?.targets || [];
+  const funnel = targetingResult?.funnel || null;
 
   const summary = useMemo(() => summarizeByPriority(topTargets), [topTargets]);
   const confidenceSummary = useMemo(() => summarizeByConfidence(topTargets), [topTargets]);
-
-  // RP-017: Funnel di targeting a 5 step
-  const funnel = useMemo(() => {
-    if (!release) return null;
-    return calculateFunnel(release, artists);
-  }, [release, artists]);
 
   // Demo appartenenti alla release (per mostrare le tracce)
   const releaseDemos = useMemo(() => {
@@ -165,7 +161,7 @@ export function ReleaseDetail({ releaseId, onBack }: ReleaseDetailProps) {
             </h2>
           </div>
 
-          {/* RP-017: Funnel di targeting a 5 step */}
+          {/* RP-020: Funnel di targeting — pipeline unica */}
           {funnel && (
             <div className="space-y-2 mb-5">
               <FunnelStep
@@ -187,9 +183,15 @@ export function ReleaseDetail({ releaseId, onBack }: ReleaseDetailProps) {
               />
               <FunnelArrow />
               <FunnelStep
-                label={locale === "it" ? "Compatibili (label)" : "Compatible (label)"}
-                value={funnel.labelCompatible}
+                label={locale === "it" ? "Score superato" : "Score passed"}
+                value={funnel.passedScore}
                 color="text-amber-400"
+              />
+              <FunnelArrow />
+              <FunnelStep
+                label={locale === "it" ? "Confidence superata" : "Confidence passed"}
+                value={funnel.passedConfidence}
+                color="text-purple-400"
               />
               <FunnelArrow />
               <FunnelStep

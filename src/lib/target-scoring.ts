@@ -1,39 +1,26 @@
 /**
- * 🔒 Musical Interest Engine — MVP per Close Your Eyes
+ * 🔒 RP-020 — Buyer Engine (pipeline unica)
  *
- * Domanda: "Quanto è probabile che questo DJ sia interessato
- * musicisticamente a questa release?"
+ * Architettura a pipeline singola: il funnel visualizzato e la lista
+ * finale dei target sono prodotti dalla STESSA sequenza di filtri.
  *
- * Solo dati oggettivi già presenti in DB (Artist, Release, Demo).
- * Niente ipotesi comportamentali, niente reachability, niente
- * saturazione top-tier. Pura affinità musicale.
+ * Pipeline:
+ *   0. Tutti gli artisti nel DB locale
+ *   1. Filtro per genere Beatport (match esatto o parziale)
+ *   2. Filtro per attività recente (ultimi 90 giorni, o lastSeenAt null = passa)
+ *   3. Calcolo Musical Interest Score (con label come fattore di score, NON filtro)
+ *   4. Filtro score ≥ soglia minima
+ *   5. Filtro confidence ≥ soglia minima
+ *   6. Sort per score desc, confidence desc
+ *   7. Top 50
  *
- * MVP subset — fattori implementabili subito:
- *   F1  Genere identico              +20
- *   F2  Genere correlato             +10
- *   F3  Profondità nel genere        +8/+15/+25
- *   F7  Attività recente (≤30gg)     +20
- *   F8  Attività mediamente recente  +10
- *   F9  Trending nel genere          +25
- *   F10 Punti recenti nel genere     +8/+15
- *   F11 Stessa scena label (3+)      +12
- *   N1  Inattività prolungata        -20
- *   N2  Solo remixer                 -8
+ * Le label NON escludono artisti. Contribuiscono al punteggio come
+ * segnale aggiuntivo di radicamento nella scena.
  *
- * Disattivati nell'MVP (richiedono dati non sempre disponibili):
- *   F4  Label match (richiede release.label esplicito)
- *   F5  BPM match (richiede demo analizzati)
- *   F6  Key match (richiede demo analizzati)
- *   F12 Collaborazione passata (richiede ArtistTrack.artists)
- *
- * Range teorico: -28 a +135
- * Soglia inclusione: ≥ 10
- * Bucket:
- *   ≥100  🔥 Altissimo
- *   60-99 🟢 Alto
- *   25-59 🟡 Medio
- *   10-24 ⚪ Basso
- *   <10   escluso
+ * Le motivazioni sono leggibili (non tecniche):
+ *   "Molto attivo negli ultimi 30 giorni nel genere Techno Peak Time / Driving."
+ *   "Pubblica regolarmente su label di riferimento della scena."
+ *   "Presenza costante nelle classifiche Beatport."
  */
 
 import type { Artist, Release } from "./store";
@@ -47,11 +34,10 @@ export interface ScoredArtist {
   artist: Artist;
   score: number;
   rules: RuleHit[];
-  motivation: string;
-  priority: InterestBucket; // alias legacy per compat UI
-  interestBucket: InterestBucket; // naming nuovo
-  reasons: string[];
-  // RP-002: Confidence (affidabilità dati) — resta invariata
+  motivation: string;       // stringa leggibile concatenata (legacy)
+  priority: InterestBucket;
+  interestBucket: InterestBucket;
+  reasons: string[];        // motivazioni leggibili positive
   confidence: number;
   confidenceLabel: ConfidenceLabel;
   confidenceFactors: string[];
@@ -59,7 +45,7 @@ export interface ScoredArtist {
 
 interface RuleHit {
   id: string;
-  label: string;
+  label: string;            // motivazione leggibile
 }
 
 interface InterestRule {
@@ -68,6 +54,21 @@ interface InterestRule {
   weight: number;
   enabled: boolean;
   evaluate: (release: Release, artist: Artist) => RuleHit | null;
+}
+
+// ==================== FUNNEL RESULT ====================
+
+export interface TargetingResult {
+  funnel: {
+    totalArtists: number;
+    sameGenre: number;
+    recentlyActive: number;
+    scored: number;
+    passedScore: number;
+    passedConfidence: number;
+    recommended: number;
+  };
+  targets: ScoredArtist[];
 }
 
 // ==================== HELPERS ====================
@@ -109,6 +110,20 @@ function hasPartialGenreMatch(release: Release, artist: Artist): boolean {
   });
 }
 
+// Case-insensitive lookup per tracksByGenre / trendingRankByGenre / trendingPointsByGenre
+function lookupGenreKey<T>(map: Record<string, T> | undefined, genre: string): T | undefined {
+  if (!map) return undefined;
+  // Try exact key first
+  const exact = map[genre];
+  if (exact !== undefined) return exact;
+  // Try case-insensitive
+  const lower = genre.toLowerCase();
+  for (const key of Object.keys(map)) {
+    if (key.toLowerCase() === lower) return map[key];
+  }
+  return undefined;
+}
+
 // ==================== MUSICAL INTEREST RULES ====================
 
 const MUSICAL_INTEREST_RULES: InterestRule[] = [
@@ -122,7 +137,11 @@ const MUSICAL_INTEREST_RULES: InterestRule[] = [
       const rg = normalizeGenre(release.genre);
       if (!rg) return null;
       const hit = artist.genres.some((g) => normalizeGenre(g) === rg);
-      return hit ? { id: "exact_genre_match", label: "stesso genere" } : null;
+      if (!hit) return null;
+      return {
+        id: "exact_genre_match",
+        label: `Stesso genere della release (${release.genre.trim()}).`,
+      };
     },
   },
 
@@ -135,11 +154,17 @@ const MUSICAL_INTEREST_RULES: InterestRule[] = [
     evaluate: (release, artist) => {
       const rg = normalizeGenre(release.genre);
       if (!rg) return null;
-      // Se c'è match esatto, F1 ha già coperto.
       const exact = artist.genres.some((g) => normalizeGenre(g) === rg);
       if (exact) return null;
       if (hasPartialGenreMatch(release, artist)) {
-        return { id: "partial_genre_match", label: "genere correlato" };
+        const artistGenre = artist.genres.find((ag) => {
+          const agKw = genreKeywords(ag);
+          return genreKeywords(release.genre).some((k) => agKw.includes(k));
+        });
+        return {
+          id: "partial_genre_match",
+          label: `Genere correlato (${artistGenre || "scena affine"}).`,
+        };
       }
       return null;
     },
@@ -154,10 +179,13 @@ const MUSICAL_INTEREST_RULES: InterestRule[] = [
     evaluate: (release, artist) => {
       const rg = release.genre?.trim();
       if (!rg) return null;
-      const tracks = artist.tracksByGenre?.[rg];
+      const tracks = lookupGenreKey(artist.tracksByGenre, rg);
       const count = Array.isArray(tracks) ? tracks.length : 0;
       if (count >= 10) {
-        return { id: "genre_depth_high", label: `molto attivo nel genere (${count} tracce)` };
+        return {
+          id: "genre_depth_high",
+          label: `Molto attivo nel genere con ${count} tracce pubblicate.`,
+        };
       }
       return null;
     },
@@ -170,10 +198,13 @@ const MUSICAL_INTEREST_RULES: InterestRule[] = [
     evaluate: (release, artist) => {
       const rg = release.genre?.trim();
       if (!rg) return null;
-      const tracks = artist.tracksByGenre?.[rg];
+      const tracks = lookupGenreKey(artist.tracksByGenre, rg);
       const count = Array.isArray(tracks) ? tracks.length : 0;
       if (count >= 5 && count <= 9) {
-        return { id: "genre_depth_medium", label: `attivo nel genere (${count} tracce)` };
+        return {
+          id: "genre_depth_medium",
+          label: `Attivo nel genere con ${count} tracce pubblicate.`,
+        };
       }
       return null;
     },
@@ -186,10 +217,13 @@ const MUSICAL_INTEREST_RULES: InterestRule[] = [
     evaluate: (release, artist) => {
       const rg = release.genre?.trim();
       if (!rg) return null;
-      const tracks = artist.tracksByGenre?.[rg];
+      const tracks = lookupGenreKey(artist.tracksByGenre, rg);
       const count = Array.isArray(tracks) ? tracks.length : 0;
       if (count >= 2 && count <= 4) {
-        return { id: "genre_depth_low", label: `presente nel genere (${count} tracce)` };
+        return {
+          id: "genre_depth_low",
+          label: `Presente nel genere con ${count} tracce.`,
+        };
       }
       return null;
     },
@@ -205,17 +239,20 @@ const MUSICAL_INTEREST_RULES: InterestRule[] = [
       const d = daysSince(artist.lastSeenAt);
       if (d === null) return null;
       if (d > 30) return null;
-      // Solo se c'è match di genere
       if (!hasGenreMatch(release, artist) && !hasPartialGenreMatch(release, artist)) {
         return null;
       }
       const days = Math.floor(d);
+      const genreName = release.genre?.trim() || "";
       if (days === 0) {
-        return { id: "recent_activity_in_genre", label: "in classifica oggi" };
+        return {
+          id: "recent_activity_in_genre",
+          label: `In classifica oggi nel genere ${genreName}.`,
+        };
       }
       return {
         id: "recent_activity_in_genre",
-        label: `in classifica ${days} giorn${days === 1 ? "o" : "i"} fa`,
+        label: `Molto attivo negli ultimi ${days} giorn${days === 1 ? "o" : "i"} nel genere ${genreName}.`,
       };
     },
   },
@@ -236,7 +273,7 @@ const MUSICAL_INTEREST_RULES: InterestRule[] = [
       const days = Math.floor(d);
       return {
         id: "medium_recent_activity_in_genre",
-        label: `in classifica ${days} giorni fa`,
+        label: `Attivo negli ultimi ${days} giorni nel genere ${release.genre?.trim() || ""}.`,
       };
     },
   },
@@ -251,11 +288,11 @@ const MUSICAL_INTEREST_RULES: InterestRule[] = [
       if (!artist.trending) return null;
       const rg = release.genre?.trim();
       if (!rg) return null;
-      const rank = artist.trendingRankByGenre?.[rg];
+      const rank = lookupGenreKey(artist.trendingRankByGenre, rg);
       if (rank === undefined || rank === null) return null;
       return {
         id: "trending_in_genre",
-        label: `trending nel genere (rank #${rank})`,
+        label: `Trending nel genere ${rg} (rank #${rank}).`,
       };
     },
   },
@@ -269,9 +306,12 @@ const MUSICAL_INTEREST_RULES: InterestRule[] = [
     evaluate: (release, artist) => {
       const rg = release.genre?.trim();
       if (!rg) return null;
-      const pts = artist.trendingPointsByGenre?.[rg] || 0;
+      const pts = lookupGenreKey(artist.trendingPointsByGenre, rg) || 0;
       if (pts >= 500) {
-        return { id: "recent_genre_points_high", label: `${pts} punti recenti nel genere` };
+        return {
+          id: "recent_genre_points_high",
+          label: `Presenza costante nelle classifiche Beatport (${pts} punti recenti nel genere).`,
+        };
       }
       return null;
     },
@@ -284,27 +324,36 @@ const MUSICAL_INTEREST_RULES: InterestRule[] = [
     evaluate: (release, artist) => {
       const rg = release.genre?.trim();
       if (!rg) return null;
-      const pts = artist.trendingPointsByGenre?.[rg] || 0;
+      const pts = lookupGenreKey(artist.trendingPointsByGenre, rg) || 0;
       if (pts >= 100 && pts < 500) {
-        return { id: "recent_genre_points_medium", label: `${pts} punti recenti nel genere` };
+        return {
+          id: "recent_genre_points_medium",
+          label: `${pts} punti recenti nelle classifiche del genere.`,
+        };
       }
       return null;
     },
   },
 
-  // ---------- F11: STESSA SCENA LABEL ----------
+  // ---------- F11: RADICAMENTO LABEL (fattore di score, NON filtro) ----------
   {
     id: "label_scene_rooted",
-    name: "Radicato in una scena label (3+)",
+    name: "Radicato in una scena label",
     weight: 12,
     enabled: true,
     evaluate: (_release, artist) => {
       const count = artist.labelsPublishedOn?.length || 0;
       if (count >= 5) {
-        return { id: "label_scene_rooted", label: `radicato su ${count} label` };
+        return {
+          id: "label_scene_rooted",
+          label: `Pubblica regolarmente su ${count} label di riferimento della scena.`,
+        };
       }
       if (count >= 3) {
-        return { id: "label_scene_rooted", label: `presente su ${count} label` };
+        return {
+          id: "label_scene_rooted",
+          label: `Presente su ${count} label della scena.`,
+        };
       }
       return null;
     },
@@ -320,7 +369,7 @@ const MUSICAL_INTEREST_RULES: InterestRule[] = [
       const d = daysSince(artist.lastSeenAt);
       if (d === null) return null;
       if (d > 365) {
-        return { id: "inactive_over_year", label: "inattivo da oltre 1 anno" };
+        return { id: "inactive_over_year", label: "Inattivo da oltre 1 anno." };
       }
       return null;
     },
@@ -334,7 +383,7 @@ const MUSICAL_INTEREST_RULES: InterestRule[] = [
     enabled: true,
     evaluate: (_release, artist) => {
       if (!artist.isRemixerOnly) return null;
-      return { id: "remixer_only_penalty", label: "solo remixer" };
+      return { id: "remixer_only_penalty", label: "Solo remixer, non produce release proprie." };
     },
   },
 ];
@@ -342,16 +391,17 @@ const MUSICAL_INTEREST_RULES: InterestRule[] = [
 // ==================== SOGLIE ====================
 
 const INTEREST_THRESHOLDS = {
-  max: 100,    // 🔥 Altissimo
-  high: 60,    // 🟢 Alto
-  medium: 25,  // 🟡 Medio
-  low: 10,     // ⚪ Basso (sotto 10 → escluso)
+  max: 100,
+  high: 60,
+  medium: 25,
+  low: 10,
 } as const;
 
-const MIN_SCORE_TO_INCLUDE = INTEREST_THRESHOLDS.low; // 10
+const MIN_SCORE_TO_INCLUDE = INTEREST_THRESHOLDS.low;
+const DEFAULT_MIN_CONFIDENCE = 30;
 const DEFAULT_LIMIT = 50;
 
-// ==================== CONFIDENCE RULES (RP-002, invariate) ====================
+// ==================== CONFIDENCE RULES ====================
 
 interface ConfidenceRule {
   id: string;
@@ -519,13 +569,8 @@ const CONFIDENCE_THRESHOLDS = {
   media: 40,
 } as const;
 
-const DEFAULT_MIN_CONFIDENCE = 30;
+// ==================== SCORING ====================
 
-// ==================== CORE FUNCTIONS ====================
-
-/**
- * Calcola il Musical Interest Score di un artista rispetto a una release.
- */
 export function scoreArtistForRelease(
   release: Release,
   artist: Artist
@@ -542,7 +587,6 @@ export function scoreArtistForRelease(
     }
   }
 
-  // Separa positive da negative
   const positiveHits = hits.filter((h) => {
     const rule = MUSICAL_INTEREST_RULES.find((r) => r.id === h.id);
     return rule ? rule.weight > 0 : true;
@@ -555,9 +599,7 @@ export function scoreArtistForRelease(
 
   const reasons = positiveHits.map((h) => h.label);
 
-  // Confidence
   const { confidence, factors } = calculateConfidence(release, artist);
-
   const bucket = bucketForScore(score);
 
   return {
@@ -565,7 +607,7 @@ export function scoreArtistForRelease(
     score,
     rules: hits,
     motivation,
-    priority: bucket, // alias legacy
+    priority: bucket,
     interestBucket: bucket,
     reasons,
     confidence,
@@ -592,12 +634,8 @@ function calculateConfidence(
     }
   }
 
-  if (maxTheoretical === 0) {
-    return { confidence: 0, factors };
-  }
-
-  const confidence = Math.round((raw / maxTheoretical) * 100);
-  return { confidence: Math.min(100, confidence), factors };
+  if (maxTheoretical === 0) return { confidence: 0, factors };
+  return { confidence: Math.min(100, Math.round((raw / maxTheoretical) * 100)), factors };
 }
 
 function bucketForScore(score: number): InterestBucket {
@@ -613,54 +651,38 @@ function bucketForConfidence(confidence: number): ConfidenceLabel {
   return "bassa";
 }
 
+// ==================== PIPELINE UNICA ====================
+
 /**
- * Calcola la lista ordinata di target per una release.
- * Filtra per score minimo e confidence minima.
+ * RP-020 — Pipeline unica autorevole.
+ *
+ * Questa è l'UNICA funzione che calcola i target per una release.
+ * Il funnel visualizzato e la lista target sono prodotti dalla
+ * STESSA sequenza di filtri.
+ *
+ * Pipeline:
+ *   0. Tutti gli artisti
+ *   1. Filtro genere Beatport (match esatto o parziale)
+ *   2. Filtro attività recente (≤90gg, oppure lastSeenAt null = passa)
+ *   3. Calcolo score per ogni artista
+ *   4. Filtro score ≥ MIN_SCORE_TO_INCLUDE (10)
+ *   5. Filtro confidence ≥ DEFAULT_MIN_CONFIDENCE (30)
+ *   6. Sort per score desc, poi confidence desc
+ *   7. Top 50
+ *
+ * Le label NON sono un filtro di esclusione. Contribuiscono al
+ * punteggio tramite la regola F11 (label_scene_rooted, +12).
  */
-export function calculateTopTargets(
+export function calculateTargets(
   release: Release,
   artists: Artist[],
   options?: { minScore?: number; minConfidence?: number; limit?: number }
-): ScoredArtist[] {
+): TargetingResult {
   const minScore = options?.minScore ?? MIN_SCORE_TO_INCLUDE;
   const minConfidence = options?.minConfidence ?? DEFAULT_MIN_CONFIDENCE;
   const limit = options?.limit ?? DEFAULT_LIMIT;
 
-  return artists
-    .map((a) => scoreArtistForRelease(release, a))
-    .filter((s) => s.score >= minScore && s.confidence >= minConfidence)
-    .sort((a, b) => {
-      if (b.score !== a.score) return b.score - a.score;
-      return b.confidence - a.confidence;
-    })
-    .slice(0, limit);
-}
-
-// ==================== FUNNEL (RP-017) ====================
-
-export interface TargetingFunnel {
-  totalArtists: number;       // Step 0: tutti gli artisti nel DB
-  sameGenre: number;          // Step 1: filtro per genere Beatport
-  recentlyActive: number;     // Step 2: filtro per attività recente (90gg)
-  labelCompatible: number;    // Step 3: filtro per affinità label
-  scored: number;             // Step 4: calcolo score (superano minimo)
-  recommended: number;        // Step 5: migliori target (top 50)
-}
-
-/**
- * RP-017 — Calcola il funnel di targeting a 5 step.
- *
- * Pipeline:
- *   1. Filtro per genere Beatport (match esatto o parziale)
- *   2. Filtro per attività recente (ultimi 90 giorni)
- *   3. Filtro per affinità label (3+ label note)
- *   4. Calcolo score (Musical Interest Score ≥ 10)
- *   5. Restituisce soltanto i migliori 50 target
- */
-export function calculateFunnel(
-  release: Release,
-  artists: Artist[]
-): TargetingFunnel {
+  // Step 0: tutti gli artisti
   const totalArtists = artists.length;
 
   // Step 1: filtro per genere Beatport
@@ -669,172 +691,46 @@ export function calculateFunnel(
   );
   const sameGenre = genreFiltered.length;
 
-  // Step 2: filtro per attività recente (ultimi 90 giorni)
+  // Step 2: filtro per attività recente (≤90gg)
+  // Artisti con lastSeenAt null PASSANO (non vengono esclusi per dati mancanti)
   const activeFiltered = genreFiltered.filter((a) => {
     const d = daysSince(a.lastSeenAt);
-    return d !== null && d <= 90;
+    // Se lastSeenAt è null/undefined, passa (non penalizzare per dati mancanti)
+    if (d === null) return true;
+    return d <= 90;
   });
   const recentlyActive = activeFiltered.length;
 
-  // Step 3: filtro per affinità label (3+ label note)
-  const labelFiltered = activeFiltered.filter((a) =>
-    (a.labelsPublishedOn?.length || 0) >= 1
-  );
-  const labelCompatible = labelFiltered.length;
+  // Step 3: calcolo score per ogni artista sopravvissuto
+  const scored = activeFiltered.map((a) => scoreArtistForRelease(release, a));
 
-  // Step 4: calcolo score
-  const scored = labelFiltered
-    .map((a) => scoreArtistForRelease(release, a))
-    .filter((s) => s.score >= MIN_SCORE_TO_INCLUDE);
+  // Step 4: filtro score ≥ minimo
+  const passedScore = scored.filter((s) => s.score >= minScore);
 
-  // Step 5: migliori target (top 50, ordinati per score)
-  const recommended = Math.min(scored.length, DEFAULT_LIMIT);
+  // Step 5: filtro confidence ≥ minimo
+  const passedConfidence = passedScore.filter((s) => s.confidence >= minConfidence);
+
+  // Step 6: sort per score desc, poi confidence desc
+  const sorted = passedConfidence.sort((a, b) => {
+    if (b.score !== a.score) return b.score - a.score;
+    return b.confidence - a.confidence;
+  });
+
+  // Step 7: top 50
+  const targets = sorted.slice(0, limit);
 
   return {
-    totalArtists,
-    sameGenre,
-    recentlyActive,
-    labelCompatible,
-    scored: scored.length,
-    recommended,
+    funnel: {
+      totalArtists,
+      sameGenre,
+      recentlyActive,
+      scored: scored.length,
+      passedScore: passedScore.length,
+      passedConfidence: passedConfidence.length,
+      recommended: targets.length,
+    },
+    targets,
   };
-}
-
-// ==================== GENRE NORMALIZATION (RP-019) ====================
-
-/**
- * Mappa delle varianti di genere estratte da fonti esterne (PromoLink, ecc.)
- * ai valori ufficiali della lista Beatport in labels-data.json.
- *
- * Le chiavi sono lowercase + trim per matching case-insensitive.
- */
-const GENRE_NORMALIZATION_MAP: Record<string, string> = {
-  // Techno variants
-  "techno (peak time / driving)": "Techno Peak Time / Driving",
-  "techno (peak time)": "Techno Peak Time / Driving",
-  "techno peak time": "Techno Peak Time / Driving",
-  "techno peak time / driving": "Techno Peak Time / Driving",
-  "techno (raw / deep / hypnotic)": "Techno Raw / Deep / Hypnotic",
-  "techno (raw/deep/hypnotic)": "Techno Raw / Deep / Hypnotic",
-  "techno raw / deep / hypnotic": "Techno Raw / Deep / Hypnotic",
-  "techno raw/deep/hypnotic": "Techno Raw / Deep / Hypnotic",
-  "hard techno": "Hard Techno",
-
-  // House variants
-  "melodic house & techno": "Melodic House & Techno",
-  "melodic house and techno": "Melodic House & Techno",
-  "melodic house": "Melodic House & Techno",
-  "tech house": "Tech House",
-  "deep house": "Deep House",
-  "funky house": "Funky House",
-  "jackin house": "Jackin House",
-  "progressive house": "Progressive House",
-  "organic house": "Organic House",
-  "afro house": "Afro House",
-
-  // Minimal
-  "minimal / deep tech": "Minimal / Deep Tech",
-  "minimal/deep tech": "Minimal / Deep Tech",
-  "minimal / deep tech house": "Minimal / Deep Tech",
-
-  // Breaks / Bass
-  "breaks / breakbeat / uk bass": "Breaks / Breakbeat / Uk Bass",
-  "breaks/breakbeat/uk bass": "Breaks / Breakbeat / Uk Bass",
-  "bass / club": "Bass / Club",
-  "bass house": "Bass House",
-  "uk garage / bassline": "Uk Garage / Bassline",
-
-  // Other common
-  "drum & bass": "Drum & Bass",
-  "drum and bass": "Drum & Bass",
-  "indie dance": "Indie Dance",
-  "nu disco / disco": "Nu Disco / Disco",
-  "nu disco": "Nu Disco / Disco",
-  "psy-trance": "Psy-Trance",
-  "psy trance": "Psy-Trance",
-  "trance main floor": "Trance Main Floor",
-  "hard dance / hardcore / neo rave": "Hard Dance / Hardcore / Neo Rave",
-
-  // Electronica / Ambient
-  "electronica": "Electronica",
-  "ambient / experimental": "Ambient / Experimental",
-  "downtempo": "Downtempo",
-  "electro classic / detroit / modern": "Electro Classic / Detroit / Modern",
-
-  // Pop / Mainstage
-  "dance / pop": "Dance / Pop",
-  "mainstage": "Mainstage",
-
-  // Amapiano / Brazilian
-  "amapiano": "Amapiano",
-  "brazilian funk": "Brazilian Funk",
-
-  // Dubstep / DnB
-  "dubstep": "Dubstep",
-  "140 / deep dubstep / grime": "140 / Deep Dubstep / Grime",
-  "trap / future bass": "Trap / Future Bass",
-};
-
-/**
- * Normalizza un genere estratto da una fonte esterna nel valore ufficiale
- * della lista Beatport.
- *
- * Strategia:
- * 1. Se il genere è già nella lista Beatport, ritornalo invariato
- * 2. Se il genere lowercase+trim è nella mappa di normalizzazione, ritorna il valore mappato
- * 3. Se nessun match, ritorna null (l'utente deve selezionare manualmente)
- *
- * @param genre il genere estratto (es. "Techno (Peak Time / Driving)")
- * @param beatportGenres la lista ufficiale dei generi Beatport
- * @returns il genere normalizzato, o null se non riconoscibile
- */
-export function normalizeBeatportGenre(
-  genre: string | null | undefined,
-  beatportGenres: string[]
-): string | null {
-  if (!genre || !genre.trim()) return null;
-
-  const trimmed = genre.trim();
-
-  // 1. Match esatto (case-sensitive) con la lista Beatport
-  if (beatportGenres.includes(trimmed)) {
-    return trimmed;
-  }
-
-  // 2. Match esatto case-insensitive con la lista Beatport
-  const lowerTrimmed = trimmed.toLowerCase();
-  const caseInsensitiveMatch = beatportGenres.find(
-    (g) => g.toLowerCase() === lowerTrimmed
-  );
-  if (caseInsensitiveMatch) {
-    return caseInsensitiveMatch;
-  }
-
-  // 3. Lookup nella mappa di normalizzazione
-  const normalized = GENRE_NORMALIZATION_MAP[lowerTrimmed];
-  if (normalized && beatportGenres.includes(normalized)) {
-    return normalized;
-  }
-
-  // 4. Tentativo di match parziale: se il genere estratto contiene
-  // un genere della lista Beatport come sottostringa, usalo
-  // (es. "Techno (Peak Time / Driving)" contiene "Techno Peak Time / Driving"? No.
-  // Ma "Techno Peak Time" potrebbe matchare parzialmente)
-  for (const bg of beatportGenres) {
-    const bgLower = bg.toLowerCase();
-    // Rimuovi parentesi dal genere estratto e prova di nuovo
-    const genreNoParens = trimmed.replace(/[()]/g, "").trim();
-    if (genreNoParens.toLowerCase() === bgLower) {
-      return bg;
-    }
-    // Se il genere estratto (senza parentesi) contiene il genere Beatport
-    if (genreNoParens.toLowerCase().includes(bgLower) && bgLower.length > 5) {
-      return bg;
-    }
-  }
-
-  // 5. Nessun match
-  return null;
 }
 
 // ==================== UI HELPERS ====================
@@ -855,29 +751,16 @@ export const CONFIDENCE_LABELS: Record<ConfidenceLabel, { color: string; bgClass
 export function summarizeByPriority(
   targets: ScoredArtist[]
 ): Record<InterestBucket, number> {
-  const summary: Record<InterestBucket, number> = {
-    max: 0,
-    high: 0,
-    medium: 0,
-    low: 0,
-  };
-  for (const t of targets) {
-    summary[t.priority]++;
-  }
+  const summary: Record<InterestBucket, number> = { max: 0, high: 0, medium: 0, low: 0 };
+  for (const t of targets) summary[t.priority]++;
   return summary;
 }
 
 export function summarizeByConfidence(
   targets: ScoredArtist[]
 ): Record<ConfidenceLabel, number> {
-  const summary: Record<ConfidenceLabel, number> = {
-    alta: 0,
-    media: 0,
-    bassa: 0,
-  };
-  for (const t of targets) {
-    summary[t.confidenceLabel]++;
-  }
+  const summary: Record<ConfidenceLabel, number> = { alta: 0, media: 0, bassa: 0 };
+  for (const t of targets) summary[t.confidenceLabel]++;
   return summary;
 }
 
@@ -887,5 +770,80 @@ export function getArtistBeatportUrl(artist: Artist): string | null {
   if (artist.slug && artist.beatportId) {
     return `https://www.beatport.com/artist/${artist.slug}/${artist.beatportId}`;
   }
+  return null;
+}
+
+// ==================== GENRE NORMALIZATION (RP-019) ====================
+
+const GENRE_NORMALIZATION_MAP: Record<string, string> = {
+  "techno (peak time / driving)": "Techno Peak Time / Driving",
+  "techno (peak time)": "Techno Peak Time / Driving",
+  "techno peak time / driving": "Techno Peak Time / Driving",
+  "techno (raw / deep / hypnotic)": "Techno Raw / Deep / Hypnotic",
+  "techno (raw/deep/hypnotic)": "Techno Raw / Deep / Hypnotic",
+  "techno raw / deep / hypnotic": "Techno Raw / Deep / Hypnotic",
+  "techno raw/deep/hypnotic": "Techno Raw / Deep / Hypnotic",
+  "hard techno": "Hard Techno",
+  "melodic house & techno": "Melodic House & Techno",
+  "melodic house and techno": "Melodic House & Techno",
+  "melodic house": "Melodic House & Techno",
+  "tech house": "Tech House",
+  "deep house": "Deep House",
+  "funky house": "Funky House",
+  "jackin house": "Jackin House",
+  "progressive house": "Progressive House",
+  "organic house": "Organic House",
+  "afro house": "Afro House",
+  "minimal / deep tech": "Minimal / Deep Tech",
+  "minimal/deep tech": "Minimal / Deep Tech",
+  "breaks / breakbeat / uk bass": "Breaks / Breakbeat / Uk Bass",
+  "breaks/breakbeat/uk bass": "Breaks / Breakbeat / Uk Bass",
+  "bass / club": "Bass / Club",
+  "bass house": "Bass House",
+  "uk garage / bassline": "Uk Garage / Bassline",
+  "drum & bass": "Drum & Bass",
+  "drum and bass": "Drum & Bass",
+  "indie dance": "Indie Dance",
+  "nu disco / disco": "Nu Disco / Disco",
+  "nu disco": "Nu Disco / Disco",
+  "psy-trance": "Psy-Trance",
+  "psy trance": "Psy-Trance",
+  "trance main floor": "Trance Main Floor",
+  "hard dance / hardcore / neo rave": "Hard Dance / Hardcore / Neo Rave",
+  "electronica": "Electronica",
+  "ambient / experimental": "Ambient / Experimental",
+  "downtempo": "Downtempo",
+  "electro classic / detroit / modern": "Electro Classic / Detroit / Modern",
+  "dance / pop": "Dance / Pop",
+  "mainstage": "Mainstage",
+  "amapiano": "Amapiano",
+  "brazilian funk": "Brazilian Funk",
+  "dubstep": "Dubstep",
+  "140 / deep dubstep / grime": "140 / Deep Dubstep / Grime",
+  "trap / future bass": "Trap / Future Bass",
+};
+
+export function normalizeBeatportGenre(
+  genre: string | null | undefined,
+  beatportGenres: string[]
+): string | null {
+  if (!genre || !genre.trim()) return null;
+  const trimmed = genre.trim();
+
+  if (beatportGenres.includes(trimmed)) return trimmed;
+
+  const lowerTrimmed = trimmed.toLowerCase();
+  const ciMatch = beatportGenres.find((g) => g.toLowerCase() === lowerTrimmed);
+  if (ciMatch) return ciMatch;
+
+  const normalized = GENRE_NORMALIZATION_MAP[lowerTrimmed];
+  if (normalized && beatportGenres.includes(normalized)) return normalized;
+
+  const genreNoParens = trimmed.replace(/[()]/g, "").trim();
+  for (const bg of beatportGenres) {
+    if (genreNoParens.toLowerCase() === bg.toLowerCase()) return bg;
+    if (genreNoParens.toLowerCase().includes(bg.toLowerCase()) && bg.toLowerCase().length > 5) return bg;
+  }
+
   return null;
 }
