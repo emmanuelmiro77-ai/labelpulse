@@ -700,6 +700,143 @@ export function calculateFunnel(
   };
 }
 
+// ==================== GENRE NORMALIZATION (RP-019) ====================
+
+/**
+ * Mappa delle varianti di genere estratte da fonti esterne (PromoLink, ecc.)
+ * ai valori ufficiali della lista Beatport in labels-data.json.
+ *
+ * Le chiavi sono lowercase + trim per matching case-insensitive.
+ */
+const GENRE_NORMALIZATION_MAP: Record<string, string> = {
+  // Techno variants
+  "techno (peak time / driving)": "Techno Peak Time / Driving",
+  "techno (peak time)": "Techno Peak Time / Driving",
+  "techno peak time": "Techno Peak Time / Driving",
+  "techno peak time / driving": "Techno Peak Time / Driving",
+  "techno (raw / deep / hypnotic)": "Techno Raw / Deep / Hypnotic",
+  "techno (raw/deep/hypnotic)": "Techno Raw / Deep / Hypnotic",
+  "techno raw / deep / hypnotic": "Techno Raw / Deep / Hypnotic",
+  "techno raw/deep/hypnotic": "Techno Raw / Deep / Hypnotic",
+  "hard techno": "Hard Techno",
+
+  // House variants
+  "melodic house & techno": "Melodic House & Techno",
+  "melodic house and techno": "Melodic House & Techno",
+  "melodic house": "Melodic House & Techno",
+  "tech house": "Tech House",
+  "deep house": "Deep House",
+  "funky house": "Funky House",
+  "jackin house": "Jackin House",
+  "progressive house": "Progressive House",
+  "organic house": "Organic House",
+  "afro house": "Afro House",
+
+  // Minimal
+  "minimal / deep tech": "Minimal / Deep Tech",
+  "minimal/deep tech": "Minimal / Deep Tech",
+  "minimal / deep tech house": "Minimal / Deep Tech",
+
+  // Breaks / Bass
+  "breaks / breakbeat / uk bass": "Breaks / Breakbeat / Uk Bass",
+  "breaks/breakbeat/uk bass": "Breaks / Breakbeat / Uk Bass",
+  "bass / club": "Bass / Club",
+  "bass house": "Bass House",
+  "uk garage / bassline": "Uk Garage / Bassline",
+
+  // Other common
+  "drum & bass": "Drum & Bass",
+  "drum and bass": "Drum & Bass",
+  "indie dance": "Indie Dance",
+  "nu disco / disco": "Nu Disco / Disco",
+  "nu disco": "Nu Disco / Disco",
+  "psy-trance": "Psy-Trance",
+  "psy trance": "Psy-Trance",
+  "trance main floor": "Trance Main Floor",
+  "hard dance / hardcore / neo rave": "Hard Dance / Hardcore / Neo Rave",
+
+  // Electronica / Ambient
+  "electronica": "Electronica",
+  "ambient / experimental": "Ambient / Experimental",
+  "downtempo": "Downtempo",
+  "electro classic / detroit / modern": "Electro Classic / Detroit / Modern",
+
+  // Pop / Mainstage
+  "dance / pop": "Dance / Pop",
+  "mainstage": "Mainstage",
+
+  // Amapiano / Brazilian
+  "amapiano": "Amapiano",
+  "brazilian funk": "Brazilian Funk",
+
+  // Dubstep / DnB
+  "dubstep": "Dubstep",
+  "140 / deep dubstep / grime": "140 / Deep Dubstep / Grime",
+  "trap / future bass": "Trap / Future Bass",
+};
+
+/**
+ * Normalizza un genere estratto da una fonte esterna nel valore ufficiale
+ * della lista Beatport.
+ *
+ * Strategia:
+ * 1. Se il genere è già nella lista Beatport, ritornalo invariato
+ * 2. Se il genere lowercase+trim è nella mappa di normalizzazione, ritorna il valore mappato
+ * 3. Se nessun match, ritorna null (l'utente deve selezionare manualmente)
+ *
+ * @param genre il genere estratto (es. "Techno (Peak Time / Driving)")
+ * @param beatportGenres la lista ufficiale dei generi Beatport
+ * @returns il genere normalizzato, o null se non riconoscibile
+ */
+export function normalizeBeatportGenre(
+  genre: string | null | undefined,
+  beatportGenres: string[]
+): string | null {
+  if (!genre || !genre.trim()) return null;
+
+  const trimmed = genre.trim();
+
+  // 1. Match esatto (case-sensitive) con la lista Beatport
+  if (beatportGenres.includes(trimmed)) {
+    return trimmed;
+  }
+
+  // 2. Match esatto case-insensitive con la lista Beatport
+  const lowerTrimmed = trimmed.toLowerCase();
+  const caseInsensitiveMatch = beatportGenres.find(
+    (g) => g.toLowerCase() === lowerTrimmed
+  );
+  if (caseInsensitiveMatch) {
+    return caseInsensitiveMatch;
+  }
+
+  // 3. Lookup nella mappa di normalizzazione
+  const normalized = GENRE_NORMALIZATION_MAP[lowerTrimmed];
+  if (normalized && beatportGenres.includes(normalized)) {
+    return normalized;
+  }
+
+  // 4. Tentativo di match parziale: se il genere estratto contiene
+  // un genere della lista Beatport come sottostringa, usalo
+  // (es. "Techno (Peak Time / Driving)" contiene "Techno Peak Time / Driving"? No.
+  // Ma "Techno Peak Time" potrebbe matchare parzialmente)
+  for (const bg of beatportGenres) {
+    const bgLower = bg.toLowerCase();
+    // Rimuovi parentesi dal genere estratto e prova di nuovo
+    const genreNoParens = trimmed.replace(/[()]/g, "").trim();
+    if (genreNoParens.toLowerCase() === bgLower) {
+      return bg;
+    }
+    // Se il genere estratto (senza parentesi) contiene il genere Beatport
+    if (genreNoParens.toLowerCase().includes(bgLower) && bgLower.length > 5) {
+      return bg;
+    }
+  }
+
+  // 5. Nessun match
+  return null;
+}
+
 // ==================== UI HELPERS ====================
 
 export const PRIORITY_LABELS: Record<InterestBucket, { icon: string; label: string; color: string }> = {

@@ -36,6 +36,7 @@ import {
   AlertCircle,
   CheckCircle2,
 } from "lucide-react";
+import { normalizeBeatportGenre } from "@/lib/target-scoring";
 
 // ==================== TYPES ====================
 
@@ -128,11 +129,16 @@ export function TrackImporter() {
       // Track detected source for display
       setDetectedSource(data.source || "Sconosciuta");
 
+      // RP-019: normalizza il genere estratto nel valore ufficiale Beatport
+      // (es. "Techno (Peak Time / Driving)" → "Techno Peak Time / Driving")
+      const genres = useAppStore.getState().getGenres() || [];
+      const normalizedGenre = normalizeBeatportGenre(meta.genre, genres);
+
       // Populate review fields with extracted data
       setReviewData({
         title: meta.title || "",
         artists: meta.artists.join(", "),
-        genre: meta.genre || "",
+        genre: normalizedGenre || "",
         label: meta.label || "",
         beatportUrl: meta.beatportUrl || "",
         promoLinkUrl: trimmed.includes("promolink.app") ? trimmed : (meta.soundcloudUrl || ""),
