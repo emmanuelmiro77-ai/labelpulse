@@ -1,21 +1,34 @@
 /**
- * 🔒 RP-001 — Target Finder Scoring Engine
+ * 🔒 RP-001 + RP-002 — Target Finder Scoring & Confidence Engine
  *
- * Motore a regole configurabili per calcolare la compatibilità
- * tra una release e ogni artista del database locale.
+ * Due metriche complementari per ogni artista:
  *
- * Obiettivo business: aiutare il Producer a decidere chi contattare OGGI.
- * Lo score numerico è interno. La UI mostra bucket di priorità
- * (🔥 Massima / 🟢 Alta / 🟡 Media / ⚪ Bassa) + motivazione leggibile.
+ *   SCORE (RP-001) — compatibilità con la release.
+ *     Misura QUANTO l'artista è adatto alla release.
+ *     Basato su: genere match, recenza, trending, presenza, best position.
+ *     Output: bucket priorità (🔥 Massima / 🟢 Alta / 🟡 Media / ⚪ Bassa).
+ *
+ *   CONFIDENCE (RP-002) — affidabilità della selezione.
+ *     Misura QUANTO possiamo fidarci del punteggio assegnato.
+ *     Basato su: attività recente, presenza costante, coerenza genere,
+ *     vicinanza label, qualità dei dati disponibili.
+ *     Output: percentuale 0-100% + label (Alta / Media / Bassa).
+ *
+ * Perché due metriche separate:
+ *   - Score alto + Confidence alta → target solido, contattare.
+ *   - Score alto + Confidence bassa → match interessante ma dati deboli,
+ *     da verificare manualmente prima di contattare.
+ *   - Score basso + Confidence alta → non adatto ma sappiamo perché.
+ *   - Score basso + Confidence bassa → scartare.
+ *
+ * La Confidence filtra la lista: artisti con confidence troppo bassa
+ * vengono esclusi anche se score alto, riducendo il rumore.
  *
  * Design:
- *   - Le regole sono dichiarate in un array SCORING_RULES.
- *   - Ogni regola ha: id, name, weight, enabled, evaluate(release, artist) → boolean.
- *   - Il motore itera le regole abilitate, somma i pesi di quelle attive.
- *   - Le motivazioni sono generate dinamicamente dalle regole attivate.
- *   - La recenza ha peso dominante (un artista attivo oggi vale più di uno storico).
- *
- * Nessuna dipendenza da React o Zustand. Funzione pura, testabile.
+ *   - SCORING_RULES: motore per la compatibilità (RP-001).
+ *   - CONFIDENCE_RULES: motore separato per l'affidabilità (RP-002).
+ *   - Entrambi configurabili, pesi non hardcoded nei flag.
+ *   - Nessuna dipendenza da React o Zustand. Funzioni pure, testabili.
  */
 
 import type { Artist, Release } from "./store";
@@ -23,13 +36,19 @@ import type { Artist, Release } from "./store";
 // ==================== TYPES ====================
 
 export type PriorityBucket = "max" | "high" | "medium" | "low";
+export type ConfidenceLabel = "alta" | "media" | "bassa";
 
 export interface ScoredArtist {
   artist: Artist;
+  // RP-001: Score di compatibilità (interno, non in UI)
   score: number;
-  rules: RuleHit[]; // regole attivate, con label leggibile
-  motivation: string; // stringa leggibile concatenata
+  rules: RuleHit[]; // regole di scoring attivate
+  motivation: string; // motivazione leggibile per lo score
   priority: PriorityBucket;
+  // RP-002: Confidence di affidabilità (visibile in UI come %)
+  confidence: number; // 0-100
+  confidenceLabel: ConfidenceLabel;
+  confidenceFactors: string[]; // fattori che hanno contribuito, leggibili
 }
 
 interface RuleHit {
@@ -285,6 +304,222 @@ const SCORING_RULES: ScoringRule[] = [
   },
 ];
 
+// ==================== CONFIDENCE RULES (RP-002) ====================
+//
+// La Confidence misura l'AFFIDABILITÀ della selezione, non la compatibilità.
+// Risponde alla domanda: "Possiamo fidarci che questo sia un buon target?"
+//
+// Scale 0-100. Massimo teorico raggiungibile sommando tutti i pesi: 100.
+// Soglie:
+//   Alta   >= 70%
+//   Media  >= 40%
+//   Bassa  < 40%
+//
+// Fattori:
+//   1. ATTIVITÀ RECENTE (max 30) — più recente = più affidabile
+//   2. PRESENZA COSTANTE (max 25) — punteggio storico solido
+//   3. COERENZA GENERE (max 25) — match forte con il genere della release
+//   4. VICINANZA LABEL (max 10) — artista radicato su più label (proxy di scena)
+//   5. QUALITÀ DATI (max 10) — beatportId, slug, image, tracks popolati
+//
+// Nota: la Confidence è volutamente separata dallo Score.
+//   - Score = "questo artista è adatto?" (compatibilità)
+//   - Confidence = "siamo sicuri di quello che diciamo?" (affidabilità dati)
+// Un artista può avere score alto (match perfetto) ma confidence bassa
+// (dati vecchi, poche informazioni) → è un target da verificare manualmente.
+
+interface ConfidenceRule {
+  id: string;
+  name: string;
+  weight: number; // punti contribuiti alla confidence (0-100 scale)
+  enabled: boolean;
+  /**
+   * Ritorna `null` se il fattore non contribuisce.
+   * Ritorna una stringa descrittiva se il fattore è attivo (per il tooltip).
+   */
+  evaluate: (release: Release, artist: Artist) => string | null;
+}
+
+const CONFIDENCE_RULES: ConfidenceRule[] = [
+  // ---------- 1. ATTIVITÀ RECENTE (max 30) ----------
+  {
+    id: "conf_recent_7d",
+    name: "Attivo negli ultimi 7 giorni",
+    weight: 30,
+    enabled: true,
+    evaluate: (_release, artist) => {
+      const d = daysSince(artist.lastSeenAt);
+      if (d === null) return null;
+      if (d <= 7) return "attivo questa settimana";
+      return null;
+    },
+  },
+  {
+    id: "conf_recent_30d",
+    name: "Attivo negli ultimi 30 giorni",
+    weight: 20,
+    enabled: true,
+    evaluate: (_release, artist) => {
+      const d = daysSince(artist.lastSeenAt);
+      if (d === null) return null;
+      if (d > 7 && d <= 30) return "attivo nell'ultimo mese";
+      return null;
+    },
+  },
+  {
+    id: "conf_recent_90d",
+    name: "Attivo negli ultimi 90 giorni",
+    weight: 10,
+    enabled: true,
+    evaluate: (_release, artist) => {
+      const d = daysSince(artist.lastSeenAt);
+      if (d === null) return null;
+      if (d > 30 && d <= 90) return "attivo negli ultimi 3 mesi";
+      return null;
+    },
+  },
+
+  // ---------- 2. PRESENZA COSTANTE (max 25) ----------
+  {
+    id: "conf_high_presence",
+    name: "Presenza molto costante (>2000 punti)",
+    weight: 25,
+    enabled: true,
+    evaluate: (_release, artist) => {
+      if (artist.totalPoints >= 2000) return `${artist.totalPoints} punti totali`;
+      return null;
+    },
+  },
+  {
+    id: "conf_medium_presence",
+    name: "Presenza costante (>500 punti)",
+    weight: 15,
+    enabled: true,
+    evaluate: (_release, artist) => {
+      if (artist.totalPoints >= 500 && artist.totalPoints < 2000) {
+        return `${artist.totalPoints} punti totali`;
+      }
+      return null;
+    },
+  },
+  {
+    id: "conf_low_presence",
+    name: "Presenza minima (>100 punti)",
+    weight: 5,
+    enabled: true,
+    evaluate: (_release, artist) => {
+      if (artist.totalPoints >= 100 && artist.totalPoints < 500) {
+        return `${artist.totalPoints} punti totali`;
+      }
+      return null;
+    },
+  },
+
+  // ---------- 3. COERENZA GENERE (max 25) ----------
+  {
+    id: "conf_exact_genre",
+    name: "Coerenza genere perfetta",
+    weight: 25,
+    enabled: true,
+    evaluate: (release, artist) => {
+      const rg = normalizeGenre(release.genre);
+      if (!rg) return null;
+      const hit = artist.genres.some((g) => normalizeGenre(g) === rg);
+      return hit ? "genere perfettamente coerente" : null;
+    },
+  },
+  {
+    id: "conf_partial_genre",
+    name: "Coerenza genere parziale",
+    weight: 15,
+    enabled: true,
+    evaluate: (release, artist) => {
+      const rg = normalizeGenre(release.genre);
+      if (!rg) return null;
+      // Se c'è match esatto, la regola precedente ha già coperto.
+      const exact = artist.genres.some((g) => normalizeGenre(g) === rg);
+      if (exact) return null;
+      const releaseKw = genreKeywords(release.genre);
+      if (releaseKw.length === 0) return null;
+      const hit = artist.genres.some((ag) => {
+        const agKw = genreKeywords(ag);
+        return releaseKw.some((k) => agKw.includes(k));
+      });
+      return hit ? "genere parzialmente coerente" : null;
+    },
+  },
+
+  // ---------- 4. VICINANZA LABEL (max 10) ----------
+  // Proxy: un artista con 3+ label note è radicato nella scena,
+  // quindi più probabile che sia un target attivo e raggiungibile.
+  {
+    id: "conf_label_rooted",
+    name: "Radicato su multiple label",
+    weight: 10,
+    enabled: true,
+    evaluate: (_release, artist) => {
+      const count = artist.labelsPublishedOn?.length || 0;
+      if (count >= 5) return `radicato su ${count} label`;
+      if (count >= 3) return `presente su ${count} label`;
+      return null;
+    },
+  },
+
+  // ---------- 5. QUALITÀ DATI (max 10) ----------
+  // Verifica che l'artista abbia dati completi nel database.
+  // Un artista con solo nome e 0 tracce ha dati deboli → confidence più bassa.
+  {
+    id: "conf_data_beatport_id",
+    name: "Beatport ID disponibile",
+    weight: 3,
+    enabled: true,
+    evaluate: (_release, artist) => {
+      return artist.beatportId ? "profilo Beatport verificato" : null;
+    },
+  },
+  {
+    id: "conf_data_slug",
+    name: "Slug Beatport disponibile",
+    weight: 2,
+    enabled: true,
+    evaluate: (_release, artist) => {
+      return artist.slug ? "URL Beatport diretto" : null;
+    },
+  },
+  {
+    id: "conf_data_image",
+    name: "Immagine profilo disponibile",
+    weight: 2,
+    enabled: true,
+    evaluate: (_release, artist) => {
+      return artist.imageUrl ? "immagine profilo disponibile" : null;
+    },
+  },
+  {
+    id: "conf_data_tracks",
+    name: "Tracce note in classifica",
+    weight: 3,
+    enabled: true,
+    evaluate: (_release, artist) => {
+      const trackCount = Object.values(artist.tracksByGenre || {}).reduce(
+        (sum, tracks) => sum + (Array.isArray(tracks) ? tracks.length : 0),
+        0
+      );
+      return trackCount >= 3 ? `${trackCount} tracce note` : null;
+    },
+  },
+];
+
+// ==================== SOGLIE CONFIDENCE ====================
+
+const CONFIDENCE_THRESHOLDS = {
+  alta: 70, // %
+  media: 40, // %
+} as const;
+
+const DEFAULT_MIN_CONFIDENCE = 30; // sotto il 30% → escluso dalla lista
+const CONFIDENCE_MAX_THEORETICAL = 100; // somma di tutti i pesi delle regole abilitate
+
 // ==================== SOGLIE PRIORITÀ ====================
 
 const PRIORITY_THRESHOLDS = {
@@ -302,6 +537,7 @@ const DEFAULT_LIMIT = 50;
 /**
  * Calcola lo score di un artista rispetto a una release.
  * Itera tutte le regole abilitate, somma i pesi, raccoglie le motivazioni.
+ * Calcola anche la confidence (RP-002) come metrica separata.
  */
 export function scoreArtistForRelease(
   release: Release,
@@ -333,13 +569,55 @@ export function scoreArtistForRelease(
       ? positiveHits.map((h) => h.label).join(" · ")
       : "nessuna corrispondenza forte";
 
+  // RP-002: calcola la confidence separatamente dallo score.
+  const { confidence, factors } = calculateConfidence(release, artist);
+
   return {
     artist,
     score,
     rules: hits,
     motivation,
     priority: bucketForScore(score),
+    confidence,
+    confidenceLabel: bucketForConfidence(confidence),
+    confidenceFactors: factors,
   };
+}
+
+/**
+ * RP-002 — Calcola la confidence (affidabilità della selezione).
+ *
+ * La confidence è normalizzata a 0-100: somma i pesi delle regole attive,
+ * diviso il massimo teorico raggiungibile, moltiplicato per 100.
+ * Questo garantisce che anche se alcune regole sono disabilitate,
+ * la percentuale resti coerente.
+ */
+function calculateConfidence(
+  release: Release,
+  artist: Artist
+): { confidence: number; factors: string[] } {
+  let raw = 0;
+  const factors: string[] = [];
+  let maxTheoretical = 0;
+
+  for (const rule of CONFIDENCE_RULES) {
+    if (!rule.enabled) continue;
+    maxTheoretical += rule.weight;
+    const factor = rule.evaluate(release, artist);
+    if (factor) {
+      raw += rule.weight;
+      factors.push(factor);
+    }
+  }
+
+  if (maxTheoretical === 0) {
+    return { confidence: 0, factors };
+  }
+
+  // Normalizza a 0-100. Arrotonda all'intero più vicino.
+  const confidence = Math.round((raw / maxTheoretical) * 100);
+
+  return { confidence: Math.min(100, confidence), factors };
 }
 
 function bucketForScore(score: number): PriorityBucket {
@@ -349,26 +627,48 @@ function bucketForScore(score: number): PriorityBucket {
   return "low";
 }
 
+function bucketForConfidence(confidence: number): ConfidenceLabel {
+  if (confidence >= CONFIDENCE_THRESHOLDS.alta) return "alta";
+  if (confidence >= CONFIDENCE_THRESHOLDS.media) return "media";
+  return "bassa";
+}
+
 /**
  * Calcola la lista ordinata di top targets per una release.
+ *
+ * RP-002: la lista è filtrata ANCHE per confidence. Artisti con confidence
+ * troppo bassa (dati deboli, attività assente) vengono esclusi anche se
+ * lo score di compatibilità è alto. Questo riduce il rumore e porta
+ * alla superficie solo target affidabili.
+ *
+ * Ordinamento: per score decrescente (compatibilità prima di tutto).
+ * A parità di score, confidence più alta vince (tiebreaker implicito
+ * perché la sort è stabile e gli artisti sono processati in ordine).
  *
  * @param release la release di riferimento
  * @param artists tutti gli artisti cached localmente
  * @param options.minScore score minimo per inclusione (default 10)
+ * @param options.minConfidence confidence minima % per inclusione (default 30)
  * @param options.limit numero massimo di risultati (default 50)
  */
 export function calculateTopTargets(
   release: Release,
   artists: Artist[],
-  options?: { minScore?: number; limit?: number }
+  options?: { minScore?: number; minConfidence?: number; limit?: number }
 ): ScoredArtist[] {
   const minScore = options?.minScore ?? MIN_SCORE_TO_INCLUDE;
+  const minConfidence = options?.minConfidence ?? DEFAULT_MIN_CONFIDENCE;
   const limit = options?.limit ?? DEFAULT_LIMIT;
 
   return artists
     .map((a) => scoreArtistForRelease(release, a))
-    .filter((s) => s.score >= minScore)
-    .sort((a, b) => b.score - a.score)
+    .filter((s) => s.score >= minScore && s.confidence >= minConfidence)
+    .sort((a, b) => {
+      // Primary: score decrescente
+      if (b.score !== a.score) return b.score - a.score;
+      // Tiebreaker: confidence decrescente
+      return b.confidence - a.confidence;
+    })
     .slice(0, limit);
 }
 
@@ -379,6 +679,13 @@ export const PRIORITY_LABELS: Record<PriorityBucket, { icon: string; label: stri
   high: { icon: "🟢", label: "Alta", color: "text-emerald-400" },
   medium: { icon: "🟡", label: "Media", color: "text-amber-400" },
   low: { icon: "⚪", label: "Bassa", color: "text-muted-foreground" },
+};
+
+// RP-002 — Confidence labels per la UI
+export const CONFIDENCE_LABELS: Record<ConfidenceLabel, { color: string; bgClass: string }> = {
+  alta: { color: "text-emerald-400", bgClass: "bg-emerald-500/10" },
+  media: { color: "text-amber-400", bgClass: "bg-amber-500/10" },
+  bassa: { color: "text-muted-foreground", bgClass: "bg-secondary/50" },
 };
 
 /**
@@ -396,6 +703,23 @@ export function summarizeByPriority(
   };
   for (const t of targets) {
     summary[t.priority]++;
+  }
+  return summary;
+}
+
+/**
+ * RP-002 — Conta quanti target ci sono per bucket di confidence.
+ */
+export function summarizeByConfidence(
+  targets: ScoredArtist[]
+): Record<ConfidenceLabel, number> {
+  const summary: Record<ConfidenceLabel, number> = {
+    alta: 0,
+    media: 0,
+    bassa: 0,
+  };
+  for (const t of targets) {
+    summary[t.confidenceLabel]++;
   }
   return summary;
 }

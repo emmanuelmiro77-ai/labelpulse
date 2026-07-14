@@ -35,13 +35,17 @@ import {
   calculateTopTargets,
   getArtistBeatportUrl,
   PRIORITY_LABELS,
+  CONFIDENCE_LABELS,
   summarizeByPriority,
+  summarizeByConfidence,
   type ScoredArtist,
   type PriorityBucket,
+  type ConfidenceLabel,
 } from "@/lib/target-scoring";
 
 // Ordine di visualizzazione dei bucket in UI
 const PRIORITY_ORDER: PriorityBucket[] = ["max", "high", "medium", "low"];
+const CONFIDENCE_ORDER: ConfidenceLabel[] = ["alta", "media", "bassa"];
 
 interface ReleaseDetailProps {
   releaseId: string;
@@ -68,6 +72,7 @@ export function ReleaseDetail({ releaseId, onBack }: ReleaseDetailProps) {
   }, [release, artists]);
 
   const summary = useMemo(() => summarizeByPriority(topTargets), [topTargets]);
+  const confidenceSummary = useMemo(() => summarizeByConfidence(topTargets), [topTargets]);
 
   // Demo appartenenti alla release (per mostrare le tracce)
   const releaseDemos = useMemo(() => {
@@ -153,24 +158,50 @@ export function ReleaseDetail({ releaseId, onBack }: ReleaseDetailProps) {
             </div>
           </div>
 
-          {/* Riepilogo bucket */}
+          {/* Riepilogo bucket priorità + confidence */}
           {topTargets.length > 0 && (
-            <div className="flex flex-wrap gap-2 mb-5 text-xs">
-              {PRIORITY_ORDER.map((bucket) => {
-                const count = summary[bucket];
-                if (count === 0) return null;
-                const meta = PRIORITY_LABELS[bucket];
-                return (
-                  <span
-                    key={bucket}
-                    className={`flex items-center gap-1 px-2 py-1 rounded-md bg-secondary/50 ${meta.color}`}
-                  >
-                    <span>{meta.icon}</span>
-                    <span className="font-medium">{count}</span>
-                    <span className="opacity-70">{meta.label}</span>
-                  </span>
-                );
-              })}
+            <div className="space-y-2 mb-5 text-xs">
+              {/* Priorità */}
+              <div className="flex flex-wrap gap-2">
+                <span className="text-[10px] uppercase tracking-wider text-muted-foreground self-center mr-1">
+                  {locale === "it" ? "Priorità:" : "Priority:"}
+                </span>
+                {PRIORITY_ORDER.map((bucket) => {
+                  const count = summary[bucket];
+                  if (count === 0) return null;
+                  const meta = PRIORITY_LABELS[bucket];
+                  return (
+                    <span
+                      key={bucket}
+                      className={`flex items-center gap-1 px-2 py-1 rounded-md bg-secondary/50 ${meta.color}`}
+                    >
+                      <span>{meta.icon}</span>
+                      <span className="font-medium">{count}</span>
+                      <span className="opacity-70 hidden sm:inline">{meta.label}</span>
+                    </span>
+                  );
+                })}
+              </div>
+              {/* Confidence */}
+              <div className="flex flex-wrap gap-2">
+                <span className="text-[10px] uppercase tracking-wider text-muted-foreground self-center mr-1">
+                  {locale === "it" ? "Confidence:" : "Confidence:"}
+                </span>
+                {CONFIDENCE_ORDER.map((label) => {
+                  const count = confidenceSummary[label];
+                  if (count === 0) return null;
+                  const meta = CONFIDENCE_LABELS[label];
+                  return (
+                    <span
+                      key={label}
+                      className={`flex items-center gap-1 px-2 py-1 rounded-md ${meta.bgClass} ${meta.color}`}
+                    >
+                      <span className="font-medium uppercase">{label}</span>
+                      <span className="opacity-70">{count}</span>
+                    </span>
+                  );
+                })}
+              </div>
             </div>
           )}
 
@@ -257,8 +288,9 @@ interface TargetRowProps {
 }
 
 function TargetRow({ rank, target, onOpenArtist, onOpenBeatport, locale }: TargetRowProps) {
-  const { artist, motivation, priority } = target;
+  const { artist, motivation, priority, confidenceLabel } = target;
   const meta = PRIORITY_LABELS[priority];
+  const confMeta = CONFIDENCE_LABELS[confidenceLabel];
   const beatportUrl = getArtistBeatportUrl(artist);
 
   // Generi da mostrare (max 3)
@@ -323,11 +355,20 @@ function TargetRow({ rank, target, onOpenArtist, onOpenBeatport, locale }: Targe
         </p>
       </div>
 
-      {/* Priority + actions */}
-      <div className="flex flex-col items-end gap-1.5 flex-shrink-0">
+      {/* Priority + Confidence + actions */}
+      <div className="flex flex-col items-end gap-1.5 flex-shrink-0 min-w-[80px]">
+        {/* Priorità */}
         <span className={`flex items-center gap-1 text-[10px] font-medium ${meta.color}`}>
           <span>{meta.icon}</span>
           <span className="hidden sm:inline">{meta.label}</span>
+        </span>
+        {/* Confidence (RP-002) */}
+        <span
+          className={`flex items-center gap-1 text-[10px] font-mono ${confMeta.color}`}
+          title={target.confidenceFactors.length > 0 ? target.confidenceFactors.join(" · ") : "Dati limitati"}
+        >
+          <span className="opacity-60 text-[9px] uppercase">conf</span>
+          <span className="font-semibold">{target.confidence}%</span>
         </span>
         {beatportUrl && (
           <Button
