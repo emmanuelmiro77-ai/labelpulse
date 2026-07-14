@@ -22,6 +22,7 @@ import { t, type Locale } from "@/lib/i18n";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent } from "@/components/ui/card";
 import { Badge } from "@/components/ui/badge";
+import { PromotionWorkspace } from "@/components/promotion-workspace";
 import {
   ArrowLeft,
   ExternalLink,
@@ -236,7 +237,7 @@ export function ReleaseDetail({ releaseId, onBack }: ReleaseDetailProps) {
             </div>
           )}
 
-          {/* Lista target */}
+          {/* Promotion Workspace (sostituisce la lista target) */}
           {topTargets.length === 0 ? (
             <div className="text-center py-8 text-muted-foreground">
               <Users className="h-8 w-8 mx-auto mb-2 opacity-30" />
@@ -247,21 +248,11 @@ export function ReleaseDetail({ releaseId, onBack }: ReleaseDetailProps) {
               </p>
             </div>
           ) : (
-            <div className="space-y-2">
-              {topTargets.map((target, idx) => (
-                <TargetRow
-                  key={target.artist.id}
-                  rank={idx + 1}
-                  target={target}
-                  onOpenArtist={() => handleOpenArtist(target.artist.id)}
-                  onOpenBeatport={() => {
-                    const url = getArtistBeatportUrl(target.artist);
-                    if (url) handleOpenBeatport(url);
-                  }}
-                  locale={locale}
-                />
-              ))}
-            </div>
+            <PromotionWorkspace
+              release={release}
+              targets={topTargets}
+              locale={locale}
+            />
           )}
         </CardContent>
       </Card>

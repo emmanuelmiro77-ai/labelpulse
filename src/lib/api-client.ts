@@ -316,3 +316,41 @@ export async function apiDeleteRelease(id: string): Promise<boolean> {
     return false;
   }
 }
+
+// ==================== PROMOTION TARGETS (RP-005) ====================
+
+export type PromotionStatus = "pending" | "dm_sent" | "waiting" | "replied" | "supported";
+
+export interface PromotionTargetRow {
+  id?: string;
+  release_id: string;
+  artist_id: string;
+  artist_name: string;
+  status: PromotionStatus;
+  notes?: string | null;
+}
+
+export async function apiFetchPromotionTargets(releaseId: string): Promise<PromotionTargetRow[] | null> {
+  try {
+    const res = await fetch(`${API_BASE}/api/promotion-targets?release_id=${encodeURIComponent(releaseId)}`);
+    if (!res.ok) {
+      console.error("[apiFetchPromotionTargets] failed:", res.status);
+      return null;
+    }
+    const data = await res.json();
+    return data.targets || [];
+  } catch (err) {
+    console.error("[apiFetchPromotionTargets] failed:", err);
+    return null;
+  }
+}
+
+export async function apiUpsertPromotionTarget(target: PromotionTargetRow): Promise<boolean> {
+  try {
+    await writeDirect(`${API_BASE}/api/promotion-targets`, "POST", target);
+    return true;
+  } catch (err) {
+    console.error("[apiUpsertPromotionTarget] failed:", err);
+    return false;
+  }
+}
