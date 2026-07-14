@@ -285,6 +285,10 @@ export interface ReleaseRow {
   genre?: string;
   notes?: string;
   ep_soundcloud_url?: string;
+  // 🔒 RP-007 — Live Release fields
+  label?: string;
+  beatport_url?: string;
+  promo_link?: string;
 }
 
 export async function apiCreateRelease(release: ReleaseRow): Promise<boolean> {

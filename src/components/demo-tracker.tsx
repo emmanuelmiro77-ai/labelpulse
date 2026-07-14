@@ -27,6 +27,7 @@ import {
   Music2,
   ArrowLeft,
   Zap,
+  Rocket,
   Activity,
   Loader2,
   X,
@@ -392,6 +393,10 @@ export function DemoTracker() {
   const [epSoundCloudUrl, setEpSoundCloudUrl] = useState("");
   const [epSelectedTrackIds, setEpSelectedTrackIds] = useState<Set<string>>(new Set());
   const [editingReleaseId, setEditingReleaseId] = useState<string | null>(null);
+  // 🔒 RP-007 — Live Release fields
+  const [epLabel, setEpLabel] = useState("");
+  const [epBeatportUrl, setEpBeatportUrl] = useState("");
+  const [epPromoLink, setEpPromoLink] = useState("");
   const [deleteConfirmId, setDeleteConfirmId] = useState<string | null>(null);
   const [scanningReplies, setScanningReplies] = useState(false);
 
@@ -822,6 +827,9 @@ export function DemoTracker() {
     setEpNotes("");
     setEpSoundCloudUrl("");
     setEpSelectedTrackIds(new Set());
+    setEpLabel("");
+    setEpBeatportUrl("");
+    setEpPromoLink("");
     setEditingReleaseId(null);
     setShowEpDialog(true);
   };
@@ -834,6 +842,9 @@ export function DemoTracker() {
     setEpNotes(release.notes || "");
     setEpSoundCloudUrl(release.epSoundCloudUrl || "");
     setEpSelectedTrackIds(new Set(release.trackIds || []));
+    setEpLabel(release.label || "");
+    setEpBeatportUrl(release.beatportUrl || "");
+    setEpPromoLink(release.promoLink || "");
     setEditingReleaseId(release.id);
     setShowEpDialog(true);
   };
@@ -866,6 +877,9 @@ export function DemoTracker() {
       genre: epGenre.trim(),
       notes: epNotes.trim(),
       epSoundCloudUrl: epSoundCloudUrl.trim(),
+      label: epLabel.trim() || undefined,
+      beatportUrl: epBeatportUrl.trim() || undefined,
+      promoLink: epPromoLink.trim() || undefined,
     };
     if (editingReleaseId) {
       // Update existing release: first detach all demos that were previously
@@ -887,6 +901,17 @@ export function DemoTracker() {
       for (const tid of trackIds) {
         updateDemo(tid, { parentReleaseId: newId });
       }
+      // 🔒 RP-007: dopo la creazione, passa in edit mode della nuova release
+      // così il pulsante "INIZIA PROMOZIONE" diventa visibile senza chiudere il dialog.
+      // L'utente può salvare e iniziare la promozione in un click aggiuntivo.
+      setEditingReleaseId(newId);
+      toast({
+        title: locale === "it" ? "EP creato" : "EP created",
+        description: locale === "it"
+          ? `"${epTitle.trim()}" con ${trackIds.length} tracce. Clicca INIZIA PROMOZIONE per trovare i target.`
+          : `"${epTitle.trim()}" with ${trackIds.length} tracks. Click START PROMOTION to find targets.`,
+      });
+      return;
     }
     setShowEpDialog(false);
     toast({
@@ -2679,6 +2704,52 @@ export function DemoTracker() {
               </p>
             </div>
 
+            {/* 🔒 RP-007 — Live Release fields: Label, Beatport URL, PromoLink URL */}
+            <div className="grid grid-cols-1 sm:grid-cols-3 gap-3">
+              <div className="space-y-1.5">
+                <UILabel className="text-xs font-mono uppercase text-muted-foreground">
+                  {locale === "it" ? "Label" : "Label"}
+                  <span className="ml-1 text-[10px] text-muted-foreground/60 normal-case font-sans">
+                    ({locale === "it" ? "opzionale" : "optional"})
+                  </span>
+                </UILabel>
+                <Input
+                  value={epLabel}
+                  onChange={(e) => setEpLabel(e.target.value)}
+                  placeholder="IAMT"
+                  className="bg-secondary/50 text-[12px]"
+                />
+              </div>
+              <div className="space-y-1.5">
+                <UILabel className="text-xs font-mono uppercase text-muted-foreground">
+                  {locale === "it" ? "Beatport URL" : "Beatport URL"}
+                  <span className="ml-1 text-[10px] text-muted-foreground/60 normal-case font-sans">
+                    ({locale === "it" ? "opzionale" : "optional"})
+                  </span>
+                </UILabel>
+                <Input
+                  value={epBeatportUrl}
+                  onChange={(e) => setEpBeatportUrl(e.target.value)}
+                  placeholder="https://www.beatport.com/release/..."
+                  className="bg-secondary/50 text-[12px]"
+                />
+              </div>
+              <div className="space-y-1.5">
+                <UILabel className="text-xs font-mono uppercase text-muted-foreground">
+                  {locale === "it" ? "PromoLink URL" : "PromoLink URL"}
+                  <span className="ml-1 text-[10px] text-muted-foreground/60 normal-case font-sans">
+                    ({locale === "it" ? "opzionale" : "optional"})
+                  </span>
+                </UILabel>
+                <Input
+                  value={epPromoLink}
+                  onChange={(e) => setEpPromoLink(e.target.value)}
+                  placeholder="https://hypeddit.com/..."
+                  className="bg-secondary/50 text-[12px]"
+                />
+              </div>
+            </div>
+
             {/* EP notes */}
             <div className="space-y-1.5">
               <UILabel className="text-xs font-mono uppercase text-muted-foreground">
@@ -2715,6 +2786,22 @@ export function DemoTracker() {
             <Button variant="ghost" onClick={() => setShowEpDialog(false)}>
               {t(locale, "labels.cancel")}
             </Button>
+            {/* 🔒 RP-007: INIZIA PROMOZIONE — visibile solo quando si sta modificando una release esistente.
+                Salva le modifiche correnti, chiude il dialog, e apre il Promotion Workspace. */}
+            {editingReleaseId && (
+              <Button
+                onClick={() => {
+                  handleSaveEp();
+                  setShowEpDialog(false);
+                  setSelectedReleaseId(editingReleaseId);
+                }}
+                disabled={!epTitle.trim() || epSelectedTrackIds.size < 2}
+                className="bg-emerald-600 hover:bg-emerald-700 text-white"
+              >
+                <Rocket className="h-3.5 w-3.5 mr-1.5" />
+                {locale === "it" ? "INIZIA PROMOZIONE" : "START PROMOTION"}
+              </Button>
+            )}
             <Button
               onClick={handleSaveEp}
               disabled={!epTitle.trim() || epSelectedTrackIds.size < 2}

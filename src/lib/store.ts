@@ -182,6 +182,10 @@ export interface Release {
    * fall back to listing each track's individual SC link.
    */
   epSoundCloudUrl?: string;
+  // 🔒 RP-007 — Live Release fields (per promozione di release reali)
+  label?: string;          // es. "IAMT"
+  beatportUrl?: string;    // URL diretto release su Beatport
+  promoLink?: string;      // URL promo (es. SoundCloud private, Hypeddit)
 }
 
 export interface Demo {
@@ -1994,6 +1998,9 @@ export const useAppStore = create<AppState>()(
           genre: newRelease.genre,
           notes: newRelease.notes,
           ep_soundcloud_url: newRelease.epSoundCloudUrl,
+          label: newRelease.label,
+          beatport_url: newRelease.beatportUrl,
+          promo_link: newRelease.promoLink,
         }).catch((err) => console.error("[cloud sync] failed:", err));
         return id;
       },
@@ -2016,6 +2023,9 @@ export const useAppStore = create<AppState>()(
             genre: updated.genre,
             notes: updated.notes,
             ep_soundcloud_url: updated.epSoundCloudUrl,
+            label: updated.label,
+            beatport_url: updated.beatportUrl,
+            promo_link: updated.promoLink,
           }).catch((err) => console.error("[cloud sync] failed:", err));
         }
       },
