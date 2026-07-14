@@ -140,6 +140,8 @@ export interface Artist {
   trendingPointsByGenre?: Record<string, number>;
   firstSeenAt?: string; // ISO timestamp of first scrape that included this artist
   lastSeenAt?: string; // ISO timestamp of most recent scrape that included this artist
+  // TODO: instagramUrl — verrà popolato in futuro da uno scraper di social
+  instagramUrl?: string | null;
 }
 
 // ==================== RANKING SNAPSHOTS ====================

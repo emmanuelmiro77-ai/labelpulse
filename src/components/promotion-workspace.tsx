@@ -119,25 +119,64 @@ function buildGoogleSearchUrl(artistName: string, querySuffix: string): string {
 }
 
 /**
- * Normalizza un nome artista in un handle Instagram plausibile:
- * lowercase, rimuove spazi e caratteri speciali, lascia solo [a-z0-9._].
- * Es. "Bart Skils" → "bartskils", "K?D" → "kd", "Deadmau5" → "deadmau5"
+ * RP-021 — Costruisce l'URL Instagram per un artista.
+ *
+ * Logica:
+ * 1. Se artist.instagramUrl esiste nel database → apri quello direttamente.
+ * 2. Se non esiste → NON costruire URL automatici (portano a profili sbagliati).
+ *    Usa invece una ricerca Google: "<nome> instagram dj"
+ *
+ * TODO: in futuro, uno scraper di social popolerà automaticamente
+ * artist.instagramUrl nel database. Fino ad allora, usiamo Google search.
  */
-function normalizeForInstagramHandle(name: string): string {
-  return (name || "")
-    .toLowerCase()
-    .replace(/[^a-z0-9._]/g, "")
-    .trim();
+function buildInstagramUrl(artist: { name: string; instagramUrl?: string | null }): string {
+  // 1. Se l'artista ha un Instagram URL nel DB, usalo
+  if (artist.instagramUrl && artist.instagramUrl.trim()) {
+    return artist.instagramUrl.trim();
+  }
+
+  // 2. Altrimenti, ricerca Google con +dj per evitare omonimi non-DJ
+  const query = `"${artist.name}" instagram dj`;
+  return `https://www.google.com/search?q=${encodeURIComponent(query)}`;
 }
 
 /**
- * Costruisce URL Instagram diretto: instagram.com/<handle>
- * Se il nome normalizzato è vuoto, ritorna null (fallback a Google).
+ * RP-021 — Trova il prossimo target non lavorato.
+ *
+ * Cerca un target il cui status è "pending" o assente (non ancora lavorato).
+ * Skippa SEMPRE currentIndex (l'artista corrente è appena stato salvato).
+ *
+ * Strategia:
+ * 1. Cerca dopo currentIndex (forward scan)
+ * 2. Se non trova, cerca dall'inizio fino a currentIndex escluso (wrap-around)
+ *
+ * @returns index del prossimo target non lavorato, o -1 se tutti lavorati
  */
-function buildInstagramDirectUrl(artistName: string): string | null {
-  const handle = normalizeForInstagramHandle(artistName);
-  if (!handle) return null;
-  return `https://www.instagram.com/${handle}/`;
+function findNextUnworkedIndex(
+  dailyMission: ScoredArtist[],
+  statuses: Record<string, PromotionStatus>,
+  currentIndex: number
+): number {
+  // 1. Forward scan: cerca dopo currentIndex
+  for (let i = currentIndex + 1; i < dailyMission.length; i++) {
+    const t = dailyMission[i];
+    const s = statuses[t.artist.id];
+    if (!s || s === "pending") {
+      return i;
+    }
+  }
+
+  // 2. Wrap-around: cerca dall'inizio fino a currentIndex escluso
+  for (let i = 0; i < currentIndex; i++) {
+    const t = dailyMission[i];
+    const s = statuses[t.artist.id];
+    if (!s || s === "pending") {
+      return i;
+    }
+  }
+
+  // 3. Tutti lavorati
+  return -1;
 }
 
 // ==================== COMPONENT ====================
@@ -226,10 +265,8 @@ export function PromotionWorkspace({ release, targets, locale }: PromotionWorksp
   const handleOpenInstagramAndAdvance = useCallback(async () => {
     if (!currentTarget || !currentArtistId) return;
 
-    // 1. Apri Instagram — diretto se possibile, fallback Google
-    const directUrl = buildInstagramDirectUrl(currentTarget.artist.name);
-    const googleUrl = buildGoogleSearchUrl(currentTarget.artist.name, "instagram");
-    const url = directUrl || googleUrl;
+    // 1. Apri Instagram — usa URL dal DB se disponibile, altrimenti Google search con +dj
+    const url = buildInstagramUrl(currentTarget.artist);
     window.open(url, "_blank", "noopener,noreferrer");
 
     // 2. Imposta stato DM inviato
@@ -251,24 +288,8 @@ export function PromotionWorkspace({ release, targets, locale }: PromotionWorksp
       setSavedFlash(true);
       setTimeout(() => setSavedFlash(false), 1500);
 
-      // 4. Passa al miglior target non lavorato (FIX BUG 3: skip currentIndex)
-      let nextIdx = -1;
-      for (let i = currentIndex + 1; i < dailyMission.length; i++) {
-        const t = dailyMission[i];
-        if (!updatedStatuses[t.artist.id] || updatedStatuses[t.artist.id] === "pending") {
-          nextIdx = i;
-          break;
-        }
-      }
-      if (nextIdx === -1) {
-        for (let i = 0; i < currentIndex; i++) {
-          const t = dailyMission[i];
-          if (!updatedStatuses[t.artist.id] || updatedStatuses[t.artist.id] === "pending") {
-            nextIdx = i;
-            break;
-          }
-        }
-      }
+      // 4. Passa al miglior target non lavorato, skippando SEMPRE currentIndex
+      const nextIdx = findNextUnworkedIndex(dailyMission, updatedStatuses, currentIndex);
       if (nextIdx >= 0) {
         setCurrentIndex(nextIdx);
       }
@@ -292,36 +313,15 @@ export function PromotionWorkspace({ release, targets, locale }: PromotionWorksp
       setSavedFlash(true);
       setTimeout(() => setSavedFlash(false), 1500);
 
-      // Aggiorna lo stato locale SUBITO così findBestUnworked lo vede
+      // Aggiorna lo stato locale SUBITO così findNextUnworkedIndex lo vede
       const updatedStatuses = { ...statuses, [currentArtistId]: currentStatus };
       setStatuses(updatedStatuses);
 
-      // Trova il miglior target non lavorato a partire da currentIndex + 1.
-      // FIX BUG 3: se l'utente non ha cambiato stato (rimasto pending), il target
-      // corrente risulterebbe ancora "non lavorato" e findIndex ritroverebbe se stesso.
-      // Cerchiamo prima DOPO currentIndex, poi (wrap-around) PRIMA di currentIndex.
-      let nextIdx = -1;
-
-      // Prima: cerca dopo currentIndex
-      for (let i = currentIndex + 1; i < dailyMission.length; i++) {
-        const t = dailyMission[i];
-        if (!updatedStatuses[t.artist.id] || updatedStatuses[t.artist.id] === "pending") {
-          nextIdx = i;
-          break;
-        }
-      }
-
-      // Se non trovato dopo, cerca dall'inizio fino a currentIndex (escluso)
-      if (nextIdx === -1) {
-        for (let i = 0; i < currentIndex; i++) {
-          const t = dailyMission[i];
-          if (!updatedStatuses[t.artist.id] || updatedStatuses[t.artist.id] === "pending") {
-            nextIdx = i;
-            break;
-          }
-        }
-      }
-
+      // RP-021 FIX BUG 2: trova il prossimo target non lavorato.
+      // L'artista corrente è stato appena salvato e va considerato "lavorato"
+      // indipendentemente dallo status (anche se è "pending").
+      // findNextUnworkedIndex skippa SEMPRE currentIndex.
+      const nextIdx = findNextUnworkedIndex(dailyMission, updatedStatuses, currentIndex);
       if (nextIdx >= 0) {
         setCurrentIndex(nextIdx);
       }
@@ -521,7 +521,7 @@ function TargetCard({ target, status, onStatusChange, onOpenInstagramAndAdvance,
   const meta = PRIORITY_LABELS[priority];
   const confMeta = CONFIDENCE_LABELS[confidenceLabel];
   const beatportUrl = getArtistBeatportUrl(artist);
-  const instagramDirectUrl = buildInstagramDirectUrl(artist.name);
+  const hasInstagramInDb = !!(artist.instagramUrl && artist.instagramUrl.trim());
 
   const genresToShow = (artist.genres || []).slice(0, 3);
   const labelsToShow = (artist.labelsPublishedOn || []).slice(0, 3);
@@ -580,13 +580,13 @@ function TargetCard({ target, status, onStatusChange, onOpenInstagramAndAdvance,
             )}
           </Button>
           <p className="text-[10px] text-muted-foreground text-center">
-            {instagramDirectUrl
+            {hasInstagramInDb
               ? (locale === "it"
-                  ? "Apre il profilo diretto · salva · passa al prossimo"
-                  : "Opens direct profile · saves · moves to next")
+                  ? "Apre il profilo Instagram dal database · salva · passa al prossimo"
+                  : "Opens Instagram profile from DB · saves · moves to next")
               : (locale === "it"
-                  ? "Nome non standardizzato · apre ricerca Google · salva · passa al prossimo"
-                  : "Non-standard name · opens Google search · saves · moves to next")}
+                  ? "Apre ricerca Google (\"nome\" instagram dj) · salva · passa al prossimo"
+                  : "Opens Google search (\"name\" instagram dj) · saves · moves to next")}
           </p>
         </div>
 
