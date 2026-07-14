@@ -25,6 +25,7 @@ import React, {
   useCallback,
 } from "react";
 import { Button } from "@/components/ui/button";
+import { SmartSearch } from "@/components/smart-search";
 import {
   Search,
   Flame,
@@ -856,6 +857,11 @@ function ArtistDetail({
           </div>
         </section>
       )}
+
+      {/* 🔒 RP-003A: Smart Search — 4 pulsanti di ricerca rapida Google */}
+      <section className="space-y-3">
+        <SmartSearch artistName={artist.name} locale={locale} />
+      </section>
     </div>
   );
 }
