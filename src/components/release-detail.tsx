@@ -16,7 +16,7 @@
  * usa esclusivamente artists cached in IndexedDB via store.
  */
 
-import React, { useMemo } from "react";
+import React, { useMemo, useState } from "react";
 import { useAppStore, type Release } from "@/lib/store";
 import { t, type Locale } from "@/lib/i18n";
 import { Button } from "@/components/ui/button";
@@ -30,6 +30,9 @@ import {
   Sparkles,
   TrendingUp,
   Calendar,
+  ThumbsUp,
+  ThumbsDown,
+  Check,
 } from "lucide-react";
 import {
   calculateTopTargets,
@@ -288,10 +291,15 @@ interface TargetRowProps {
 }
 
 function TargetRow({ rank, target, onOpenArtist, onOpenBeatport, locale }: TargetRowProps) {
-  const { artist, motivation, priority, confidenceLabel } = target;
+  const { artist, priority, confidenceLabel, reasons } = target;
   const meta = PRIORITY_LABELS[priority];
   const confMeta = CONFIDENCE_LABELS[confidenceLabel];
   const beatportUrl = getArtistBeatportUrl(artist);
+
+  // 🔒 Beta feedback — stato locale temporaneo, NESSUN salvataggio.
+  // I pulsanti 👍/👎 servono solo per validazione manuale durante la beta.
+  // Dopo il click, il bottone resta premuto per feedback visivo.
+  const [feedback, setFeedback] = useState<"up" | "down" | null>(null);
 
   // Generi da mostrare (max 3)
   const genresToShow = (artist.genres || []).slice(0, 3);
@@ -305,83 +313,131 @@ function TargetRow({ rank, target, onOpenArtist, onOpenBeatport, locale }: Targe
   const isRecent = lastSeenDays !== null && lastSeenDays <= 7;
 
   return (
-    <div className="flex items-start gap-3 p-3 rounded-lg border border-border/30 bg-secondary/20 hover:bg-secondary/40 hover:border-border/50 transition-all">
-      {/* Rank */}
-      <div className="flex-shrink-0 w-8 text-center pt-0.5">
-        <span className="text-sm font-mono text-muted-foreground">#{rank}</span>
-      </div>
+    <div className="p-3 rounded-lg border border-border/30 bg-secondary/20 hover:bg-secondary/40 hover:border-border/50 transition-all space-y-2.5">
+      {/* === RIGA SUPERIORE: rank + info + meta + azioni === */}
+      <div className="flex items-start gap-3">
+        {/* Rank */}
+        <div className="flex-shrink-0 w-8 text-center pt-0.5">
+          <span className="text-sm font-mono text-muted-foreground">#{rank}</span>
+        </div>
 
-      {/* Main info */}
-      <div className="flex-1 min-w-0 space-y-1.5">
-        <div className="flex items-center gap-2 flex-wrap">
-          <button
-            type="button"
-            onClick={onOpenArtist}
-            className="text-sm font-semibold hover:text-primary hover:underline transition-colors text-left"
+        {/* Main info */}
+        <div className="flex-1 min-w-0 space-y-1.5">
+          <div className="flex items-center gap-2 flex-wrap">
+            <button
+              type="button"
+              onClick={onOpenArtist}
+              className="text-sm font-semibold hover:text-primary hover:underline transition-colors text-left"
+            >
+              {artist.name}
+            </button>
+            {isRecent && (
+              <span className="flex items-center gap-0.5 text-[10px] text-emerald-400">
+                <Calendar className="h-2.5 w-2.5" />
+                {locale === "it" ? "questa sett." : "this week"}
+              </span>
+            )}
+            {artist.trending && (
+              <span className="flex items-center gap-0.5 text-[10px] text-amber-400">
+                <TrendingUp className="h-2.5 w-2.5" />
+                trending
+              </span>
+            )}
+          </div>
+
+          {/* Generi + label */}
+          <div className="flex flex-wrap items-center gap-1.5 text-xs">
+            {genresToShow.map((g) => (
+              <Badge key={g} variant="secondary" className="text-[10px] font-mono px-1.5 py-0">
+                {g}
+              </Badge>
+            ))}
+            {labelsToShow.length > 0 && (
+              <span className="text-muted-foreground">
+                · {labelsToShow.join(" · ")}
+              </span>
+            )}
+          </div>
+        </div>
+
+        {/* Priority + Confidence + APRI */}
+        <div className="flex flex-col items-end gap-1.5 flex-shrink-0 min-w-[80px]">
+          <span className={`flex items-center gap-1 text-[10px] font-medium ${meta.color}`}>
+            <span>{meta.icon}</span>
+            <span className="hidden sm:inline">{meta.label}</span>
+          </span>
+          <span
+            className={`flex items-center gap-1 text-[10px] font-mono ${confMeta.color}`}
+            title={target.confidenceFactors.length > 0 ? target.confidenceFactors.join(" · ") : "Dati limitati"}
           >
-            {artist.name}
-          </button>
-          {isRecent && (
-            <span className="flex items-center gap-0.5 text-[10px] text-emerald-400">
-              <Calendar className="h-2.5 w-2.5" />
-              {locale === "it" ? "questa sett." : "this week"}
-            </span>
-          )}
-          {artist.trending && (
-            <span className="flex items-center gap-0.5 text-[10px] text-amber-400">
-              <TrendingUp className="h-2.5 w-2.5" />
-              trending
-            </span>
-          )}
-        </div>
-
-        {/* Generi + label */}
-        <div className="flex flex-wrap items-center gap-1.5 text-xs">
-          {genresToShow.map((g) => (
-            <Badge key={g} variant="secondary" className="text-[10px] font-mono px-1.5 py-0">
-              {g}
-            </Badge>
-          ))}
-          {labelsToShow.length > 0 && (
-            <span className="text-muted-foreground">
-              · {labelsToShow.join(" · ")}
-            </span>
+            <span className="opacity-60 text-[9px] uppercase">conf</span>
+            <span className="font-semibold">{target.confidence}%</span>
+          </span>
+          {beatportUrl && (
+            <Button
+              type="button"
+              size="sm"
+              variant="outline"
+              onClick={onOpenBeatport}
+              className="h-6 px-2 text-[10px] gap-1"
+            >
+              <ExternalLink className="h-2.5 w-2.5" />
+              {locale === "it" ? "Apri" : "Open"}
+            </Button>
           )}
         </div>
-
-        {/* Motivazione */}
-        <p className="text-xs text-muted-foreground/90 italic">
-          {motivation}
-        </p>
       </div>
 
-      {/* Priority + Confidence + actions */}
-      <div className="flex flex-col items-end gap-1.5 flex-shrink-0 min-w-[80px]">
-        {/* Priorità */}
-        <span className={`flex items-center gap-1 text-[10px] font-medium ${meta.color}`}>
-          <span>{meta.icon}</span>
-          <span className="hidden sm:inline">{meta.label}</span>
+      {/* === SEZIONE "PERCHÉ È STATO SELEZIONATO" === */}
+      {reasons.length > 0 && (
+        <div className="pl-11 pr-2 py-2 rounded-md bg-primary/5 border border-primary/15">
+          <p className="text-[9px] uppercase tracking-wider font-semibold text-primary/80 mb-1.5">
+            {locale === "it" ? "Perché è stato selezionato" : "Why selected"}
+          </p>
+          <ul className="space-y-1">
+            {reasons.map((reason, idx) => (
+              <li key={idx} className="flex items-start gap-1.5 text-xs text-foreground/80">
+                <Check className="h-3 w-3 text-emerald-400 flex-shrink-0 mt-0.5" />
+                <span>{reason}</span>
+              </li>
+            ))}
+          </ul>
+        </div>
+      )}
+
+      {/* === BETA FEEDBACK — temporaneo, no salvataggio === */}
+      <div className="flex items-center justify-end gap-2 pl-11">
+        <span className="text-[9px] uppercase tracking-wider text-muted-foreground/60 mr-1">
+          {locale === "it" ? "Beta feedback" : "Beta feedback"}
         </span>
-        {/* Confidence (RP-002) */}
-        <span
-          className={`flex items-center gap-1 text-[10px] font-mono ${confMeta.color}`}
-          title={target.confidenceFactors.length > 0 ? target.confidenceFactors.join(" · ") : "Dati limitati"}
+        <Button
+          type="button"
+          size="sm"
+          variant="ghost"
+          onClick={() => setFeedback(feedback === "up" ? null : "up")}
+          className={`h-6 px-2 text-[10px] gap-1 ${
+            feedback === "up"
+              ? "bg-emerald-500/20 text-emerald-400"
+              : "text-muted-foreground hover:text-emerald-400 hover:bg-emerald-500/10"
+          }`}
+          title="Target corretto"
         >
-          <span className="opacity-60 text-[9px] uppercase">conf</span>
-          <span className="font-semibold">{target.confidence}%</span>
-        </span>
-        {beatportUrl && (
-          <Button
-            type="button"
-            size="sm"
-            variant="outline"
-            onClick={onOpenBeatport}
-            className="h-6 px-2 text-[10px] gap-1"
-          >
-            <ExternalLink className="h-2.5 w-2.5" />
-            {locale === "it" ? "Apri" : "Open"}
-          </Button>
-        )}
+          <ThumbsUp className="h-3 w-3" />
+        </Button>
+        <Button
+          type="button"
+          size="sm"
+          variant="ghost"
+          onClick={() => setFeedback(feedback === "down" ? null : "down")}
+          className={`h-6 px-2 text-[10px] gap-1 ${
+            feedback === "down"
+              ? "bg-red-500/20 text-red-400"
+              : "text-muted-foreground hover:text-red-400 hover:bg-red-500/10"
+          }`}
+          title="Non interessante"
+        >
+          <ThumbsDown className="h-3 w-3" />
+        </Button>
       </div>
     </div>
   );

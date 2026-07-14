@@ -42,13 +42,17 @@ export interface ScoredArtist {
   artist: Artist;
   // RP-001: Score di compatibilità (interno, non in UI)
   score: number;
-  rules: RuleHit[]; // regole di scoring attivate
-  motivation: string; // motivazione leggibile per lo score
+  rules: RuleHit[]; // regole di scoring attivate (tutte, incluse penalità)
+  motivation: string; // motivazione leggibile concatenata (legacy, per compat)
   priority: PriorityBucket;
   // RP-002: Confidence di affidabilità (visibile in UI come %)
   confidence: number; // 0-100
   confidenceLabel: ConfidenceLabel;
   confidenceFactors: string[]; // fattori che hanno contribuito, leggibili
+  // RP-002 review: motivazioni positive come array, per la sezione
+  // "PERCHÉ È STATO SELEZIONATO" in UI. Solo regole con weight > 0.
+  // Le penalità (weight < 0) NON compaiono qui: non sono motivi di selezione.
+  reasons: string[];
 }
 
 interface RuleHit {
@@ -160,8 +164,14 @@ const SCORING_RULES: ScoringRule[] = [
     evaluate: (_release, artist) => {
       const d = daysSince(artist.lastSeenAt);
       if (d === null) return null;
+      const days = Math.floor(d);
       if (d <= 7) {
-        return { id: "seen_last_7d", label: "in classifica questa settimana" };
+        return {
+          id: "seen_last_7d",
+          label: days === 0
+            ? "in classifica oggi"
+            : `ultima presenza ${days} giorn${days === 1 ? "o" : "i"} fa`,
+        };
       }
       return null;
     },
@@ -174,8 +184,9 @@ const SCORING_RULES: ScoringRule[] = [
     evaluate: (_release, artist) => {
       const d = daysSince(artist.lastSeenAt);
       if (d === null) return null;
+      const days = Math.floor(d);
       if (d > 7 && d <= 30) {
-        return { id: "seen_last_30d", label: "in classifica nell'ultimo mese" };
+        return { id: "seen_last_30d", label: `ultima presenza ${days} giorni fa` };
       }
       return null;
     },
@@ -188,8 +199,9 @@ const SCORING_RULES: ScoringRule[] = [
     evaluate: (_release, artist) => {
       const d = daysSince(artist.lastSeenAt);
       if (d === null) return null;
+      const days = Math.floor(d);
       if (d > 30 && d <= 90) {
-        return { id: "seen_last_90d", label: "attivo negli ultimi 3 mesi" };
+        return { id: "seen_last_90d", label: `ultima presenza ${days} giorni fa` };
       }
       return null;
     },
@@ -222,7 +234,7 @@ const SCORING_RULES: ScoringRule[] = [
       if (artist.totalPoints < 500) return null;
       return {
         id: "frequent_in_charts",
-        label: `presenza frequente (${artist.totalPoints} punti)`,
+        label: "presenza frequente nelle classifiche",
       };
     },
   },
@@ -569,6 +581,10 @@ export function scoreArtistForRelease(
       ? positiveHits.map((h) => h.label).join(" · ")
       : "nessuna corrispondenza forte";
 
+  // RP-002 review: reasons è l'array di label positive, per la sezione
+  // "PERCHÉ È STATO SELEZIONATO" in UI. Solo regole con weight > 0.
+  const reasons = positiveHits.map((h) => h.label);
+
   // RP-002: calcola la confidence separatamente dallo score.
   const { confidence, factors } = calculateConfidence(release, artist);
 
@@ -581,6 +597,7 @@ export function scoreArtistForRelease(
     confidence,
     confidenceLabel: bucketForConfidence(confidence),
     confidenceFactors: factors,
+    reasons,
   };
 }
 
