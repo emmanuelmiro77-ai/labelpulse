@@ -2,21 +2,77 @@ import { NextRequest, NextResponse } from "next/server";
 import { chromium } from "playwright";
 
 /**
- * 🔒 RP-009 + RP-011 — PromoLink Importer con Playwright
+ * 🔒 RP-013 — Universal Track Importer
  *
- * PromoLink è una SPA Next.js: l'HTML iniziale contiene solo un loader.
- * I metadati vengono renderizzati lato client via JavaScript.
- * Un semplice fetch HTTP non può estrarli — serve un headless browser.
+ * Punto di ingresso unico per importare metadati da qualsiasi URL.
+ * Riconosce automaticamente la sorgente e instrada verso l'importer corretto.
  *
- * Playwright carica la pagina, esegue il JS, aspetta il rendering,
- * poi estrae:
- *   - og: tags (title, description, image)
- *   - title tag
- *   - link agli store (Beatport, Spotify, Apple Music, YouTube, SoundCloud, ecc.)
- *   - label e genere dal testo visibile della pagina
+ * Sorgenti supportate:
+ *   - PromoLink (promolink.app)
+ *   - Beatport Release (beatport.com/release/...)
+ *   - Beatport Track (beatport.com/track/...)
+ *   - Spotify (open.spotify.com)
+ *   - SoundCloud (soundcloud.com)
+ *   - Linktree (linktr.ee)
+ *
+ * Se la sorgente non è riconosciuta: "Formato non ancora supportato"
+ *
+ * Tutte le sorgenti vengono elaborate con Playwright (headless browser)
+ * perché la maggior parte sono SPA con rendering client-side.
  */
 
-const PROMOLINK_DOMAIN = "promolink.app";
+// ==================== SOURCE DETECTION ====================
+
+type SourceType =
+  | "promolink"
+  | "beatport_release"
+  | "beatport_track"
+  | "spotify"
+  | "soundcloud"
+  | "linktree"
+  | "unknown";
+
+interface SourceInfo {
+  type: SourceType;
+  label: string;
+  supported: boolean;
+}
+
+function detectSource(url: URL): SourceInfo {
+  const host = url.hostname.toLowerCase();
+  const path = url.pathname.toLowerCase();
+
+  if (host.includes("promolink.app")) {
+    return { type: "promolink", label: "PromoLink", supported: true };
+  }
+
+  if (host.includes("beatport.com")) {
+    if (path.includes("/release/")) {
+      return { type: "beatport_release", label: "Beatport Release", supported: true };
+    }
+    if (path.includes("/track/")) {
+      return { type: "beatport_track", label: "Beatport Track", supported: true };
+    }
+    // Generic Beatport — try anyway
+    return { type: "beatport_release", label: "Beatport", supported: true };
+  }
+
+  if (host.includes("open.spotify.com") || host.includes("spotify.com")) {
+    return { type: "spotify", label: "Spotify", supported: true };
+  }
+
+  if (host.includes("soundcloud.com")) {
+    return { type: "soundcloud", label: "SoundCloud", supported: true };
+  }
+
+  if (host.includes("linktr.ee")) {
+    return { type: "linktree", label: "Linktree", supported: true };
+  }
+
+  return { type: "unknown", label: "Sconosciuta", supported: false };
+}
+
+// ==================== TYPES ====================
 
 interface ExtractedMetadata {
   title: string | null;
@@ -33,6 +89,7 @@ interface ExtractedMetadata {
 }
 
 interface Diagnostics {
+  source: string;
   httpStatus: number | null;
   htmlLength: number;
   renderedTextLength: number;
@@ -41,31 +98,11 @@ interface Diagnostics {
   timeout: boolean;
 }
 
-export async function POST(req: NextRequest) {
-  const body = await req.json().catch(() => ({}));
-  const url: string = body.url;
+// ==================== EXTRACTOR ====================
 
-  if (!url) {
-    return NextResponse.json({ error: "URL required" }, { status: 400 });
-  }
-
-  let parsedUrl: URL;
-  try {
-    parsedUrl = new URL(url);
-  } catch {
-    return NextResponse.json({ error: "Invalid URL format", url }, { status: 400 });
-  }
-
-  if (!parsedUrl.hostname.includes(PROMOLINK_DOMAIN)) {
-    return NextResponse.json({
-      error: "Not a PromoLink URL",
-      url,
-      hostname: parsedUrl.hostname,
-      expected: `*${PROMOLINK_DOMAIN}*`,
-    }, { status: 400 });
-  }
-
+async function extractWithPlaywright(url: string): Promise<{ extracted: ExtractedMetadata; diagnostics: Diagnostics }> {
   const diagnostics: Diagnostics = {
+    source: "",
     httpStatus: null,
     htmlLength: 0,
     renderedTextLength: 0,
@@ -74,21 +111,20 @@ export async function POST(req: NextRequest) {
     timeout: false,
   };
 
-  let browser;
+  const browser = await chromium.launch({
+    headless: true,
+    args: ["--no-sandbox", "--disable-setuid-sandbox"],
+  });
+
   try {
-    browser = await chromium.launch({
-      headless: true,
-      args: ["--no-sandbox", "--disable-setuid-sandbox"],
-    });
     const page = await browser.newPage({
       userAgent: "Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36",
     });
 
-    // Navigate and wait for network to be idle (SPA loaded)
     const response = await page.goto(url, { waitUntil: "networkidle", timeout: 20000 });
     diagnostics.httpStatus = response?.status() || null;
 
-    // Extra wait for client-side rendering to complete
+    // Extra wait for client-side rendering
     await page.waitForTimeout(2000);
 
     const html = await page.content();
@@ -100,7 +136,6 @@ export async function POST(req: NextRequest) {
         document.querySelector(sel)?.getAttribute("content") || null;
 
       const ogTitle = getMeta('meta[property="og:title"]');
-      const ogDesc = getMeta('meta[property="og:description"]');
       const ogImage = getMeta('meta[property="og:image"]');
       const titleTag = document.title;
 
@@ -120,7 +155,10 @@ export async function POST(req: NextRequest) {
 
       // Parse title — usually "Artist - Title" or "Artist1, Artist2 - Title"
       const titleSource = ogTitle || titleTag || "";
-      const cleanedTitle = titleSource.replace(/\s*[|\-–—]\s*PromoLink\s*$/i, "").trim();
+      const cleanedTitle = titleSource
+        .replace(/\s*[|\-–—]\s*(PromoLink|Beatport|Spotify|SoundCloud|Linktree)\s*$/i, "")
+        .replace(/\s*[|\-–—]\s*YouTube\s*$/i, "")
+        .trim();
 
       if (cleanedTitle.includes(" - ")) {
         const parts = cleanedTitle.split(" - ");
@@ -168,10 +206,7 @@ export async function POST(req: NextRequest) {
       });
 
       // Extract label and genre from visible body text
-      // PromoLink renders: "Title\n\nArtists\n\nLabel\n\nGenre\nStore links..."
       const bodyText = document.body.innerText || "";
-
-      // Heuristic: lines after artists, before store links
       const lines = bodyText.split("\n").map((l) => l.trim()).filter(Boolean);
 
       // Find the title line index
@@ -180,28 +215,26 @@ export async function POST(req: NextRequest) {
         titleIdx = lines.findIndex((l) => l === result.title || l.includes(result.title!));
       }
 
-      if (titleIdx >= 0 && titleIdx + 2 < lines.length) {
-        // After title: artists line, then label, then genre
-        // Artists may be on one line comma-separated
+      if (titleIdx >= 0 && titleIdx + 3 < lines.length) {
         const labelCandidate = lines[titleIdx + 2];
         const genreCandidate = lines[titleIdx + 3];
 
-        // Label is usually short (1-3 words, uppercase often)
         if (labelCandidate && !result.label && labelCandidate.length < 50 &&
-            !/spotify|beatport|apple|youtube|soundcloud|deezer|tidal|powered/i.test(labelCandidate)) {
+            !/spotify|beatport|apple|youtube|soundcloud|deezer|tidal|powered|listen|play/i.test(labelCandidate)) {
           result.label = labelCandidate;
         }
 
-        // Genre usually contains parentheses or known genre keywords
-        if (genreCandidate && !result.genre && genreCandidate.length < 60 &&
-            !/spotify|beatport|apple|youtube|soundcloud|deezer|tidal|powered/i.test(genreCandidate)) {
+        if (genreCandidate && !result.genre && genreCandidate.length < 80 &&
+            !/spotify|beatport|apple|youtube|soundcloud|deezer|tidal|powered|listen|play/i.test(genreCandidate)) {
           result.genre = genreCandidate;
         }
       }
 
-      // Fallback: regex search in body text for genre patterns
+      // Fallback: regex search for genre patterns
       if (!result.genre) {
-        const genreMatch = bodyText.match(/(Techno|House|Trance|Progressive|Deep|Tech|Melodic|Minimal|Electro|Dubstep|Drum.?n.?Bass|Ambient|Breakbeat|Hardcore|Psytrance|Garage|Funky|Soulful|Afro|Amapiano|Downtempo|Indie Dance|Nu Disco)[^\n]*?(?:\([^)]*\))?/i);
+        const genreMatch = bodyText.match(
+          /(Techno|House|Trance|Progressive|Deep|Tech|Melodic|Minimal|Electro|Dubstep|Drum.?n.?Bass|Ambient|Breakbeat|Hardcore|Psytrance|Garage|Funky|Soulful|Afro|Amapiano|Downtempo|Indie Dance|Nu Disco|Bass|Hard)[^\n]*?(?:\([^)]*\))?/i
+        );
         if (genreMatch) result.genre = genreMatch[0].trim();
       }
 
@@ -213,30 +246,79 @@ export async function POST(req: NextRequest) {
       [extracted.beatportUrl, extracted.spotifyUrl, extracted.appleMusicUrl, extracted.youtubeUrl, extracted.soundcloudUrl]
         .filter(Boolean).length + extracted.otherStores.length;
 
+    return { extracted, diagnostics };
+  } finally {
     await browser.close();
+  }
+}
+
+// ==================== ROUTE HANDLER ====================
+
+export async function POST(req: NextRequest) {
+  const body = await req.json().catch(() => ({}));
+  const url: string = body.url;
+
+  if (!url) {
+    return NextResponse.json({ error: "URL required" }, { status: 400 });
+  }
+
+  let parsedUrl: URL;
+  try {
+    parsedUrl = new URL(url);
+  } catch {
+    return NextResponse.json({ error: "Formato URL non valido", url }, { status: 400 });
+  }
+
+  // 1. Detect source
+  const sourceInfo = detectSource(parsedUrl);
+
+  if (!sourceInfo.supported) {
+    return NextResponse.json({
+      error: "Formato non ancora supportato",
+      url,
+      hostname: parsedUrl.hostname,
+      detectedSource: sourceInfo.label,
+    }, { status: 400 });
+  }
+
+  // 2. Extract metadata using Playwright (universal extractor)
+  try {
+    const { extracted, diagnostics } = await extractWithPlaywright(url);
+    diagnostics.source = sourceInfo.label;
 
     return NextResponse.json({
       success: true,
       url,
+      source: sourceInfo.label,
+      sourceType: sourceInfo.type,
       fetchedAt: new Date().toISOString(),
       diagnostics,
       extracted,
     });
   } catch (err: any) {
-    if (browser) await browser.close();
-
-    diagnostics.fetchError = err.message;
-    diagnostics.timeout = err.message.includes("Timeout") || err.message.includes("timeout");
+    const isTimeout = err.message.includes("Timeout") || err.message.includes("timeout");
 
     return NextResponse.json({
-      error: diagnostics.timeout ? "Timeout — la pagina non si è caricata entro 20s" : "Extraction failed",
+      error: isTimeout
+        ? "Timeout — la pagina non si è caricata entro 20s"
+        : "Estrazione fallita",
       reason: err.message,
       url,
-      diagnostics,
-      possibleReason: diagnostics.timeout
-        ? "Il server PromoLink non ha risposto entro 20 secondi, oppure il rendering JavaScript è troppo lento."
+      source: sourceInfo.label,
+      sourceType: sourceInfo.type,
+      diagnostics: {
+        source: sourceInfo.label,
+        httpStatus: null,
+        htmlLength: 0,
+        renderedTextLength: 0,
+        storeLinksFound: 0,
+        fetchError: err.message,
+        timeout: isTimeout,
+      },
+      possibleReason: isTimeout
+        ? "Il server non ha risposto entro 20 secondi, oppure il rendering JavaScript è troppo lento."
         : err.message.includes("Target closed")
-          ? "Il browser headless è stato chiuso inaspettatamente (possibile out of memory sul server)."
+          ? "Il browser headless è stato chiuso inaspettatamente (possibile out of memory)."
           : "Errore sconosciuto durante il rendering della pagina.",
     }, { status: 500 });
   }

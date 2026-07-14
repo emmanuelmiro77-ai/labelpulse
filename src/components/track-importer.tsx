@@ -60,11 +60,15 @@ interface ImportResponse {
   explanation?: string;
   possibleReason?: string;
   url: string;
+  hostname?: string;
+  source?: string;
+  sourceType?: string;
   extracted?: ExtractedMetadata;
   diagnostics?: {
+    source?: string;
     httpStatus: number | null;
-    looksLikeSpa: boolean;
-    spaReason: string | null;
+    looksLikeSpa?: boolean;
+    spaReason?: string | null;
     fetchError: string | null;
     timeout: boolean;
   };
@@ -86,6 +90,7 @@ export function TrackImporter() {
 
   // Review state — editable fields
   const [reviewMode, setReviewMode] = useState(false);
+  const [detectedSource, setDetectedSource] = useState<string>("");
   const [reviewData, setReviewData] = useState({
     title: "",
     artists: "",
@@ -104,7 +109,7 @@ export function TrackImporter() {
     setReviewMode(false);
 
     try {
-      const res = await fetch("/api/promolink-import", {
+      const res = await fetch("/api/track-import", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({ url: trimmed }),
@@ -119,6 +124,9 @@ export function TrackImporter() {
       }
 
       const meta = data.extracted;
+
+      // Track detected source for display
+      setDetectedSource(data.source || "Sconosciuta");
 
       // Populate review fields with extracted data
       setReviewData({
@@ -170,6 +178,7 @@ export function TrackImporter() {
     setUrl("");
     setError(null);
     setReviewMode(false);
+    setDetectedSource("");
     setReviewData({ title: "", artists: "", genre: "", label: "", beatportUrl: "", promoLinkUrl: "" });
   };
 
@@ -190,6 +199,7 @@ export function TrackImporter() {
         isGenreFilled={isGenreFilled}
         onFindDjs={handleFindDjs}
         onReset={handleReset}
+        detectedSource={detectedSource}
         locale={locale}
       />
     );
@@ -207,8 +217,8 @@ export function TrackImporter() {
         </h2>
         <p className="text-sm text-muted-foreground max-w-md mx-auto">
           {locale === "it"
-            ? "Incolla il link PromoLink della tua traccia. Estraiamo automaticamente i metadati e li mostriamo per revisione."
-            : "Paste the PromoLink URL of your track. We extract metadata automatically and show them for review."}
+            ? "Incolla il link della tua traccia (PromoLink, Beatport, Spotify, SoundCloud, Linktree). Riconosciamo automaticamente la sorgente."
+            : "Paste your track link (PromoLink, Beatport, Spotify, SoundCloud, Linktree). We auto-detect the source."}
         </p>
       </div>
 
@@ -223,7 +233,7 @@ export function TrackImporter() {
               value={url}
               onChange={(e) => setUrl(e.target.value)}
               onKeyDown={handleKeyDown}
-              placeholder="https://promolink.app/s/..."
+              placeholder="https://..."
               autoFocus
               disabled={loading}
               className="h-12 text-sm bg-secondary/50"
@@ -295,6 +305,7 @@ interface ReviewScreenProps {
   isGenreFilled: boolean;
   onFindDjs: () => void;
   onReset: () => void;
+  detectedSource: string;
   locale: string;
 }
 
@@ -305,14 +316,15 @@ function ReviewScreen({
   isGenreFilled,
   onFindDjs,
   onReset,
+  detectedSource,
   locale,
 }: ReviewScreenProps) {
   return (
     <div className="max-w-2xl mx-auto space-y-5">
-      {/* Success banner */}
+      {/* Success banner + source detected */}
       <div className="p-4 rounded-lg bg-emerald-500/10 border border-emerald-500/30 flex items-center gap-2">
         <CheckCircle2 className="h-5 w-5 text-emerald-400 flex-shrink-0" />
-        <div>
+        <div className="flex-1">
           <p className="font-semibold text-emerald-400 text-sm">
             {locale === "it" ? "Metadati estratti!" : "Metadata extracted!"}
           </p>
@@ -322,6 +334,14 @@ function ReviewScreen({
               : "Review the data below. Complete missing fields (highlighted in red)."}
           </p>
         </div>
+        {detectedSource && (
+          <div className="flex-shrink-0 px-3 py-1.5 rounded-md bg-primary/10 border border-primary/20">
+            <p className="text-[9px] uppercase tracking-wider text-muted-foreground">
+              {locale === "it" ? "Sorgente" : "Source"}
+            </p>
+            <p className="text-xs font-semibold text-primary">{detectedSource}</p>
+          </div>
+        )}
       </div>
 
       {/* Review form */}
@@ -483,12 +503,21 @@ function ReviewField({
 // ==================== HELPERS ====================
 
 function buildErrorMessage(data: ImportResponse): string {
+  // Caso speciale: formato non supportato
+  if (data.error === "Formato non ancora supportato") {
+    const parts = [data.error];
+    if (data.hostname) parts.push(`Dominio: ${data.hostname}`);
+    parts.push("Sorgenti supportate: PromoLink, Beatport, Spotify, SoundCloud, Linktree");
+    return parts.join("\n");
+  }
+
   const parts: string[] = [];
   if (data.error) parts.push(data.error);
   if (data.possibleReason) parts.push(`Causa probabile: ${data.possibleReason}`);
   if (data.explanation) parts.push(`Spiegazione: ${data.explanation}`);
   if (data.diagnostics) {
     const d = data.diagnostics;
+    if (d.source) parts.push(`Sorgente: ${d.source}`);
     if (d.httpStatus) parts.push(`HTTP status: ${d.httpStatus}`);
     if (d.looksLikeSpa && d.spaReason) parts.push(`SPA: ${d.spaReason}`);
     if (d.fetchError) parts.push(`Errore fetch: ${d.fetchError}`);
