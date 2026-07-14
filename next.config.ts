@@ -17,6 +17,25 @@ const nextConfig: NextConfig = {
     ".vercel.app",
   ],
 
+  // 🔒 RP-014: externalizza i pacchetti che non possono essere bundlati da webpack.
+  // @sparticuz/chromium contiene un binario chromium (~130MB) che webpack non
+  // riesce a includere nel bundle. Deve essere trattato come external e
+  // caricato a runtime dal node_modules.
+  serverExternalPackages: [
+    "@sparticuz/chromium",
+    "playwright-core",
+  ],
+
+  // 🔒 RP-014: assicura che i file binari di @sparticuz/chromium vengano
+  // inclusi nel trace della Lambda Vercel. Senza questo, Vercel non copia
+  // i file .bin nel deploy.
+  outputFileTracingIncludes: {
+    "/api/track-import/**/*": [
+      "./node_modules/@sparticuz/chromium/bin/**/*",
+      "./node_modules/@sparticuz/chromium/dist/**/*",
+    ],
+  },
+
   // Generate source maps for client bundle (production).
   // These are uploaded to Bugsnag by scripts/bugsnag-upload-sourcemaps.mjs
   // in the postbuild step, then DELETED from the build output so they're
