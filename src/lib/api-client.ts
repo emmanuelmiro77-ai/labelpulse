@@ -319,7 +319,7 @@ export async function apiDeleteRelease(id: string): Promise<boolean> {
 
 // ==================== PROMOTION TARGETS (RP-005) ====================
 
-export type PromotionStatus = "pending" | "dm_sent" | "waiting" | "replied" | "supported";
+export type PromotionStatus = "pending" | "dm_sent" | "waiting" | "replied" | "supported" | "not_interested";
 
 export interface PromotionTargetRow {
   id?: string;

@@ -33,6 +33,8 @@ import {
   Loader2,
   ChevronLeft,
   ChevronRight,
+  CheckCircle2,
+  XCircle,
 } from "lucide-react";
 import {
   type ScoredArtist,
@@ -96,7 +98,18 @@ const STATUS_CONFIGS: StatusConfig[] = [
     color: "text-emerald-400",
     bgColor: "bg-emerald-500/15",
   },
+  // RP-005 review: stato per beta feedback, aiuta a migliorare il Musical Interest Engine
+  {
+    id: "not_interested",
+    labelIt: "Non interessante",
+    labelEn: "Not interesting",
+    color: "text-red-400",
+    bgColor: "bg-red-500/15",
+  },
 ];
+
+// 🔒 RP-005 review: Missione giornaliera — default 10 target
+const DAILY_MISSION_SIZE = 10;
 
 // ==================== SEARCH URL HELPERS ====================
 
@@ -114,6 +127,9 @@ interface PromotionWorkspaceProps {
 }
 
 export function PromotionWorkspace({ release, targets, locale }: PromotionWorkspaceProps) {
+  // 🔒 RP-005 review: Missione giornaliera — solo i primi DAILY_MISSION_SIZE target
+  const dailyMission = useMemo(() => targets.slice(0, DAILY_MISSION_SIZE), [targets]);
+
   const [currentIndex, setCurrentIndex] = useState(0);
   const [statuses, setStatuses] = useState<Record<string, PromotionStatus>>({});
   const [loading, setLoading] = useState(true);
@@ -132,27 +148,52 @@ export function PromotionWorkspace({ release, targets, locale }: PromotionWorksp
       }
       setStatuses(map);
       setLoading(false);
+
+      // 🔒 RP-005 review: all'apertura, salta al primo target non lavorato
+      // (status pending o assente). Se tutti lavorati, resta sul primo.
+      if (mounted && dailyMission.length > 0) {
+        const firstUnworked = dailyMission.findIndex(
+          (t) => !map[t.artist.id] || map[t.artist.id] === "pending"
+        );
+        if (firstUnworked >= 0) {
+          setCurrentIndex(firstUnworked);
+        }
+      }
     });
     return () => { mounted = false; };
-  }, [release.id]);
+  }, [release.id, dailyMission]);
 
-  const currentTarget = targets[currentIndex];
+  const currentTarget = dailyMission[currentIndex];
   const currentArtistId = currentTarget?.artist.id;
   const currentStatus = currentArtistId ? (statuses[currentArtistId] || "pending") : "pending";
 
-  // Statistiche progresso
+  // 🔒 RP-005 review: verifica se la missione giornaliera è completata
+  // Tutti i target della missione hanno uno stato != "pending"
+  const missionComplete = useMemo(() => {
+    if (dailyMission.length === 0) return false;
+    return dailyMission.every((t) => {
+      const s = statuses[t.artist.id];
+      return s && s !== "pending";
+    });
+  }, [dailyMission, statuses]);
+
+  // Statistiche progresso (sulla missione giornaliera)
   const progress = useMemo(() => {
-    const total = targets.length;
-    const contacted = targets.filter(t => statuses[t.artist.id] && statuses[t.artist.id] !== "pending").length;
-    const replied = targets.filter(t => statuses[t.artist.id] === "replied" || statuses[t.artist.id] === "supported").length;
-    return { total, contacted, replied };
-  }, [targets, statuses]);
+    const total = dailyMission.length;
+    const contacted = dailyMission.filter(t => statuses[t.artist.id] && statuses[t.artist.id] !== "pending").length;
+    const replied = dailyMission.filter(t => statuses[t.artist.id] === "replied" || statuses[t.artist.id] === "supported").length;
+    const notInterested = dailyMission.filter(t => statuses[t.artist.id] === "not_interested").length;
+    return { total, contacted, replied, notInterested };
+  }, [dailyMission, statuses]);
 
   const handleStatusChange = useCallback((newStatus: PromotionStatus) => {
     if (!currentArtistId) return;
     setStatuses(prev => ({ ...prev, [currentArtistId]: newStatus }));
   }, [currentArtistId]);
 
+  // 🔒 RP-005 review: SALVA E PASSA AL PROSSIMO apre il MIGLIOR target
+  // ancora non lavorato. Poiché dailyMission è ordinata per score decrescente,
+  // il primo target con status pending/assente è il miglior target non lavorato.
   const handleSaveAndNext = useCallback(async () => {
     if (!currentTarget || !currentArtistId) return;
     setSaving(true);
@@ -166,20 +207,30 @@ export function PromotionWorkspace({ release, targets, locale }: PromotionWorksp
     if (ok) {
       setSavedFlash(true);
       setTimeout(() => setSavedFlash(false), 1500);
-      // Passa al prossimo
-      if (currentIndex < targets.length - 1) {
-        setCurrentIndex(currentIndex + 1);
+
+      // Aggiorna lo stato locale SUBITO così findBestUnworked lo vede
+      const updatedStatuses = { ...statuses, [currentArtistId]: currentStatus };
+      setStatuses(updatedStatuses);
+
+      // Trova il miglior target non lavorato (primo con status pending/assente)
+      const nextIdx = dailyMission.findIndex(
+        (t) => !updatedStatuses[t.artist.id] || updatedStatuses[t.artist.id] === "pending"
+      );
+
+      if (nextIdx >= 0 && nextIdx !== currentIndex) {
+        setCurrentIndex(nextIdx);
       }
+      // Se nextIdx === -1, la missione è completata — la UI mostrerà la completion screen
     }
-  }, [currentTarget, currentArtistId, currentStatus, release.id, currentIndex, targets.length]);
+  }, [currentTarget, currentArtistId, currentStatus, release.id, currentIndex, dailyMission, statuses]);
 
   const handlePrev = useCallback(() => {
     if (currentIndex > 0) setCurrentIndex(currentIndex - 1);
   }, [currentIndex]);
 
   const handleNext = useCallback(() => {
-    if (currentIndex < targets.length - 1) setCurrentIndex(currentIndex + 1);
-  }, [currentIndex, targets.length]);
+    if (currentIndex < dailyMission.length - 1) setCurrentIndex(currentIndex + 1);
+  }, [currentIndex, dailyMission.length]);
 
   if (loading) {
     return (
@@ -189,7 +240,7 @@ export function PromotionWorkspace({ release, targets, locale }: PromotionWorksp
     );
   }
 
-  if (targets.length === 0) {
+  if (dailyMission.length === 0) {
     return (
       <div className="text-center py-8 text-muted-foreground">
         <p className="text-sm">
@@ -201,21 +252,72 @@ export function PromotionWorkspace({ release, targets, locale }: PromotionWorksp
     );
   }
 
+  // 🔒 RP-005 review: Schermata MISSIONE COMPLETATA
+  if (missionComplete) {
+    return (
+      <Card className="bg-card/60 border-border/40">
+        <CardContent className="p-8 text-center space-y-5">
+          <CheckCircle2 className="h-14 w-14 text-emerald-400 mx-auto" />
+          <div className="space-y-1">
+            <h2 className="text-lg font-bold text-foreground">
+              {locale === "it" ? "Missione di oggi completata!" : "Today's mission complete!"}
+            </h2>
+            <p className="text-sm text-muted-foreground">
+              {locale === "it"
+                ? `Hai lavorato su tutti i ${dailyMission.length} target della missione giornaliera.`
+                : `You've worked on all ${dailyMission.length} targets of the daily mission.`}
+            </p>
+          </div>
+
+          {/* Riepilogo */}
+          <div className="grid grid-cols-3 gap-3 max-w-md mx-auto pt-2">
+            <div className="space-y-1 p-3 rounded-lg bg-secondary/30 border border-border/30">
+              <p className="text-[10px] uppercase tracking-wider text-muted-foreground">
+                {locale === "it" ? "Contattati" : "Contacted"}
+              </p>
+              <p className="text-xl font-bold text-blue-400">
+                {progress.contacted - progress.notInterested}
+              </p>
+            </div>
+            <div className="space-y-1 p-3 rounded-lg bg-emerald-500/5 border border-emerald-500/20">
+              <p className="text-[10px] uppercase tracking-wider text-muted-foreground">
+                {locale === "it" ? "Risposte" : "Replies"}
+              </p>
+              <p className="text-xl font-bold text-emerald-400">{progress.replied}</p>
+            </div>
+            <div className="space-y-1 p-3 rounded-lg bg-red-500/5 border border-red-500/20">
+              <p className="text-[10px] uppercase tracking-wider text-muted-foreground">
+                {locale === "it" ? "Non interessanti" : "Not interesting"}
+              </p>
+              <p className="text-xl font-bold text-red-400">{progress.notInterested}</p>
+            </div>
+          </div>
+
+          <p className="text-xs text-muted-foreground italic pt-2">
+            {locale === "it"
+              ? "Torna domani per una nuova missione, o continua a lavorare sui target della missione."
+              : "Come back tomorrow for a new mission, or keep working on the mission targets."}
+          </p>
+        </CardContent>
+      </Card>
+    );
+  }
+
   return (
     <div className="space-y-4">
       {/* === HEADER WORKSPACE === */}
       <div className="flex items-center justify-between gap-3 flex-wrap">
         <div>
           <h2 className="text-sm font-semibold uppercase tracking-wider text-primary">
-            {locale === "it" ? "Promotion Workspace" : "Promotion Workspace"}
+            {locale === "it" ? "Missione di Oggi" : "Today's Mission"}
           </h2>
           <p className="text-xs text-muted-foreground mt-0.5">
-            {locale === "it" ? "Target" : "Target"} {currentIndex + 1} {locale === "it" ? "di" : "of"} {targets.length}
+            {locale === "it" ? "Target" : "Target"} {currentIndex + 1} {locale === "it" ? "di" : "of"} {dailyMission.length}
           </p>
         </div>
         <div className="flex items-center gap-2">
           <div className="text-xs text-muted-foreground">
-            {locale === "it" ? "Contattati" : "Contacted"}: <span className="font-semibold text-foreground">{progress.contacted}</span>/{progress.total}
+            {locale === "it" ? "Lavorati" : "Worked"}: <span className="font-semibold text-foreground">{progress.contacted}</span>/{progress.total}
             {" · "}
             {locale === "it" ? "Risposte" : "Replies"}: <span className="font-semibold text-emerald-400">{progress.replied}</span>
           </div>
@@ -232,7 +334,7 @@ export function PromotionWorkspace({ release, targets, locale }: PromotionWorksp
             variant="ghost"
             size="sm"
             onClick={handleNext}
-            disabled={currentIndex === targets.length - 1}
+            disabled={currentIndex === dailyMission.length - 1}
             className="h-7 px-2"
           >
             <ChevronRight className="h-4 w-4" />
@@ -269,7 +371,7 @@ export function PromotionWorkspace({ release, targets, locale }: PromotionWorksp
         <div className="ml-auto">
           <Button
             onClick={handleSaveAndNext}
-            disabled={saving || currentIndex === targets.length - 1}
+            disabled={saving}
             className="gap-2"
           >
             {saving ? (
@@ -284,12 +386,12 @@ export function PromotionWorkspace({ release, targets, locale }: PromotionWorksp
         </div>
       </div>
 
-      {/* Se all'ultimo target, mostra messaggio */}
-      {currentIndex === targets.length - 1 && (
+      {/* Se all'ultimo target della missione, mostra messaggio */}
+      {currentIndex === dailyMission.length - 1 && (
         <p className="text-center text-xs text-muted-foreground">
           {locale === "it"
-            ? "Ultimo target della lista."
-            : "Last target in the list."}
+            ? "Ultimo target della missione di oggi."
+            : "Last target of today's mission."}
         </p>
       )}
     </div>
