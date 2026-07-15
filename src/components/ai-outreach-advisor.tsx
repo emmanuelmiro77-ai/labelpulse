@@ -450,19 +450,20 @@ export const AiOutreachAdvisor = React.memo(function AiOutreachAdvisor({ artist,
     console.log(`[DEBUG AiOutreachAdvisor] ${new Date().toISOString()} handleSaveContacts PAYLOAD`, {
       contactData,
     });
-    const ok = await apiUpsertArtistContact(contactData);
+    const result = await apiUpsertArtistContact(contactData);
     console.log(`[DEBUG AiOutreachAdvisor] ${new Date().toISOString()} handleSaveContacts RESULT`, {
-      ok,
+      ok: result.ok,
+      error: result.error,
     });
     setSaving(false);
-    if (ok) {
+    if (result.ok) {
       setContact(contactData);
       setSavedFlash(true);
       setSaveError(null);
       setTimeout(() => setSavedFlash(false), 3000);
     } else {
-      setSaveError(locale === "it" ? "Errore durante il salvataggio" : "Error saving contacts");
-      setTimeout(() => setSaveError(null), 5000);
+      setSaveError(result.error || (locale === "it" ? "Errore durante il salvataggio" : "Error saving contacts"));
+      setTimeout(() => setSaveError(null), 10000);
     }
   }, [contact, artist, locale]);
 
@@ -475,16 +476,16 @@ export const AiOutreachAdvisor = React.memo(function AiOutreachAdvisor({ artist,
       last_dm: dm,
       last_contact_at: new Date().toISOString(),
     };
-    const ok = await apiUpsertArtistContact(contactData);
+    const result = await apiUpsertArtistContact(contactData);
     setSaving(false);
-    if (ok) {
+    if (result.ok) {
       setContact(contactData);
       setSavedFlash(true);
       setSaveError(null);
       setTimeout(() => setSavedFlash(false), 3000);
     } else {
-      setSaveError(locale === "it" ? "Errore durante il salvataggio" : "Error saving");
-      setTimeout(() => setSaveError(null), 5000);
+      setSaveError(result.error || (locale === "it" ? "Errore durante il salvataggio" : "Error saving"));
+      setTimeout(() => setSaveError(null), 10000);
     }
   }, [contact, artist, dm, locale]);
 

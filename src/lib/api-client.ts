@@ -393,15 +393,15 @@ export async function apiFetchArtistContact(artistId: string): Promise<ArtistCon
   }
 }
 
-export async function apiUpsertArtistContact(contact: ArtistContactRow): Promise<boolean> {
+export async function apiUpsertArtistContact(contact: ArtistContactRow): Promise<{ ok: boolean; error?: string }> {
   console.log(`[DEBUG apiUpsertArtistContact] ${new Date().toISOString()} CALL`, { contact });
   try {
     const result = await writeDirect(`${API_BASE}/api/artist-contacts`, "POST", contact);
     console.log(`[DEBUG apiUpsertArtistContact] ${new Date().toISOString()} SUCCESS`, { result });
-    return true;
-  } catch (err) {
+    return { ok: true };
+  } catch (err: any) {
     console.error(`[DEBUG apiUpsertArtistContact] ${new Date().toISOString()} ERROR:`, err);
-    return false;
+    return { ok: false, error: err?.message || String(err) };
   }
 }
 
