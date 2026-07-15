@@ -26,6 +26,8 @@ import React, {
 } from "react";
 import { Button } from "@/components/ui/button";
 import { SmartSearch } from "@/components/smart-search";
+import { AiOutreachAdvisor } from "@/components/ai-outreach-advisor";
+import { calculateTargets, type ScoredArtist } from "@/lib/target-scoring";
 import {
   Search,
   Flame,
@@ -469,6 +471,8 @@ function ArtistDetail({
   onLabelClick,
   onBackToLabel,
   returnToLabelName,
+  selectedRelease,
+  scoredArtist,
 }: {
   artist: Artist;
   locale: Locale;
@@ -477,6 +481,8 @@ function ArtistDetail({
   onLabelClick: (labelName: string) => void;
   onBackToLabel?: () => void;
   returnToLabelName?: string;
+  selectedRelease?: any | null;
+  scoredArtist?: ScoredArtist | null;
 }) {
   // ----- Audio playback (single shared <audio> element) -----
   const audioRef = useRef<HTMLAudioElement | null>(null);
@@ -862,6 +868,14 @@ function ArtistDetail({
       <section className="space-y-3">
         <SmartSearch artistName={artist.name} locale={locale} />
       </section>
+
+      {/* 🔒 RP-024: AI Outreach Advisor — compatibilità + strategia + DM generator */}
+      <AiOutreachAdvisor
+        artist={artist}
+        scored={scoredArtist || null}
+        release={selectedRelease || null}
+        locale={locale}
+      />
     </div>
   );
 }
@@ -1187,6 +1201,8 @@ export default function ArtistExplorer() {
     setSelectedLabelId?: (id: string | null) => void;
     navigationReturnTo?: { kind: "label"; labelId: string; labelName?: string } | null;
     setNavigationReturnTo?: (target: { kind: "label"; labelId: string; labelName?: string } | null) => void;
+    releases?: any[];
+    selectedReleaseId?: string | null;
   };
 
   const { locale, labels, setActiveTab } = store;
@@ -1196,6 +1212,8 @@ export default function ArtistExplorer() {
   const setSelectedLabelId = store.setSelectedLabelId;
   const navigationReturnTo = store.navigationReturnTo ?? null;
   const setNavigationReturnTo = store.setNavigationReturnTo;
+  const releases = store.releases || [];
+  const selectedReleaseId = store.selectedReleaseId ?? null;
 
   // Defensive: guard against undefined arrays.
   const safeArtists = useMemo(
@@ -1286,6 +1304,16 @@ export default function ArtistExplorer() {
 
   // ----- Detail view -----
   if (selectedArtistId && selectedArtist) {
+    // RP-024: calcola score per l'artista selezionato rispetto alla release selezionata
+    const selectedRelease = selectedReleaseId
+      ? releases.find((r: any) => r.id === selectedReleaseId) || null
+      : null;
+    let scoredArtist: ScoredArtist | null = null;
+    if (selectedRelease && safeArtists.length > 0) {
+      const result = calculateTargets(selectedRelease, safeArtists);
+      scoredArtist = result.targets.find((t) => t.artist.id === selectedArtist.id) || null;
+    }
+
     return (
       <ArtistDetail
         artist={selectedArtist}
@@ -1295,6 +1323,8 @@ export default function ArtistExplorer() {
         onLabelClick={handleLabelClick}
         onBackToLabel={navigationReturnTo ? handleBackToLabel : undefined}
         returnToLabelName={navigationReturnTo?.labelName}
+        selectedRelease={selectedRelease}
+        scoredArtist={scoredArtist}
       />
     );
   }
