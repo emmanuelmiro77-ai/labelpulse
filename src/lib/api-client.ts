@@ -369,6 +369,8 @@ export interface ArtistContactRow {
   management_email?: string | null;
   contact_email?: string | null;
   notes?: string | null;
+  last_dm?: string | null;
+  last_contact_at?: string | null;
 }
 
 export async function apiFetchArtistContact(artistId: string): Promise<ArtistContactRow | null> {

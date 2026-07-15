@@ -1,8 +1,9 @@
 -- =====================================================================
--- RP-022 — DJ Contacts (CRM per artisti)
+-- RP-022 / RP-023 — DJ Contacts (CRM per artisti)
 -- =====================================================================
 -- Una riga per (user_id, artist_id). Salva contatti verificati
--- dall'utente e note. Riutilizzabile in tutte le promozioni future.
+-- dall'utente, note, ultimo DM generato e data ultimo contatto.
+-- Riutilizzabile in tutte le promozioni future.
 -- =====================================================================
 
 CREATE TABLE IF NOT EXISTS artist_contacts (
@@ -20,6 +21,8 @@ CREATE TABLE IF NOT EXISTS artist_contacts (
   management_email TEXT,
   contact_email TEXT,
   notes TEXT,
+  last_dm TEXT,
+  last_contact_at TIMESTAMPTZ,
   created_at TIMESTAMPTZ NOT NULL DEFAULT NOW(),
   updated_at TIMESTAMPTZ NOT NULL DEFAULT NOW(),
   UNIQUE (user_id, artist_id)
@@ -50,3 +53,7 @@ DROP TRIGGER IF EXISTS trigger_artist_contacts_updated_at ON artist_contacts;
 CREATE TRIGGER trigger_artist_contacts_updated_at
   BEFORE UPDATE ON artist_contacts
   FOR EACH ROW EXECUTE FUNCTION update_updated_at_column();
+
+-- RP-023: aggiungi colonne se la tabella esiste già da RP-022
+ALTER TABLE artist_contacts ADD COLUMN IF NOT EXISTS last_dm TEXT;
+ALTER TABLE artist_contacts ADD COLUMN IF NOT EXISTS last_contact_at TIMESTAMPTZ;

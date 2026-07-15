@@ -53,7 +53,8 @@ export async function POST(req: NextRequest) {
   try {
     const body = await req.json();
     const { artist_id, artist_name, instagram, beatport, website, soundcloud, spotify,
-            resident_advisor, booking_email, management_email, contact_email, notes, id } = body || {};
+            resident_advisor, booking_email, management_email, contact_email, notes,
+            last_dm, last_contact_at, id } = body || {};
 
     if (!artist_id || !artist_name) {
       return NextResponse.json({ error: "artist_id and artist_name required" }, { status: 400 });
@@ -76,6 +77,8 @@ export async function POST(req: NextRequest) {
         management_email: management_email || null,
         contact_email: contact_email || null,
         notes: notes || null,
+        last_dm: last_dm || null,
+        last_contact_at: last_contact_at || null,
       }, { onConflict: "user_id, artist_id" })
       .select()
       .single();
