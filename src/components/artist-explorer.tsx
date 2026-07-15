@@ -1303,20 +1303,6 @@ export default function ArtistExplorer() {
     [labels, setActiveTab, setSelectedLabelId]
   );
 
-  // ----- Empty state (no artists loaded yet) -----
-  if (safeArtists.length === 0) {
-    return (
-      <div className="rounded-lg border border-border/30 bg-muted/20 py-16 text-center">
-        <Music2 className="mx-auto mb-3 h-10 w-10 opacity-30" />
-        <p className="text-sm text-muted-foreground">
-          {locale === "it"
-            ? "Nessun artista caricato. Avvia lo scraper per popolare la lista."
-            : "No artists loaded yet. Run the scraper to populate the list."}
-        </p>
-      </div>
-    );
-  }
-
   // RP-024: calcola score per l'artista selezionato rispetto alla release selezionata
   // Memoizzato per evitare re-render di AiOutreachAdvisor ad ogni render del parent
   const selectedRelease = useMemo(() => {
@@ -1345,6 +1331,20 @@ export default function ArtistExplorer() {
     });
     return found;
   }, [selectedRelease, selectedArtist, safeArtists]);
+
+  // ----- Empty state (no artists loaded yet) -----
+  if (safeArtists.length === 0) {
+    return (
+      <div className="rounded-lg border border-border/30 bg-muted/20 py-16 text-center">
+        <Music2 className="mx-auto mb-3 h-10 w-10 opacity-30" />
+        <p className="text-sm text-muted-foreground">
+          {locale === "it"
+            ? "Nessun artista caricato. Avvia lo scraper per popolare la lista."
+            : "No artists loaded yet. Run the scraper to populate the list."}
+        </p>
+      </div>
+    );
+  }
 
   // ----- Detail view -----
   if (selectedArtistId && selectedArtist) {
