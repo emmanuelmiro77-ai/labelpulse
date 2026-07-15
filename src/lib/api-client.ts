@@ -374,23 +374,33 @@ export interface ArtistContactRow {
 }
 
 export async function apiFetchArtistContact(artistId: string): Promise<ArtistContactRow | null> {
+  console.log(`[DEBUG apiFetchArtistContact] ${new Date().toISOString()} CALL`, { artistId });
   try {
     const res = await fetch(`${API_BASE}/api/artist-contacts?artist_id=${encodeURIComponent(artistId)}`);
+    console.log(`[DEBUG apiFetchArtistContact] ${new Date().toISOString()} RESPONSE`, {
+      status: res.status, ok: res.ok,
+    });
     if (!res.ok) return null;
     const data = await res.json();
+    console.log(`[DEBUG apiFetchArtistContact] ${new Date().toISOString()} DATA`, {
+      hasContact: !!data.contact,
+      contact: data.contact,
+    });
     return data.contact || null;
   } catch (err) {
-    console.error("[apiFetchArtistContact] failed:", err);
+    console.error(`[DEBUG apiFetchArtistContact] ${new Date().toISOString()} ERROR:`, err);
     return null;
   }
 }
 
 export async function apiUpsertArtistContact(contact: ArtistContactRow): Promise<boolean> {
+  console.log(`[DEBUG apiUpsertArtistContact] ${new Date().toISOString()} CALL`, { contact });
   try {
-    await writeDirect(`${API_BASE}/api/artist-contacts`, "POST", contact);
+    const result = await writeDirect(`${API_BASE}/api/artist-contacts`, "POST", contact);
+    console.log(`[DEBUG apiUpsertArtistContact] ${new Date().toISOString()} SUCCESS`, { result });
     return true;
   } catch (err) {
-    console.error("[apiUpsertArtistContact] failed:", err);
+    console.error(`[DEBUG apiUpsertArtistContact] ${new Date().toISOString()} ERROR:`, err);
     return false;
   }
 }

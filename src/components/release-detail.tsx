@@ -112,6 +112,9 @@ export function ReleaseDetail({ releaseId, onBack }: ReleaseDetailProps) {
 
   // RP-025: click su DJ naviga alla scheda artista esistente (non DjCard)
   const handleOpenDj = (artistId: string) => {
+    console.log(`[DEBUG ReleaseDetail] ${new Date().toISOString()} handleOpenDj`, {
+      artistId, selectedReleaseId: release.id,
+    });
     setSelectedArtistId(artistId);
     setActiveTab("artists");
     window.scrollTo({ top: 0, behavior: "smooth" });

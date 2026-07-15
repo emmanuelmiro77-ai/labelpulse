@@ -1215,6 +1215,15 @@ export default function ArtistExplorer() {
   const releases = store.releases || [];
   const selectedReleaseId = store.selectedReleaseId ?? null;
 
+  // 🔒 DEBUG RP-027: log render + state changes
+  console.log(`[DEBUG ArtistExplorer] ${new Date().toISOString()} RENDER`, {
+    selectedArtistId,
+    selectedReleaseId,
+    activeTab: store.activeTab,
+    artistsCount: artists?.length || 0,
+    releasesCount: releases.length,
+  });
+
   // Defensive: guard against undefined arrays.
   const safeArtists = useMemo(
     () => (Array.isArray(artists) ? artists : []),
@@ -1241,8 +1250,10 @@ export default function ArtistExplorer() {
   );
 
   const handleBack = useCallback(() => {
+    console.log(`[DEBUG ArtistExplorer] ${new Date().toISOString()} handleBack CALLED`, {
+      selectedArtistId, selectedReleaseId, willSwitchToDemos: !!selectedReleaseId,
+    });
     setSelectedArtistId?.(null);
-    // RP-026 BUG 2: se c'è una release selezionata, torna al tab demos (lista DJ)
     if (selectedReleaseId) {
       setActiveTab("demos");
     }
@@ -1310,17 +1321,40 @@ export default function ArtistExplorer() {
   // Memoizzato per evitare re-render di AiOutreachAdvisor ad ogni render del parent
   const selectedRelease = useMemo(() => {
     if (!selectedReleaseId) return null;
-    return releases.find((r: any) => r.id === selectedReleaseId) || null;
+    const found = releases.find((r: any) => r.id === selectedReleaseId) || null;
+    console.log(`[DEBUG ArtistExplorer] ${new Date().toISOString()} useMemo selectedRelease`, {
+      selectedReleaseId, found: !!found, releaseTitle: found?.title,
+    });
+    return found;
   }, [selectedReleaseId, releases]);
 
   const scoredArtist = useMemo<ScoredArtist | null>(() => {
-    if (!selectedRelease || !selectedArtist || safeArtists.length === 0) return null;
+    if (!selectedRelease || !selectedArtist || safeArtists.length === 0) {
+      console.log(`[DEBUG ArtistExplorer] ${new Date().toISOString()} useMemo scoredArtist SKIP`, {
+        hasRelease: !!selectedRelease, hasArtist: !!selectedArtist, artistsCount: safeArtists.length,
+      });
+      return null;
+    }
+    console.log(`[DEBUG ArtistExplorer] ${new Date().toISOString()} useMemo scoredArtist CALCULATING calculateTargets()`, {
+      artistId: selectedArtist.id, artistName: selectedArtist.name,
+    });
     const result = calculateTargets(selectedRelease, safeArtists);
-    return result.targets.find((t) => t.artist.id === selectedArtist.id) || null;
+    const found = result.targets.find((t) => t.artist.id === selectedArtist.id) || null;
+    console.log(`[DEBUG ArtistExplorer] ${new Date().toISOString()} useMemo scoredArtist RESULT`, {
+      found: !!found, score: found?.score, targetsCount: result.targets.length,
+    });
+    return found;
   }, [selectedRelease, selectedArtist, safeArtists]);
 
   // ----- Detail view -----
   if (selectedArtistId && selectedArtist) {
+    console.log(`[DEBUG ArtistExplorer] ${new Date().toISOString()} RENDER ArtistDetail`, {
+      artistId: selectedArtist.id,
+      artistName: selectedArtist.name,
+      hasRelease: !!selectedRelease,
+      hasScored: !!scoredArtist,
+      scoredScore: scoredArtist?.score,
+    });
     return (
       <ArtistDetail
         artist={selectedArtist}

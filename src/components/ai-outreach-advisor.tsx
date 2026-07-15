@@ -285,6 +285,16 @@ interface AiOutreachAdvisorProps {
 }
 
 export function AiOutreachAdvisor({ artist, scored, release, locale }: AiOutreachAdvisorProps) {
+  // 🔒 DEBUG RP-027: log render
+  console.log(`[DEBUG AiOutreachAdvisor] ${new Date().toISOString()} RENDER`, {
+    artistId: artist.id,
+    artistName: artist.name,
+    hasScored: !!scored,
+    scoredScore: scored?.score,
+    hasRelease: !!release,
+    releaseTitle: release?.title,
+  });
+
   // Compatibility score
   const compat = useMemo(() => calculateCompatibilityScore(scored), [scored]);
 
@@ -304,17 +314,35 @@ export function AiOutreachAdvisor({ artist, scored, release, locale }: AiOutreac
 
   // Load contact
   useEffect(() => {
+    console.log(`[DEBUG AiOutreachAdvisor] ${new Date().toISOString()} useEffect[artist.id] FIRE — apiFetchArtistContact`, {
+      artistId: artist.id,
+    });
     let mounted = true;
     setLoading(true);
     apiFetchArtistContact(artist.id).then((data) => {
-      if (!mounted) return;
+      if (!mounted) {
+        console.log(`[DEBUG AiOutreachAdvisor] ${new Date().toISOString()} useEffect[artist.id] UNMOUNTED — ignoring response`, {
+          artistId: artist.id,
+        });
+        return;
+      }
+      console.log(`[DEBUG AiOutreachAdvisor] ${new Date().toISOString()} useEffect[artist.id] RESPONSE`, {
+        artistId: artist.id,
+        hasData: !!data,
+        contact: data,
+      });
       setContact(data);
       setLoading(false);
       if (data?.last_dm) {
         setDm(data.last_dm);
       }
     });
-    return () => { mounted = false; };
+    return () => {
+      console.log(`[DEBUG AiOutreachAdvisor] ${new Date().toISOString()} useEffect[artist.id] CLEANUP`, {
+        artistId: artist.id,
+      });
+      mounted = false;
+    };
   }, [artist.id]);
 
   // Strategy
@@ -340,6 +368,10 @@ export function AiOutreachAdvisor({ artist, scored, release, locale }: AiOutreac
 
   // Auto-generate on load if no saved DM
   useEffect(() => {
+    console.log(`[DEBUG AiOutreachAdvisor] ${new Date().toISOString()} useEffect[auto-gen DM] FIRE`, {
+      loading, hasDm: !!dm, hasRelease: !!release, hasScored: !!scored,
+      willGenerate: !loading && !dm && !!release && !!scored,
+    });
     if (!loading && !dm && release && scored) {
       handleGenerateDm();
     }
@@ -352,6 +384,9 @@ export function AiOutreachAdvisor({ artist, scored, release, locale }: AiOutreac
   };
 
   const handleFieldChange = (field: keyof ArtistContactRow, value: string) => {
+    console.log(`[DEBUG AiOutreachAdvisor] ${new Date().toISOString()} handleFieldChange`, {
+      field, valueLength: value.length, prevContact: contact,
+    });
     setContact((prev) => ({
       ...(prev || { artist_id: artist.id, artist_name: artist.name }),
       [field]: value,
@@ -359,16 +394,24 @@ export function AiOutreachAdvisor({ artist, scored, release, locale }: AiOutreac
   };
 
   const handleSaveContacts = useCallback(async () => {
+    console.log(`[DEBUG AiOutreachAdvisor] ${new Date().toISOString()} handleSaveContacts CALLED`, {
+      contactState: contact,
+    });
     setSaving(true);
     const contactData: ArtistContactRow = {
       ...(contact || { artist_id: artist.id, artist_name: artist.name }),
       artist_id: artist.id,
       artist_name: artist.name,
     };
+    console.log(`[DEBUG AiOutreachAdvisor] ${new Date().toISOString()} handleSaveContacts PAYLOAD`, {
+      contactData,
+    });
     const ok = await apiUpsertArtistContact(contactData);
+    console.log(`[DEBUG AiOutreachAdvisor] ${new Date().toISOString()} handleSaveContacts RESULT`, {
+      ok,
+    });
     setSaving(false);
     if (ok) {
-      // Aggiorna lo stato locale con i dati salvati
       setContact(contactData);
       setSavedFlash(true);
       setSaveError(null);
