@@ -23,7 +23,6 @@ import { Button } from "@/components/ui/button";
 import { Card, CardContent } from "@/components/ui/card";
 import { Badge } from "@/components/ui/badge";
 import { PromotionWorkspace } from "@/components/promotion-workspace";
-import { DjCard } from "@/components/dj-card";
 import {
   ArrowLeft,
   ExternalLink,
@@ -111,8 +110,12 @@ export function ReleaseDetail({ releaseId, onBack }: ReleaseDetailProps) {
     window.open(url, "_blank", "noopener,noreferrer");
   };
 
-  // RP-022: DJ selezionato per la scheda CRM
-  const [selectedDj, setSelectedDj] = useState<ScoredArtist | null>(null);
+  // RP-025: click su DJ naviga alla scheda artista esistente (non DjCard)
+  const handleOpenDj = (artistId: string) => {
+    setSelectedArtistId(artistId);
+    setActiveTab("artists");
+    window.scrollTo({ top: 0, behavior: "smooth" });
+  };
 
   return (
     <div className="space-y-6 max-w-5xl mx-auto">
@@ -255,15 +258,8 @@ export function ReleaseDetail({ releaseId, onBack }: ReleaseDetailProps) {
             </div>
           )}
 
-          {/* RP-022: Lista DJ cliccabili → DjCard */}
-          {selectedDj ? (
-            <DjCard
-              target={selectedDj}
-              release={release}
-              onBack={() => setSelectedDj(null)}
-              locale={locale}
-            />
-          ) : topTargets.length === 0 ? (
+          {/* RP-025: Lista DJ cliccabili → naviga ad ArtistDetail */}
+          {topTargets.length === 0 ? (
             <div className="text-center py-8 text-muted-foreground">
               <Users className="h-8 w-8 mx-auto mb-2 opacity-30" />
               <p className="text-sm">
@@ -279,7 +275,7 @@ export function ReleaseDetail({ releaseId, onBack }: ReleaseDetailProps) {
                   key={target.artist.id}
                   rank={idx + 1}
                   target={target}
-                  onClick={() => setSelectedDj(target)}
+                  onClick={() => handleOpenDj(target.artist.id)}
                   locale={locale}
                 />
               ))}

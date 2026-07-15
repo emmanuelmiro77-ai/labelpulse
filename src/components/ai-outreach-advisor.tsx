@@ -21,8 +21,10 @@
 import React, { useState, useMemo, useCallback, useEffect } from "react";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent } from "@/components/ui/card";
+import { Input } from "@/components/ui/input";
 import { Textarea } from "@/components/ui/textarea";
 import { Badge } from "@/components/ui/badge";
+import { Label as UILabel } from "@/components/ui/label";
 import {
   Sparkles,
   Copy,
@@ -33,6 +35,14 @@ import {
   TrendingUp,
   Clock,
   AlertTriangle,
+  Save,
+  Instagram,
+  Globe,
+  Music2,
+  Disc3,
+  Mail,
+  FileText,
+  ExternalLink,
 } from "lucide-react";
 import {
   type ScoredArtist,
@@ -340,6 +350,24 @@ export function AiOutreachAdvisor({ artist, scored, release, locale }: AiOutreac
     setTimeout(() => setDmCopied(false), 2000);
   };
 
+  const handleFieldChange = (field: keyof ArtistContactRow, value: string) => {
+    setContact((prev) => ({
+      ...(prev || { artist_id: artist.id, artist_name: artist.name }),
+      [field]: value,
+    }));
+  };
+
+  const handleSaveContacts = useCallback(async () => {
+    setSaving(true);
+    const contactData: ArtistContactRow = contact || { artist_id: artist.id, artist_name: artist.name };
+    const ok = await apiUpsertArtistContact(contactData);
+    setSaving(false);
+    if (ok) {
+      setSavedFlash(true);
+      setTimeout(() => setSavedFlash(false), 2000);
+    }
+  }, [contact, artist]);
+
   const handleSaveDmAndMarkContact = useCallback(async () => {
     setSaving(true);
     const contactData: ArtistContactRow = {
@@ -480,6 +508,104 @@ export function AiOutreachAdvisor({ artist, scored, release, locale }: AiOutreac
         </CardContent>
       </Card>
 
+      {/* === CRM CONTACTS === */}
+      <Card className="bg-card/60 border-border/40">
+        <CardContent className="p-5 space-y-4">
+          <div className="flex items-center justify-between">
+            <h4 className="text-xs font-semibold uppercase tracking-wider text-muted-foreground">
+              {locale === "it" ? "Contatti CRM" : "CRM Contacts"}
+            </h4>
+            {savedFlash && (
+              <span className="text-xs text-emerald-400 flex items-center gap-1 animate-pulse">
+                <Check className="h-3 w-3" /> {locale === "it" ? "Salvato!" : "Saved!"}
+              </span>
+            )}
+          </div>
+
+          <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
+            <ContactField icon={Instagram} label="Instagram" value={contact?.instagram || ""} onChange={(v) => handleFieldChange("instagram", v)} placeholder="@username o URL" />
+            <ContactField icon={Globe} label="Website" value={contact?.website || ""} onChange={(v) => handleFieldChange("website", v)} placeholder="https://..." />
+            <ContactField icon={Disc3} label="Beatport" value={contact?.beatport || ""} onChange={(v) => handleFieldChange("beatport", v)} placeholder="URL Beatport" />
+            <ContactField icon={Music2} label="Spotify" value={contact?.spotify || ""} onChange={(v) => handleFieldChange("spotify", v)} placeholder="URL Spotify" />
+            <ContactField icon={Music2} label="SoundCloud" value={contact?.soundcloud || ""} onChange={(v) => handleFieldChange("soundcloud", v)} placeholder="URL SoundCloud" />
+            <ContactField icon={Globe} label="Resident Advisor" value={contact?.resident_advisor || ""} onChange={(v) => handleFieldChange("resident_advisor", v)} placeholder="URL RA" />
+            <ContactField icon={Mail} label="Booking email" value={contact?.booking_email || ""} onChange={(v) => handleFieldChange("booking_email", v)} placeholder="booking@..." />
+            <ContactField icon={Mail} label="Management email" value={contact?.management_email || ""} onChange={(v) => handleFieldChange("management_email", v)} placeholder="management@..." />
+            <ContactField icon={Mail} label="Contact email" value={contact?.contact_email || ""} onChange={(v) => handleFieldChange("contact_email", v)} placeholder="contact@..." />
+          </div>
+
+          {/* Notes */}
+          <div className="space-y-1.5">
+            <UILabel className="text-xs font-mono uppercase tracking-wider text-muted-foreground flex items-center gap-1">
+              <FileText className="h-3 w-3" /> {locale === "it" ? "Note" : "Notes"}
+            </UILabel>
+            <Textarea
+              value={contact?.notes || ""}
+              onChange={(e) => handleFieldChange("notes", e.target.value)}
+              placeholder={locale === "it" ? "Note su questo DJ..." : "Notes about this DJ..."}
+              rows={2}
+              className="bg-secondary/50 text-sm resize-none"
+            />
+          </div>
+
+          {/* Ultimo contatto + Ultimo DM */}
+          {(contact?.last_contact_at || contact?.last_dm) && (
+            <div className="flex flex-wrap gap-4 text-[10px] text-muted-foreground pt-2 border-t border-border/30">
+              {contact?.last_contact_at && (
+                <span className="flex items-center gap-1">
+                  <Clock className="h-3 w-3" />
+                  {locale === "it" ? "Ultimo contatto:" : "Last contact:"}
+                  {" "}
+                  {new Date(contact.last_contact_at).toLocaleDateString(locale === "it" ? "it-IT" : "en-US", {
+                    day: "numeric", month: "short", year: "numeric"
+                  })}
+                </span>
+              )}
+              {contact?.last_dm && (
+                <span className="flex items-center gap-1">
+                  <FileText className="h-3 w-3" />
+                  {locale === "it" ? "Ultimo DM salvato" : "Last DM saved"}
+                </span>
+              )}
+            </div>
+          )}
+
+          {/* Pulsanti rapidi */}
+          <div className="flex flex-wrap gap-2">
+            {contact?.instagram && (
+              <Button variant="outline" size="sm" onClick={() => window.open(contact.instagram!, "_blank", "noopener,noreferrer")} className="gap-1.5 text-xs h-8">
+                <Instagram className="h-3.5 w-3.5" /> Instagram <ExternalLink className="h-3 w-3 opacity-50" />
+              </Button>
+            )}
+            {contact?.beatport && (
+              <Button variant="outline" size="sm" onClick={() => window.open(contact.beatport!, "_blank", "noopener,noreferrer")} className="gap-1.5 text-xs h-8">
+                <Disc3 className="h-3.5 w-3.5" /> Beatport <ExternalLink className="h-3 w-3 opacity-50" />
+              </Button>
+            )}
+            {contact?.website && (
+              <Button variant="outline" size="sm" onClick={() => window.open(contact.website!, "_blank", "noopener,noreferrer")} className="gap-1.5 text-xs h-8">
+                <Globe className="h-3.5 w-3.5" /> Website <ExternalLink className="h-3 w-3 opacity-50" />
+              </Button>
+            )}
+            {contact?.spotify && (
+              <Button variant="outline" size="sm" onClick={() => window.open(contact.spotify!, "_blank", "noopener,noreferrer")} className="gap-1.5 text-xs h-8">
+                <Music2 className="h-3.5 w-3.5" /> Spotify <ExternalLink className="h-3 w-3 opacity-50" />
+              </Button>
+            )}
+            {contact?.soundcloud && (
+              <Button variant="outline" size="sm" onClick={() => window.open(contact.soundcloud!, "_blank", "noopener,noreferrer")} className="gap-1.5 text-xs h-8">
+                <Music2 className="h-3.5 w-3.5" /> SoundCloud <ExternalLink className="h-3 w-3 opacity-50" />
+              </Button>
+            )}
+          </div>
+
+          <Button onClick={handleSaveContacts} disabled={saving} variant="outline" className="w-full gap-2">
+            {saving ? <Loader2 className="h-4 w-4 animate-spin" /> : <Save className="h-4 w-4" />}
+            {locale === "it" ? "Salva contatti" : "Save contacts"}
+          </Button>
+        </CardContent>
+      </Card>
+
       {/* === DM GENERATOR === */}
       <Card className="bg-card/60 border-primary/20">
         <CardContent className="p-5 space-y-3">
@@ -552,6 +678,36 @@ function StrategyItem({
         {icon} {label}
       </p>
       <p className="text-xs text-foreground">{value}</p>
+    </div>
+  );
+}
+
+// ==================== CONTACT FIELD ====================
+
+function ContactField({
+  icon: Icon,
+  label,
+  value,
+  onChange,
+  placeholder,
+}: {
+  icon: typeof Instagram;
+  label: string;
+  value: string;
+  onChange: (value: string) => void;
+  placeholder?: string;
+}) {
+  return (
+    <div className="space-y-1.5">
+      <UILabel className="text-xs font-mono uppercase tracking-wider text-muted-foreground flex items-center gap-1">
+        <Icon className="h-3 w-3" /> {label}
+      </UILabel>
+      <Input
+        value={value}
+        onChange={(e) => onChange(e.target.value)}
+        placeholder={placeholder || ""}
+        className="h-9 text-sm bg-secondary/50"
+      />
     </div>
   );
 }
