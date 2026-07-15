@@ -353,6 +353,46 @@ export async function apiFetchPromotionTargets(releaseId: string): Promise<Promo
   }
 }
 
+// ==================== ARTIST CONTACTS (RP-022) ====================
+
+export interface ArtistContactRow {
+  id?: string;
+  artist_id: string;
+  artist_name: string;
+  instagram?: string | null;
+  beatport?: string | null;
+  website?: string | null;
+  soundcloud?: string | null;
+  spotify?: string | null;
+  resident_advisor?: string | null;
+  booking_email?: string | null;
+  management_email?: string | null;
+  contact_email?: string | null;
+  notes?: string | null;
+}
+
+export async function apiFetchArtistContact(artistId: string): Promise<ArtistContactRow | null> {
+  try {
+    const res = await fetch(`${API_BASE}/api/artist-contacts?artist_id=${encodeURIComponent(artistId)}`);
+    if (!res.ok) return null;
+    const data = await res.json();
+    return data.contact || null;
+  } catch (err) {
+    console.error("[apiFetchArtistContact] failed:", err);
+    return null;
+  }
+}
+
+export async function apiUpsertArtistContact(contact: ArtistContactRow): Promise<boolean> {
+  try {
+    await writeDirect(`${API_BASE}/api/artist-contacts`, "POST", contact);
+    return true;
+  } catch (err) {
+    console.error("[apiUpsertArtistContact] failed:", err);
+    return false;
+  }
+}
+
 export async function apiUpsertPromotionTarget(target: PromotionTargetRow): Promise<boolean> {
   try {
     await writeDirect(`${API_BASE}/api/promotion-targets`, "POST", target);

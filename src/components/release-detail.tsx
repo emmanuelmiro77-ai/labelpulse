@@ -23,6 +23,7 @@ import { Button } from "@/components/ui/button";
 import { Card, CardContent } from "@/components/ui/card";
 import { Badge } from "@/components/ui/badge";
 import { PromotionWorkspace } from "@/components/promotion-workspace";
+import { DjCard } from "@/components/dj-card";
 import {
   ArrowLeft,
   ExternalLink,
@@ -35,6 +36,7 @@ import {
   ThumbsDown,
   Check,
   ChevronDown,
+  ChevronRight,
 } from "lucide-react";
 import {
   calculateTargets,
@@ -108,6 +110,9 @@ export function ReleaseDetail({ releaseId, onBack }: ReleaseDetailProps) {
   const handleOpenBeatport = (url: string) => {
     window.open(url, "_blank", "noopener,noreferrer");
   };
+
+  // RP-022: DJ selezionato per la scheda CRM
+  const [selectedDj, setSelectedDj] = useState<ScoredArtist | null>(null);
 
   return (
     <div className="space-y-6 max-w-5xl mx-auto">
@@ -250,8 +255,15 @@ export function ReleaseDetail({ releaseId, onBack }: ReleaseDetailProps) {
             </div>
           )}
 
-          {/* Promotion Workspace (sostituisce la lista target) */}
-          {topTargets.length === 0 ? (
+          {/* RP-022: Lista DJ cliccabili → DjCard */}
+          {selectedDj ? (
+            <DjCard
+              target={selectedDj}
+              release={release}
+              onBack={() => setSelectedDj(null)}
+              locale={locale}
+            />
+          ) : topTargets.length === 0 ? (
             <div className="text-center py-8 text-muted-foreground">
               <Users className="h-8 w-8 mx-auto mb-2 opacity-30" />
               <p className="text-sm">
@@ -261,11 +273,17 @@ export function ReleaseDetail({ releaseId, onBack }: ReleaseDetailProps) {
               </p>
             </div>
           ) : (
-            <PromotionWorkspace
-              release={release}
-              targets={topTargets}
-              locale={locale}
-            />
+            <div className="space-y-2">
+              {topTargets.map((target, idx) => (
+                <DjListRow
+                  key={target.artist.id}
+                  rank={idx + 1}
+                  target={target}
+                  onClick={() => setSelectedDj(target)}
+                  locale={locale}
+                />
+              ))}
+            </div>
           )}
         </CardContent>
       </Card>
@@ -491,5 +509,88 @@ function FunnelArrow() {
     <div className="flex justify-center">
       <ChevronDown className="h-4 w-4 text-muted-foreground/50" />
     </div>
+  );
+}
+
+// ==================== DJ LIST ROW (RP-022) ====================
+
+function DjListRow({
+  rank,
+  target,
+  onClick,
+  locale,
+}: {
+  rank: number;
+  target: ScoredArtist;
+  onClick: () => void;
+  locale: Locale;
+}) {
+  const { artist, priority, confidenceLabel, confidence, reasons } = target;
+  const meta = PRIORITY_LABELS[priority];
+  const confMeta = CONFIDENCE_LABELS[confidenceLabel];
+
+  const genresToShow = (artist.genres || []).slice(0, 3);
+  const labelsToShow = (artist.labelsPublishedOn || []).slice(0, 3);
+
+  const lastSeenDays = artist.lastSeenAt
+    ? Math.floor((Date.now() - new Date(artist.lastSeenAt).getTime()) / 86400000)
+    : null;
+
+  return (
+    <button
+      type="button"
+      onClick={onClick}
+      className="w-full flex items-center gap-3 p-3 rounded-lg border border-border/30 bg-secondary/20 hover:bg-secondary/40 hover:border-border/50 transition-all text-left"
+    >
+      {/* Rank */}
+      <div className="flex-shrink-0 w-8 text-center pt-0.5">
+        <span className="text-sm font-mono text-muted-foreground">#{rank}</span>
+      </div>
+
+      {/* Main info */}
+      <div className="flex-1 min-w-0 space-y-1.5">
+        <div className="flex items-center gap-2 flex-wrap">
+          <span className="text-sm font-semibold truncate">{artist.name}</span>
+          {lastSeenDays !== null && lastSeenDays <= 7 && (
+            <span className="flex items-center gap-0.5 text-[10px] text-emerald-400">
+              <Calendar className="h-2.5 w-2.5" />
+              {locale === "it" ? "questa sett." : "this week"}
+            </span>
+          )}
+          {artist.trending && (
+            <span className="flex items-center gap-0.5 text-[10px] text-amber-400">
+              <TrendingUp className="h-2.5 w-2.5" /> trending
+            </span>
+          )}
+        </div>
+        <div className="flex flex-wrap items-center gap-1.5 text-xs">
+          {genresToShow.map((g) => (
+            <Badge key={g} variant="secondary" className="text-[10px] font-mono px-1.5 py-0">
+              {g}
+            </Badge>
+          ))}
+          {labelsToShow.length > 0 && (
+            <span className="text-muted-foreground">· {labelsToShow.join(" · ")}</span>
+          )}
+        </div>
+        {reasons.length > 0 && (
+          <p className="text-xs text-muted-foreground/80 italic line-clamp-1">
+            {reasons[0]}
+          </p>
+        )}
+      </div>
+
+      {/* Priority + Confidence */}
+      <div className="flex flex-col items-end gap-1 flex-shrink-0 min-w-[70px]">
+        <span className={`flex items-center gap-1 text-[10px] font-medium ${meta.color}`}>
+          <span>{meta.icon}</span>
+          <span className="hidden sm:inline">{meta.label}</span>
+        </span>
+        <span className={`text-[10px] font-mono ${confMeta.color}`}>
+          conf {confidence}%
+        </span>
+        <ChevronRight className="h-4 w-4 text-muted-foreground/50" />
+      </div>
+    </button>
   );
 }
