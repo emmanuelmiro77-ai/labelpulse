@@ -1242,7 +1242,11 @@ export default function ArtistExplorer() {
 
   const handleBack = useCallback(() => {
     setSelectedArtistId?.(null);
-  }, [setSelectedArtistId]);
+    // RP-026 BUG 2: se c'è una release selezionata, torna al tab demos (lista DJ)
+    if (selectedReleaseId) {
+      setActiveTab("demos");
+    }
+  }, [setSelectedArtistId, selectedReleaseId, setActiveTab]);
 
   // Back to the label the user was viewing before navigating to this artist.
   // Triggered by the dedicated "Back to label" button — only shown when
@@ -1302,18 +1306,21 @@ export default function ArtistExplorer() {
     );
   }
 
+  // RP-024: calcola score per l'artista selezionato rispetto alla release selezionata
+  // Memoizzato per evitare re-render di AiOutreachAdvisor ad ogni render del parent
+  const selectedRelease = useMemo(() => {
+    if (!selectedReleaseId) return null;
+    return releases.find((r: any) => r.id === selectedReleaseId) || null;
+  }, [selectedReleaseId, releases]);
+
+  const scoredArtist = useMemo<ScoredArtist | null>(() => {
+    if (!selectedRelease || !selectedArtist || safeArtists.length === 0) return null;
+    const result = calculateTargets(selectedRelease, safeArtists);
+    return result.targets.find((t) => t.artist.id === selectedArtist.id) || null;
+  }, [selectedRelease, selectedArtist, safeArtists]);
+
   // ----- Detail view -----
   if (selectedArtistId && selectedArtist) {
-    // RP-024: calcola score per l'artista selezionato rispetto alla release selezionata
-    const selectedRelease = selectedReleaseId
-      ? releases.find((r: any) => r.id === selectedReleaseId) || null
-      : null;
-    let scoredArtist: ScoredArtist | null = null;
-    if (selectedRelease && safeArtists.length > 0) {
-      const result = calculateTargets(selectedRelease, safeArtists);
-      scoredArtist = result.targets.find((t) => t.artist.id === selectedArtist.id) || null;
-    }
-
     return (
       <ArtistDetail
         artist={selectedArtist}

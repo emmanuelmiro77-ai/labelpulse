@@ -300,6 +300,7 @@ export function AiOutreachAdvisor({ artist, scored, release, locale }: AiOutreac
   const [dmCopied, setDmCopied] = useState(false);
   const [saving, setSaving] = useState(false);
   const [savedFlash, setSavedFlash] = useState(false);
+  const [saveError, setSaveError] = useState<string | null>(null);
 
   // Load contact
   useEffect(() => {
@@ -359,19 +360,31 @@ export function AiOutreachAdvisor({ artist, scored, release, locale }: AiOutreac
 
   const handleSaveContacts = useCallback(async () => {
     setSaving(true);
-    const contactData: ArtistContactRow = contact || { artist_id: artist.id, artist_name: artist.name };
+    const contactData: ArtistContactRow = {
+      ...(contact || { artist_id: artist.id, artist_name: artist.name }),
+      artist_id: artist.id,
+      artist_name: artist.name,
+    };
     const ok = await apiUpsertArtistContact(contactData);
     setSaving(false);
     if (ok) {
+      // Aggiorna lo stato locale con i dati salvati
+      setContact(contactData);
       setSavedFlash(true);
-      setTimeout(() => setSavedFlash(false), 2000);
+      setSaveError(null);
+      setTimeout(() => setSavedFlash(false), 3000);
+    } else {
+      setSaveError(locale === "it" ? "Errore durante il salvataggio" : "Error saving contacts");
+      setTimeout(() => setSaveError(null), 5000);
     }
-  }, [contact, artist]);
+  }, [contact, artist, locale]);
 
   const handleSaveDmAndMarkContact = useCallback(async () => {
     setSaving(true);
     const contactData: ArtistContactRow = {
       ...(contact || { artist_id: artist.id, artist_name: artist.name }),
+      artist_id: artist.id,
+      artist_name: artist.name,
       last_dm: dm,
       last_contact_at: new Date().toISOString(),
     };
@@ -380,9 +393,13 @@ export function AiOutreachAdvisor({ artist, scored, release, locale }: AiOutreac
     if (ok) {
       setContact(contactData);
       setSavedFlash(true);
-      setTimeout(() => setSavedFlash(false), 2000);
+      setSaveError(null);
+      setTimeout(() => setSavedFlash(false), 3000);
+    } else {
+      setSaveError(locale === "it" ? "Errore durante il salvataggio" : "Error saving");
+      setTimeout(() => setSaveError(null), 5000);
     }
-  }, [contact, artist, dm]);
+  }, [contact, artist, dm, locale]);
 
   if (!release) {
     return (
@@ -601,8 +618,15 @@ export function AiOutreachAdvisor({ artist, scored, release, locale }: AiOutreac
 
           <Button onClick={handleSaveContacts} disabled={saving} variant="outline" className="w-full gap-2">
             {saving ? <Loader2 className="h-4 w-4 animate-spin" /> : <Save className="h-4 w-4" />}
-            {locale === "it" ? "Salva contatti" : "Save contacts"}
+            {savedFlash
+              ? (locale === "it" ? "✓ Contatti salvati" : "✓ Contacts saved")
+              : (locale === "it" ? "Salva contatti" : "Save contacts")}
           </Button>
+          {saveError && (
+            <p className="text-xs text-red-400 text-center flex items-center justify-center gap-1">
+              <AlertTriangle className="h-3 w-3" /> {saveError}
+            </p>
+          )}
         </CardContent>
       </Card>
 
@@ -651,7 +675,7 @@ export function AiOutreachAdvisor({ artist, scored, release, locale }: AiOutreac
             >
               {saving ? <Loader2 className="h-3.5 w-3.5 animate-spin" /> : <Send className="h-3.5 w-3.5" />}
               {savedFlash
-                ? (locale === "it" ? "Salvato!" : "Saved!")
+                ? (locale === "it" ? "✓ Salvato!" : "✓ Saved!")
                 : (locale === "it" ? "Salva + segna contattato" : "Save + mark contacted")}
             </Button>
           </div>
