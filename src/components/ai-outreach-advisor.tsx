@@ -284,7 +284,7 @@ interface AiOutreachAdvisorProps {
   locale: Locale;
 }
 
-export function AiOutreachAdvisor({ artist, scored, release, locale }: AiOutreachAdvisorProps) {
+export const AiOutreachAdvisor = React.memo(function AiOutreachAdvisor({ artist, scored, release, locale }: AiOutreachAdvisorProps) {
   // 🔒 DEBUG RP-027: log render
   console.log(`[DEBUG AiOutreachAdvisor] ${new Date().toISOString()} RENDER`, {
     artistId: artist.id,
@@ -726,9 +726,7 @@ export function AiOutreachAdvisor({ artist, scored, release, locale }: AiOutreac
       </Card>
     </div>
   );
-}
-
-// ==================== STRATEGY ITEM ====================
+});
 
 function StrategyItem({
   icon,
