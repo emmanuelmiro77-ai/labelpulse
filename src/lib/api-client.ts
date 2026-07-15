@@ -394,14 +394,27 @@ export async function apiFetchArtistContact(artistId: string): Promise<ArtistCon
 }
 
 export async function apiUpsertArtistContact(contact: ArtistContactRow): Promise<{ ok: boolean; error?: string }> {
-  console.log(`[DEBUG apiUpsertArtistContact] ${new Date().toISOString()} CALL`, { contact });
+  const url = `${API_BASE}/api/artist-contacts`;
+  const method = "POST";
+  console.log(`[DEBUG apiUpsertArtistContact] ${new Date().toISOString()} CALL`, {
+    url, method, payload: contact,
+  });
   try {
-    const result = await writeDirect(`${API_BASE}/api/artist-contacts`, "POST", contact);
+    const result = await writeDirect(url, method, contact);
     console.log(`[DEBUG apiUpsertArtistContact] ${new Date().toISOString()} SUCCESS`, { result });
     return { ok: true };
   } catch (err: any) {
-    console.error(`[DEBUG apiUpsertArtistContact] ${new Date().toISOString()} ERROR:`, err);
-    return { ok: false, error: err?.message || String(err) };
+    const errorDetail = {
+      url,
+      method,
+      httpStatus: err?.status ?? "unknown",
+      responseBody: err?.body ?? "no body",
+      apiErrorMessage: err?.message ?? String(err),
+      supabaseError: err?.body?.error ?? "not present in response",
+      stack: err?.stack ?? "no stack",
+    };
+    console.error(`[DEBUG apiUpsertArtistContact] ${new Date().toISOString()} ERROR — FULL DETAIL:`, errorDetail);
+    return { ok: false, error: JSON.stringify(errorDetail, null, 2) };
   }
 }
 
