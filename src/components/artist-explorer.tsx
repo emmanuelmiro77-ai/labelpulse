@@ -1230,11 +1230,30 @@ export default function ArtistExplorer() {
     [artists]
   );
 
+  // 🔒 DEBUG RP-030: log when safeArtists reference changes
+  const prevArtistsRef = React.useRef<number>(-1);
+  if (prevArtistsRef.current !== safeArtists.length) {
+    console.log(`[DEBUG ArtistExplorer] ${new Date().toISOString()} safeArtists CHANGED`, {
+      prevLength: prevArtistsRef.current,
+      newLength: safeArtists.length,
+    });
+    prevArtistsRef.current = safeArtists.length;
+  }
+
   const selectedArtist = useMemo(
-    () =>
-      selectedArtistId
+    () => {
+      const found = selectedArtistId
         ? safeArtists.find((a) => a.id === selectedArtistId) || null
-        : null,
+        : null;
+      console.log(`[DEBUG ArtistExplorer] ${new Date().toISOString()} selectedArtist useMemo`, {
+        selectedArtistId,
+        found: !!found,
+        foundId: found?.id,
+        foundName: found?.name,
+        artistsCount: safeArtists.length,
+      });
+      return found;
+    },
     [safeArtists, selectedArtistId]
   );
 

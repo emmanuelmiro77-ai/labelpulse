@@ -285,7 +285,31 @@ interface AiOutreachAdvisorProps {
 }
 
 export const AiOutreachAdvisor = React.memo(function AiOutreachAdvisor({ artist, scored, release, locale }: AiOutreachAdvisorProps) {
-  // 🔒 DEBUG RP-027: log render
+  // 🔒 DEBUG RP-030: log mount
+  const mountRef = React.useRef(false);
+  if (!mountRef.current) {
+    mountRef.current = true;
+    console.log(`[DEBUG AiOutreachAdvisor] ${new Date().toISOString()} MOUNT`, {
+      artistId: artist.id,
+    });
+  }
+
+  // 🔒 DEBUG RP-030: log render + props comparison
+  const prevPropsRef = React.useRef<{ artistId: string; scoredRef: string; releaseRef: string } | null>(null);
+  const propsChanged: Record<string, boolean> = {};
+  if (prevPropsRef.current) {
+    propsChanged.artist = prevPropsRef.current.artistId !== artist.id;
+    propsChanged.scored = prevPropsRef.current.scoredRef !== (scored ? `s${scored.score}` : 'null');
+    propsChanged.release = prevPropsRef.current.releaseRef !== (release ? `r${release.id}` : 'null');
+  } else {
+    propsChanged.firstRender = true;
+  }
+  prevPropsRef.current = {
+    artistId: artist.id,
+    scoredRef: scored ? `s${scored.score}` : 'null',
+    releaseRef: release ? `r${release.id}` : 'null',
+  };
+
   console.log(`[DEBUG AiOutreachAdvisor] ${new Date().toISOString()} RENDER`, {
     artistId: artist.id,
     artistName: artist.name,
@@ -293,6 +317,8 @@ export const AiOutreachAdvisor = React.memo(function AiOutreachAdvisor({ artist,
     scoredScore: scored?.score,
     hasRelease: !!release,
     releaseTitle: release?.title,
+    propsChanged,
+    contactState: contactSnapshotRef.current,
   });
 
   // Compatibility score
@@ -303,6 +329,10 @@ export const AiOutreachAdvisor = React.memo(function AiOutreachAdvisor({ artist,
 
   // Contact state
   const [contact, setContact] = useState<ArtistContactRow | null>(null);
+  const contactSnapshotRef = React.useRef<string>("null");
+  contactSnapshotRef.current = contact ? JSON.stringify({
+    instagram: contact.instagram, beatport: contact.beatport, notes: contact.notes?.substring(0, 30),
+  }) : "null";
   const [loading, setLoading] = useState(true);
 
   // DM state
@@ -311,6 +341,16 @@ export const AiOutreachAdvisor = React.memo(function AiOutreachAdvisor({ artist,
   const [saving, setSaving] = useState(false);
   const [savedFlash, setSavedFlash] = useState(false);
   const [saveError, setSaveError] = useState<string | null>(null);
+
+  // 🔒 DEBUG RP-030: log unmount
+  useEffect(() => {
+    return () => {
+      console.log(`[DEBUG AiOutreachAdvisor] ${new Date().toISOString()} UNMOUNT`, {
+        artistId: artist.id,
+        contactStateBeforeUnmount: contactSnapshotRef.current,
+      });
+    };
+  }, []);
 
   // Load contact
   useEffect(() => {
@@ -385,12 +425,16 @@ export const AiOutreachAdvisor = React.memo(function AiOutreachAdvisor({ artist,
 
   const handleFieldChange = (field: keyof ArtistContactRow, value: string) => {
     console.log(`[DEBUG AiOutreachAdvisor] ${new Date().toISOString()} handleFieldChange`, {
-      field, valueLength: value.length, prevContact: contact,
+      field, valueLength: value.length,
+      contactBefore: contactSnapshotRef.current,
     });
     setContact((prev) => ({
       ...(prev || { artist_id: artist.id, artist_name: artist.name }),
       [field]: value,
     }));
+    console.log(`[DEBUG AiOutreachAdvisor] ${new Date().toISOString()} handleFieldChange DONE — setContact called`, {
+      field, valueLength: value.length,
+    });
   };
 
   const handleSaveContacts = useCallback(async () => {
