@@ -81,7 +81,7 @@ END $$;
 
 
 -- ---------------------------------------------------------------------
--- Step 2: DROP PRIMARY KEY su user_email
+-- Step 2: DROP PRIMARY KEY su user_email + DROP NOT NULL su user_email
 -- ---------------------------------------------------------------------
 -- Il constraint PK è stato creato implicitamente da
 --   `user_email TEXT PRIMARY KEY` (supabase-schema-fase-c.sql riga 143)
@@ -89,6 +89,12 @@ END $$;
 -- Il DROP rimuove anche l'indice univoco implicito su user_email.
 -- Nessun FK punta a user_profiles.user_email (verificato: ricerca
 --   REFERENCES user_profiles → 0 match in tutto il codebase).
+--
+-- ATTENZIONE: in PostgreSQL, PRIMARY KEY crea DUE constraint separati:
+--   1. UNIQUE constraint (la PK vera e propria)
+--   2. NOT NULL constraint sulla colonna
+-- DROP CONSTRAINT rimuove solo l'UNIQUE. Il NOT NULL persiste.
+-- Serve un ALTER COLUMN esplicito per renderla nullable.
 DO $$
 BEGIN
   IF EXISTS (
@@ -97,6 +103,20 @@ BEGIN
       AND contype = 'p'
   ) THEN
     ALTER TABLE user_profiles DROP CONSTRAINT user_profiles_pkey;
+  END IF;
+END $$;
+
+-- Rendi user_email nullable (il NOT NULL era implicito della PK, non viene rimosso dal DROP)
+DO $$
+BEGIN
+  IF EXISTS (
+    SELECT 1 FROM information_schema.columns
+    WHERE table_schema = 'public'
+      AND table_name = 'user_profiles'
+      AND column_name = 'user_email'
+      AND is_nullable = 'NO'
+  ) THEN
+    ALTER TABLE user_profiles ALTER COLUMN user_email DROP NOT NULL;
   END IF;
 END $$;
 
