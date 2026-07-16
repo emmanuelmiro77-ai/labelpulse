@@ -65,14 +65,40 @@ export async function POST(req: NextRequest) {
       .single();
 
     if (error) {
-      console.error("[/api/profile POST]", error);
-      return NextResponse.json({ error: error.message }, { status: 500 });
+      console.error("[/api/profile POST] Supabase error:", error);
+      return NextResponse.json({
+        error: error.message,
+        diagnostic: {
+          url: "/api/profile",
+          method: "POST",
+          httpStatus: 500,
+          responseBody: { error: error.message },
+          errorMessage: error.message,
+          errorCode: error.code ?? null,
+          errorDetails: error.details ?? null,
+          errorHint: error.hint ?? null,
+          stack: error.stack ?? null,
+        },
+      }, { status: 500 });
     }
 
     return NextResponse.json({ profile: data });
   } catch (err: any) {
     console.error("[/api/profile POST] exception:", err);
-    return NextResponse.json({ error: "Internal server error" }, { status: 500 });
+    return NextResponse.json({
+      error: "Internal server error",
+      diagnostic: {
+        url: "/api/profile",
+        method: "POST",
+        httpStatus: 500,
+        responseBody: { error: err?.message ?? "unknown" },
+        errorMessage: err?.message ?? "unknown",
+        errorCode: null,
+        errorDetails: null,
+        errorHint: null,
+        stack: err?.stack ?? null,
+      },
+    }, { status: 500 });
   }
 }
 
