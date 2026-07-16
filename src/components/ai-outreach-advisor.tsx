@@ -285,6 +285,13 @@ interface AiOutreachAdvisorProps {
 }
 
 export const AiOutreachAdvisor = React.memo(function AiOutreachAdvisor({ artist, scored, release, locale }: AiOutreachAdvisorProps) {
+  // Contact state
+  const [contact, setContact] = useState<ArtistContactRow | null>(null);
+  const contactSnapshotRef = React.useRef<string>("null");
+  contactSnapshotRef.current = contact ? JSON.stringify({
+    instagram: contact.instagram, beatport: contact.beatport, notes: contact.notes?.substring(0, 30),
+  }) : "null";
+
   // 🔒 DEBUG RP-030: log mount
   const mountRef = React.useRef(false);
   if (!mountRef.current) {
@@ -327,12 +334,6 @@ export const AiOutreachAdvisor = React.memo(function AiOutreachAdvisor({ artist,
   // Reasons from Musical Interest Engine
   const reasons = useMemo(() => scored?.reasons || [], [scored]);
 
-  // Contact state
-  const [contact, setContact] = useState<ArtistContactRow | null>(null);
-  const contactSnapshotRef = React.useRef<string>("null");
-  contactSnapshotRef.current = contact ? JSON.stringify({
-    instagram: contact.instagram, beatport: contact.beatport, notes: contact.notes?.substring(0, 30),
-  }) : "null";
   const [loading, setLoading] = useState(true);
 
   // DM state
