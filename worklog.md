@@ -2173,3 +2173,40 @@ Stage Summary:
 - UI si aggiorna istantaneamente dopo il salvataggio: customArtists viene mappato con l'artista aggiornato → allArtists e selectedArtist si ricalcolano via useMemo → tutti i pulsanti social (Beatport, Spotify, SoundCloud, Instagram, Website, Contact) riflettono i nuovi valori senza refresh manuale e senza perdere lo stato (selectedArtistId invariato).
 - Persistenza dopo F5 garantita: i dati sono su Supabase (artist_custom_data), apiFetchCustomArtists al mount ricarica i valori aggiornati.
 - Pulsante "Edit Artist" visibile solo per artisti custom (artist.isCustom === true). Artisti Beatport non mostrano il pulsante.
+
+---
+Task ID: rp-035a-fix-edit-bugs
+Agent: Z-AI (session web-aaf0d6d4)
+Task: RP-035A — Fix 3 bug emersi nel test manuale di Edit Artist: (1) email non persistente dopo riapertura Edit, (2) Contact non usa mailto: quando email salvata, (3) testo pulsante EDIT mode deve essere "Aggiorna artista" non "Salva".
+
+Work Log:
+- Indagine root cause BUG 1+2 (stessa causa):
+  * Verificato payload client (riga 1422): `email: email.trim() || null` ✓ corretto
+  * Verificato PATCH API: destruttura `email: contactEmail` + aggiorna `email: contactEmail?.trim() || null` ✓ corretto
+  * Verificato UPDATE SQL: Supabase `.update(updates).eq("id", id).eq("user_id", userId)` ✓ corretto
+  * Verificato mapping DB → Artist (`customArtistToArtist`): `email: row.email || null` ✓ corretto
+  * Verificato mapping Artist → Form (useEffect): `setEmail(editArtist.email || "")` ✓ corretto
+  * TUTTI i 5 passaggi sono corretti → la causa reale è altrove.
+  * ROOT CAUSE: `selectedArtist` useMemo (riga 1621) aveva deps `[safeArtists, selectedArtistId]` ma il callback usa `allArtists.find(...)`.
+    - `safeArtists` = solo artisti Beatport (immutabile dopo il boot)
+    - `allArtists` = `[...safeArtists, ...customArtists]` (cambia quando customArtists cambia)
+    - Quando l'utente salva un edit → customArtists aggiornato → allArtists ricalcolato → MA selectedArtist NON ricalcolato (deps non cambiano)
+    - → selectedArtist resta STALE (oggetto vecchio senza email)
+    - → Riaprendo Edit, editingArtist = selectedArtist (stale) → useEffect precarica email vuota (BUG 1)
+    - → SmartSearch riceve email={artist.email} = null → Contact usa Google Search invece di mailto: (BUG 2)
+- Fix BUG 1+2: cambiato deps di selectedArtist useMemo da `[safeArtists, selectedArtistId]` a `[allArtists, selectedArtistId]`. Ora selectedArtist è reattivo ai cambiamenti di customArtists.
+- Verifica BUG 2 logic in SmartSearch: la logica `mailto:` quando email è valorizzata era già correttamente implementata in RP-034 PATCH. Il malfunzionamento era solo a causa dello stale selectedArtist. Fix BUG 1 risolve automaticamente BUG 2.
+- Fix BUG 3: cambiato testo pulsante EDIT mode da "Salva"/"Save" a "Aggiorna artista"/"Update Artist" (riga 1513). CREATE mode invariato ("Aggiungi"/"Add"). Aggiornato anche il commento docblock del dialog.
+- Verifica anti-regressione:
+  * selectedArtist useMemo ora ricalcolato quando allArtists cambia → bug fix non introduce regressioni (allArtists è il dato effettivamente usato nel callback)
+  * SmartSearch logic invariato (era già corretto)
+  * CREATE mode invariato (pulsante "Aggiungi"/"Add", flow originale)
+  * Nessuna modifica a: scraping, sync, database, migration, altre pagine, altri moduli
+- Build produzione: ✓ Compiled successfully in 39.9s, 49/49 static pages
+- Test suite: ✓ 42/42 test passati (5 file)
+
+Stage Summary:
+- 3 bug fixati con 1 root cause fix + 1 testo button fix.
+- BUG 1+2 root cause: selectedArtist useMemo aveva dipendenza `safeArtists` invece di `allArtists` → stale dopo EDIT di artisti custom → email non visibile riaprendo Edit + Contact usava Google Search invece di mailto:.
+- BUG 3: testo pulsante EDIT mode corretto a "Aggiorna artista" / "Update Artist".
+- File modificati: solo src/components/artist-explorer.tsx (3 edit minimi: 1 deps useMemo + 1 testo button + 1 commento docblock).

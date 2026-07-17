@@ -1334,7 +1334,7 @@ function customArtistToArtist(row: ArtistCustomRow): Artist {
 // Quando `editArtist` è fornito:
 //   - Tutti i campi sono precaricati con i valori dell'artista.
 //   - Il titolo diventa "Modifica artista" / "Edit artist".
-//   - Il pulsante di salvataggio diventa "Salva" / "Save".
+//   - Il pulsante di salvataggio diventa "Aggiorna artista" / "Update Artist".
 //   - Il salvataggio chiama PATCH /api/artist-custom?id=<id> (UPDATE, NON upsert).
 //   - La callback `onUpdated(artist)` viene invocata al posto di `onCreated`.
 // Quando `editArtist` è undefined → comportamento invariato (CREATE).
@@ -1507,8 +1507,10 @@ function AddArtistDialog({
           <Button variant="ghost" onClick={onClose}>{locale === "it" ? "Annulla" : "Cancel"}</Button>
           <Button onClick={handleSave} disabled={!name.trim() || saving} className="gap-2">
             {saving ? <Loader2 className="h-4 w-4 animate-spin" /> : isEditMode ? <Pencil className="h-4 w-4" /> : <Plus className="h-4 w-4" />}
+            {/* RP-035A BUG 3 FIX — testo pulsante EDIT mode: "Aggiorna artista" / "Update Artist"
+                (non "Salva" / "Save"). CREATE mode invariato: "Aggiungi" / "Add". */}
             {isEditMode
-              ? locale === "it" ? "Salva" : "Save"
+              ? locale === "it" ? "Aggiorna artista" : "Update Artist"
               : locale === "it" ? "Aggiungi" : "Add"}
           </Button>
         </DialogFooter>
@@ -1632,7 +1634,14 @@ export default function ArtistExplorer() {
       });
       return found;
     },
-    [safeArtists, selectedArtistId]
+    // RP-035A BUG 1+2 FIX — la dipendenza deve essere `allArtists` (che include
+    // customArtists), NON `safeArtists` (solo Beatport). Prima di questo fix,
+    // quando customArtists veniva aggiornato dopo un EDIT (es. email salvata),
+    // selectedArtist NON veniva ricalcolato perché safeArtists non era cambiato
+    // → selectedArtist restava stale (oggetto vecchio senza email)
+    // → Edit Artist riapriva con email vuota (BUG 1)
+    // → SmartSearch riceveva email=null → Contact usava Google Search (BUG 2).
+    [allArtists, selectedArtistId]
   );
 
   const handleSelect = useCallback(
