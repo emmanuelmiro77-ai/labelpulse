@@ -456,6 +456,35 @@ export async function apiFetchCustomArtists(): Promise<ArtistCustomRow[] | null>
   }
 }
 
+/**
+ * 🔒 RP-036 — Cerca un record CRM (artist_custom_data) tramite beatport_artist_id.
+ *
+ * Ritorna l'ArtistCustomRow collegato, o null se:
+ *   - l'utente non ha un CRM record per questo artista Beatport
+ *   - la chiamata fallisce (network / auth / 500)
+ *
+ * Usato dal flusso "Edit CRM" per decidere se aprire il dialog in
+ * modalità EDIT (record esiste) o CREATE-from-Beatport (record non esiste).
+ */
+export async function apiFetchCustomArtistByBeatportId(
+  beatportId: number,
+): Promise<ArtistCustomRow | null> {
+  try {
+    const res = await fetch(
+      `${API_BASE}/api/artist-custom?beatport_id=${encodeURIComponent(beatportId)}`,
+    );
+    if (!res.ok) {
+      console.error("[apiFetchCustomArtistByBeatportId] HTTP", res.status);
+      return null;
+    }
+    const data = await res.json();
+    return data.artist || null;
+  } catch (err) {
+    console.error("[apiFetchCustomArtistByBeatportId] failed:", err);
+    return null;
+  }
+}
+
 export async function apiCreateCustomArtist(artist: ArtistCustomRow): Promise<ArtistCustomRow | null> {
   try {
     const res = await fetch(`${API_BASE}/api/artist-custom`, {

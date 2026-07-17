@@ -2210,3 +2210,67 @@ Stage Summary:
 - BUG 1+2 root cause: selectedArtist useMemo aveva dipendenza `safeArtists` invece di `allArtists` → stale dopo EDIT di artisti custom → email non visibile riaprendo Edit + Contact usava Google Search invece di mailto:.
 - BUG 3: testo pulsante EDIT mode corretto a "Aggiorna artista" / "Update Artist".
 - File modificati: solo src/components/artist-explorer.tsx (3 edit minimi: 1 deps useMemo + 1 testo button + 1 commento docblock).
+
+---
+Task ID: rp-036-universal-crm-profile
+Agent: Z-AI (session web-aaf0d6d4)
+Task: RP-036 — Universal CRM Profile. Edit Artist diventa Edit CRM, visibile per tutti gli artisti. Per artisti Beatport senza CRM, premendo Edit CRM si crea automaticamente il record CRM collegato (precompilando name, beatport_id, beatport_url, image). Il dettaglio artista legge sempre Beatport + CRM con priorità ai campi CRM.
+
+Work Log:
+- Modifica 1 — API route (src/app/api/artist-custom/route.ts): GET esteso per supportare ?beatport_id=<id>.
+  * Se beatport_id è presente → maybeSingle() ritorna il singolo record CRM collegato o null.
+  * Se assente → comportamento invariato (ritorna tutti i record dell'utente).
+- Modifica 2 — api-client.ts: aggiunta apiFetchCustomArtistByBeatportId(beatportId: number) → GET /api/artist-custom?beatport_id=<id>.
+- Modifica 3 — Artist interface: aggiunto campo customId?: string (id del record in artist_custom_data collegato).
+  - Per artisti custom standalone: coincide con `id`.
+  - Per artisti Beatport con CRM: è il customId del CRM record (mentre `id` resta "bp_XXXX").
+  - Per artisti Beatport senza CRM: undefined.
+- Modifica 4 — customArtistToArtist: imposta customId = row.id.
+- Modifica 5 — Nuova funzione helper mergeCrmIntoArtist(beatportArtist, crmArtist):
+  - Preserva tutti i dati musicali Beatport (tracks, genres, labels, points, trending, etc.).
+  - Sovrascrive i 6 campi CRM (beatportUrl, instagramUrl, spotifyUrl, soundcloudUrl, websiteUrl, email) con i valori del CRM.
+  - Imposta isCustom=true e customId=crmArtist.customId.
+  - L'Artist risultante ha id Beatport (es. "bp_6824") → il detail page continua a funzionare.
+- Modifica 6 — allArtists useMemo: logica di merge Beatport + CRM.
+  - Costruisce una Map<beatportId, Artist> dai customArtists.
+  - Per ogni artista Beatport, se esiste un CRM con stesso beatportId → merge.
+  - I CRM senza match Beatport (custom senza URL Beatport, o URL non nel dataset) restano standalone.
+  - Risultato: nessun duplicato, tutti i campi CRM disponibili nel detail page.
+- Modifica 7 — ArtistDetail:
+  - Pulsante rinominato "Edit Artist" → "Edit CRM" (it: "Modifica CRM", en: "Edit CRM").
+  - Rimossa guardia artist.isCustom → visibile per TUTTI gli artisti.
+  - Nuova prop editCrmLoading: mostra spinner durante la lookup CRM via beatport_id.
+  - onEditArtist è sempre passato dal parent (non più filtrato per isCustom).
+- Modifica 8 — AddArtistDialog: supporta 3 modalità (type DialogMode).
+  - EDIT mode (editArtist != null): titolo "Modifica CRM" / "Edit CRM", pulsante "Aggiorna CRM" / "Update CRM", salva via PATCH usando editArtist.customId come target.
+  - CREATE-FROM-BEATPORT mode (createFromArtist != null): titolo "Crea CRM" / "Create CRM", pulsante "Crea CRM" / "Create CRM", precompila name e beatportUrl dall'artista Beatport, lascia vuoti i campi CRM, salva via POST includendo image_url dall'artista Beatport. beatport_artist_id estratto dall'URL o fallback a createFromArtist.beatportId.
+  - CREATE mode (entrambi null): comportamento originale invariato.
+  - Nuova callback onCrmCreated per il flow create-from-beatport.
+- Modifica 9 — ArtistExplorer (main):
+  - Nuovo stato createFromArtist: Artist | null.
+  - Nuovo stato editCrmLoading: boolean (per lo spinner).
+  - Nuovo handler handleEditCrm (async):
+    - Caso 1: artist.customId presente → EDIT mode diretto.
+    - Caso 2: artist.beatportId presente, customId assente → fetch CRM via beatport_id:
+      - Se trovato → merge + EDIT mode.
+      - Se non trovato → CREATE-from-Beatport mode.
+    - Caso 3: fallback (no customId, no beatportId) → EDIT mode.
+  - Nuovo handler handleCrmCreated: aggiunge il nuovo CRM artist a customArtists (con dedupe per customId).
+  - handleArtistUpdated: cambiato match da `a.id === updated.id` a `a.customId === updated.customId` (per consistenza con la nuova semantica).
+  - 3 istanze del dialog montate in ogni render branch (empty, detail, list): CREATE, EDIT, CREATE-from-Beatport. Solo una è open alla volta.
+- Verifica anti-regressione:
+  * Beatport artist logic INVIOLATA: mergeCrmIntoArtist preserva tracks, genres, labels, points, trending, slug, imageUrl (Beatport), bestPosition, isRemixerOnly, trendingRankByGenre, trendingPointsByGenre.
+  * API POST (create) e DELETE non modificati. PATCH invariato.
+  * NESSUNA modifica a: scraping Beatport, sync Beatport, database, migration, altre pagine, altri moduli.
+  * getArtistBeatportUrl(artist) continua a funzionare (usa slug + beatportId, invariati dal merge).
+- TypeScript: 1 errore pre-esistente (activeTab, non mio). Fix iniziale: mergeCrmIntoArtist accettava ArtistCustomRow invece di Artist (causava TS2345). Fixato cambiando il tipo del parametro a Artist (la Map contiene Artist già convertiti).
+- Build produzione: ✓ Compiled successfully in 42s, 49/49 static pages.
+- Test suite: ✓ 42/42 test passati (5 file).
+
+Stage Summary:
+- CRM universale implementato. Edit CRM visibile per TUTTI gli artisti (Beatport e custom).
+- Per artisti Beatport senza CRM: click su Edit CRM → lookup via beatport_id → se non trovato, apre dialog in CREATE-from-Beatport mode con name + beatportUrl precompilati e campi CRM vuoti. Salvataggio crea nuovo record CRM con beatport_artist_id collegato.
+- Per artisti Beatport con CRM esistente: click su Edit CRM → lookup → se trovato, apre dialog in EDIT mode con CRM fields precompilati.
+- Per artisti custom (con o senza beatport_id): click su Edit CRM → EDIT mode diretto (usa customId come target PATCH).
+- Detail page legge sempre Beatport + CRM con CRM priority (merge avviene in allArtists useMemo automaticamente).
+- UI si aggiorna istantaneamente dopo CREATE/UPDATE: customArtists aggiornato → allArtists ricalcolato → selectedArtist ricalcolato (con merge) → detail page re-renderizzato. Nessun refresh manuale, nessuna perdita di stato.

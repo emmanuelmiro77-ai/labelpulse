@@ -31,6 +31,7 @@ import { calculateTargets, type ScoredArtist } from "@/lib/target-scoring";
 import {
   type ArtistCustomRow,
   apiFetchCustomArtists,
+  apiFetchCustomArtistByBeatportId,
   apiCreateCustomArtist,
   apiUpdateCustomArtist,
 } from "@/lib/api-client";
@@ -88,7 +89,7 @@ export interface ArtistTrack {
 }
 
 export interface Artist {
-  id: string; // 'bp_6824' or 'nm_<name>'
+  id: string; // 'bp_6824' or 'nm_<name>' or 'custom_<ts>_<rand>'
   beatportId: number | null;
   name: string;
   slug: string;
@@ -113,6 +114,13 @@ export interface Artist {
   // RP-035 — true per gli artisti creati manualmente (artist_custom_data).
   // Usato per mostrare il pulsante "Edit Artist" nel detail.
   isCustom?: boolean;
+  // RP-036 — id del record in artist_custom_data collegato a questo artista.
+  // - Per artisti custom standalone: uguale a `id` (es. "custom_123_abc").
+  // - Per artisti Beatport con CRM record: l'id del CRM record (es. "custom_456_def")
+  //   mentre `id` resta "bp_6824". Permette di sapere se l'artista ha un CRM
+  //   e di aggiornarlo via PATCH.
+  // - Per artisti Beatport senza CRM: undefined.
+  customId?: string;
 }
 
 // ============================================================================
@@ -502,6 +510,7 @@ function ArtistDetail({
   selectedRelease,
   scoredArtist,
   onEditArtist,
+  editCrmLoading,
 }: {
   artist: Artist;
   locale: Locale;
@@ -512,9 +521,12 @@ function ArtistDetail({
   returnToLabelName?: string;
   selectedRelease?: any | null;
   scoredArtist?: ScoredArtist | null;
-  // RP-035 — passato dal parent solo per artisti custom (artist_custom_data).
-  // Quando fornito, mostra il pulsante "Edit Artist" nell'hero.
+  // RP-036 — passato dal parent per TUTTI gli artisti (non solo custom).
+  // La logica che decide EDIT vs CREATE-from-Beatport è nel parent (handleEditCrm).
   onEditArtist?: (artist: Artist) => void;
+  // RP-036 — true mentre handleEditCrm cerca il CRM via beatport_id (solo per
+  // artisti Beatport senza customId). Mostra uno spinner nel pulsante Edit CRM.
+  editCrmLoading?: boolean;
 }) {
   // ----- Audio playback (single shared <audio> element) -----
   const audioRef = useRef<HTMLAudioElement | null>(null);
@@ -645,18 +657,24 @@ function ArtistDetail({
             </span>
           </Button>
         )}
-        {/* RP-035 — Edit Artist button, solo per artisti custom (artist_custom_data).
-            onEditArtist è passato dal parent solo quando artist.isCustom === true. */}
-        {onEditArtist && artist.isCustom && (
+        {/* RP-036 — Edit CRM button, visibile per TUTTI gli artisti.
+            Il parent passa onEditArtist sempre (non più filtrato per isCustom).
+            La logica di decide-mode (EDIT vs CREATE-from-Beatport) è nel parent. */}
+        {onEditArtist && (
           <Button
             variant="outline"
             size="sm"
             onClick={() => onEditArtist(artist)}
+            disabled={editCrmLoading}
             className="gap-1.5 ml-auto border-primary/30 text-primary hover:bg-primary/10"
-            title={it(locale, "Modifica artista", "Edit artist")}
+            title={it(locale, "Modifica CRM", "Edit CRM")}
           >
-            <Pencil className="h-3.5 w-3.5" />
-            {it(locale, "Modifica artista", "Edit artist")}
+            {editCrmLoading ? (
+              <Loader2 className="h-3.5 w-3.5 animate-spin" />
+            ) : (
+              <Pencil className="h-3.5 w-3.5" />
+            )}
+            {it(locale, "Modifica CRM", "Edit CRM")}
           </Button>
         )}
       </div>
@@ -1323,38 +1341,114 @@ function customArtistToArtist(row: ArtistCustomRow): Artist {
     email: row.email || null,
     // RP-035 — flag per distinguere gli artisti custom (mostra "Edit Artist").
     isCustom: true,
+    // RP-036 — customId = id del record in artist_custom_data.
+    // Per artisti custom standalone coincide con `id`.
+    customId: row.id,
+  };
+}
+
+/**
+ * 🔒 RP-036 — Merge di un artista Beatport con il suo record CRM (già convertito in Artist).
+ *
+ * Ritorna un nuovo Artist che preserva tutti i dati musicali Beatport
+ * (tracks, genres, labels, points, trending, ecc.) ma sovrascrive i
+ * campi CRM (instagram_url, spotify_url, soundcloud_url, website_url,
+ * email, beatport_url) con i valori salvati nel CRM. Il CRM ha priorità:
+ * se un campo CRM è NULL, viene comunque sovrascritto (a null) SOLO se
+ * l'artista Beatport non aveva un valore equivalente. In pratica, gli
+ * artisti Beatport non hanno questi campi valorizzati, quindi il merge
+ * è semplice: i campi CRM vengono aggiunti.
+ *
+ * Il risultato ha:
+ *   - id = id Beatport (es. "bp_6824") → il detail page continua a funzionare
+ *   - customId = id del CRM record → PATCH ha il target giusto
+ *   - isCustom = true → il pulsante Edit CRM apre il dialog in EDIT mode
+ *   - Tutti i campi musicali Beatport intatti
+ *   - Tutti i campi CRM valorizzati dal record
+ *
+ * Nota: il parametro `crmArtist` è un Artist già convertito da ArtistCustomRow
+ * via customArtistToArtist (non l'ArtistCustomRow grezzo).
+ */
+function mergeCrmIntoArtist(
+  beatportArtist: Artist,
+  crmArtist: Artist,
+): Artist {
+  return {
+    ...beatportArtist,
+    // CRM fields — sovrascrivono eventuali valori precedenti
+    beatportUrl: crmArtist.beatportUrl || beatportArtist.beatportUrl || null,
+    instagramUrl: crmArtist.instagramUrl || null,
+    spotifyUrl: crmArtist.spotifyUrl || null,
+    soundcloudUrl: crmArtist.soundcloudUrl || null,
+    websiteUrl: crmArtist.websiteUrl || null,
+    email: crmArtist.email || null,
+    // RP-036 flags
+    isCustom: true,
+    customId: crmArtist.customId || crmArtist.id,
   };
 }
 
 // ============================================================================
-// ADD / EDIT ARTIST DIALOG (RP-034 create + RP-035 edit, same component)
+// ADD / EDIT / CREATE-FROM-BEATPORT DIALOG (RP-034 + RP-035 + RP-036, same component)
 // ============================================================================
 //
 // RP-035 — Il dialog esistente viene riutilizzato in modalità EDIT.
-// Quando `editArtist` è fornito:
-//   - Tutti i campi sono precaricati con i valori dell'artista.
-//   - Il titolo diventa "Modifica artista" / "Edit artist".
-//   - Il pulsante di salvataggio diventa "Aggiorna artista" / "Update Artist".
-//   - Il salvataggio chiama PATCH /api/artist-custom?id=<id> (UPDATE, NON upsert).
-//   - La callback `onUpdated(artist)` viene invocata al posto di `onCreated`.
-// Quando `editArtist` è undefined → comportamento invariato (CREATE).
+// RP-036 — Terza modalità: CREATE-from-Beatport.
+//
+// Tre modalità selezionate in base alle props:
+//
+//   1. editArtist != null    → EDIT MODE
+//      - Tutti i campi precaricati dal CRM record.
+//      - Titolo: "Modifica CRM" / "Edit CRM".
+//      - Pulsante: "Aggiorna CRM" / "Update CRM".
+//      - Salvataggio: PATCH /api/artist-custom?id=<editArtist.customId>.
+//      - Callback: onUpdated(artist).
+//
+//   2. createFromArtist != null → CREATE-FROM-BEATPORT MODE (RP-036)
+//      - name e beatportUrl precaricati dall'artista Beatport.
+//      - beatport_artist_id estratto dall'URL.
+//      - image_url preso dall'artista Beatport.
+//      - Campi CRM (instagram, spotify, soundcloud, website, email, notes)
+//        lasciati vuoti (l'utente li compilerà).
+//      - Titolo: "Crea CRM" / "Create CRM".
+//      - Pulsante: "Crea CRM" / "Create CRM".
+//      - Salvataggio: POST /api/artist-custom (crea nuovo record CRM
+//        collegato al beatport_artist_id).
+//      - Callback: onCrmCreated(artist).
+//
+//   3. editArtist == null && createFromArtist == null → CREATE MODE (originale)
+//      - Form vuoto.
+//      - Titolo: "Aggiungi artista" / "Add artist".
+//      - Pulsante: "Aggiungi" / "Add".
+//      - Salvataggio: POST /api/artist-custom.
+//      - Callback: onCreated(artist).
+
+type DialogMode = "create" | "edit" | "create-from-beatport";
 
 function AddArtistDialog({
   open,
   onClose,
   onCreated,
   onUpdated,
+  onCrmCreated,
   editArtist,
+  createFromArtist,
   locale,
 }: {
   open: boolean;
   onClose: () => void;
   onCreated: (artist: Artist) => void;
   onUpdated?: (artist: Artist) => void;
+  onCrmCreated?: (artist: Artist) => void;
   editArtist?: Artist | null;
+  createFromArtist?: Artist | null;
   locale: Locale;
 }) {
-  const isEditMode = !!editArtist;
+  const mode: DialogMode = editArtist
+    ? "edit"
+    : createFromArtist
+      ? "create-from-beatport"
+      : "create";
 
   const [name, setName] = useState("");
   const [beatportUrl, setBeatportUrl] = useState("");
@@ -1366,14 +1460,14 @@ function AddArtistDialog({
   const [notes, setNotes] = useState("");
   const [saving, setSaving] = useState(false);
 
-  // RP-035 — Quando il dialog viene aperto in modalità EDIT, precarica tutti
-  // i campi con i valori correnti dell'artista. L'effetto viene rieseguito
-  // solo quando cambia l'id dell'artista in modifica (o quando si passa da
-  // create a edit mode), così le modifiche utente non vengono sovrascritte
-  // ad ogni render.
+  // Popola i campi quando il dialog si apre. Rieseguito solo quando cambia
+  // la "chiave" della modalità (id artista in edit, o id Beatport in create-from,
+  // o nessuno per create pura).
   useEffect(() => {
     if (!open) return;
-    if (isEditMode && editArtist) {
+
+    if (mode === "edit" && editArtist) {
+      // EDIT MODE — precompila TUTTI i campi dal CRM.
       setName(editArtist.name || "");
       setBeatportUrl(editArtist.beatportUrl || "");
       setInstagram(editArtist.instagramUrl || "");
@@ -1381,12 +1475,20 @@ function AddArtistDialog({
       setSoundcloud(editArtist.soundcloudUrl || "");
       setWebsite(editArtist.websiteUrl || "");
       setEmail(editArtist.email || "");
-      // notes non fa parte dell'interfaccia Artist; viene perso in display
-      // ma resta nel DB. Per precaricarlo servirebbe estendere Artist;
-      // per ora lo lasciamo vuoto in edit mode (non richiesto dal test).
+      setNotes("");
+    } else if (mode === "create-from-beatport" && createFromArtist) {
+      // CREATE-FROM-BEATPORT — precompila solo i dati Beatport.
+      // I campi CRM restano vuoti (li compilerà l'utente).
+      setName(createFromArtist.name || "");
+      setBeatportUrl(createFromArtist.beatportUrl || "");
+      setInstagram("");
+      setSpotify("");
+      setSoundcloud("");
+      setWebsite("");
+      setEmail("");
       setNotes("");
     } else {
-      // CREATE mode — form pulito
+      // CREATE MODE — form vuoto
       setName("");
       setBeatportUrl("");
       setInstagram("");
@@ -1396,7 +1498,7 @@ function AddArtistDialog({
       setEmail("");
       setNotes("");
     }
-  }, [open, isEditMode, editArtist]);
+  }, [open, mode, editArtist, createFromArtist]);
 
   const handleSave = async () => {
     if (!name.trim()) return;
@@ -1411,6 +1513,12 @@ function AddArtistDialog({
       }
     }
 
+    // RP-036 — in CREATE-from-Beatport, usa il beatportId dell'artista Beatport
+    // anche se la URL non lo contiene (non dovrebbe mai capitare, ma fallback sicuro).
+    if (!beatportArtistId && mode === "create-from-beatport" && createFromArtist?.beatportId) {
+      beatportArtistId = createFromArtist.beatportId;
+    }
+
     const payload = {
       artist_name: name.trim(),
       beatport_url: beatportUrl.trim() || null,
@@ -1423,12 +1531,24 @@ function AddArtistDialog({
       notes: notes.trim() || null,
     };
 
-    if (isEditMode && editArtist && onUpdated) {
-      // RP-035 — UPDATE del record esistente.
-      const updated = await apiUpdateCustomArtist(editArtist.id, payload);
+    if (mode === "edit" && editArtist && editArtist.customId && onUpdated) {
+      // EDIT — UPDATE del CRM record esistente.
+      const updated = await apiUpdateCustomArtist(editArtist.customId, payload);
       setSaving(false);
       if (updated) {
         onUpdated(customArtistToArtist(updated));
+        onClose();
+      }
+    } else if (mode === "create-from-beatport" && createFromArtist && onCrmCreated) {
+      // CREATE-FROM-BEATPORT — POST crea nuovo CRM record collegato al Beatport artist.
+      // image_url viene preso dall'artista Beatport (il CRM lo memorizza).
+      const created = await apiCreateCustomArtist({
+        ...payload,
+        image_url: createFromArtist.imageUrl || null,
+      });
+      setSaving(false);
+      if (created) {
+        onCrmCreated(customArtistToArtist(created));
         onClose();
       }
     } else {
@@ -1448,19 +1568,31 @@ function AddArtistDialog({
     }
   };
 
+  // RP-036 — titoli, icone e testi pulsante per le 3 modalità
+  const titleIcon = mode === "create" ? <UserPlus className="h-4 w-4 text-primary" /> : <Pencil className="h-4 w-4 text-primary" />;
+  const titleText = mode === "edit"
+    ? locale === "it" ? "Modifica CRM" : "Edit CRM"
+    : mode === "create-from-beatport"
+      ? locale === "it" ? "Crea CRM" : "Create CRM"
+      : locale === "it" ? "Aggiungi artista" : "Add artist";
+
+  const buttonText = mode === "edit"
+    ? locale === "it" ? "Aggiorna CRM" : "Update CRM"
+    : mode === "create-from-beatport"
+      ? locale === "it" ? "Crea CRM" : "Create CRM"
+      : locale === "it" ? "Aggiungi" : "Add";
+
+  const buttonIcon = saving
+    ? <Loader2 className="h-4 w-4 animate-spin" />
+    : mode === "create" ? <Plus className="h-4 w-4" /> : <Pencil className="h-4 w-4" />;
+
   return (
     <Dialog open={open} onOpenChange={onClose}>
       <DialogContent className="max-w-lg">
         <DialogHeader>
           <DialogTitle className="flex items-center gap-2">
-            {isEditMode ? (
-              <Pencil className="h-4 w-4 text-primary" />
-            ) : (
-              <UserPlus className="h-4 w-4 text-primary" />
-            )}
-            {isEditMode
-              ? locale === "it" ? "Modifica artista" : "Edit artist"
-              : locale === "it" ? "Aggiungi artista" : "Add artist"}
+            {titleIcon}
+            {titleText}
           </DialogTitle>
         </DialogHeader>
 
@@ -1506,12 +1638,8 @@ function AddArtistDialog({
         <DialogFooter>
           <Button variant="ghost" onClick={onClose}>{locale === "it" ? "Annulla" : "Cancel"}</Button>
           <Button onClick={handleSave} disabled={!name.trim() || saving} className="gap-2">
-            {saving ? <Loader2 className="h-4 w-4 animate-spin" /> : isEditMode ? <Pencil className="h-4 w-4" /> : <Plus className="h-4 w-4" />}
-            {/* RP-035A BUG 3 FIX — testo pulsante EDIT mode: "Aggiorna artista" / "Update Artist"
-                (non "Salva" / "Save"). CREATE mode invariato: "Aggiungi" / "Add". */}
-            {isEditMode
-              ? locale === "it" ? "Aggiorna artista" : "Update Artist"
-              : locale === "it" ? "Aggiungi" : "Add"}
+            {buttonIcon}
+            {buttonText}
           </Button>
         </DialogFooter>
       </DialogContent>
@@ -1575,6 +1703,15 @@ export default function ArtistExplorer() {
   // editingArtist !== null → il dialog esiste in versione EDIT (precompilata).
   const [editingArtist, setEditingArtist] = useState<Artist | null>(null);
 
+  // RP-036 — stato per la modalità CREATE-from-Beatport del dialog.
+  // createFromArtist !== null → il dialog precompila solo i dati Beatport
+  // (name, beatportUrl) e lascia vuoti i campi CRM.
+  const [createFromArtist, setCreateFromArtist] = useState<Artist | null>(null);
+
+  // RP-036 — flag di caricamento mentre handleEditCrm cerca il CRM via
+  // beatport_id. Mostra uno spinner nel pulsante Edit CRM.
+  const [editCrmLoading, setEditCrmLoading] = useState(false);
+
   // Load custom artists on mount
   useEffect(() => {
     let mounted = true;
@@ -1586,28 +1723,112 @@ export default function ArtistExplorer() {
     return () => { mounted = false; };
   }, []);
 
-  // RP-035 — Handler per l'apertura del dialog in modalità EDIT.
-  // Passato ad ArtistDetail come `onEditArtist` solo per artisti custom
-  // (la guardia `artist.isCustom` è anche nel detail, doppia sicurezza).
-  const handleEditArtist = useCallback((artist: Artist) => {
+  // RP-036 — Handler universale per Edit CRM.
+  // Logica:
+  //   1. Se artist.customId è presente → CRM record esiste già → EDIT mode.
+  //   2. Se artist.customId è assente MA artist.beatportId è presente →
+  //      fetch del CRM via beatport_id:
+  //        a. Se trovato → EDIT mode (merge CRM + Beatport artist).
+  //        b. Se non trovato → CREATE-from-Beatport mode (precompila
+  //           name + beatportUrl dall'artista Beatport, CRM vuoti).
+  //   3. Se artist non ha né customId né beatportId → fallback EDIT mode
+  //      (artista custom senza id valido, caso edge).
+  const handleEditCrm = useCallback(async (artist: Artist) => {
+    // Caso 1: CRM già collegato (artista custom standalone o Beatport merged)
+    if (artist.customId) {
+      setEditingArtist(artist);
+      return;
+    }
+
+    // Caso 2: artista Beatport — cerca CRM via beatport_id
+    if (artist.beatportId) {
+      setEditCrmLoading(true);
+      try {
+        const crmRow = await apiFetchCustomArtistByBeatportId(artist.beatportId);
+        if (crmRow) {
+          // CRM trovato → EDIT mode con CRM mergeato nell'artista Beatport.
+          // Convertiamo prima il row in Artist (via customArtistToArtist) e poi
+          // facciamo il merge con l'artista Beatport per preservare i dati musicali.
+          const crmArtist = customArtistToArtist(crmRow);
+          const merged = mergeCrmIntoArtist(artist, crmArtist);
+          setEditingArtist(merged);
+        } else {
+          // CRM non trovato → CREATE-from-Beatport mode
+          setCreateFromArtist(artist);
+        }
+      } catch (err) {
+        console.error("[handleEditCrm] lookup failed:", err);
+        // In caso di errore di rete, fallback a CREATE-from-Beatport
+        // (l'utente può comunque compilare il form)
+        setCreateFromArtist(artist);
+      } finally {
+        setEditCrmLoading(false);
+      }
+      return;
+    }
+
+    // Caso 3: fallback (artista custom senza id valido)
     setEditingArtist(artist);
   }, []);
 
   // RP-035 — Handler per l'aggiornamento post-PATCH.
-  // Sostituisce l'artista aggiornato dentro customArtists (match per id),
+  // Sostituisce l'artista aggiornato dentro customArtists (match per customId),
   // così allArtists e selectedArtist si ricalcolano automaticamente via
   // useMemo → la pagina dettaglio si aggiorna senza refresh manuale e
   // senza perdere lo stato (selectedArtistId resta invariato).
   const handleArtistUpdated = useCallback((updated: Artist) => {
     setCustomArtists((prev) =>
-      prev.map((a) => (a.id === updated.id ? updated : a)),
+      prev.map((a) => (a.customId === updated.customId ? updated : a)),
     );
     setEditingArtist(null);
   }, []);
 
-  // Merge Beatport + custom artists into a single list
+  // RP-036 — Handler per la CREAZIONE di un CRM record da un artista Beatport.
+  // Aggiunge il nuovo CRM artist in customArtists. allArtists verrà ricalcolato
+  // e il Beatport artist (match per beatportId) verrà automaticamente merged
+  // con il nuovo CRM → il detail page mostra istantaneamente i nuovi campi.
+  const handleCrmCreated = useCallback((newCrmArtist: Artist) => {
+    setCustomArtists((prev) => {
+      // Evita duplicati: se esiste già un CRM con lo stesso customId, sostituiscilo.
+      const filtered = prev.filter((a) => a.customId !== newCrmArtist.customId);
+      return [newCrmArtist, ...filtered];
+    });
+    setCreateFromArtist(null);
+  }, []);
+
+  // RP-036 — Merge Beatport + custom artists into a single list.
+  // Per ogni artista Beatport, se esiste un CRM record con lo stesso beatportId,
+  // lo mergia dentro (CRM fields hanno priorità). I CRM record senza match
+  // Beatport (es. artista custom senza URL Beatport) sono mostrati standalone.
   const allArtists = useMemo(() => {
-    return [...safeArtists, ...customArtists];
+    // Index CRM artists by beatport_id for fast lookup
+    const crmByBeatportId = new Map<number, Artist>();
+    for (const c of customArtists) {
+      if (c.beatportId && !crmByBeatportId.has(c.beatportId)) {
+        crmByBeatportId.set(c.beatportId, c);
+      }
+    }
+
+    // Merge CRM into Beatport artists (CRM fields take priority when set)
+    const mergedBeatport = safeArtists.map((a) => {
+      const crm = a.beatportId ? crmByBeatportId.get(a.beatportId) : undefined;
+      return crm ? mergeCrmIntoArtist(a, crm) : a;
+    });
+
+    // Standalone custom artists: quelli senza beatportId OPPORA con un beatportId
+    // che non corrisponde a nessun artista Beatport nel dataset locale.
+    // (evita di mostrarli due volte: una merged nel Beatport artist + una standalone)
+    const beatportIds = new Set(
+      safeArtists
+        .map((a) => a.beatportId)
+        .filter((id): id is number => typeof id === "number"),
+    );
+    const standaloneCustom = customArtists.filter((c) => {
+      if (!c.beatportId) return true; // custom senza URL Beatport
+      return !beatportIds.has(c.beatportId); // custom con Beatport URL ma artista non nel dataset
+    });
+
+    return [...mergedBeatport, ...standaloneCustom];
   }, [safeArtists, customArtists]);
 
   // 🔒 DEBUG RP-030: log when safeArtists reference changes
@@ -1769,6 +1990,15 @@ export default function ArtistExplorer() {
           editArtist={editingArtist}
           locale={locale}
         />
+        {/* RP-036 — Create-from-Beatport dialog (apre solo quando createFromArtist !== null) */}
+        <AddArtistDialog
+          open={!!createFromArtist}
+          onClose={() => setCreateFromArtist(null)}
+          onCreated={() => { /* no-op in create-from-beatport mode */ }}
+          onCrmCreated={handleCrmCreated}
+          createFromArtist={createFromArtist}
+          locale={locale}
+        />
       </>
     );
   }
@@ -1787,8 +2017,10 @@ export default function ArtistExplorer() {
           returnToLabelName={navigationReturnTo?.labelName}
           selectedRelease={selectedRelease}
           scoredArtist={scoredArtist}
-          // RP-035 — passato solo per artisti custom (la guardia è anche nel detail)
-          onEditArtist={selectedArtist.isCustom ? handleEditArtist : undefined}
+          // RP-036 — onEditArtist passato per TUTTI gli artisti (CRM universale).
+          // La logica di mode-decision (EDIT vs CREATE-from-Beatport) è in handleEditCrm.
+          onEditArtist={handleEditCrm}
+          editCrmLoading={editCrmLoading}
         />
         {/* RP-035 — Edit dialog (same component, edit mode) */}
         <AddArtistDialog
@@ -1797,6 +2029,15 @@ export default function ArtistExplorer() {
           onCreated={() => { /* no-op in edit mode */ }}
           onUpdated={handleArtistUpdated}
           editArtist={editingArtist}
+          locale={locale}
+        />
+        {/* RP-036 — Create-from-Beatport dialog (apre solo quando createFromArtist !== null) */}
+        <AddArtistDialog
+          open={!!createFromArtist}
+          onClose={() => setCreateFromArtist(null)}
+          onCreated={() => { /* no-op in create-from-beatport mode */ }}
+          onCrmCreated={handleCrmCreated}
+          createFromArtist={createFromArtist}
           locale={locale}
         />
       </>
@@ -1837,6 +2078,15 @@ export default function ArtistExplorer() {
         onCreated={() => { /* no-op in edit mode */ }}
         onUpdated={handleArtistUpdated}
         editArtist={editingArtist}
+        locale={locale}
+      />
+      {/* RP-036 — Create-from-Beatport dialog (apre solo quando createFromArtist !== null) */}
+      <AddArtistDialog
+        open={!!createFromArtist}
+        onClose={() => setCreateFromArtist(null)}
+        onCreated={() => { /* no-op in create-from-beatport mode */ }}
+        onCrmCreated={handleCrmCreated}
+        createFromArtist={createFromArtist}
         locale={locale}
       />
     </>

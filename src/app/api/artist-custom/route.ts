@@ -3,14 +3,46 @@ import { getAdminClient } from "@/lib/supabase-admin";
 
 /**
  * API /api/artist-custom — CRUD per artist_custom_data
+ *
+ * 🔒 RP-036 — GET supporta due modalità:
+ *   1. Senza query param: ritorna tutti i record dell'utente (default).
+ *   2. Con ?beatport_id=<id>: ritorna il singolo record collegato
+ *      a quell'artista Beatport, o { artist: null } se non esiste.
+ *      Usato dal flusso "Edit CRM" per verificare se un artista Beatport
+ *      ha già un CRM record prima di aprire il dialog in modalità
+ *      EDIT (record esiste) o CREATE-from-Beatport (record non esiste).
  */
-
-export async function GET() {
+export async function GET(req: NextRequest) {
   const { supabase, email, userId } = await getAdminClient();
   if (!supabase || !email || !userId) {
     return NextResponse.json({ error: "Not authenticated" }, { status: 401 });
   }
 
+  const { searchParams } = new URL(req.url);
+  const beatportIdParam = searchParams.get("beatport_id");
+
+  // RP-036 — lookup per beatport_id (singolo record o null)
+  if (beatportIdParam) {
+    const beatportId = parseInt(beatportIdParam, 10);
+    if (isNaN(beatportId)) {
+      return NextResponse.json(
+        { error: "beatport_id must be a number" },
+        { status: 400 },
+      );
+    }
+    const { data, error } = await supabase
+      .from("artist_custom_data")
+      .select("*")
+      .eq("user_id", userId)
+      .eq("beatport_artist_id", beatportId)
+      .maybeSingle();
+    if (error) {
+      return NextResponse.json({ error: error.message }, { status: 500 });
+    }
+    return NextResponse.json({ artist: data || null });
+  }
+
+  // Default: ritorna tutti i record dell'utente
   const { data, error } = await supabase
     .from("artist_custom_data")
     .select("*")
