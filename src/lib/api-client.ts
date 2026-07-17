@@ -427,3 +427,59 @@ export async function apiUpsertPromotionTarget(target: PromotionTargetRow): Prom
     return false;
   }
 }
+
+// ==================== ARTIST CUSTOM DATA (RP-034) ====================
+
+export interface ArtistCustomRow {
+  id?: string;
+  artist_name: string;
+  beatport_artist_id?: number | null;
+  beatport_url?: string | null;
+  image_url?: string | null;
+  instagram_url?: string | null;
+  spotify_url?: string | null;
+  soundcloud_url?: string | null;
+  website_url?: string | null;
+  email?: string | null;
+  notes?: string | null;
+}
+
+export async function apiFetchCustomArtists(): Promise<ArtistCustomRow[] | null> {
+  try {
+    const res = await fetch(`${API_BASE}/api/artist-custom`);
+    if (!res.ok) return null;
+    const data = await res.json();
+    return data.artists || [];
+  } catch (err) {
+    console.error("[apiFetchCustomArtists] failed:", err);
+    return null;
+  }
+}
+
+export async function apiCreateCustomArtist(artist: ArtistCustomRow): Promise<ArtistCustomRow | null> {
+  try {
+    const res = await fetch(`${API_BASE}/api/artist-custom`, {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify(artist),
+    });
+    if (!res.ok) return null;
+    const data = await res.json();
+    return data.artist || null;
+  } catch (err) {
+    console.error("[apiCreateCustomArtist] failed:", err);
+    return null;
+  }
+}
+
+export async function apiDeleteCustomArtist(id: string): Promise<boolean> {
+  try {
+    const res = await fetch(`${API_BASE}/api/artist-custom?id=${encodeURIComponent(id)}`, {
+      method: "DELETE",
+    });
+    return res.ok;
+  } catch (err) {
+    console.error("[apiDeleteCustomArtist] failed:", err);
+    return false;
+  }
+}

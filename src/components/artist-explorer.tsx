@@ -29,6 +29,22 @@ import { SmartSearch } from "@/components/smart-search";
 import { AiOutreachAdvisor } from "@/components/ai-outreach-advisor";
 import { calculateTargets, type ScoredArtist } from "@/lib/target-scoring";
 import {
+  type ArtistCustomRow,
+  apiFetchCustomArtists,
+  apiCreateCustomArtist,
+} from "@/lib/api-client";
+import {
+  Dialog,
+  DialogContent,
+  DialogHeader,
+  DialogTitle,
+  DialogFooter,
+} from "@/components/ui/dialog";
+import { Input } from "@/components/ui/input";
+import { Label as UILabel } from "@/components/ui/label";
+import { Textarea } from "@/components/ui/textarea";
+import { Plus, Loader2, UserPlus } from "lucide-react";
+import {
   Search,
   Flame,
   ArrowLeft,
@@ -1183,6 +1199,150 @@ function FilterChip({
 }
 
 // ============================================================================
+// HELPERS — Convert custom artist DB row to Artist interface
+// ============================================================================
+
+function customArtistToArtist(row: ArtistCustomRow): Artist {
+  return {
+    id: row.id || `custom_${Date.now()}`,
+    beatportId: row.beatport_artist_id || null,
+    name: row.artist_name,
+    slug: "",
+    imageUrl: row.image_url || "",
+    genres: [],
+    tracksByGenre: {},
+    labelsPublishedOn: [],
+    totalPoints: 0,
+    bestPosition: 0,
+    isRemixerOnly: false,
+    trending: false,
+    instagramUrl: row.instagram_url || null,
+  };
+}
+
+// ============================================================================
+// ADD ARTIST DIALOG
+// ============================================================================
+
+function AddArtistDialog({
+  open,
+  onClose,
+  onCreated,
+  locale,
+}: {
+  open: boolean;
+  onClose: () => void;
+  onCreated: (artist: Artist) => void;
+  locale: Locale;
+}) {
+  const [name, setName] = useState("");
+  const [beatportUrl, setBeatportUrl] = useState("");
+  const [instagram, setInstagram] = useState("");
+  const [spotify, setSpotify] = useState("");
+  const [soundcloud, setSoundcloud] = useState("");
+  const [website, setWebsite] = useState("");
+  const [email, setEmail] = useState("");
+  const [notes, setNotes] = useState("");
+  const [saving, setSaving] = useState(false);
+
+  const handleSave = async () => {
+    if (!name.trim()) return;
+    setSaving(true);
+
+    // Try to extract Beatport artist ID from URL
+    let beatportArtistId: number | null = null;
+    if (beatportUrl.trim()) {
+      const match = beatportUrl.match(/\/artist\/[^/]+\/(\d+)/);
+      if (match) {
+        beatportArtistId = parseInt(match[1], 10);
+      }
+    }
+
+    const created = await apiCreateCustomArtist({
+      artist_name: name.trim(),
+      beatport_url: beatportUrl.trim() || null,
+      beatport_artist_id: beatportArtistId,
+      image_url: null,
+      instagram_url: instagram.trim() || null,
+      spotify_url: spotify.trim() || null,
+      soundcloud_url: soundcloud.trim() || null,
+      website_url: website.trim() || null,
+      email: email.trim() || null,
+      notes: notes.trim() || null,
+    });
+
+    setSaving(false);
+    if (created) {
+      onCreated(customArtistToArtist(created));
+      // Reset form
+      setName(""); setBeatportUrl(""); setInstagram(""); setSpotify("");
+      setSoundcloud(""); setWebsite(""); setEmail(""); setNotes("");
+      onClose();
+    }
+  };
+
+  return (
+    <Dialog open={open} onOpenChange={onClose}>
+      <DialogContent className="max-w-lg">
+        <DialogHeader>
+          <DialogTitle className="flex items-center gap-2">
+            <UserPlus className="h-4 w-4 text-primary" />
+            {locale === "it" ? "Aggiungi artista" : "Add artist"}
+          </DialogTitle>
+        </DialogHeader>
+
+        <div className="space-y-3 max-h-[60vh] overflow-y-auto">
+          <div className="space-y-1.5">
+            <UILabel className="text-xs font-mono uppercase text-muted-foreground">
+              {locale === "it" ? "Nome artista" : "Artist name"} *
+            </UILabel>
+            <Input value={name} onChange={(e) => setName(e.target.value)} placeholder="DJ Name" autoFocus className="bg-secondary/50" />
+          </div>
+          <div className="space-y-1.5">
+            <UILabel className="text-xs font-mono uppercase text-muted-foreground">Beatport URL</UILabel>
+            <Input value={beatportUrl} onChange={(e) => setBeatportUrl(e.target.value)} placeholder="https://www.beatport.com/artist/..." className="bg-secondary/50" />
+          </div>
+          <div className="grid grid-cols-2 gap-3">
+            <div className="space-y-1.5">
+              <UILabel className="text-xs font-mono uppercase text-muted-foreground">Instagram</UILabel>
+              <Input value={instagram} onChange={(e) => setInstagram(e.target.value)} placeholder="@username" className="bg-secondary/50" />
+            </div>
+            <div className="space-y-1.5">
+              <UILabel className="text-xs font-mono uppercase text-muted-foreground">Spotify</UILabel>
+              <Input value={spotify} onChange={(e) => setSpotify(e.target.value)} placeholder="URL" className="bg-secondary/50" />
+            </div>
+            <div className="space-y-1.5">
+              <UILabel className="text-xs font-mono uppercase text-muted-foreground">SoundCloud</UILabel>
+              <Input value={soundcloud} onChange={(e) => setSoundcloud(e.target.value)} placeholder="URL" className="bg-secondary/50" />
+            </div>
+            <div className="space-y-1.5">
+              <UILabel className="text-xs font-mono uppercase text-muted-foreground">Website</UILabel>
+              <Input value={website} onChange={(e) => setWebsite(e.target.value)} placeholder="https://..." className="bg-secondary/50" />
+            </div>
+          </div>
+          <div className="space-y-1.5">
+            <UILabel className="text-xs font-mono uppercase text-muted-foreground">Email</UILabel>
+            <Input value={email} onChange={(e) => setEmail(e.target.value)} placeholder="contact@..." className="bg-secondary/50" />
+          </div>
+          <div className="space-y-1.5">
+            <UILabel className="text-xs font-mono uppercase text-muted-foreground">{locale === "it" ? "Note" : "Notes"}</UILabel>
+            <Textarea value={notes} onChange={(e) => setNotes(e.target.value)} rows={2} className="bg-secondary/50 resize-none" />
+          </div>
+        </div>
+
+        <DialogFooter>
+          <Button variant="ghost" onClick={onClose}>{locale === "it" ? "Annulla" : "Cancel"}</Button>
+          <Button onClick={handleSave} disabled={!name.trim() || saving} className="gap-2">
+            {saving ? <Loader2 className="h-4 w-4 animate-spin" /> : <Plus className="h-4 w-4" />}
+            {locale === "it" ? "Aggiungi" : "Add"}
+          </Button>
+        </DialogFooter>
+      </DialogContent>
+    </Dialog>
+  );
+}
+
+// ============================================================================
 // MAIN COMPONENT
 // ============================================================================
 
@@ -1230,6 +1390,26 @@ export default function ArtistExplorer() {
     [artists]
   );
 
+  // RP-034: custom artists from Supabase
+  const [customArtists, setCustomArtists] = useState<Artist[]>([]);
+  const [showAddDialog, setShowAddDialog] = useState(false);
+
+  // Load custom artists on mount
+  useEffect(() => {
+    let mounted = true;
+    apiFetchCustomArtists().then((rows) => {
+      if (!mounted || !rows) return;
+      const converted = rows.map(customArtistToArtist);
+      setCustomArtists(converted);
+    });
+    return () => { mounted = false; };
+  }, []);
+
+  // Merge Beatport + custom artists into a single list
+  const allArtists = useMemo(() => {
+    return [...safeArtists, ...customArtists];
+  }, [safeArtists, customArtists]);
+
   // 🔒 DEBUG RP-030: log when safeArtists reference changes
   const prevArtistsRef = React.useRef<number>(-1);
   if (prevArtistsRef.current !== safeArtists.length) {
@@ -1243,7 +1423,7 @@ export default function ArtistExplorer() {
   const selectedArtist = useMemo(
     () => {
       const found = selectedArtistId
-        ? safeArtists.find((a) => a.id === selectedArtistId) || null
+        ? allArtists.find((a) => a.id === selectedArtistId) || null
         : null;
       console.log(`[DEBUG ArtistExplorer] ${new Date().toISOString()} selectedArtist useMemo`, {
         selectedArtistId,
@@ -1352,28 +1532,33 @@ export default function ArtistExplorer() {
   }, [selectedRelease, selectedArtist, safeArtists]);
 
   // ----- Empty state (no artists loaded yet) -----
-  if (safeArtists.length === 0) {
+  if (allArtists.length === 0) {
     return (
-      <div className="rounded-lg border border-border/30 bg-muted/20 py-16 text-center">
-        <Music2 className="mx-auto mb-3 h-10 w-10 opacity-30" />
-        <p className="text-sm text-muted-foreground">
-          {locale === "it"
-            ? "Nessun artista caricato. Avvia lo scraper per popolare la lista."
-            : "No artists loaded yet. Run the scraper to populate the list."}
-        </p>
-      </div>
+      <>
+        <div className="rounded-lg border border-border/30 bg-muted/20 py-16 text-center">
+          <Music2 className="mx-auto mb-3 h-10 w-10 opacity-30" />
+          <p className="text-sm text-muted-foreground mb-4">
+            {locale === "it"
+              ? "Nessun artista caricato."
+              : "No artists loaded yet."}
+          </p>
+          <Button onClick={() => setShowAddDialog(true)} variant="outline" className="gap-2">
+            <UserPlus className="h-4 w-4" />
+            {locale === "it" ? "Aggiungi artista" : "Add artist"}
+          </Button>
+        </div>
+        <AddArtistDialog
+          open={showAddDialog}
+          onClose={() => setShowAddDialog(false)}
+          onCreated={(artist) => setCustomArtists((prev) => [artist, ...prev])}
+          locale={locale}
+        />
+      </>
     );
   }
 
   // ----- Detail view -----
   if (selectedArtistId && selectedArtist) {
-    console.log(`[DEBUG ArtistExplorer] ${new Date().toISOString()} RENDER ArtistDetail`, {
-      artistId: selectedArtist.id,
-      artistName: selectedArtist.name,
-      hasRelease: !!selectedRelease,
-      hasScored: !!scoredArtist,
-      scoredScore: scoredArtist?.score,
-    });
     return (
       <ArtistDetail
         artist={selectedArtist}
@@ -1391,19 +1576,31 @@ export default function ArtistExplorer() {
 
   // If an id is set but the artist can't be found, reset and show list.
   if (selectedArtistId && !selectedArtist) {
-    // Best-effort clear (defensive against stale ids).
     if (typeof window !== "undefined") {
-      // Defer to avoid setState-during-render.
       setTimeout(() => setSelectedArtistId?.(null), 0);
     }
   }
 
   // ----- List view (default) -----
   return (
-    <ArtistList
-      artists={safeArtists}
-      locale={locale}
-      onSelect={handleSelect}
-    />
+    <>
+      <div className="flex justify-end mb-2">
+        <Button onClick={() => setShowAddDialog(true)} variant="outline" size="sm" className="gap-1.5">
+          <UserPlus className="h-3.5 w-3.5" />
+          {locale === "it" ? "Aggiungi artista" : "Add artist"}
+        </Button>
+      </div>
+      <ArtistList
+        artists={allArtists}
+        locale={locale}
+        onSelect={handleSelect}
+      />
+      <AddArtistDialog
+        open={showAddDialog}
+        onClose={() => setShowAddDialog(false)}
+        onCreated={(artist) => setCustomArtists((prev) => [artist, ...prev])}
+        locale={locale}
+      />
+    </>
   );
 }
