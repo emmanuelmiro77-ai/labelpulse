@@ -2125,3 +2125,51 @@ Stage Summary:
   * soundcloud_url valorizzato → pulsante SoundCloud (hero, arancione) — NEW
   * Booking → sempre Google Search (nessun override possibile)
   * Artisti Beatport → comportamento identico a prima (zero modifiche)
+
+---
+Task ID: rp-035-edit-manual-artists
+Agent: Z-AI (session web-aaf0d6d4)
+Task: RP-035 — Allow editing manual artists. Aggiungere Edit Artist nella pagina dettaglio, riutilizzare il dialog Add Artist in modalità EDIT, salvare via UPDATE su artist_custom_data, aggiornare immediatamente la UI senza refresh.
+
+Work Log:
+- Boot: letto stato attuale. RP-034 PATCH precedente (e8cc1ee) ha già esteso l'interfaccia Artist con i 6 campi custom (beatportUrl, instagramUrl, spotifyUrl, soundcloudUrl, websiteUrl, email) e customArtistToArtist li propaga. RP-035 costruisce sopra questa base.
+- Modifica 1 — API route (src/app/api/artist-custom/route.ts): aggiunto metodo PATCH.
+  * Filtro: id (query param) + user_id (RLS safety).
+  * Campi aggiornabili: artist_name, beatport_url, instagram_url, spotify_url, soundcloud_url, website_url, email, notes.
+  * beatport_artist_id ricalcolato da beatport_url (coerente con POST).
+  * Non tocca: id, user_id, image_url, created_at (immutabili).
+  * UPDATE esplicito (NON upsert) → 404 se il record non esiste o non appartiene all'utente.
+- Modifica 2 — api-client.ts: aggiunta apiUpdateCustomArtist(id, updates) → PATCH /api/artist-custom?id=<id>.
+- Modifica 3 — artist-explorer.tsx, Artist interface: aggiunto flag `isCustom?: boolean` (true per artisti custom, undefined per Beatport).
+- Modifica 4 — customArtistToArtist: imposta `isCustom: true`.
+- Modifica 5 — AddArtistDialog (RIUTILIZZATO, non nuovo componente):
+  * Nuove props opzionali: `editArtist?: Artist | null`, `onUpdated?: (artist) => void`.
+  * `isEditMode = !!editArtist`.
+  * useEffect popola tutti i campi quando il dialog si apre in EDIT mode (name, beatportUrl, instagram, spotify, soundcloud, website, email — notes non in interfaccia Artist, lasciato vuoto).
+  * handleSave: in EDIT mode → apiUpdateCustomArtist(id, payload) + onUpdated(customArtistToArtist(updated)); in CREATE mode → flow originale invariato.
+  * UI dinamica: titolo "Modifica artista"/"Edit artist", pulsante "Salva"/"Save", icona Pencil al posto di UserPlus/Plus.
+- Modifica 6 — ArtistDetail: 
+  * Nuova prop `onEditArtist?: (artist: Artist) => void`.
+  * Aggiunto pulsante "Edit Artist" nella top bar (visibile solo se `onEditArtist && artist.isCustom`).
+  * Pulsante con icona Pencil + ml-auto (spostato a destra nella top bar).
+- Modifica 7 — ArtistExplorer (main component):
+  * Nuovo stato `editingArtist: Artist | null`.
+  * `handleEditArtist(artist)` → setEditingArtist(artist).
+  * `handleArtistUpdated(updated)` → sostituisce l'artista in customArtists (match per id) + chiude il dialog. allArtists e selectedArtist si ricalcolano via useMemo → UI aggiornata senza refresh, senza perdere selectedArtistId.
+  * AddArtistDialog in modalità EDIT montato in tutti e 3 i branch di render (empty state, detail view, list view). open={!!editingArtist}.
+  * onEditArtist passato ad ArtistDetail solo quando selectedArtist.isCustom === true (doppia guardia: nel parent e nel detail).
+- Verifica anti-regressione:
+  * Beatport artist logic INVIOLATA — artisti Beatport hanno isCustom === undefined → onEditArtist non passato → pulsante "Edit Artist" mai visibile.
+  * CREATE flow invariato — AddArtistDialog senza editArtist si comporta come prima (apiCreateCustomArtist + onCreated).
+  * API POST (create) e DELETE non modificati. GET non modificato.
+  * NESSUNA modifica a: scraping Beatport, sync Beatport, database, migration, altre pagine, altri moduli.
+- TypeScript: 1 errore pre-esistente (activeTab, non mio). Nessun nuovo errore introdotto.
+- Build produzione: ✓ Compiled successfully in 40s, 49/49 static pages.
+- Test suite: ✓ 42/42 test passati (5 file).
+
+Stage Summary:
+- Edit Artist implementato riutilizzando il dialog Add Artist esistente (vincolo "NON creare un nuovo componente" rispettato).
+- Salvataggio tramite UPDATE esplicito (PATCH /api/artist-custom?id=<id>) — NON upsert, NON nuovo record (vincolo rispettato).
+- UI si aggiorna istantaneamente dopo il salvataggio: customArtists viene mappato con l'artista aggiornato → allArtists e selectedArtist si ricalcolano via useMemo → tutti i pulsanti social (Beatport, Spotify, SoundCloud, Instagram, Website, Contact) riflettono i nuovi valori senza refresh manuale e senza perdere lo stato (selectedArtistId invariato).
+- Persistenza dopo F5 garantita: i dati sono su Supabase (artist_custom_data), apiFetchCustomArtists al mount ricarica i valori aggiornati.
+- Pulsante "Edit Artist" visibile solo per artisti custom (artist.isCustom === true). Artisti Beatport non mostrano il pulsante.

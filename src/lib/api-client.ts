@@ -472,6 +472,39 @@ export async function apiCreateCustomArtist(artist: ArtistCustomRow): Promise<Ar
   }
 }
 
+/**
+ * 🔒 RP-035 — UPDATE di un artista custom esistente.
+ *
+ * Chiama PATCH /api/artist-custom?id=<id> con i campi modificabili.
+ * Il filtro id + user_id è applicato server-side (RLS safety).
+ *
+ * Ritorna l'ArtistCustomRow aggiornato, o null in caso di errore.
+ */
+export async function apiUpdateCustomArtist(
+  id: string,
+  updates: Partial<Omit<ArtistCustomRow, "id">>,
+): Promise<ArtistCustomRow | null> {
+  try {
+    const res = await fetch(
+      `${API_BASE}/api/artist-custom?id=${encodeURIComponent(id)}`,
+      {
+        method: "PATCH",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify(updates),
+      },
+    );
+    if (!res.ok) {
+      console.error("[apiUpdateCustomArtist] HTTP", res.status);
+      return null;
+    }
+    const data = await res.json();
+    return data.artist || null;
+  } catch (err) {
+    console.error("[apiUpdateCustomArtist] failed:", err);
+    return null;
+  }
+}
+
 export async function apiDeleteCustomArtist(id: string): Promise<boolean> {
   try {
     const res = await fetch(`${API_BASE}/api/artist-custom?id=${encodeURIComponent(id)}`, {

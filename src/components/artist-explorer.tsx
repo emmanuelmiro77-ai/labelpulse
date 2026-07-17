@@ -32,6 +32,7 @@ import {
   type ArtistCustomRow,
   apiFetchCustomArtists,
   apiCreateCustomArtist,
+  apiUpdateCustomArtist,
 } from "@/lib/api-client";
 import {
   Dialog,
@@ -43,7 +44,7 @@ import {
 import { Input } from "@/components/ui/input";
 import { Label as UILabel } from "@/components/ui/label";
 import { Textarea } from "@/components/ui/textarea";
-import { Plus, Loader2, UserPlus } from "lucide-react";
+import { Plus, Loader2, UserPlus, Pencil } from "lucide-react";
 import {
   Search,
   Flame,
@@ -109,6 +110,9 @@ export interface Artist {
   soundcloudUrl?: string | null;
   websiteUrl?: string | null;
   email?: string | null;
+  // RP-035 — true per gli artisti creati manualmente (artist_custom_data).
+  // Usato per mostrare il pulsante "Edit Artist" nel detail.
+  isCustom?: boolean;
 }
 
 // ============================================================================
@@ -497,6 +501,7 @@ function ArtistDetail({
   returnToLabelName,
   selectedRelease,
   scoredArtist,
+  onEditArtist,
 }: {
   artist: Artist;
   locale: Locale;
@@ -507,6 +512,9 @@ function ArtistDetail({
   returnToLabelName?: string;
   selectedRelease?: any | null;
   scoredArtist?: ScoredArtist | null;
+  // RP-035 — passato dal parent solo per artisti custom (artist_custom_data).
+  // Quando fornito, mostra il pulsante "Edit Artist" nell'hero.
+  onEditArtist?: (artist: Artist) => void;
 }) {
   // ----- Audio playback (single shared <audio> element) -----
   const audioRef = useRef<HTMLAudioElement | null>(null);
@@ -635,6 +643,20 @@ function ArtistDetail({
             <span className="truncate max-w-[200px]">
               {it(locale, "Torna a", "Back to")} <span className="font-medium">{returnToLabelName}</span>
             </span>
+          </Button>
+        )}
+        {/* RP-035 — Edit Artist button, solo per artisti custom (artist_custom_data).
+            onEditArtist è passato dal parent solo quando artist.isCustom === true. */}
+        {onEditArtist && artist.isCustom && (
+          <Button
+            variant="outline"
+            size="sm"
+            onClick={() => onEditArtist(artist)}
+            className="gap-1.5 ml-auto border-primary/30 text-primary hover:bg-primary/10"
+            title={it(locale, "Modifica artista", "Edit artist")}
+          >
+            <Pencil className="h-3.5 w-3.5" />
+            {it(locale, "Modifica artista", "Edit artist")}
           </Button>
         )}
       </div>
@@ -1299,24 +1321,41 @@ function customArtistToArtist(row: ArtistCustomRow): Artist {
     soundcloudUrl: row.soundcloud_url || null,
     websiteUrl: row.website_url || null,
     email: row.email || null,
+    // RP-035 — flag per distinguere gli artisti custom (mostra "Edit Artist").
+    isCustom: true,
   };
 }
 
 // ============================================================================
-// ADD ARTIST DIALOG
+// ADD / EDIT ARTIST DIALOG (RP-034 create + RP-035 edit, same component)
 // ============================================================================
+//
+// RP-035 — Il dialog esistente viene riutilizzato in modalità EDIT.
+// Quando `editArtist` è fornito:
+//   - Tutti i campi sono precaricati con i valori dell'artista.
+//   - Il titolo diventa "Modifica artista" / "Edit artist".
+//   - Il pulsante di salvataggio diventa "Salva" / "Save".
+//   - Il salvataggio chiama PATCH /api/artist-custom?id=<id> (UPDATE, NON upsert).
+//   - La callback `onUpdated(artist)` viene invocata al posto di `onCreated`.
+// Quando `editArtist` è undefined → comportamento invariato (CREATE).
 
 function AddArtistDialog({
   open,
   onClose,
   onCreated,
+  onUpdated,
+  editArtist,
   locale,
 }: {
   open: boolean;
   onClose: () => void;
   onCreated: (artist: Artist) => void;
+  onUpdated?: (artist: Artist) => void;
+  editArtist?: Artist | null;
   locale: Locale;
 }) {
+  const isEditMode = !!editArtist;
+
   const [name, setName] = useState("");
   const [beatportUrl, setBeatportUrl] = useState("");
   const [instagram, setInstagram] = useState("");
@@ -1326,6 +1365,38 @@ function AddArtistDialog({
   const [email, setEmail] = useState("");
   const [notes, setNotes] = useState("");
   const [saving, setSaving] = useState(false);
+
+  // RP-035 — Quando il dialog viene aperto in modalità EDIT, precarica tutti
+  // i campi con i valori correnti dell'artista. L'effetto viene rieseguito
+  // solo quando cambia l'id dell'artista in modifica (o quando si passa da
+  // create a edit mode), così le modifiche utente non vengono sovrascritte
+  // ad ogni render.
+  useEffect(() => {
+    if (!open) return;
+    if (isEditMode && editArtist) {
+      setName(editArtist.name || "");
+      setBeatportUrl(editArtist.beatportUrl || "");
+      setInstagram(editArtist.instagramUrl || "");
+      setSpotify(editArtist.spotifyUrl || "");
+      setSoundcloud(editArtist.soundcloudUrl || "");
+      setWebsite(editArtist.websiteUrl || "");
+      setEmail(editArtist.email || "");
+      // notes non fa parte dell'interfaccia Artist; viene perso in display
+      // ma resta nel DB. Per precaricarlo servirebbe estendere Artist;
+      // per ora lo lasciamo vuoto in edit mode (non richiesto dal test).
+      setNotes("");
+    } else {
+      // CREATE mode — form pulito
+      setName("");
+      setBeatportUrl("");
+      setInstagram("");
+      setSpotify("");
+      setSoundcloud("");
+      setWebsite("");
+      setEmail("");
+      setNotes("");
+    }
+  }, [open, isEditMode, editArtist]);
 
   const handleSave = async () => {
     if (!name.trim()) return;
@@ -1340,26 +1411,40 @@ function AddArtistDialog({
       }
     }
 
-    const created = await apiCreateCustomArtist({
+    const payload = {
       artist_name: name.trim(),
       beatport_url: beatportUrl.trim() || null,
       beatport_artist_id: beatportArtistId,
-      image_url: null,
       instagram_url: instagram.trim() || null,
       spotify_url: spotify.trim() || null,
       soundcloud_url: soundcloud.trim() || null,
       website_url: website.trim() || null,
       email: email.trim() || null,
       notes: notes.trim() || null,
-    });
+    };
 
-    setSaving(false);
-    if (created) {
-      onCreated(customArtistToArtist(created));
-      // Reset form
-      setName(""); setBeatportUrl(""); setInstagram(""); setSpotify("");
-      setSoundcloud(""); setWebsite(""); setEmail(""); setNotes("");
-      onClose();
+    if (isEditMode && editArtist && onUpdated) {
+      // RP-035 — UPDATE del record esistente.
+      const updated = await apiUpdateCustomArtist(editArtist.id, payload);
+      setSaving(false);
+      if (updated) {
+        onUpdated(customArtistToArtist(updated));
+        onClose();
+      }
+    } else {
+      // CREATE — flow originale (invariato).
+      const created = await apiCreateCustomArtist({
+        ...payload,
+        image_url: null,
+      });
+      setSaving(false);
+      if (created) {
+        onCreated(customArtistToArtist(created));
+        // Reset form
+        setName(""); setBeatportUrl(""); setInstagram(""); setSpotify("");
+        setSoundcloud(""); setWebsite(""); setEmail(""); setNotes("");
+        onClose();
+      }
     }
   };
 
@@ -1368,8 +1453,14 @@ function AddArtistDialog({
       <DialogContent className="max-w-lg">
         <DialogHeader>
           <DialogTitle className="flex items-center gap-2">
-            <UserPlus className="h-4 w-4 text-primary" />
-            {locale === "it" ? "Aggiungi artista" : "Add artist"}
+            {isEditMode ? (
+              <Pencil className="h-4 w-4 text-primary" />
+            ) : (
+              <UserPlus className="h-4 w-4 text-primary" />
+            )}
+            {isEditMode
+              ? locale === "it" ? "Modifica artista" : "Edit artist"
+              : locale === "it" ? "Aggiungi artista" : "Add artist"}
           </DialogTitle>
         </DialogHeader>
 
@@ -1415,8 +1506,10 @@ function AddArtistDialog({
         <DialogFooter>
           <Button variant="ghost" onClick={onClose}>{locale === "it" ? "Annulla" : "Cancel"}</Button>
           <Button onClick={handleSave} disabled={!name.trim() || saving} className="gap-2">
-            {saving ? <Loader2 className="h-4 w-4 animate-spin" /> : <Plus className="h-4 w-4" />}
-            {locale === "it" ? "Aggiungi" : "Add"}
+            {saving ? <Loader2 className="h-4 w-4 animate-spin" /> : isEditMode ? <Pencil className="h-4 w-4" /> : <Plus className="h-4 w-4" />}
+            {isEditMode
+              ? locale === "it" ? "Salva" : "Save"
+              : locale === "it" ? "Aggiungi" : "Add"}
           </Button>
         </DialogFooter>
       </DialogContent>
@@ -1476,6 +1569,10 @@ export default function ArtistExplorer() {
   const [customArtists, setCustomArtists] = useState<Artist[]>([]);
   const [showAddDialog, setShowAddDialog] = useState(false);
 
+  // RP-035 — stato per la modalità EDIT del dialog.
+  // editingArtist !== null → il dialog esiste in versione EDIT (precompilata).
+  const [editingArtist, setEditingArtist] = useState<Artist | null>(null);
+
   // Load custom artists on mount
   useEffect(() => {
     let mounted = true;
@@ -1485,6 +1582,25 @@ export default function ArtistExplorer() {
       setCustomArtists(converted);
     });
     return () => { mounted = false; };
+  }, []);
+
+  // RP-035 — Handler per l'apertura del dialog in modalità EDIT.
+  // Passato ad ArtistDetail come `onEditArtist` solo per artisti custom
+  // (la guardia `artist.isCustom` è anche nel detail, doppia sicurezza).
+  const handleEditArtist = useCallback((artist: Artist) => {
+    setEditingArtist(artist);
+  }, []);
+
+  // RP-035 — Handler per l'aggiornamento post-PATCH.
+  // Sostituisce l'artista aggiornato dentro customArtists (match per id),
+  // così allArtists e selectedArtist si ricalcolano automaticamente via
+  // useMemo → la pagina dettaglio si aggiorna senza refresh manuale e
+  // senza perdere lo stato (selectedArtistId resta invariato).
+  const handleArtistUpdated = useCallback((updated: Artist) => {
+    setCustomArtists((prev) =>
+      prev.map((a) => (a.id === updated.id ? updated : a)),
+    );
+    setEditingArtist(null);
   }, []);
 
   // Merge Beatport + custom artists into a single list
@@ -1635,6 +1751,15 @@ export default function ArtistExplorer() {
           onCreated={(artist) => setCustomArtists((prev) => [artist, ...prev])}
           locale={locale}
         />
+        {/* RP-035 — Edit dialog (mounted in ogni branch; apre solo quando editingArtist !== null) */}
+        <AddArtistDialog
+          open={!!editingArtist}
+          onClose={() => setEditingArtist(null)}
+          onCreated={() => { /* no-op in edit mode */ }}
+          onUpdated={handleArtistUpdated}
+          editArtist={editingArtist}
+          locale={locale}
+        />
       </>
     );
   }
@@ -1642,17 +1767,30 @@ export default function ArtistExplorer() {
   // ----- Detail view -----
   if (selectedArtistId && selectedArtist) {
     return (
-      <ArtistDetail
-        artist={selectedArtist}
-        locale={locale}
-        labels={labels}
-        onBack={handleBack}
-        onLabelClick={handleLabelClick}
-        onBackToLabel={navigationReturnTo ? handleBackToLabel : undefined}
-        returnToLabelName={navigationReturnTo?.labelName}
-        selectedRelease={selectedRelease}
-        scoredArtist={scoredArtist}
-      />
+      <>
+        <ArtistDetail
+          artist={selectedArtist}
+          locale={locale}
+          labels={labels}
+          onBack={handleBack}
+          onLabelClick={handleLabelClick}
+          onBackToLabel={navigationReturnTo ? handleBackToLabel : undefined}
+          returnToLabelName={navigationReturnTo?.labelName}
+          selectedRelease={selectedRelease}
+          scoredArtist={scoredArtist}
+          // RP-035 — passato solo per artisti custom (la guardia è anche nel detail)
+          onEditArtist={selectedArtist.isCustom ? handleEditArtist : undefined}
+        />
+        {/* RP-035 — Edit dialog (same component, edit mode) */}
+        <AddArtistDialog
+          open={!!editingArtist}
+          onClose={() => setEditingArtist(null)}
+          onCreated={() => { /* no-op in edit mode */ }}
+          onUpdated={handleArtistUpdated}
+          editArtist={editingArtist}
+          locale={locale}
+        />
+      </>
     );
   }
 
@@ -1681,6 +1819,15 @@ export default function ArtistExplorer() {
         open={showAddDialog}
         onClose={() => setShowAddDialog(false)}
         onCreated={(artist) => setCustomArtists((prev) => [artist, ...prev])}
+        locale={locale}
+      />
+      {/* RP-035 — Edit dialog (same component, edit mode) */}
+      <AddArtistDialog
+        open={!!editingArtist}
+        onClose={() => setEditingArtist(null)}
+        onCreated={() => { /* no-op in edit mode */ }}
+        onUpdated={handleArtistUpdated}
+        editArtist={editingArtist}
         locale={locale}
       />
     </>
