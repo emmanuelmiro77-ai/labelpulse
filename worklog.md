@@ -2081,3 +2081,47 @@ Stage Summary:
 - Build OK, nessuna regressione
 - Deploy Vercel partirà automaticamente al push
 
+
+---
+Task ID: rp-034-patch-detail-custom-urls
+Agent: Z-AI (session web-aaf0d6d4)
+Task: RP-034 PATCH — Il dettaglio degli artisti manuali non utilizza i dati salvati in artist_custom_data. Correggere esclusivamente la pagina dettaglio artista.
+
+Work Log:
+- Boot: letto stato attuale. Verificato che artist_custom_data e API /api/artist-custom esistono già (commit precedente 1e74c26).
+- Identificata root cause: `customArtistToArtist()` (riga 1205) propagava solo `instagram_url` (e generava TS error perché il campo non era nell'interfaccia `Artist`). Tutti gli altri campi (beatport_url, spotify_url, soundcloud_url, website_url, email) venivano scartati.
+- Identificata seconda root cause: `ArtistDetail` non riceveva nessun override — Beatport URL veniva calcolato solo via `getArtistBeatportUrl(artist)` (slug+id, dataset Beatport). SmartSearch era hardcoded su Google Search, ignorando i link salvati.
+- Modifica 1 (artist-explorer.tsx): estesa `Artist` interface con 6 nuovi campi opzionali: `beatportUrl`, `instagramUrl`, `spotifyUrl`, `soundcloudUrl`, `websiteUrl`, `email` (tutti `string | null | undefined`).
+- Modifica 2 (artist-explorer.tsx): `customArtistToArtist()` ora propaga tutti i 6 campi da `ArtistCustomRow`.
+- Modifica 3 (artist-explorer.tsx, ArtistDetail): 
+  * `beatportUrl` calcolato come `artist.beatportUrl?.trim() || getArtistBeatportUrl(artist)` → per artisti Beatport (beatportUrl undefined) resta invariato; per artisti custom con beatport_url salvato usa il link diretto.
+  * Aggiunta sezione "Links" nell'hero con pulsanti Beatport (esistente, ma ora usa override se presente), Spotify (NUOVO, verde), SoundCloud (NUOVO, arancione). Visibili solo quando il relativo URL è valorizzato.
+  * Passati override `instagramUrl`, `websiteUrl`, `email` a `<SmartSearch>`.
+- Modifica 4 (smart-search.tsx): 
+  * Estesa `SmartSearchProps` con 3 props opzionali: `instagramUrl?`, `websiteUrl?`, `email?`.
+  * Aggiunta funzione `resolveButtonUrl()` che ritorna `{ url, isOverride }`: se l'override è valorizzato, usa il link diretto (Instagram/Website) o `mailto:<email>` (Contact); altrimenti Google Search.
+  * Pulsanti con override attivo hanno bordo verde + tooltip "Link salvato in artist_custom_data" per distinguere visivamente dal fallback Google.
+  * Booking non ha override — sempre Google Search (invariato).
+- Verifica anti-regressione: 
+  * Beatport artist logic INVIOLATA — `getArtistBeatportUrl(artist)` resta la fallback quando `artist.beatportUrl` è undefined (tutti gli artisti del dataset Beatport).
+  * SmartSearch default behavior invariato quando override sono undefined (Beatport artists non passano override → Google Search come prima).
+  * Liste / API / store NON toccati (vincolo "Correggere esclusivamente la pagina dettaglio artista" rispettato).
+- TypeScript check: 
+  * PRIMA: 2 errori in artist-explorer.tsx (instagramUrl missing da Artist interface + activeTab pre-esistente).
+  * DOPO: 1 errore (solo activeTab pre-esistente, non mio). Il fix ha RIMOSSO l'errore TS pre-esistente su instagramUrl.
+- Build produzione: ✓ Compiled successfully in 41s, 49/49 static pages generate.
+- Test suite: ✓ 42/42 test passati (5 file).
+
+Stage Summary:
+- Root cause: `customArtistToArtist()` scartava tutti i campi custom tranne `instagram_url`, e `ArtistDetail` non aveva logica per usare i link salvati.
+- Fix applicato esclusivamente su pagina dettaglio artista (artist-explorer.tsx + smart-search.tsx sub-component). NESSUNA modifica a liste, API, store, o logica artisti Beatport.
+- 6 nuovi campi nell'interfaccia Artist, tutti opzionali → retrocompatibile al 100% con artisti Beatport esistenti.
+- Comportamento finale:
+  * instagram_url valorizzato → pulsante Instagram (SmartSearch) apre il link diretto (verde)
+  * website_url valorizzato → pulsante Official Website (SmartSearch) apre il link diretto (verde)
+  * email valorizzato → pulsante Contact (SmartSearch) apre mailto:<email> (verde)
+  * beatport_url valorizzato → pulsante Beatport (hero) apre il link salvato (solo artisti custom)
+  * spotify_url valorizzato → pulsante Spotify (hero, verde) — NEW
+  * soundcloud_url valorizzato → pulsante SoundCloud (hero, arancione) — NEW
+  * Booking → sempre Google Search (nessun override possibile)
+  * Artisti Beatport → comportamento identico a prima (zero modifiche)

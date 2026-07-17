@@ -101,6 +101,14 @@ export interface Artist {
   trending: boolean;
   trendingRankByGenre?: Record<string, number>;
   trendingPointsByGenre?: Record<string, number>;
+  // RP-034 PATCH — custom artist data (artist_custom_data table).
+  // Populated only for manually-created artists; NULL for Beatport artists.
+  beatportUrl?: string | null;
+  instagramUrl?: string | null;
+  spotifyUrl?: string | null;
+  soundcloudUrl?: string | null;
+  websiteUrl?: string | null;
+  email?: string | null;
 }
 
 // ============================================================================
@@ -539,10 +547,18 @@ function ArtistDetail({
     };
   }, []);
 
-  const beatportUrl = getArtistBeatportUrl(artist);
+  // RP-034 PATCH — Beatport URL resolution
+  // Priority: artist.beatportUrl (custom, from artist_custom_data) > getArtistBeatportUrl(artist) (Beatport dataset slug+id)
+  // Beatport artists have beatportUrl === undefined → falls back to existing logic (UNCHANGED).
+  // Custom artists with beatport_url set → uses the saved link directly.
+  const beatportUrl = artist.beatportUrl?.trim() || getArtistBeatportUrl(artist);
   const totalTracks = getArtistTrackCount(artist);
   const totalLabels = artist.labelsPublishedOn?.length ?? 0;
   const genres = artist.genres || [];
+
+  // RP-034 PATCH — custom streaming links (only shown when saved by the user)
+  const spotifyUrl = artist.spotifyUrl?.trim() || null;
+  const soundcloudUrl = artist.soundcloudUrl?.trim() || null;
 
   // ----- Tracks grouped by genre, sorted by position asc -----
   const genreEntries = useMemo(() => {
@@ -678,23 +694,74 @@ function ArtistDetail({
               />
             </div>
 
-            {beatportUrl && (
-              <div>
-                <Button
-                  asChild
-                  size="sm"
-                  variant="outline"
-                  className="gap-1.5 border-primary/30 text-primary hover:bg-primary/10"
-                >
-                  <a
-                    href={beatportUrl}
-                    target="_blank"
-                    rel="noopener noreferrer"
+            {/* RP-034 PATCH — Links row.
+                Beatport button: shown when (a) Beatport dataset artist with slug+id, OR
+                                  (b) custom artist with beatport_url saved.
+                Spotify / SoundCloud buttons: shown only when the user saved the link
+                                                in artist_custom_data. */}
+            {(beatportUrl || spotifyUrl || soundcloudUrl) && (
+              <div className="flex flex-wrap gap-2">
+                {beatportUrl && (
+                  <Button
+                    asChild
+                    size="sm"
+                    variant="outline"
+                    className="gap-1.5 border-primary/30 text-primary hover:bg-primary/10"
                   >
-                    <ExternalLink className="h-3.5 w-3.5" />
-                    {it(locale, "Apri su Beatport", "Open on Beatport")}
-                  </a>
-                </Button>
+                    <a
+                      href={beatportUrl}
+                      target="_blank"
+                      rel="noopener noreferrer"
+                    >
+                      <ExternalLink className="h-3.5 w-3.5" />
+                      {it(locale, "Apri su Beatport", "Open on Beatport")}
+                    </a>
+                  </Button>
+                )}
+                {spotifyUrl && (
+                  <Button
+                    asChild
+                    size="sm"
+                    variant="outline"
+                    className="gap-1.5 border-emerald-500/40 text-emerald-300 hover:bg-emerald-500/10"
+                    title={it(
+                      locale,
+                      "Link Spotify salvato",
+                      "Saved Spotify link",
+                    )}
+                  >
+                    <a
+                      href={spotifyUrl}
+                      target="_blank"
+                      rel="noopener noreferrer"
+                    >
+                      <ExternalLink className="h-3.5 w-3.5" />
+                      Spotify
+                    </a>
+                  </Button>
+                )}
+                {soundcloudUrl && (
+                  <Button
+                    asChild
+                    size="sm"
+                    variant="outline"
+                    className="gap-1.5 border-orange-500/40 text-orange-300 hover:bg-orange-500/10"
+                    title={it(
+                      locale,
+                      "Link SoundCloud salvato",
+                      "Saved SoundCloud link",
+                    )}
+                  >
+                    <a
+                      href={soundcloudUrl}
+                      target="_blank"
+                      rel="noopener noreferrer"
+                    >
+                      <ExternalLink className="h-3.5 w-3.5" />
+                      SoundCloud
+                    </a>
+                  </Button>
+                )}
               </div>
             )}
           </div>
@@ -880,9 +947,17 @@ function ArtistDetail({
         </section>
       )}
 
-      {/* 🔒 RP-003A: Smart Search — 4 pulsanti di ricerca rapida Google */}
+      {/* 🔒 RP-003A: Smart Search — 4 pulsanti di ricerca rapida Google.
+          🔒 RP-034 PATCH — override Instagram/Website/Contact quando valorizzati
+                             in artist_custom_data (link diretto o mailto:). */}
       <section className="space-y-3">
-        <SmartSearch artistName={artist.name} locale={locale} />
+        <SmartSearch
+          artistName={artist.name}
+          locale={locale}
+          instagramUrl={artist.instagramUrl}
+          websiteUrl={artist.websiteUrl}
+          email={artist.email}
+        />
       </section>
 
       {/* 🔒 RP-024: AI Outreach Advisor — compatibilità + strategia + DM generator */}
@@ -1216,7 +1291,14 @@ function customArtistToArtist(row: ArtistCustomRow): Artist {
     bestPosition: 0,
     isRemixerOnly: false,
     trending: false,
+    // RP-034 PATCH — propagate every saved link/email so the detail page
+    // can open them directly instead of falling back to Smart Search.
+    beatportUrl: row.beatport_url || null,
     instagramUrl: row.instagram_url || null,
+    spotifyUrl: row.spotify_url || null,
+    soundcloudUrl: row.soundcloud_url || null,
+    websiteUrl: row.website_url || null,
+    email: row.email || null,
   };
 }
 
