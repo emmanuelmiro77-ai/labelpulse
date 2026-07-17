@@ -1037,23 +1037,67 @@ function StatBox({
 // ============================================================================
 // LIST VIEW
 // ============================================================================
+//
+// 🔒 RP-037 — Lo stato della lista (search, filters, sort, pagination, sort
+// dropdown open) è HOISTATO nel parent ArtistExplorer, così sopravvive alla
+// navigazione verso il dettaglio artista. ArtistList riceve i valori e i
+// setter come props controllate. Lo scroll della lista viene salvato nel
+// parent (listScrollRef) prima di aprire il dettaglio e ripristinato al ritorno.
+
+interface ArtistListState {
+  search: string;
+  trendingOnly: boolean;
+  remixerOnly: boolean;
+  genreFilter: string | null;
+  sortMode: SortMode;
+  visibleCount: number;
+  sortOpen: boolean;
+}
+
+const INITIAL_LIST_STATE: ArtistListState = {
+  search: "",
+  trendingOnly: false,
+  remixerOnly: false,
+  genreFilter: null,
+  sortMode: "points",
+  visibleCount: PAGE_SIZE,
+  sortOpen: false,
+};
 
 function ArtistList({
   artists,
   locale,
   onSelect,
+  listState,
+  setListState,
+  listScrollRef,
 }: {
   artists: Artist[];
   locale: Locale;
   onSelect: (id: string) => void;
+  // 🔒 RP-037 — stato controllato dal parent per preservarlo tra navigazioni
+  listState: ArtistListState;
+  setListState: React.Dispatch<React.SetStateAction<ArtistListState>>;
+  // 🔒 RP-037 — ref al container scrollabile per salvare/ripristinare lo scroll
+  listScrollRef: React.RefObject<HTMLDivElement | null>;
 }) {
-  const [search, setSearch] = useState("");
-  const [trendingOnly, setTrendingOnly] = useState(false);
-  const [remixerOnly, setRemixerOnly] = useState(false);
-  const [genreFilter, setGenreFilter] = useState<string | null>(null);
-  const [sortMode, setSortMode] = useState<SortMode>("points");
-  const [visibleCount, setVisibleCount] = useState(PAGE_SIZE);
-  const [sortOpen, setSortOpen] = useState(false);
+  const {
+    search,
+    trendingOnly,
+    remixerOnly,
+    genreFilter,
+    sortMode,
+    visibleCount,
+    sortOpen,
+  } = listState;
+
+  // Helper per aggiornare un singolo campo dello stato (evita di passare 7 setter separati)
+  const update = useCallback(
+    <K extends keyof ArtistListState>(key: K, value: ArtistListState[K]) => {
+      setListState((prev) => ({ ...prev, [key]: value }));
+    },
+    [setListState],
+  );
 
   // ----- All genres, deduped + sorted -----
   const allGenres = useMemo(() => {
@@ -1097,9 +1141,14 @@ function ArtistList({
     return list;
   }, [artists, search, trendingOnly, remixerOnly, genreFilter, sortMode]);
 
-  // Reset pagination when filters change
+  // RP-037 — Reset pagination quando i filtri cambiano (come prima, ma via setListState)
   useEffect(() => {
-    setVisibleCount(PAGE_SIZE);
+    setListState((prev) =>
+      prev.visibleCount === PAGE_SIZE
+        ? prev
+        : { ...prev, visibleCount: PAGE_SIZE },
+    );
+    // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [search, trendingOnly, remixerOnly, genreFilter, sortMode]);
 
   const trendingCount = useMemo(
@@ -1144,7 +1193,7 @@ function ArtistList({
         <input
           type="text"
           value={search}
-          onChange={(e) => setSearch(e.target.value)}
+          onChange={(e) => update("search", e.target.value)}
           placeholder={it(
             locale,
             "Cerca artista... (es. Adam Beyer)",
@@ -1159,20 +1208,23 @@ function ArtistList({
         <FilterChip
           active={!trendingOnly && !remixerOnly && genreFilter === null}
           onClick={() => {
-            setTrendingOnly(false);
-            setRemixerOnly(false);
-            setGenreFilter(null);
+            setListState((prev) => ({
+              ...prev,
+              trendingOnly: false,
+              remixerOnly: false,
+              genreFilter: null,
+            }));
           }}
         >
           {it(locale, "Tutti", "All")}
         </FilterChip>
 
-        <FilterChip active={trendingOnly} onClick={() => setTrendingOnly((v) => !v)}>
+        <FilterChip active={trendingOnly} onClick={() => update("trendingOnly", !trendingOnly)}>
           <Flame className="h-3 w-3" />
           {it(locale, "Trending", "Trending")}
         </FilterChip>
 
-        <FilterChip active={remixerOnly} onClick={() => setRemixerOnly((v) => !v)}>
+        <FilterChip active={remixerOnly} onClick={() => update("remixerOnly", !remixerOnly)}>
           <TrendingUp className="h-3 w-3" />
           {it(locale, "Remixer", "Remixer")}
         </FilterChip>
@@ -1181,7 +1233,7 @@ function ArtistList({
           <FilterChip
             key={g}
             active={genreFilter === g}
-            onClick={() => setGenreFilter((prev) => (prev === g ? null : g))}
+            onClick={() => update("genreFilter", genreFilter === g ? null : g)}
           >
             {g}
           </FilterChip>
@@ -1200,7 +1252,7 @@ function ArtistList({
             variant="outline"
             size="sm"
             className="gap-1.5"
-            onClick={() => setSortOpen((v) => !v)}
+            onClick={() => update("sortOpen", !sortOpen)}
           >
             <Award className="h-3.5 w-3.5" />
             <span className="hidden sm:inline">{sortLabel}</span>
@@ -1216,7 +1268,7 @@ function ArtistList({
               {/* Click-away overlay */}
               <div
                 className="fixed inset-0 z-40"
-                onClick={() => setSortOpen(false)}
+                onClick={() => update("sortOpen", false)}
               />
               <div className="absolute right-0 z-50 mt-1 min-w-[200px] overflow-hidden rounded-lg border border-border bg-popover shadow-lg">
                 {(
@@ -1230,8 +1282,7 @@ function ArtistList({
                   <button
                     key={mode}
                     onClick={() => {
-                      setSortMode(mode);
-                      setSortOpen(false);
+                      setListState((prev) => ({ ...prev, sortMode: mode, sortOpen: false }));
                     }}
                     className={`flex w-full items-center justify-between px-3 py-2 text-left text-sm transition-colors hover:bg-accent/50 ${
                       sortMode === mode
@@ -1248,42 +1299,46 @@ function ArtistList({
         </div>
       </div>
 
-      {/* Results grid */}
-      {visible.length === 0 ? (
-        <div className="rounded-lg border border-border/30 bg-muted/20 py-16 text-center">
-          <Search className="mx-auto mb-3 h-10 w-10 opacity-30" />
-          <p className="text-sm text-muted-foreground">
-            {it(locale, "Nessun artista trovato", "No artists found")}
-          </p>
-        </div>
-      ) : (
-        <>
-          <div className="grid grid-cols-1 gap-2 lg:grid-cols-2">
-            {visible.map((a) => (
-              <ArtistCard
-                key={a.id}
-                artist={a}
-                locale={locale}
-                onSelect={onSelect}
-              />
-            ))}
+      {/* 🔒 RP-037 — Container scrollabile. listScrollRef salva la posizione
+          scroll prima di aprire il dettaglio e la ripristina al ritorno. */}
+      <div ref={listScrollRef}>
+        {/* Results grid */}
+        {visible.length === 0 ? (
+          <div className="rounded-lg border border-border/30 bg-muted/20 py-16 text-center">
+            <Search className="mx-auto mb-3 h-10 w-10 opacity-30" />
+            <p className="text-sm text-muted-foreground">
+              {it(locale, "Nessun artista trovato", "No artists found")}
+            </p>
           </div>
-
-          {hasMore && (
-            <div className="flex justify-center pt-2">
-              <Button
-                variant="outline"
-                size="sm"
-                onClick={() => setVisibleCount((c) => c + PAGE_SIZE)}
-                className="gap-1.5"
-              >
-                {it(locale, "Carica altri", "Load more")} (
-                {filtered.length - visible.length})
-              </Button>
+        ) : (
+          <>
+            <div className="grid grid-cols-1 gap-2 lg:grid-cols-2">
+              {visible.map((a) => (
+                <ArtistCard
+                  key={a.id}
+                  artist={a}
+                  locale={locale}
+                  onSelect={onSelect}
+                />
+              ))}
             </div>
-          )}
-        </>
-      )}
+
+            {hasMore && (
+              <div className="flex justify-center pt-2">
+                <Button
+                  variant="outline"
+                  size="sm"
+                  onClick={() => update("visibleCount", visibleCount + PAGE_SIZE)}
+                  className="gap-1.5"
+                >
+                  {it(locale, "Carica altri", "Load more")} (
+                  {filtered.length - visible.length})
+                </Button>
+              </div>
+            )}
+          </>
+        )}
+      </div>
     </div>
   );
 }
@@ -1712,6 +1767,20 @@ export default function ArtistExplorer() {
   // beatport_id. Mostra uno spinner nel pulsante Edit CRM.
   const [editCrmLoading, setEditCrmLoading] = useState(false);
 
+  // 🔒 RP-037 — Stato della lista (search, filters, sort, pagination)
+  // HOISTATO nel parent ArtistExplorer. Survive alla navigazione verso il
+  // dettaglio artista e ritorno. ArtistList è ora un componente controllato.
+  const [listState, setListState] = useState<ArtistListState>(INITIAL_LIST_STATE);
+
+  // 🔒 RP-037 — Ref al container scrollabile della lista. Salviamo la
+  // posizione scroll qui dentro prima di aprire il dettaglio, e la
+  // ripristiniamo quando l'utente preme Back.
+  // NB: usiamo window.scrollY perché la lista scorre sulla window (non in un
+  // container interno con overflow). Se in futuro la lista venisse messa in
+  // un container scrollabile, basterà cambiare listScrollRef.current.scrollTop.
+  const listScrollRef = useRef<HTMLDivElement | null>(null);
+  const savedScrollY = useRef<number>(0);
+
   // Load custom artists on mount
   useEffect(() => {
     let mounted = true;
@@ -1867,6 +1936,11 @@ export default function ArtistExplorer() {
 
   const handleSelect = useCallback(
     (id: string) => {
+      // 🔒 RP-037 — Salva la posizione scroll corrente PRIMA di aprire il
+      // dettaglio. Verrà ripristinata quando l'utente preme Back.
+      if (typeof window !== "undefined") {
+        savedScrollY.current = window.scrollY;
+      }
       setSelectedArtistId?.(id);
       // Scroll to top so the detail hero is visible.
       if (typeof window !== "undefined") {
@@ -1883,6 +1957,18 @@ export default function ArtistExplorer() {
     setSelectedArtistId?.(null);
     if (selectedReleaseId) {
       setActiveTab("demos");
+      return;
+    }
+    // 🔒 RP-037 — Ripristina la posizione scroll salvata in handleSelect.
+    // Usiamo requestAnimationFrame per essere sicuri che la lista sia stata
+    // renderizzata (selectedArtistId è già null, ma React non ha ancora
+    // committato il re-render). Senza rAF, window.scrollTo avrebbe luogo
+    // mentre il DOM è ancora quello del dettaglio → scroll perso.
+    if (typeof window !== "undefined") {
+      const targetY = savedScrollY.current;
+      window.requestAnimationFrame(() => {
+        window.scrollTo({ top: targetY, behavior: "auto" });
+      });
     }
   }, [setSelectedArtistId, selectedReleaseId, setActiveTab]);
 
@@ -2064,6 +2150,11 @@ export default function ArtistExplorer() {
         artists={allArtists}
         locale={locale}
         onSelect={handleSelect}
+        // 🔒 RP-037 — stato + ref passati dal parent per preservare filtri,
+        // sort, paginazione e scroll tra navigazioni detail → list.
+        listState={listState}
+        setListState={setListState}
+        listScrollRef={listScrollRef}
       />
       <AddArtistDialog
         open={showAddDialog}

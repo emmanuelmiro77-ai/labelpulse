@@ -2274,3 +2274,39 @@ Stage Summary:
 - Per artisti custom (con o senza beatport_id): click su Edit CRM → EDIT mode diretto (usa customId come target PATCH).
 - Detail page legge sempre Beatport + CRM con CRM priority (merge avviene in allArtists useMemo automaticamente).
 - UI si aggiorna istantaneamente dopo CREATE/UPDATE: customArtists aggiornato → allArtists ricalcolato → selectedArtist ricalcolato (con merge) → detail page re-renderizzato. Nessun refresh manuale, nessuna perdita di stato.
+
+---
+Task ID: rp-037-preserve-artist-explorer-state
+Agent: Z-AI (session web-aaf0d6d4)
+Task: RP-037 — Preserve Artist Explorer State. Quando l'utente preme Back dal dettaglio artista, deve ritrovare esattamente la stessa vista: stesso genere, filtro, ricerca, ordinamento, pagina corrente, posizione scroll, lista già caricata.
+
+Work Log:
+- Indagine root cause: ArtistExplorer (main) usa early returns per renderizzare condizionalmente ArtistDetail OPPURE ArtistList. Quando selectedArtistId è set → ArtistList viene smontata → il suo stato interno (useState per search/filters/sort/pagination) viene PERSO. Al Back, ArtistList viene rimontata con stato fresco → l'utente torna alla schermata iniziale.
+- Modifica 1 — Definita interfaccia ArtistListState (search, trendingOnly, remixerOnly, genreFilter, sortMode, visibleCount, sortOpen) e costante INITIAL_LIST_STATE.
+- Modifica 2 — ArtistList refactor: da stato interno (7 useState) a stato controllato.
+  * Riceve listState + setListState dal parent (props).
+  * Helper update(key, value) per aggiornare un singolo campo.
+  * Tutti gli onChange (search, filter chips, sort dropdown, load more) usano setListState invece dei setter locali.
+  * useEffect di reset pagination chiama setListState invece di setVisibleCount.
+- Modifica 3 — ArtistExplorer (main): aggiunto stato listState useState(INITIAL_LIST_STATE) + ref listScrollRef + ref savedScrollY.
+- Modifica 4 — handleSelect: salva window.scrollY in savedScrollRef.current PRIMA di aprire il dettaglio.
+- Modifica 5 — handleBack: dopo aver settato selectedArtistId=null, ripristina lo scroll salvato via window.requestAnimationFrame (rAF attende il re-render di React → la lista è nel DOM → scroll valido). Behavior: "auto" (no smooth, l'utente non deve vedere animazione di scroll).
+- Modifica 6 — ArtistList invocation: passate props listState, setListState, listScrollRef.
+- Modifica 7 — listScrollRef è attaccato a un <div> wrapper attorno alla results grid (non su tutta la lista). In questo momento la lista scorre sulla window (nessun container overflow), quindi listScrollRef è attaccato ma non usato per leggere scrollTop. Usiamo window.scrollY. Il ref resta disponibile per future modifiche (se la lista venisse messa in un container scrollabile).
+- Verifica anti-regressione:
+  * Ricerca artisti: invariata (lo state è solo spostato di posizione, la logica di filtro/sort è identica).
+  * CRM: invariato (nessuna modifica a artist_custom_data, API, dialog).
+  * Beatport: invariato (nessuna modifica a dataset, getArtistBeatportUrl, mergeCrmIntoArtist).
+  * Database: invariato.
+  * Scraping: invariato.
+  * Altre pagine/moduli: invariati.
+- TypeScript: 1 errore pre-esistente (activeTab, non mio). Nessun nuovo errore introdotto.
+- Build produzione: ✓ Compiled successfully in 26.5s, 49/49 static pages.
+- Test suite: ✓ 42/42 test passati (5 file).
+
+Stage Summary:
+- Stato della lista (search, trendingOnly, remixerOnly, genreFilter, sortMode, visibleCount, sortOpen) HOISTATO nel parent ArtistExplorer → sopravvive alla navigazione detail → list.
+- Scroll position salvata in savedScrollY (useRef) in handleSelect, ripristinata in handleBack via requestAnimationFrame.
+- visibleCount (paginazione "Load more") preservato: l'utente ritrova la stessa quantità di card caricate.
+- ArtistList è ora un componente controllato (riceve listState + setListState via props).
+- Back button NON ricostruisce Artist Explorer: si limita a settare selectedArtistId=null. Lo stato listState è nel parent (mai smontato) → ripristino immediato.
