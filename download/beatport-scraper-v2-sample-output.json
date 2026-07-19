@@ -628,6 +628,14 @@
           "seenAt": "2026-06-21T10:00:00.000Z"
         }
       ],
+      "positionHistory": [
+        {
+          "scrapedAt": "2026-06-21T10:00:00.000Z",
+          "genreId": 11,
+          "genreName": "Tech House",
+          "position": 1
+        }
+      ],
       "seenAt": "2026-06-21T10:00:00.000Z",
       "id": 19711254,
       "key": "bp_19711254",
@@ -682,6 +690,14 @@
           "seenAt": "2026-06-21T10:00:00.000Z"
         }
       ],
+      "positionHistory": [
+        {
+          "scrapedAt": "2026-06-21T10:00:00.000Z",
+          "genreId": 11,
+          "genreName": "Tech House",
+          "position": 5
+        }
+      ],
       "seenAt": "2026-06-21T10:00:00.000Z",
       "id": 19711255,
       "key": "bp_19711255",
@@ -731,6 +747,20 @@
           "seenAt": "2026-06-21T10:00:00.000Z"
         }
       ],
+      "positionHistory": [
+        {
+          "scrapedAt": "2026-06-21T10:00:00.000Z",
+          "genreId": 11,
+          "genreName": "Tech House",
+          "position": 12
+        },
+        {
+          "scrapedAt": "2026-06-21T10:00:00.000Z",
+          "genreId": 14,
+          "genreName": "Minimal / Deep Tech",
+          "position": 2
+        }
+      ],
       "seenAt": "2026-06-21T10:00:00.000Z",
       "id": 19711256,
       "key": "bp_19711256",
@@ -772,6 +802,14 @@
           "position": 3,
           "points": 98,
           "seenAt": "2026-06-21T10:00:00.000Z"
+        }
+      ],
+      "positionHistory": [
+        {
+          "scrapedAt": "2026-06-21T10:00:00.000Z",
+          "genreId": 6,
+          "genreName": "Techno Peak Time / Driving",
+          "position": 3
         }
       ],
       "seenAt": "2026-06-21T10:00:00.000Z",
@@ -816,6 +854,14 @@
           "position": 8,
           "points": 93,
           "seenAt": "2026-06-21T10:00:00.000Z"
+        }
+      ],
+      "positionHistory": [
+        {
+          "scrapedAt": "2026-06-21T10:00:00.000Z",
+          "genreId": 6,
+          "genreName": "Techno Peak Time / Driving",
+          "position": 8
         }
       ],
       "seenAt": "2026-06-21T10:00:00.000Z",
@@ -866,6 +912,14 @@
           "seenAt": "2026-06-21T10:00:00.000Z"
         }
       ],
+      "positionHistory": [
+        {
+          "scrapedAt": "2026-06-21T10:00:00.000Z",
+          "genreId": 6,
+          "genreName": "Techno Peak Time / Driving",
+          "position": 18
+        }
+      ],
       "seenAt": "2026-06-21T10:00:00.000Z",
       "id": 19711262,
       "key": "bp_19711262",
@@ -909,6 +963,14 @@
           "position": 25,
           "points": 76,
           "seenAt": "2026-06-21T10:00:00.000Z"
+        }
+      ],
+      "positionHistory": [
+        {
+          "scrapedAt": "2026-06-21T10:00:00.000Z",
+          "genreId": 14,
+          "genreName": "Minimal / Deep Tech",
+          "position": 25
         }
       ],
       "seenAt": "2026-06-21T10:00:00.000Z",

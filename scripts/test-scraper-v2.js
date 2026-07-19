@@ -180,7 +180,7 @@ function releaseKeyFor(rel, labelName) {
 }
 
 // === Re-implement processTracks (mirror of the scraper — RP-BPI-002B canonical) ===
-function processTracks(tracks, gn, lm, am, tm, rm) {
+function processTracks(tracks, gn, gid, lm, am, tm, rm) {
   for (var i = 0; i < tracks.length; i++) {
     var t = tracks[i];
     var label = null;
@@ -451,6 +451,8 @@ function processTracks(tracks, gn, lm, am, tm, rm) {
         artistIds: trackArtistCanonicalIds.slice(),
         remixerIds: trackRemixerCanonicalIds.slice(),
         positions: [{ genre: gn, position: pos, points: pts, seenAt: NOW }],
+        // RP-BPI-003 — Position History
+        positionHistory: [{ scrapedAt: NOW, genreId: gid, genreName: gn, position: pos }],
         seenAt: NOW,
         _compat: {
           key: trackBpKey,
@@ -466,6 +468,13 @@ function processTracks(tracks, gn, lm, am, tm, rm) {
       var tr = tm.get(trackBpKey);
       tr.positions.push({ genre: gn, position: pos, points: pts, seenAt: NOW });
       if (!tr.releaseId && tReleaseCanonicalId) tr.releaseId = tReleaseCanonicalId;
+      // RP-BPI-003 — Position History: dedup consecutivi
+      var ph = tr.positionHistory;
+      var lastEntry = ph.length > 0 ? ph[ph.length - 1] : null;
+      var differs = !lastEntry || lastEntry.genreName !== gn || lastEntry.position !== pos;
+      if (differs) {
+        ph.push({ scrapedAt: NOW, genreId: gid, genreName: gn, position: pos });
+      }
     }
 
     // === Aggiorna Release.trackIds[] con il canonical track id ===
@@ -640,6 +649,14 @@ function remapCanonicalIds() {
           graph.remapRegistry.track[v.id] = ex.id;
         }
         ex.positions.push(...v.positions);
+        // RP-BPI-003 — Merge positionHistory with dedup
+        v.positionHistory.forEach(function (phEntry) {
+          var lastPh = ex.positionHistory.length > 0 ? ex.positionHistory[ex.positionHistory.length - 1] : null;
+          var phDiffers = !lastPh || lastPh.genreName !== phEntry.genreName || lastPh.position !== phEntry.position;
+          if (phDiffers) {
+            ex.positionHistory.push(phEntry);
+          }
+        });
         if (!ex.releaseId && v.releaseId) ex.releaseId = v.releaseId;
       } else {
         graph.tracks.set(k, v);
@@ -830,6 +847,8 @@ const tracksArr = Array.from(graph.tracks.values()).map(t => ({
   artistIds: t.artistIds.slice(),
   remixerIds: t.remixerIds.slice(),
   positions: t.positions.slice(),
+  // RP-BPI-003 — Position History
+  positionHistory: t.positionHistory.slice(),
   seenAt: t.seenAt,
   id: t.beatportId,
   key: t._compat.key,
@@ -903,10 +922,20 @@ const out = {
 const graph = createCanonicalGraph();
 const builder = createCanonicalGraphBuilder(graph);
 
+// RP-BPI-003 — genreName → genreId mapping (for positionHistory.genreId).
+// Beatport genre ids (from the scraper's G array): Tech House=11, Techno Peak Time / Driving=6,
+// Minimal / Deep Tech=14.
+const genreIdMap = {
+  'Tech House': 11,
+  'Techno Peak Time / Driving': 6,
+  'Minimal / Deep Tech': 14
+};
+
 // Phase 1+2: Beatport Import + Graph construction
 for (const gn of Object.keys(sampleByGenre)) {
   const lm = new Map(), am = new Map(), tm = new Map(), rm = new Map();
-  builder.processTracks(sampleByGenre[gn], gn, lm, am, tm, rm);
+  const gid = genreIdMap[gn] || 0;
+  builder.processTracks(sampleByGenre[gn], gn, gid, lm, am, tm, rm);
   builder.mergeGenreIntoGlobal(lm, am, tm, rm, gn);
 }
 
@@ -1379,6 +1408,218 @@ assert('_meta.source preserved', out._meta.source, 'beatport');
 // releases array is before _meta in JSON (RP-BPI-001 invariant preserved)
 const jsonKeys = Object.keys(out);
 assert('releases is before _meta in JSON keys', jsonKeys.indexOf('releases'), jsonKeys.indexOf('_meta') - 1);
+
+// ====================================================================
+// RP-BPI-003 — POSITION HISTORY TESTS
+// ====================================================================
+console.log('\n=== RP-BPI-003 POSITION HISTORY ===');
+
+// --- Test 1: First acquisition ---
+// Every track from the first (and only) scrape must have a positionHistory
+// with at least 1 entry.
+const allTracksHavePositionHistory = out.tracks.every(t =>
+  Array.isArray(t.positionHistory) && t.positionHistory.length >= 1
+);
+assert('every track has positionHistory array with >= 1 entry', allTracksHavePositionHistory, true);
+
+// Each entry must have: scrapedAt, genreId, genreName, position
+const allEntriesWellFormed = out.tracks.every(t =>
+  t.positionHistory.every(e =>
+    typeof e.scrapedAt === 'string' &&
+    typeof e.genreId === 'number' &&
+    typeof e.genreName === 'string' &&
+    typeof e.position === 'number'
+  )
+);
+assert('every positionHistory entry has scrapedAt, genreId, genreName, position', allEntriesWellFormed, true);
+
+// --- Test 2: Cross-genre track has multiple entries ---
+// "lose control" (beatportId 19711256) appears in Tech House (pos 12) and
+// Minimal / Deep Tech (pos 2). Its positionHistory must have 2 entries
+// (different genre → different entry, not a duplicate).
+const loseCtrlTrack = out.tracks.find(t => t.beatportId === 19711256);
+assert('lose control track found', !!loseCtrlTrack, true);
+if (loseCtrlTrack) {
+  assert('lose control positionHistory has 2 entries (cross-genre)', loseCtrlTrack.positionHistory.length, 2);
+  // Entry 0: Tech House (first genre processed), pos 12
+  // Entry 1: Minimal / Deep Tech (second genre processed), pos 2
+  // Note: the genre order in the test is Tech House → Techno → Minimal/Deep Tech
+  assert('lose control positionHistory[0].genreName = Tech House', loseCtrlTrack.positionHistory[0].genreName, 'Tech House');
+  assert('lose control positionHistory[0].genreId = 11', loseCtrlTrack.positionHistory[0].genreId, 11);
+  assert('lose control positionHistory[0].position = 12', loseCtrlTrack.positionHistory[0].position, 12);
+  assert('lose control positionHistory[1].genreName = Minimal / Deep Tech', loseCtrlTrack.positionHistory[1].genreName, 'Minimal / Deep Tech');
+  assert('lose control positionHistory[1].genreId = 14', loseCtrlTrack.positionHistory[1].genreId, 14);
+  assert('lose control positionHistory[1].position = 2', loseCtrlTrack.positionHistory[1].position, 2);
+}
+
+// ====================================================================
+// RP-BPI-003 — MULTI-SCRAPE SIMULATION
+// ====================================================================
+console.log('\n=== RP-BPI-003 MULTI-SCRAPE SIMULATION ===');
+
+// To test positionHistory across multiple scraping sessions, we create a
+// FRESH graph + builder, then run processTracks multiple times with
+// different sample data (simulating different positions over time).
+// The NOW timestamp is different per scrape to simulate time passing.
+
+// Sample data for 3 scraping sessions of the SAME track "test track":
+//   Scrape 1: position 5 (first acquisition)
+//   Scrape 2: position 3 (improvement)
+//   Scrape 3: position 3 (same → dedup, no new entry)
+//   Scrape 4: position 8 (worsening)
+//   Scrape 5: track not in chart (exit — no processTracks call)
+//   Scrape 6: position 10 (re-entry)
+//   Scrape 7: position 10 (same → dedup)
+
+function makeTrack(id, name, position, labelId, labelName) {
+  return {
+    id: id,
+    name: name,
+    mix_name: 'Original Mix',
+    slug: name.toLowerCase().replace(/\s+/g, '-'),
+    artists: [{ id: 99999, name: 'Test Artist', slug: 'test-artist' }],
+    remixers: [],
+    bpm: 128,
+    key: { name: 'A Minor', camelot_number: 1, camelot_letter: 'A' },
+    publish_date: '2024-01-01',
+    release: {
+      id: 88888, slug: 'test-release', name: 'Test Release',
+      label: { id: labelId, name: labelName, slug: labelName.toLowerCase().replace(/\s+/g, '-') }
+    },
+    _position: position
+  };
+}
+
+// Create a fresh graph + builder for the multi-scrape test
+const graph2 = createCanonicalGraph();
+const builder2 = createCanonicalGraphBuilder(graph2);
+const genreName2 = 'Tech House';
+const genreId2 = 11;
+
+// Scrape 1: position 5 (first acquisition)
+// We need to temporarily override NOW for each scrape to simulate different timestamps.
+// Since NOW is a const in the test, we'll use the builder with a custom timestamp
+// by directly calling processTracks with a modified track that carries _scrapedAt.
+// Actually, the scraper uses NOW internally. For the test, we'll just check
+// that entries are added in order (the timestamp is always NOW, but the
+// positionHistory array is ordered by insertion).
+
+// Scrape 1: first acquisition, position 5
+let lm2 = new Map(), am2 = new Map(), tm2 = new Map(), rm2 = new Map();
+builder2.processTracks([makeTrack(77777, 'test track', 5, 55555, 'Test Label')], genreName2, genreId2, lm2, am2, tm2, rm2);
+builder2.mergeGenreIntoGlobal(lm2, am2, tm2, rm2, genreName2);
+
+let testTrack = Array.from(graph2.tracks.values()).find(t => t.beatportId === 77777);
+assert('multi-scrape: scrape 1 — track created', !!testTrack, true);
+if (testTrack) {
+  assert('multi-scrape: scrape 1 — positionHistory has 1 entry', testTrack.positionHistory.length, 1);
+  assert('multi-scrape: scrape 1 — positionHistory[0].position = 5', testTrack.positionHistory[0].position, 5);
+}
+
+// Scrape 2: position 3 (improvement — different from last → new entry)
+lm2 = new Map(); am2 = new Map(); tm2 = new Map(); rm2 = new Map();
+builder2.processTracks([makeTrack(77777, 'test track', 3, 55555, 'Test Label')], genreName2, genreId2, lm2, am2, tm2, rm2);
+builder2.mergeGenreIntoGlobal(lm2, am2, tm2, rm2, genreName2);
+
+testTrack = Array.from(graph2.tracks.values()).find(t => t.beatportId === 77777);
+if (testTrack) {
+  assert('multi-scrape: scrape 2 (improvement) — positionHistory has 2 entries', testTrack.positionHistory.length, 2);
+  assert('multi-scrape: scrape 2 — positionHistory[1].position = 3', testTrack.positionHistory[1].position, 3);
+}
+
+// Scrape 3: position 3 (same as last → dedup, NO new entry)
+lm2 = new Map(); am2 = new Map(); tm2 = new Map(); rm2 = new Map();
+builder2.processTracks([makeTrack(77777, 'test track', 3, 55555, 'Test Label')], genreName2, genreId2, lm2, am2, tm2, rm2);
+builder2.mergeGenreIntoGlobal(lm2, am2, tm2, rm2, genreName2);
+
+testTrack = Array.from(graph2.tracks.values()).find(t => t.beatportId === 77777);
+if (testTrack) {
+  assert('multi-scrape: scrape 3 (same position → dedup) — positionHistory still 2 entries', testTrack.positionHistory.length, 2);
+}
+
+// Scrape 4: position 8 (worsening — different from last → new entry)
+lm2 = new Map(); am2 = new Map(); tm2 = new Map(); rm2 = new Map();
+builder2.processTracks([makeTrack(77777, 'test track', 8, 55555, 'Test Label')], genreName2, genreId2, lm2, am2, tm2, rm2);
+builder2.mergeGenreIntoGlobal(lm2, am2, tm2, rm2, genreName2);
+
+testTrack = Array.from(graph2.tracks.values()).find(t => t.beatportId === 77777);
+if (testTrack) {
+  assert('multi-scrape: scrape 4 (worsening) — positionHistory has 3 entries', testTrack.positionHistory.length, 3);
+  assert('multi-scrape: scrape 4 — positionHistory[2].position = 8', testTrack.positionHistory[2].position, 8);
+}
+
+// Scrape 5: track NOT in chart (exit — no processTracks call, so no new entry)
+// In a real scraper, if the track is not in the chart, processTracks is not
+// called for it, so positionHistory is not modified.
+// We simulate this by simply not calling processTracks for this track.
+// positionHistory should remain at 3 entries.
+testTrack = Array.from(graph2.tracks.values()).find(t => t.beatportId === 77777);
+if (testTrack) {
+  assert('multi-scrape: scrape 5 (exit — no call) — positionHistory still 3 entries', testTrack.positionHistory.length, 3);
+}
+
+// Scrape 6: position 10 (re-entry — different from last → new entry)
+lm2 = new Map(); am2 = new Map(); tm2 = new Map(); rm2 = new Map();
+builder2.processTracks([makeTrack(77777, 'test track', 10, 55555, 'Test Label')], genreName2, genreId2, lm2, am2, tm2, rm2);
+builder2.mergeGenreIntoGlobal(lm2, am2, tm2, rm2, genreName2);
+
+testTrack = Array.from(graph2.tracks.values()).find(t => t.beatportId === 77777);
+if (testTrack) {
+  assert('multi-scrape: scrape 6 (re-entry) — positionHistory has 4 entries', testTrack.positionHistory.length, 4);
+  assert('multi-scrape: scrape 6 — positionHistory[3].position = 10', testTrack.positionHistory[3].position, 10);
+}
+
+// Scrape 7: position 10 (same as last → dedup, NO new entry)
+lm2 = new Map(); am2 = new Map(); tm2 = new Map(); rm2 = new Map();
+builder2.processTracks([makeTrack(77777, 'test track', 10, 55555, 'Test Label')], genreName2, genreId2, lm2, am2, tm2, rm2);
+builder2.mergeGenreIntoGlobal(lm2, am2, tm2, rm2, genreName2);
+
+testTrack = Array.from(graph2.tracks.values()).find(t => t.beatportId === 77777);
+if (testTrack) {
+  assert('multi-scrape: scrape 7 (same position → dedup) — positionHistory still 4 entries', testTrack.positionHistory.length, 4);
+}
+
+// --- Final verification: no consecutive duplicates ---
+// Walk the entire positionHistory and verify no two consecutive entries
+// have the same genreName AND position.
+if (testTrack) {
+  let noConsecutiveDups = true;
+  for (let i = 1; i < testTrack.positionHistory.length; i++) {
+    const prev = testTrack.positionHistory[i - 1];
+    const curr = testTrack.positionHistory[i];
+    if (prev.genreName === curr.genreName && prev.position === curr.position) {
+      noConsecutiveDups = false;
+      break;
+    }
+  }
+  assert('multi-scrape: no consecutive duplicates in positionHistory', noConsecutiveDups, true);
+
+  // Verify the full history is correct (chronological order):
+  // 1. pos 5 (first acquisition)
+  // 2. pos 3 (improvement)
+  // 3. pos 8 (worsening)
+  // 4. pos 10 (re-entry)
+  assert('multi-scrape: positionHistory[0].position = 5 (first)', testTrack.positionHistory[0].position, 5);
+  assert('multi-scrape: positionHistory[1].position = 3 (improvement)', testTrack.positionHistory[1].position, 3);
+  assert('multi-scrape: positionHistory[2].position = 8 (worsening)', testTrack.positionHistory[2].position, 8);
+  assert('multi-scrape: positionHistory[3].position = 10 (re-entry)', testTrack.positionHistory[3].position, 10);
+
+  // All entries should have the same genreName (all in Tech House)
+  assert('multi-scrape: all entries have genreName = Tech House',
+    testTrack.positionHistory.every(e => e.genreName === 'Tech House'), true);
+  // All entries should have genreId = 11
+  assert('multi-scrape: all entries have genreId = 11',
+    testTrack.positionHistory.every(e => e.genreId === 11), true);
+}
+
+// --- Verify Artist/Release/Label entities do NOT have positionHistory ---
+// RP-BPI-003 extends ONLY the Track entity.
+const artistsHaveNoPositionHistory = out.artists.every(a => !('positionHistory' in a));
+assert('no Artist has positionHistory field (RP-BPI-003 extends only Track)', artistsHaveNoPositionHistory, true);
+const releasesHaveNoPositionHistory = out.releases.every(r => !('positionHistory' in r));
+assert('no Release has positionHistory field (RP-BPI-003 extends only Track)', releasesHaveNoPositionHistory, true);
+const labelsHaveNoPositionHistory = out.labels.every(l => !('positionHistory' in l));
+assert('no Label has positionHistory field (RP-BPI-003 extends only Track)', labelsHaveNoPositionHistory, true);
 
 console.log('\n=== RESULT: ' + pass + ' passed, ' + fail + ' failed ===');
 console.log('=== Sample JSON saved to: ' + samplePath + ' ===');

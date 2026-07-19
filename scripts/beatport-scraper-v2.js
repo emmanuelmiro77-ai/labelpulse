@@ -210,7 +210,7 @@
   //   Artist.labelIds[], Artist.releaseIds[], Artist.trackIds[]
   //   Label.artistIds[], Label.releaseIds[], Label.trackIds[]
   // ===================================================================
-  function processTracks(tracks, gn, lm, am, tm, rm) {
+  function processTracks(tracks, gn, gid, lm, am, tm, rm) {
     for (var i = 0; i < tracks.length; i++) {
       var t = tracks[i];
 
@@ -553,6 +553,11 @@
           remixerIds: trackRemixerCanonicalIds.slice(),// canonical remixer ids
           // === AGGREGATES ===
           positions: [{ genre: gn, position: pos, points: pts, seenAt: NOW }],
+          // RP-BPI-003 — Position History: array ordinato cronologicamente.
+          // Ogni entry: { scrapedAt, genreId, genreName, position }
+          // Dedup: una nuova entry viene aggiunta solo se differisce dall'ultima
+          // (genere o posizione diversi). Conserva tutta la cronologia.
+          positionHistory: [{ scrapedAt: NOW, genreId: gid, genreName: gn, position: pos }],
           seenAt: NOW,
           // === LEGACY COMPAT ===
           _compat: {
@@ -572,11 +577,21 @@
         };
         tm.set(trackBpKey, newTrack);
       } else {
-        // Same track seen in another genre — append position entry
+        // Same track seen in another genre (or same genre in a later scrape) — append position entry
         var tr = tm.get(trackBpKey);
         tr.positions.push({ genre: gn, position: pos, points: pts, seenAt: NOW });
         // Fill releaseId if not set
         if (!tr.releaseId && tReleaseCanonicalId) tr.releaseId = tReleaseCanonicalId;
+        // RP-BPI-003 — Position History: aggiungi una nuova entry solo se
+        // differisce dall'ultima registrata (genreName o position diversi).
+        // Questo evita duplicati consecutivi quando la stessa traccia appare
+        // nello stesso genere alla stessa posizione in scrape successivi.
+        var ph = tr.positionHistory;
+        var lastEntry = ph.length > 0 ? ph[ph.length - 1] : null;
+        var differs = !lastEntry || lastEntry.genreName !== gn || lastEntry.position !== pos;
+        if (differs) {
+          ph.push({ scrapedAt: NOW, genreId: gid, genreName: gn, position: pos });
+        }
       }
 
       // === AGGIORNA Release.trackIds[] con il canonical track id (ora disponibile) ===
@@ -871,6 +886,15 @@
             graph.remapRegistry.track[v.id] = ex.id;
           }
           v.positions.forEach(function (p) { ex.positions.push(p); });
+          // RP-BPI-003 — Merge positionHistory: append per-genre entries
+          // with dedup (skip if same genreName+position as last entry).
+          v.positionHistory.forEach(function (phEntry) {
+            var lastPh = ex.positionHistory.length > 0 ? ex.positionHistory[ex.positionHistory.length - 1] : null;
+            var phDiffers = !lastPh || lastPh.genreName !== phEntry.genreName || lastPh.position !== phEntry.position;
+            if (phDiffers) {
+              ex.positionHistory.push(phEntry);
+            }
+          });
           if (!ex.releaseId && v.releaseId) ex.releaseId = v.releaseId;
         } else {
           graph.tracks.set(k, v);
@@ -1117,6 +1141,9 @@
       remixerIds: t.remixerIds.slice(),     // canonical remixer ids (art_<n>)
       // === AGGREGATES ===
       positions: t.positions.slice(),
+      // RP-BPI-003 — Position History (cronologia ordinata delle posizioni
+      // in classifica nel tempo, con dedup di entry consecutive identiche).
+      positionHistory: t.positionHistory.slice(),
       seenAt: t.seenAt,
       // === LEGACY (preservato per backward compat) ===
       id: t.beatportId,                     // legacy: BP id (alias of beatportId, may be null)
@@ -1218,7 +1245,7 @@
           var d = await r.json(), tr = d.results || d.tracks || d;
           if (Array.isArray(tr) && tr.length > 0) {
             console.log(S + ' %c API interna: ' + tr.length + ' tracce', c1, cOk);
-            builder.processTracks(tr, gn, lm, am, tm, rm);
+            builder.processTracks(tr, gn, gid, lm, am, tm, rm);
           }
         }
       } catch (e) { /* ignore */ }
@@ -1230,7 +1257,7 @@
           var d2 = await r2.json(), tr2 = d2.results || d2;
           if (Array.isArray(tr2) && tr2.length > 0) {
             console.log(S + ' %c API v4: ' + tr2.length + ' tracce', c1, cOk);
-            builder.processTracks(tr2, gn, lm, am, tm, rm);
+            builder.processTracks(tr2, gn, gid, lm, am, tm, rm);
           }
         }
       } catch (e) { /* ignore */ }
@@ -1248,13 +1275,13 @@
                 var res = q[qi].state && q[qi].state.data && q[qi].state.data.results;
                 if (Array.isArray(res) && res.length > 0) {
                   console.log(S + ' %c Next.js data: ' + res.length + ' tracce', c1, cOk);
-                  builder.processTracks(res, gn, lm, am, tm, rm);
+                  builder.processTracks(res, gn, gid, lm, am, tm, rm);
                   break;
                 }
                 var trk = q[qi].state && q[qi].state.data && q[qi].state.data.tracks;
                 if (Array.isArray(trk) && trk.length > 0) {
                   console.log(S + ' %c Next.js data: ' + trk.length + ' tracce', c1, cOk);
-                  builder.processTracks(trk, gn, lm, am, tm, rm);
+                  builder.processTracks(trk, gn, gid, lm, am, tm, rm);
                   break;
                 }
               }
@@ -1285,7 +1312,7 @@
             });
             if (htmlTracks.length > 0) {
               console.log(S + ' %c HTML parsing (label-only): ' + htmlTracks.length + ' tracce', c1, cOk);
-              builder.processTracks(htmlTracks, gn, lm, am, tm, rm);
+              builder.processTracks(htmlTracks, gn, gid, lm, am, tm, rm);
             }
           }
         }
