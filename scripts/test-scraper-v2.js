@@ -153,6 +153,23 @@ function canonicalReleaseId() { canonicalCounters.release++; return 'rel_' + pad
 function canonicalArtistId() { canonicalCounters.artist++; return 'art_' + padNum(canonicalCounters.artist); }
 function canonicalLabelId() { canonicalCounters.label++; return 'lbl_' + padNum(canonicalCounters.label); }
 
+// === RP-BPI-004 — Track Trend Engine ===
+function computeTrend(positionHistory, currentGenreName) {
+  if (!Array.isArray(positionHistory) || positionHistory.length <= 1) {
+    return 'new';
+  }
+  var genre = currentGenreName || positionHistory[positionHistory.length - 1].genreName;
+  var sameGenre = positionHistory.filter(function (e) { return e.genreName === genre; });
+  if (sameGenre.length < 2) {
+    return 'new';
+  }
+  var last = sameGenre[sameGenre.length - 1];
+  var prev = sameGenre[sameGenre.length - 2];
+  if (last.position < prev.position) return 'up';
+  if (last.position > prev.position) return 'down';
+  return 'stable';
+}
+
 // === RP-BPI-002A — Beatport-derived stable key helpers (kept for dedup internal) ===
 function artistKey(a) {
   if (!a) return null;
@@ -453,6 +470,8 @@ function processTracks(tracks, gn, gid, lm, am, tm, rm) {
         positions: [{ genre: gn, position: pos, points: pts, seenAt: NOW }],
         // RP-BPI-003 — Position History
         positionHistory: [{ scrapedAt: NOW, genreId: gid, genreName: gn, position: pos }],
+        // RP-BPI-004 — Track Trend
+        trend: 'new',
         seenAt: NOW,
         _compat: {
           key: trackBpKey,
@@ -475,6 +494,8 @@ function processTracks(tracks, gn, gid, lm, am, tm, rm) {
       if (differs) {
         ph.push({ scrapedAt: NOW, genreId: gid, genreName: gn, position: pos });
       }
+      // RP-BPI-004 — Ricalcola trend
+      tr.trend = computeTrend(ph, gn);
     }
 
     // === Aggiorna Release.trackIds[] con il canonical track id ===
@@ -657,6 +678,10 @@ function remapCanonicalIds() {
             ex.positionHistory.push(phEntry);
           }
         });
+        // RP-BPI-004 — Ricalcola trend dopo merge
+        if (ex.positionHistory.length > 0) {
+          ex.trend = computeTrend(ex.positionHistory, ex.positionHistory[ex.positionHistory.length - 1].genreName);
+        }
         if (!ex.releaseId && v.releaseId) ex.releaseId = v.releaseId;
       } else {
         graph.tracks.set(k, v);
@@ -849,6 +874,8 @@ const tracksArr = Array.from(graph.tracks.values()).map(t => ({
   positions: t.positions.slice(),
   // RP-BPI-003 — Position History
   positionHistory: t.positionHistory.slice(),
+  // RP-BPI-004 — Track Trend
+  trend: t.trend,
   seenAt: t.seenAt,
   id: t.beatportId,
   key: t._compat.key,
@@ -1620,6 +1647,135 @@ const releasesHaveNoPositionHistory = out.releases.every(r => !('positionHistory
 assert('no Release has positionHistory field (RP-BPI-003 extends only Track)', releasesHaveNoPositionHistory, true);
 const labelsHaveNoPositionHistory = out.labels.every(l => !('positionHistory' in l));
 assert('no Label has positionHistory field (RP-BPI-003 extends only Track)', labelsHaveNoPositionHistory, true);
+
+// ====================================================================
+// RP-BPI-004 — TRACK TREND ENGINE TESTS
+// ====================================================================
+console.log('\n=== RP-BPI-004 TRACK TREND ENGINE ===');
+
+// --- Test 1: Every track has a trend field with valid value ---
+const validTrendValues = ['up', 'down', 'stable', 'new'];
+const allTracksHaveTrend = out.tracks.every(t =>
+  typeof t.trend === 'string' && validTrendValues.includes(t.trend)
+);
+assert('every track has trend field with valid value (up/down/stable/new)', allTracksHaveTrend, true);
+
+// --- Test 2: New track (single scrape) → trend = "new" ---
+// All tracks in the first scrape have 1-2 positionHistory entries.
+// Tracks with only 1 entry → trend = "new".
+// Tracks with 2 entries but from DIFFERENT genres (cross-genre) → trend = "new"
+// (because there's only 1 entry per genre, so no comparison possible).
+// In our sample, "lose control" has 2 entries (Tech House + Minimal/Deep Tech)
+// but each genre has only 1 entry → trend = "new".
+// Tracks with 1 entry → trend = "new".
+// So ALL tracks in the single-scrape sample should have trend = "new".
+const allTracksAreNew = out.tracks.every(t => t.trend === 'new');
+assert('all tracks in first scrape have trend = "new" (1 entry per genre)', allTracksAreNew, true);
+
+// --- Test 3: Verify specific tracks ---
+// "palm of my hands" — 1 entry (Tech House only) → new
+const palmTrk = out.tracks.find(t => t.beatportId === 19711254);
+assert('palm track trend = new (1 entry)', palmTrk ? palmTrk.trend : null, 'new');
+
+// "lose control" — 2 entries but cross-genre (Tech House + Minimal/Deep Tech)
+// Only 1 entry per genre → trend = "new"
+const loseCtrlTrk = out.tracks.find(t => t.beatportId === 19711256);
+assert('lose control track trend = new (cross-genre, 1 entry per genre)', loseCtrlTrk ? loseCtrlTrk.trend : null, 'new');
+
+// ====================================================================
+// RP-BPI-004 — MULTI-SCRAPE TREND SIMULATION
+// ====================================================================
+console.log('\n=== RP-BPI-004 MULTI-SCRAPE TREND SIMULATION ===');
+
+// Reuse the multi-scrape track from RP-BPI-003 test (graph2, builder2).
+// The track has 4 positionHistory entries (all Tech House):
+//   1. pos 5 (first → new)
+//   2. pos 3 (improvement → up)
+//   3. pos 8 (worsening → down)
+//   4. pos 10 (worsening → down)
+// Note: the trend is recalculated after EACH scrape, so the FINAL trend
+// reflects the last two entries (pos 8 → pos 10 = down).
+
+const multiScrapeTrack = Array.from(graph2.tracks.values()).find(t => t.beatportId === 77777);
+assert('multi-scrape track found', !!multiScrapeTrack, true);
+if (multiScrapeTrack) {
+  // Final trend: last two entries are pos 8 → pos 10 (worsening) → "down"
+  assert('multi-scrape final trend = down (pos 8 → pos 10)', multiScrapeTrack.trend, 'down');
+}
+
+// --- Test trend at each step using a fresh builder ---
+// Scrape 1: pos 5 → new (1 entry)
+const g3 = createCanonicalGraph();
+const b3 = createCanonicalGraphBuilder(g3);
+let lm3 = new Map(), am3 = new Map(), tm3 = new Map(), rm3 = new Map();
+b3.processTracks([makeTrack(88888, 'trend test', 5, 55555, 'Test Label')], 'Tech House', 11, lm3, am3, tm3, rm3);
+b3.mergeGenreIntoGlobal(lm3, am3, tm3, rm3, 'Tech House');
+let tt = Array.from(g3.tracks.values()).find(t => t.beatportId === 88888);
+assert('trend test scrape 1 (pos 5, 1 entry) → new', tt ? tt.trend : null, 'new');
+
+// Scrape 2: pos 3 → up (5→3, improvement)
+lm3 = new Map(); am3 = new Map(); tm3 = new Map(); rm3 = new Map();
+b3.processTracks([makeTrack(88888, 'trend test', 3, 55555, 'Test Label')], 'Tech House', 11, lm3, am3, tm3, rm3);
+b3.mergeGenreIntoGlobal(lm3, am3, tm3, rm3, 'Tech House');
+tt = Array.from(g3.tracks.values()).find(t => t.beatportId === 88888);
+assert('trend test scrape 2 (pos 5→3, improvement) → up', tt ? tt.trend : null, 'up');
+
+// Scrape 3: pos 3 → same as last, dedup prevents new entry.
+// positionHistory still [5, 3] → trend stays "up" (not "stable", because
+// "stable" requires two entries with the same position in the same genre,
+// and dedup prevents consecutive same-position entries in the same genre).
+lm3 = new Map(); am3 = new Map(); tm3 = new Map(); rm3 = new Map();
+b3.processTracks([makeTrack(88888, 'trend test', 3, 55555, 'Test Label')], 'Tech House', 11, lm3, am3, tm3, rm3);
+b3.mergeGenreIntoGlobal(lm3, am3, tm3, rm3, 'Tech House');
+tt = Array.from(g3.tracks.values()).find(t => t.beatportId === 88888);
+assert('trend test scrape 3 (pos 3→3, dedup, trend stays up)', tt ? tt.trend : null, 'up');
+
+// Scrape 4: pos 7 → down (3→7, worsening)
+lm3 = new Map(); am3 = new Map(); tm3 = new Map(); rm3 = new Map();
+b3.processTracks([makeTrack(88888, 'trend test', 7, 55555, 'Test Label')], 'Tech House', 11, lm3, am3, tm3, rm3);
+b3.mergeGenreIntoGlobal(lm3, am3, tm3, rm3, 'Tech House');
+tt = Array.from(g3.tracks.values()).find(t => t.beatportId === 88888);
+assert('trend test scrape 4 (pos 3→7, worsening) → down', tt ? tt.trend : null, 'down');
+
+// --- Test "stable" with cross-genre scenario ---
+console.log('\n=== RP-BPI-004 STABLE TREND (cross-genre) ===');
+
+const g4 = createCanonicalGraph();
+const b4 = createCanonicalGraphBuilder(g4);
+
+// Scrape 1: Tech House, pos 5
+let lm4 = new Map(), am4 = new Map(), tm4 = new Map(), rm4 = new Map();
+b4.processTracks([makeTrack(99999, 'stable test', 5, 55555, 'Test Label')], 'Tech House', 11, lm4, am4, tm4, rm4);
+b4.mergeGenreIntoGlobal(lm4, am4, tm4, rm4, 'Tech House');
+let st = Array.from(g4.tracks.values()).find(t => t.beatportId === 99999);
+assert('stable test scrape 1 (Tech House pos 5) → new', st ? st.trend : null, 'new');
+
+// Scrape 2: Minimal / Deep Tech, pos 3 (different genre → entry added)
+lm4 = new Map(); am4 = new Map(); tm4 = new Map(); rm4 = new Map();
+b4.processTracks([makeTrack(99999, 'stable test', 3, 55555, 'Test Label')], 'Minimal / Deep Tech', 14, lm4, am4, tm4, rm4);
+b4.mergeGenreIntoGlobal(lm4, am4, tm4, rm4, 'Minimal / Deep Tech');
+st = Array.from(g4.tracks.values()).find(t => t.beatportId === 99999);
+// Last genre = Minimal / Deep Tech, only 1 entry for that genre → "new"
+assert('stable test scrape 2 (Minimal pos 3) → new (1 entry for Minimal)', st ? st.trend : null, 'new');
+
+// Scrape 3: Tech House, pos 5 (same genre A, same pos 5 as entry 1).
+// Last entry is Minimal pos 3, which differs from Tech House pos 5 → entry IS added.
+// Now positionHistory = [TH:5, M:3, TH:5]
+// For genre Tech House: last two entries are [5, 5] → stable!
+lm4 = new Map(); am4 = new Map(); tm4 = new Map(); rm4 = new Map();
+b4.processTracks([makeTrack(99999, 'stable test', 5, 55555, 'Test Label')], 'Tech House', 11, lm4, am4, tm4, rm4);
+b4.mergeGenreIntoGlobal(lm4, am4, tm4, rm4, 'Tech House');
+st = Array.from(g4.tracks.values()).find(t => t.beatportId === 99999);
+// Last genre = Tech House. Tech House entries: [5, 5] → stable!
+assert('stable test scrape 3 (Tech House pos 5 again) → stable (TH: 5→5)', st ? st.trend : null, 'stable');
+
+// --- Verify Artist/Release/Label do NOT have trend ---
+const artistsHaveNoTrend = out.artists.every(a => !('trend' in a));
+assert('no Artist has trend field (RP-BPI-004 extends only Track)', artistsHaveNoTrend, true);
+const releasesHaveNoTrend = out.releases.every(r => !('trend' in r));
+assert('no Release has trend field (RP-BPI-004 extends only Track)', releasesHaveNoTrend, true);
+const labelsHaveNoTrend = out.labels.every(l => !('trend' in l));
+assert('no Label has trend field (RP-BPI-004 extends only Track)', labelsHaveNoTrend, true);
 
 console.log('\n=== RESULT: ' + pass + ' passed, ' + fail + ' failed ===');
 console.log('=== Sample JSON saved to: ' + samplePath + ' ===');

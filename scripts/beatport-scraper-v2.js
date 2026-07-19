@@ -187,6 +187,40 @@
   }
 
   // ===================================================================
+  // RP-BPI-004 — TRACK TREND ENGINE
+  //
+  // Calcola il trend di una traccia in base alla sua positionHistory.
+  // Il calcolo viene fatto durante la costruzione del Canonical Graph
+  // (nel builder), NON nell'Exporter.
+  //
+  // Regole:
+  //   - Se positionHistory ha 0 o 1 entry → trend = "new"
+  //   - Altrimenti, trova le ultime due entry dello STESSO genere.
+  //     Se non ci sono due entry dello stesso genere → trend = "new"
+  //     (la traccia è apparsa per la prima volta in quel genere).
+  //   - Confronta le posizioni delle ultime due entry dello stesso genere:
+  //       posizione migliorata (numero più basso) → trend = "up"
+  //       posizione peggiorata (numero più alto)  → trend = "down"
+  //       posizione invariata                     → trend = "stable"
+  // ===================================================================
+  function computeTrend(positionHistory, currentGenreName) {
+    if (!Array.isArray(positionHistory) || positionHistory.length <= 1) {
+      return 'new';
+    }
+    // Filtra le entry dello stesso genere corrente (o dell'ultima entry)
+    var genre = currentGenreName || positionHistory[positionHistory.length - 1].genreName;
+    var sameGenre = positionHistory.filter(function (e) { return e.genreName === genre; });
+    if (sameGenre.length < 2) {
+      return 'new';
+    }
+    var last = sameGenre[sameGenre.length - 1];
+    var prev = sameGenre[sameGenre.length - 2];
+    if (last.position < prev.position) return 'up';
+    if (last.position > prev.position) return 'down';
+    return 'stable';
+  }
+
+  // ===================================================================
   // processTracks: popola labelMap (lm), artistMap (am), trackMap (tm),
   //                releaseMap (rm) — RP-BPI-001
   // gn = genre name (string)
@@ -558,6 +592,9 @@
           // Dedup: una nuova entry viene aggiunta solo se differisce dall'ultima
           // (genere o posizione diversi). Conserva tutta la cronologia.
           positionHistory: [{ scrapedAt: NOW, genreId: gid, genreName: gn, position: pos }],
+          // RP-BPI-004 — Track Trend: calcolato durante la costruzione del graph.
+          // "new" per la prima acquisizione (1 entry in positionHistory).
+          trend: 'new',
           seenAt: NOW,
           // === LEGACY COMPAT ===
           _compat: {
@@ -592,6 +629,9 @@
         if (differs) {
           ph.push({ scrapedAt: NOW, genreId: gid, genreName: gn, position: pos });
         }
+        // RP-BPI-004 — Ricalcola il trend dopo l'aggiornamento di positionHistory.
+        // Il trend è basato sulle ultime due entry dello stesso genere.
+        tr.trend = computeTrend(ph, gn);
       }
 
       // === AGGIORNA Release.trackIds[] con il canonical track id (ora disponibile) ===
@@ -895,6 +935,11 @@
               ex.positionHistory.push(phEntry);
             }
           });
+          // RP-BPI-004 — Ricalcola il trend dopo il merge di positionHistory.
+          // Usa l'genreName dell'ultima entry come genere corrente.
+          if (ex.positionHistory.length > 0) {
+            ex.trend = computeTrend(ex.positionHistory, ex.positionHistory[ex.positionHistory.length - 1].genreName);
+          }
           if (!ex.releaseId && v.releaseId) ex.releaseId = v.releaseId;
         } else {
           graph.tracks.set(k, v);
@@ -1144,6 +1189,8 @@
       // RP-BPI-003 — Position History (cronologia ordinata delle posizioni
       // in classifica nel tempo, con dedup di entry consecutive identiche).
       positionHistory: t.positionHistory.slice(),
+      // RP-BPI-004 — Track Trend: calcolato nel builder, non nell'exporter.
+      trend: t.trend,
       seenAt: t.seenAt,
       // === LEGACY (preservato per backward compat) ===
       id: t.beatportId,                     // legacy: BP id (alias of beatportId, may be null)
