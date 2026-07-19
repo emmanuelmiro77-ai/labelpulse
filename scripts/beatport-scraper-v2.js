@@ -67,9 +67,58 @@
   var sleep = function (ms) { return new Promise(function (r) { setTimeout(r, ms); }); };
 
   // ===================================================================
+  // RP-BPI-002A — STABLE ID HELPERS
+  //
+  // Ogni entità ha un identificatore STABILE indipendente dal nome:
+  //   Artist  → 'bp_<beatportId>' oppure 'nm_<NAME_UPPER>' (fallback)
+  //   Label   → 'bp_lbl_<beatportId>' oppure 'nm_lbl_<NAME_UPPER>' (fallback)
+  //   Track   → 'bp_<beatportId>' oppure 'nm_<name>|<LABEL_NAME>' (fallback)
+  //   Release → 'bp_rel_<beatportId>' oppure 'nm_rel_<slug>|<LABEL_NAME>' (fallback)
+  //
+  // Queste funzioni vengono usate per popolare i nuovi campi *Ids[]/*Key
+  // nelle entità, in modo che i riferimenti siano sempre basati su ID
+  // (Beatport id quando esiste, fallback name-based quando manca).
+  // I campi legacy (name-based come `label`, `labelId`, `artists`/`remixers`
+  // come array di oggetti `{id,name,slug}`) vengono PRESERVATI per
+  // retrocompatibilità.
+  // ===================================================================
+
+  function artistKey(a) {
+    if (!a) return null;
+    if (a.id) return 'bp_' + a.id;
+    var nm = (a.name || '').toUpperCase().trim();
+    return nm ? ('nm_' + nm) : null;
+  }
+
+  function labelKey(label) {
+    if (!label) return null;
+    if (label.id) return 'bp_lbl_' + label.id;
+    var nm = (label.name || '').toUpperCase().trim();
+    return nm ? ('nm_lbl_' + nm) : null;
+  }
+
+  function trackKeyFor(t, labelName) {
+    if (!t) return null;
+    if (t.id) return 'bp_' + t.id;
+    var nm = (t.name || '').toUpperCase().trim();
+    return nm ? ('nm_' + nm + '|' + (labelName || '')) : null;
+  }
+
+  function releaseKeyFor(rel, labelName) {
+    if (!rel) return null;
+    if (rel.id) return 'bp_rel_' + rel.id;
+    var slug = rel.slug || rel.name || '';
+    return slug ? ('nm_rel_' + slug + '|' + (labelName || '')) : null;
+  }
+
+  // ===================================================================
   // processTracks: popola labelMap (lm), artistMap (am), trackMap (tm),
   //                releaseMap (rm) — RP-BPI-001
   // gn = genre name (string)
+  //
+  // RP-BPI-002A — Track/Artist/Label/Release entità vengono popolate con
+  // riferimenti stabili basati su ID (Beatport id quando esiste, fallback
+  // name-based). I campi legacy vengono preservati per retrocompatibilità.
   // ===================================================================
   function processTracks(tracks, gn, lm, am, tm, rm) {
     for (var i = 0; i < tracks.length; i++) {
@@ -85,6 +134,9 @@
       var pos = t._position || (i + 1);
       var pts = Math.max(0, 101 - pos);
 
+      // RP-BPI-002A — stable label key (bp_lbl_<id> o nm_lbl_<name>)
+      var lblKey = labelKey(label);
+
       // === KEY EXTRACTION ===
       var k = t.key || {};
       var keyCamelot = (k.camelot_number != null && k.camelot_letter) ? (k.camelot_number + k.camelot_letter) : '';
@@ -97,9 +149,14 @@
       var coverArt = (t.release && t.release.image && t.release.image.uri) || '';
 
       // === LABEL MAP ===
+      // RP-BPI-002A — aggiunto campo `key` (stable id) e `beatportId`.
+      //              La Map è ancora keyed by NAME per backward compat con
+      //              il codice esistente (che cerca per labelName).
       if (!lm.has(labelName)) {
         lm.set(labelName, {
           id: label.id || null,
+          key: lblKey,                       // RP-BPI-002A — stable label key
+          beatportId: label.id || null,      // RP-BPI-002A — alias esplicito
           name: labelName,
           slug: label.slug || '',
           imageUrl: (label.image && label.image.uri) || '',
@@ -117,8 +174,13 @@
       var artistsRaw = Array.isArray(t.artists) ? t.artists.slice() : [];
       var remixersRaw = Array.isArray(t.remixers) ? t.remixers.slice() : [];
 
+      // RP-BPI-002A — stable keys per artisti e remixers della traccia corrente
+      var primaryArtistKeys = artistsRaw.map(artistKey).filter(function (kx) { return kx !== null; });
+      var remixerKeys = remixersRaw.map(artistKey).filter(function (kx) { return kx !== null; });
+
       function processArtist(a, isRemixer) {
-        var key = a.id ? ('bp_' + a.id) : ('nm_' + a.name.toUpperCase().trim());
+        var key = artistKey(a);
+        if (!key) return;
         if (!am.has(key)) {
           am.set(key, {
             id: key,
@@ -128,7 +190,8 @@
             imageUrl: (a.image && a.image.uri) || '',
             genres: [],
             tracksByGenre: {},
-            labelsPublishedOn: [],
+            labelsPublishedOn: [],            // legacy: array di NAME (backward compat)
+            labelIds: [],                     // RP-BPI-002A — array di stable label keys
             totalPoints: 0,
             bestPosition: pos,
             isRemixerOnly: isRemixer
@@ -137,6 +200,8 @@
         var ar = am.get(key);
         if (ar.genres.indexOf(gn) === -1) ar.genres.push(gn);
         if (ar.labelsPublishedOn.indexOf(labelName) === -1) ar.labelsPublishedOn.push(labelName);
+        // RP-BPI-002A — aggiungi stable label key (dedup)
+        if (lblKey && ar.labelIds.indexOf(lblKey) === -1) ar.labelIds.push(lblKey);
 
         if (!isRemixer) {
           if (!ar.tracksByGenre[gn]) ar.tracksByGenre[gn] = [];
@@ -153,6 +218,7 @@
               points: pts,
               label: labelName,
               labelId: label.id || null,
+              labelKey: lblKey,                 // RP-BPI-002A — stable label key
               labelSlug: label.slug || '',
               releaseDate: releaseDate,
               bpm: t.bpm || null,
@@ -176,19 +242,31 @@
       remixersRaw.forEach(function (a) { processArtist(a, true); });
 
       // === TRACK MAP (deduplicated by Beatport track id) ===
-      var trackKey = t.id ? ('bp_' + t.id) : ('nm_' + t.name + '|' + labelName);
+      var trackKey = trackKeyFor(t, labelName);
+      // RP-BPI-002A — stable release key per linkare Track → Release
+      var rel = t.release || null;
+      var tReleaseKey = releaseKeyFor(rel, labelName);
       if (!tm.has(trackKey)) {
         tm.set(trackKey, {
           id: t.id || null,
-          key: trackKey,
+          key: trackKey,                     // RP-BPI-002A — stable track key (alias of map key)
+          beatportId: t.id || null,          // RP-BPI-002A — alias esplicito
           name: t.name,
           mixName: t.mix_name || '',
           slug: t.slug || '',
+          // Legacy artist arrays (preservati per backward compat — array di oggetti {id,name,slug})
           artists: artistsRaw.map(function (a) { return { id: a.id || null, name: a.name, slug: a.slug || '' }; }),
           remixers: remixersRaw.map(function (a) { return { id: a.id || null, name: a.name, slug: a.slug || '' }; }),
+          // RP-BPI-002A — stable artist/remixer keys (array di stringhe 'bp_<id>'/'nm_<name>')
+          artistIds: primaryArtistKeys.slice(),
+          remixerIds: remixerKeys.slice(),
+          // Legacy label fields (preservati — label è il NAME, labelId è il BP id)
           label: labelName,
           labelId: label.id || null,
+          labelKey: lblKey,                  // RP-BPI-002A — stable label key
           labelSlug: label.slug || '',
+          // RP-BPI-002A — stable release key (link Track → Release)
+          releaseId: tReleaseKey,
           primaryGenre: gn,
           subGenre: (t.sub_genre && t.sub_genre.name) || null,
           bpm: t.bpm || null,
@@ -204,15 +282,22 @@
         // Same track seen in another genre — append position entry
         var tr = tm.get(trackKey);
         tr.positions.push({ genre: gn, position: pos, points: pts, seenAt: NOW });
+        // RP-BPI-002A — se la traccia esiste già ma releaseId non era settato (race condition edge), fill
+        if (!tr.releaseId && tReleaseKey) tr.releaseId = tReleaseKey;
       }
 
       // === RELEASE MAP (RP-BPI-001) ===
       // Deduplica per release.id (fallback slug). Se la release è già nota,
       // aggiorna artistIds, trackIds, genres, bpmAverage e keyDistribution
       // senza creare duplicati.
-      var rel = t.release || null;
+      //
+      // RP-BPI-002A — artistIds[] ora contiene STABLE KEYS ('bp_<id>'/'nm_<name>'),
+      //              non più BP ids raw. Il campo legacy artistIds era array
+      //              di BP ids (con null per name-only); per backward compat
+      //              manteniamo `artistBpIds[]` con i BP ids (null-safe).
+      //              Stessa cosa per trackIds → trackBpIds[].
       if (rel && (rel.id || rel.slug)) {
-        var releaseKey = rel.id ? ('bp_rel_' + rel.id) : ('nm_rel_' + (rel.slug || rel.name || '') + '|' + labelName);
+        var releaseKey = releaseKeyFor(rel, labelName);
         var releaseId = rel.id || null;
         var releaseSlug = rel.slug || '';
         var releaseName = rel.name || '';
@@ -224,27 +309,35 @@
         var releaseImage = (rel.image && rel.image.uri) || coverArt || '';
 
         // Campi specifici della traccia corrente (per aggregazione)
-        var trackId = t.id || null;
+        var trackBpId = t.id || null;
         var trackBpm = (typeof t.bpm === 'number' && t.bpm > 0) ? t.bpm : null;
         // Per artistIds/Names: includiamo sia primary artists che remixers
         var allArtistsOnTrack = artistsRaw.concat(remixersRaw);
+        // RP-BPI-002A — stable keys per artisti (primary + remixers)
+        var allArtistKeysOnTrack = primaryArtistKeys.concat(remixerKeys);
 
         if (!rm.has(releaseKey)) {
           // === NUOVA RELEASE ===
           var newRel = {
             id: releaseId,
             beatportId: releaseId,
+            key: releaseKey,                 // RP-BPI-002A — stable release key (alias esplicito)
             name: releaseName,
             slug: releaseSlug,
             url: releaseUrl,
             catalogNumber: releaseCatalog,
             releaseDate: releaseDate,
             imageUrl: releaseImage,
-            labelId: label.id || null,
+            labelId: label.id || null,       // legacy: BP id della label (null se mancante)
+            labelKey: lblKey,                // RP-BPI-002A — stable label key
             labelName: labelName,
-            artistIds: [],
+            // RP-BPI-002A — artistIds[] ora contiene STABLE KEYS (legacy era BP ids).
+            // Per backward compat con RP-BPI-001, manteniamo artistBpIds[] con i BP ids.
+            artistIds: [],                   // RP-BPI-002A — stable artist keys ('bp_<id>'/'nm_<name>')
+            artistBpIds: [],                 // RP-BPI-002A — legacy BP ids (alias del vecchio artistIds)
             artistNames: [],
-            trackIds: [],
+            trackIds: [],                    // RP-BPI-002A — stable track keys ('bp_<id>'/'nm_<name>|<label>')
+            trackBpIds: [],                  // RP-BPI-002A — legacy BP track ids (alias del vecchio trackIds)
             trackCount: 0,
             genres: [],
             bpmAverage: null,
@@ -252,20 +345,21 @@
             firstSeen: NOW,
             lastSeen: NOW
           };
-          // Popola artistIds/Names (dedup per id, fallback nome)
+          // Popola artistIds/Names (dedup per stable key)
           var seenArtistKeys = {};
-          allArtistsOnTrack.forEach(function (a) {
-            var aKey = a.id ? ('bp_' + a.id) : ('nm_' + (a.name || '').toUpperCase().trim());
+          allArtistsOnTrack.forEach(function (a, idx) {
+            var aKey = artistKey(a);
+            if (!aKey) return;
             if (!seenArtistKeys[aKey]) {
               seenArtistKeys[aKey] = true;
-              newRel.artistIds.push(a.id || null);
+              newRel.artistIds.push(aKey);
+              newRel.artistBpIds.push(a.id || null);
               newRel.artistNames.push(a.name || '');
             }
           });
-          // Popola trackIds
-          if (trackId != null) {
-            newRel.trackIds.push(trackId);
-          }
+          // Popola trackIds (stable key) e trackBpIds (legacy BP id)
+          if (trackKey) newRel.trackIds.push(trackKey);
+          if (trackBpId != null) newRel.trackBpIds.push(trackBpId);
           newRel.trackCount = newRel.trackIds.length;
           // Popola genres
           if (newRel.genres.indexOf(gn) === -1) newRel.genres.push(gn);
@@ -280,23 +374,22 @@
         } else {
           // === RELEASE ESISTENTE — AGGIORNA ===
           var exRel = rm.get(releaseKey);
-          // Aggiorna artistIds/Names (dedup)
+          // Aggiorna artistIds (stable keys, dedup) + artistBpIds (legacy) + artistNames
           allArtistsOnTrack.forEach(function (a) {
-            var aKey = a.id ? ('bp_' + a.id) : ('nm_' + (a.name || '').toUpperCase().trim());
-            // Cerca match per chiave in artistIds esistenti
-            var alreadyPresent = false;
-            for (var ai = 0; ai < exRel.artistIds.length; ai++) {
-              var exKey = exRel.artistIds[ai] ? ('bp_' + exRel.artistIds[ai]) : ('nm_' + (exRel.artistNames[ai] || '').toUpperCase().trim());
-              if (exKey === aKey) { alreadyPresent = true; break; }
-            }
-            if (!alreadyPresent) {
-              exRel.artistIds.push(a.id || null);
+            var aKey = artistKey(a);
+            if (!aKey) return;
+            if (exRel.artistIds.indexOf(aKey) === -1) {
+              exRel.artistIds.push(aKey);
+              exRel.artistBpIds.push(a.id || null);
               exRel.artistNames.push(a.name || '');
             }
           });
-          // Aggiorna trackIds (dedup)
-          if (trackId != null && exRel.trackIds.indexOf(trackId) === -1) {
-            exRel.trackIds.push(trackId);
+          // Aggiorna trackIds (stable key, dedup) + trackBpIds (legacy, dedup)
+          if (trackKey && exRel.trackIds.indexOf(trackKey) === -1) {
+            exRel.trackIds.push(trackKey);
+          }
+          if (trackBpId != null && exRel.trackBpIds.indexOf(trackBpId) === -1) {
+            exRel.trackBpIds.push(trackBpId);
           }
           exRel.trackCount = exRel.trackIds.length;
           // Aggiorna genres (dedup)
@@ -322,8 +415,9 @@
           }
           // Aggiorna lastSeen
           exRel.lastSeen = NOW;
-          // Aggiorna labelId/labelName se non erano settati (caso edge)
+          // Aggiorna labelId/labelKey/labelName se non erano settati (caso edge)
           if (!exRel.labelId && label.id) exRel.labelId = label.id;
+          if (!exRel.labelKey && lblKey) exRel.labelKey = lblKey;
           if (!exRel.labelName) exRel.labelName = labelName;
           // Aggiorna imageUrl se non era settato
           if (!exRel.imageUrl && releaseImage) exRel.imageUrl = releaseImage;
@@ -467,11 +561,18 @@
     tL += la.length;
 
     // === Merge artists across genres ===
+    // RP-BPI-002A — merge anche di labelIds[] (stable keys) oltre a labelsPublishedOn[] (names).
     res.am.forEach(function (v, k) {
       if (globalAM.has(k)) {
         var ex = globalAM.get(k);
         v.genres.forEach(function (gn2) { if (ex.genres.indexOf(gn2) === -1) ex.genres.push(gn2); });
         v.labelsPublishedOn.forEach(function (ln) { if (ex.labelsPublishedOn.indexOf(ln) === -1) ex.labelsPublishedOn.push(ln); });
+        // RP-BPI-002A — merge stable label keys
+        if (Array.isArray(v.labelIds)) {
+          v.labelIds.forEach(function (lk) {
+            if (lk && ex.labelIds.indexOf(lk) === -1) ex.labelIds.push(lk);
+          });
+        }
         for (var gn3 in v.tracksByGenre) {
           if (!ex.tracksByGenre[gn3]) ex.tracksByGenre[gn3] = [];
           v.tracksByGenre[gn3].forEach(function (tr2) { ex.tracksByGenre[gn3].push(tr2); });
@@ -489,6 +590,8 @@
       if (globalTM.has(k)) {
         var ex = globalTM.get(k);
         v.positions.forEach(function (p) { ex.positions.push(p); });
+        // RP-BPI-002A — fill releaseId se la prima occorrenza non lo aveva
+        if (!ex.releaseId && v.releaseId) ex.releaseId = v.releaseId;
       } else {
         globalTM.set(k, v);
       }
@@ -498,25 +601,33 @@
     // Stessa logica di aggregazione usata in processTracks per le release
     // già esistenti: dedup artistIds, trackIds, genres; ricalcola bpmAverage;
     // aggiorna keyDistribution; aggiorna lastSeen e campi mancanti.
+    //
+    // RP-BPI-002A — artistIds[] e trackIds[] ora contengono STABLE KEYS.
+    // La dedup è fatta per stable key (stringa 'bp_<id>' o 'nm_<name>').
+    // artistBpIds[] e trackBpIds[] (legacy BP ids) vengono mantenuti
+    // allineati per backward compat.
     res.rm.forEach(function (v, k) {
       if (globalRM.has(k)) {
         var exR = globalRM.get(k);
-        // Merge artistIds/Names (dedup per chiave bp_<id> o nm_<name>)
-        v.artistIds.forEach(function (aid, idx) {
-          var aKey = aid ? ('bp_' + aid) : ('nm_' + (v.artistNames[idx] || '').toUpperCase().trim());
-          var alreadyPresent = false;
-          for (var ai = 0; ai < exR.artistIds.length; ai++) {
-            var exKey = exR.artistIds[ai] ? ('bp_' + exR.artistIds[ai]) : ('nm_' + (exR.artistNames[ai] || '').toUpperCase().trim());
-            if (exKey === aKey) { alreadyPresent = true; break; }
-          }
-          if (!alreadyPresent) {
-            exR.artistIds.push(aid);
+        // Merge artistIds (stable keys, dedup) + artistBpIds (legacy) + artistNames
+        v.artistIds.forEach(function (aKey, idx) {
+          if (!aKey) return;
+          if (exR.artistIds.indexOf(aKey) === -1) {
+            exR.artistIds.push(aKey);
+            exR.artistBpIds.push(v.artistBpIds[idx] != null ? v.artistBpIds[idx] : null);
             exR.artistNames.push(v.artistNames[idx] || '');
           }
         });
-        // Merge trackIds (dedup)
-        v.trackIds.forEach(function (tid) {
-          if (tid != null && exR.trackIds.indexOf(tid) === -1) exR.trackIds.push(tid);
+        // Merge trackIds (stable keys, dedup) + trackBpIds (legacy, dedup)
+        v.trackIds.forEach(function (tKey, idx) {
+          if (!tKey) return;
+          if (exR.trackIds.indexOf(tKey) === -1) {
+            exR.trackIds.push(tKey);
+          }
+          var tBpId = v.trackBpIds[idx];
+          if (tBpId != null && exR.trackBpIds.indexOf(tBpId) === -1) {
+            exR.trackBpIds.push(tBpId);
+          }
         });
         exR.trackCount = exR.trackIds.length;
         // Merge genres (dedup)
@@ -547,6 +658,7 @@
         if (v.lastSeen > exR.lastSeen) exR.lastSeen = v.lastSeen;
         // Aggiorna campi mancanti sul target
         if (!exR.labelId && v.labelId) exR.labelId = v.labelId;
+        if (!exR.labelKey && v.labelKey) exR.labelKey = v.labelKey;
         if (!exR.labelName && v.labelName) exR.labelName = v.labelName;
         if (!exR.imageUrl && v.imageUrl) exR.imageUrl = v.imageUrl;
         if (!exR.releaseDate && v.releaseDate) exR.releaseDate = v.releaseDate;
@@ -596,6 +708,8 @@
         if (lb.id) lM[nm].beatportId = lb.id;
         if (lb.slug) lM[nm].slug = lb.slug;
         if (lb.imageUrl) lM[nm].imageUrl = lb.imageUrl;
+        // RP-BPI-002A — stable label key (alias del campo `key` popolato in lm)
+        if (lb.key) lM[nm].key = lb.key;
       }
       if (lM[nm].genres.indexOf(gn4) === -1) lM[nm].genres.push(gn4);
       lM[nm].rankByGenre[gn4] = lb.rank;
@@ -692,6 +806,10 @@
     _meta: {
       source: 'beatport',
       version: 2,
+      // RP-BPI-002A — schemaVersion esplicito per future migration path.
+      // 2 = modello dati normalizzato con stable ID references.
+      // I campi legacy (name-based) sono ancora presenti per retrocompatibilità.
+      schemaVersion: 2,
       scrapedAt: NOW,
       totalLabels: labelArr.length,
       totalLabelsWithLogo: logosCount,

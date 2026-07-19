@@ -21,6 +21,7 @@
       "beatportId": 103008,
       "slug": "experts-only",
       "imageUrl": "https://example.com/label-experts.jpg",
+      "key": "bp_lbl_103008",
       "trendingRankByGenre": {
         "Tech House": 1
       },
@@ -46,6 +47,7 @@
       "trending": true,
       "beatportId": 9001,
       "slug": "solid-grooves",
+      "key": "bp_lbl_9001",
       "trendingRankByGenre": {
         "Tech House": 2,
         "Minimal / Deep Tech": 1
@@ -70,6 +72,7 @@
       "trending": true,
       "beatportId": 1234,
       "slug": "drumcode",
+      "key": "bp_lbl_1234",
       "trendingRankByGenre": {
         "Techno Peak Time / Driving": 1
       },
@@ -92,6 +95,7 @@
       "trending": true,
       "beatportId": 5678,
       "slug": "truesoul",
+      "key": "bp_lbl_5678",
       "trendingRankByGenre": {
         "Techno Peak Time / Driving": 2
       },
@@ -120,6 +124,7 @@
             "points": 98,
             "label": "DRUMCODE",
             "labelId": 1234,
+            "labelKey": "bp_lbl_1234",
             "labelSlug": "drumcode",
             "releaseDate": "2024-08-20",
             "bpm": 135,
@@ -137,6 +142,7 @@
             "points": 93,
             "label": "DRUMCODE",
             "labelId": 1234,
+            "labelKey": "bp_lbl_1234",
             "labelSlug": "drumcode",
             "releaseDate": "2024-07-10",
             "bpm": 133,
@@ -154,6 +160,7 @@
             "points": 83,
             "label": "TRUESOUL",
             "labelId": 5678,
+            "labelKey": "bp_lbl_5678",
             "labelSlug": "truesoul",
             "releaseDate": "2024-09-05",
             "bpm": 138,
@@ -168,6 +175,10 @@
       "labelsPublishedOn": [
         "DRUMCODE",
         "TRUESOUL"
+      ],
+      "labelIds": [
+        "bp_lbl_1234",
+        "bp_lbl_5678"
       ],
       "totalPoints": 274,
       "bestPosition": 3,
@@ -200,6 +211,7 @@
             "points": 89,
             "label": "SOLID GROOVES",
             "labelId": 9001,
+            "labelKey": "bp_lbl_9001",
             "labelSlug": "solid-grooves",
             "releaseDate": "2024-10-01",
             "bpm": 128,
@@ -219,6 +231,7 @@
             "points": 99,
             "label": "SOLID GROOVES",
             "labelId": 9001,
+            "labelKey": "bp_lbl_9001",
             "labelSlug": "solid-grooves",
             "releaseDate": "2024-10-01",
             "bpm": 128,
@@ -236,6 +249,7 @@
             "points": 76,
             "label": "SOLID GROOVES",
             "labelId": 9001,
+            "labelKey": "bp_lbl_9001",
             "labelSlug": "solid-grooves",
             "releaseDate": "2024-11-01",
             "bpm": 127,
@@ -249,6 +263,9 @@
       },
       "labelsPublishedOn": [
         "SOLID GROOVES"
+      ],
+      "labelIds": [
+        "bp_lbl_9001"
       ],
       "totalPoints": 264,
       "bestPosition": 2,
@@ -282,6 +299,7 @@
             "points": 100,
             "label": "EXPERTS ONLY",
             "labelId": 103008,
+            "labelKey": "bp_lbl_103008",
             "labelSlug": "experts-only",
             "releaseDate": "2024-11-08",
             "bpm": 132,
@@ -299,6 +317,7 @@
             "points": 96,
             "label": "EXPERTS ONLY",
             "labelId": 103008,
+            "labelKey": "bp_lbl_103008",
             "labelSlug": "experts-only",
             "releaseDate": "2024-09-15",
             "bpm": 126,
@@ -312,6 +331,9 @@
       },
       "labelsPublishedOn": [
         "EXPERTS ONLY"
+      ],
+      "labelIds": [
+        "bp_lbl_103008"
       ],
       "totalPoints": 196,
       "bestPosition": 1,
@@ -343,6 +365,7 @@
             "points": 100,
             "label": "EXPERTS ONLY",
             "labelId": 103008,
+            "labelKey": "bp_lbl_103008",
             "labelSlug": "experts-only",
             "releaseDate": "2024-11-08",
             "bpm": 132,
@@ -356,6 +379,9 @@
       },
       "labelsPublishedOn": [
         "EXPERTS ONLY"
+      ],
+      "labelIds": [
+        "bp_lbl_103008"
       ],
       "totalPoints": 100,
       "bestPosition": 1,
@@ -387,6 +413,7 @@
             "points": 93,
             "label": "DRUMCODE",
             "labelId": 1234,
+            "labelKey": "bp_lbl_1234",
             "labelSlug": "drumcode",
             "releaseDate": "2024-07-10",
             "bpm": 133,
@@ -400,6 +427,9 @@
       },
       "labelsPublishedOn": [
         "DRUMCODE"
+      ],
+      "labelIds": [
+        "bp_lbl_1234"
       ],
       "totalPoints": 93,
       "bestPosition": 8,
@@ -425,6 +455,9 @@
       "labelsPublishedOn": [
         "EXPERTS ONLY"
       ],
+      "labelIds": [
+        "bp_lbl_103008"
+      ],
       "totalPoints": 0,
       "bestPosition": 1,
       "isRemixerOnly": true,
@@ -445,6 +478,9 @@
       "labelsPublishedOn": [
         "SOLID GROOVES"
       ],
+      "labelIds": [
+        "bp_lbl_9001"
+      ],
       "totalPoints": 0,
       "bestPosition": 25,
       "isRemixerOnly": true,
@@ -457,6 +493,7 @@
     {
       "id": 19711254,
       "key": "bp_19711254",
+      "beatportId": 19711254,
       "name": "palm of my hands",
       "mixName": "Odd Mob Extended Remix",
       "slug": "palm-of-my-hands",
@@ -479,9 +516,18 @@
           "slug": "odd-mob"
         }
       ],
+      "artistIds": [
+        "bp_610028",
+        "bp_1068825"
+      ],
+      "remixerIds": [
+        "bp_353575"
+      ],
       "label": "EXPERTS ONLY",
       "labelId": 103008,
+      "labelKey": "bp_lbl_103008",
       "labelSlug": "experts-only",
+      "releaseId": "bp_rel_4803379",
       "primaryGenre": "Tech House",
       "subGenre": null,
       "bpm": 132,
@@ -503,6 +549,7 @@
     {
       "id": 19711255,
       "key": "bp_19711255",
+      "beatportId": 19711255,
       "name": "walls",
       "mixName": "Original Mix",
       "slug": "walls",
@@ -514,9 +561,15 @@
         }
       ],
       "remixers": [],
+      "artistIds": [
+        "bp_610028"
+      ],
+      "remixerIds": [],
       "label": "EXPERTS ONLY",
       "labelId": 103008,
+      "labelKey": "bp_lbl_103008",
       "labelSlug": "experts-only",
+      "releaseId": "bp_rel_4803380",
       "primaryGenre": "Tech House",
       "subGenre": "Latin Tech",
       "bpm": 126,
@@ -538,6 +591,7 @@
     {
       "id": 19711256,
       "key": "bp_19711256",
+      "beatportId": 19711256,
       "name": "lose control",
       "mixName": "Original Mix",
       "slug": "lose-control",
@@ -549,9 +603,15 @@
         }
       ],
       "remixers": [],
+      "artistIds": [
+        "bp_770001"
+      ],
+      "remixerIds": [],
       "label": "SOLID GROOVES",
       "labelId": 9001,
+      "labelKey": "bp_lbl_9001",
       "labelSlug": "solid-grooves",
+      "releaseId": "bp_rel_4900001",
       "primaryGenre": "Tech House",
       "subGenre": null,
       "bpm": 128,
@@ -579,6 +639,7 @@
     {
       "id": 19711260,
       "key": "bp_19711260",
+      "beatportId": 19711260,
       "name": "code reader",
       "mixName": "Original Mix",
       "slug": "code-reader",
@@ -590,9 +651,15 @@
         }
       ],
       "remixers": [],
+      "artistIds": [
+        "bp_1456"
+      ],
+      "remixerIds": [],
       "label": "DRUMCODE",
       "labelId": 1234,
+      "labelKey": "bp_lbl_1234",
       "labelSlug": "drumcode",
+      "releaseId": "bp_rel_4900002",
       "primaryGenre": "Techno Peak Time / Driving",
       "subGenre": null,
       "bpm": 135,
@@ -614,6 +681,7 @@
     {
       "id": 19711261,
       "key": "bp_19711261",
+      "beatportId": 19711261,
       "name": "server farm",
       "mixName": "Original Mix",
       "slug": "server-farm",
@@ -630,9 +698,16 @@
         }
       ],
       "remixers": [],
+      "artistIds": [
+        "bp_1456",
+        "bp_7800"
+      ],
+      "remixerIds": [],
       "label": "DRUMCODE",
       "labelId": 1234,
+      "labelKey": "bp_lbl_1234",
       "labelSlug": "drumcode",
+      "releaseId": "bp_rel_4900003",
       "primaryGenre": "Techno Peak Time / Driving",
       "subGenre": null,
       "bpm": 133,
@@ -654,6 +729,7 @@
     {
       "id": 19711262,
       "key": "bp_19711262",
+      "beatportId": 19711262,
       "name": "industrial zone",
       "mixName": "Original Mix",
       "slug": "industrial-zone",
@@ -665,9 +741,15 @@
         }
       ],
       "remixers": [],
+      "artistIds": [
+        "bp_1456"
+      ],
+      "remixerIds": [],
       "label": "TRUESOUL",
       "labelId": 5678,
+      "labelKey": "bp_lbl_5678",
       "labelSlug": "truesoul",
+      "releaseId": "bp_rel_4900004",
       "primaryGenre": "Techno Peak Time / Driving",
       "subGenre": null,
       "bpm": 138,
@@ -689,6 +771,7 @@
     {
       "id": 19711270,
       "key": "bp_19711270",
+      "beatportId": 19711270,
       "name": "dub layers",
       "mixName": "Dub Mix",
       "slug": "dub-layers",
@@ -706,9 +789,17 @@
           "slug": "wade"
         }
       ],
+      "artistIds": [
+        "bp_770001"
+      ],
+      "remixerIds": [
+        "bp_9999"
+      ],
       "label": "SOLID GROOVES",
       "labelId": 9001,
+      "labelKey": "bp_lbl_9001",
       "labelSlug": "solid-grooves",
+      "releaseId": "bp_rel_4900005",
       "primaryGenre": "Minimal / Deep Tech",
       "subGenre": null,
       "bpm": 127,
@@ -732,6 +823,7 @@
     {
       "id": 4803379,
       "beatportId": 4803379,
+      "key": "bp_rel_4803379",
       "name": "palm of my hands - Odd Mob Extended Remix",
       "slug": "palm-of-my-hands-odd-mob-extended-remix",
       "url": "https://www.beatport.com/release/palm-of-my-hands-odd-mob-extended-remix/4803379",
@@ -739,8 +831,14 @@
       "releaseDate": "2024-11-08",
       "imageUrl": "https://example.com/cover1.jpg",
       "labelId": 103008,
+      "labelKey": "bp_lbl_103008",
       "labelName": "EXPERTS ONLY",
       "artistIds": [
+        "bp_610028",
+        "bp_1068825",
+        "bp_353575"
+      ],
+      "artistBpIds": [
         610028,
         1068825,
         353575
@@ -751,6 +849,9 @@
         "Odd Mob"
       ],
       "trackIds": [
+        "bp_19711254"
+      ],
+      "trackBpIds": [
         19711254
       ],
       "trackCount": 1,
@@ -767,6 +868,7 @@
     {
       "id": 4803380,
       "beatportId": 4803380,
+      "key": "bp_rel_4803380",
       "name": "walls",
       "slug": "walls",
       "url": "https://www.beatport.com/release/walls/4803380",
@@ -774,14 +876,21 @@
       "releaseDate": "2024-09-15",
       "imageUrl": "https://example.com/cover2.jpg",
       "labelId": 103008,
+      "labelKey": "bp_lbl_103008",
       "labelName": "EXPERTS ONLY",
       "artistIds": [
+        "bp_610028"
+      ],
+      "artistBpIds": [
         610028
       ],
       "artistNames": [
         "John Summit"
       ],
       "trackIds": [
+        "bp_19711255"
+      ],
+      "trackBpIds": [
         19711255
       ],
       "trackCount": 1,
@@ -798,6 +907,7 @@
     {
       "id": 4900001,
       "beatportId": 4900001,
+      "key": "bp_rel_4900001",
       "name": "lose control",
       "slug": "lose-control",
       "url": "https://www.beatport.com/release/lose-control/4900001",
@@ -805,14 +915,21 @@
       "releaseDate": "2024-10-01",
       "imageUrl": "",
       "labelId": 9001,
+      "labelKey": "bp_lbl_9001",
       "labelName": "SOLID GROOVES",
       "artistIds": [
+        "bp_770001"
+      ],
+      "artistBpIds": [
         770001
       ],
       "artistNames": [
         "Mochakk"
       ],
       "trackIds": [
+        "bp_19711256"
+      ],
+      "trackBpIds": [
         19711256
       ],
       "trackCount": 1,
@@ -830,6 +947,7 @@
     {
       "id": 4900002,
       "beatportId": 4900002,
+      "key": "bp_rel_4900002",
       "name": "code reader",
       "slug": "code-reader",
       "url": "https://www.beatport.com/release/code-reader/4900002",
@@ -837,14 +955,21 @@
       "releaseDate": "2024-08-20",
       "imageUrl": "",
       "labelId": 1234,
+      "labelKey": "bp_lbl_1234",
       "labelName": "DRUMCODE",
       "artistIds": [
+        "bp_1456"
+      ],
+      "artistBpIds": [
         1456
       ],
       "artistNames": [
         "Adam Beyer"
       ],
       "trackIds": [
+        "bp_19711260"
+      ],
+      "trackBpIds": [
         19711260
       ],
       "trackCount": 1,
@@ -861,6 +986,7 @@
     {
       "id": 4900003,
       "beatportId": 4900003,
+      "key": "bp_rel_4900003",
       "name": "server farm",
       "slug": "server-farm",
       "url": "https://www.beatport.com/release/server-farm/4900003",
@@ -868,8 +994,13 @@
       "releaseDate": "2024-07-10",
       "imageUrl": "",
       "labelId": 1234,
+      "labelKey": "bp_lbl_1234",
       "labelName": "DRUMCODE",
       "artistIds": [
+        "bp_1456",
+        "bp_7800"
+      ],
+      "artistBpIds": [
         1456,
         7800
       ],
@@ -878,6 +1009,9 @@
         "Layton Giordani"
       ],
       "trackIds": [
+        "bp_19711261"
+      ],
+      "trackBpIds": [
         19711261
       ],
       "trackCount": 1,
@@ -894,6 +1028,7 @@
     {
       "id": 4900004,
       "beatportId": 4900004,
+      "key": "bp_rel_4900004",
       "name": "industrial zone",
       "slug": "industrial-zone",
       "url": "https://www.beatport.com/release/industrial-zone/4900004",
@@ -901,14 +1036,21 @@
       "releaseDate": "2024-09-05",
       "imageUrl": "",
       "labelId": 5678,
+      "labelKey": "bp_lbl_5678",
       "labelName": "TRUESOUL",
       "artistIds": [
+        "bp_1456"
+      ],
+      "artistBpIds": [
         1456
       ],
       "artistNames": [
         "Adam Beyer"
       ],
       "trackIds": [
+        "bp_19711262"
+      ],
+      "trackBpIds": [
         19711262
       ],
       "trackCount": 1,
@@ -925,6 +1067,7 @@
     {
       "id": 4900005,
       "beatportId": 4900005,
+      "key": "bp_rel_4900005",
       "name": "dub layers",
       "slug": "dub-layers",
       "url": "https://www.beatport.com/release/dub-layers/4900005",
@@ -932,8 +1075,13 @@
       "releaseDate": "2024-11-01",
       "imageUrl": "",
       "labelId": 9001,
+      "labelKey": "bp_lbl_9001",
       "labelName": "SOLID GROOVES",
       "artistIds": [
+        "bp_770001",
+        "bp_9999"
+      ],
+      "artistBpIds": [
         770001,
         9999
       ],
@@ -942,6 +1090,9 @@
         "Wade"
       ],
       "trackIds": [
+        "bp_19711270"
+      ],
+      "trackBpIds": [
         19711270
       ],
       "trackCount": 1,
@@ -959,6 +1110,7 @@
   "_meta": {
     "source": "beatport",
     "version": 2,
+    "schemaVersion": 2,
     "scrapedAt": "2026-06-21T10:00:00.000Z",
     "totalLabels": 4,
     "totalArtists": 7,

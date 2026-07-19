@@ -121,8 +121,36 @@ const sampleByGenre = {
   ]
 };
 
+// === RP-BPI-002A — Stable ID helpers (mirrors the scraper) ===
+function artistKey(a) {
+  if (!a) return null;
+  if (a.id) return 'bp_' + a.id;
+  const nm = (a.name || '').toUpperCase().trim();
+  return nm ? ('nm_' + nm) : null;
+}
+function labelKey(label) {
+  if (!label) return null;
+  if (label.id) return 'bp_lbl_' + label.id;
+  const nm = (label.name || '').toUpperCase().trim();
+  return nm ? ('nm_lbl_' + nm) : null;
+}
+function trackKeyFor(t, labelName) {
+  if (!t) return null;
+  if (t.id) return 'bp_' + t.id;
+  const nm = (t.name || '').toUpperCase().trim();
+  return nm ? ('nm_' + nm + '|' + (labelName || '')) : null;
+}
+function releaseKeyFor(rel, labelName) {
+  if (!rel) return null;
+  if (rel.id) return 'bp_rel_' + rel.id;
+  const slug = rel.slug || rel.name || '';
+  return slug ? ('nm_rel_' + slug + '|' + (labelName || '')) : null;
+}
+
 // === Re-implement processTracks (mirror of the scraper) ===
 // RP-BPI-001 — aggiunto parametro rm (releaseMap) e logica di aggregazione release.
+// RP-BPI-002A — Track/Artist/Label/Release entità popolate con riferimenti stabili
+//              basati su ID (Beatport id quando esiste, fallback name-based).
 function processTracks(tracks, gn, lm, am, tm, rm) {
   for (var i = 0; i < tracks.length; i++) {
     var t = tracks[i];
@@ -135,6 +163,9 @@ function processTracks(tracks, gn, lm, am, tm, rm) {
     var pos = t._position || (i + 1);
     var pts = Math.max(0, 101 - pos);
 
+    // RP-BPI-002A — stable label key
+    var lblKey = labelKey(label);
+
     var k = t.key || {};
     var keyCamelot = (k.camelot_number != null && k.camelot_letter) ? (k.camelot_number + k.camelot_letter) : '';
     var keyName = k.name || '';
@@ -143,7 +174,10 @@ function processTracks(tracks, gn, lm, am, tm, rm) {
 
     if (!lm.has(labelName)) {
       lm.set(labelName, {
-        id: label.id || null, name: labelName, slug: label.slug || '',
+        id: label.id || null,
+        key: lblKey,                       // RP-BPI-002A — stable label key
+        beatportId: label.id || null,      // RP-BPI-002A — alias esplicito
+        name: labelName, slug: label.slug || '',
         imageUrl: (label.image && label.image.uri) || '',
         trackCount: 0, totalPoints: 0, bestPosition: pos
       });
@@ -155,19 +189,28 @@ function processTracks(tracks, gn, lm, am, tm, rm) {
     var artistsRaw = Array.isArray(t.artists) ? t.artists.slice() : [];
     var remixersRaw = Array.isArray(t.remixers) ? t.remixers.slice() : [];
 
+    // RP-BPI-002A — stable keys per artisti e remixers della traccia corrente
+    var primaryArtistKeys = artistsRaw.map(artistKey).filter(function (kx) { return kx !== null; });
+    var remixerKeys = remixersRaw.map(artistKey).filter(function (kx) { return kx !== null; });
+
     function processArtist(a, isRemixer) {
-      var key = a.id ? ('bp_' + a.id) : ('nm_' + a.name.toUpperCase().trim());
+      var key = artistKey(a);
+      if (!key) return;
       if (!am.has(key)) {
         am.set(key, {
           id: key, beatportId: a.id || null, name: a.name, slug: a.slug || '',
           imageUrl: (a.image && a.image.uri) || '',
-          genres: [], tracksByGenre: {}, labelsPublishedOn: [],
+          genres: [], tracksByGenre: {},
+          labelsPublishedOn: [],              // legacy: NAME array
+          labelIds: [],                       // RP-BPI-002A — stable label keys
           totalPoints: 0, bestPosition: pos, isRemixerOnly: isRemixer
         });
       }
       var ar = am.get(key);
       if (ar.genres.indexOf(gn) === -1) ar.genres.push(gn);
       if (ar.labelsPublishedOn.indexOf(labelName) === -1) ar.labelsPublishedOn.push(labelName);
+      // RP-BPI-002A — aggiungi stable label key (dedup)
+      if (lblKey && ar.labelIds.indexOf(lblKey) === -1) ar.labelIds.push(lblKey);
       if (!isRemixer) {
         if (!ar.tracksByGenre[gn]) ar.tracksByGenre[gn] = [];
         var alreadyInGenre = false;
@@ -178,7 +221,9 @@ function processTracks(tracks, gn, lm, am, tm, rm) {
           ar.tracksByGenre[gn].push({
             id: t.id, name: t.name, mixName: t.mix_name || '',
             position: pos, points: pts, label: labelName,
-            labelId: label.id || null, labelSlug: label.slug || '',
+            labelId: label.id || null,
+            labelKey: lblKey,                 // RP-BPI-002A — stable label key
+            labelSlug: label.slug || '',
             releaseDate: releaseDate, bpm: t.bpm || null,
             keyCamelot: keyCamelot, keyName: keyName, coverArt: coverArt,
             sampleUrl: t.sample_url || '', seenAt: NOW
@@ -192,14 +237,29 @@ function processTracks(tracks, gn, lm, am, tm, rm) {
     artistsRaw.forEach(function (a) { processArtist(a, false); });
     remixersRaw.forEach(function (a) { processArtist(a, true); });
 
-    var trackKey = t.id ? ('bp_' + t.id) : ('nm_' + t.name + '|' + labelName);
+    var trackKey = trackKeyFor(t, labelName);
+    // RP-BPI-002A — stable release key per linkare Track → Release
+    var rel = t.release || null;
+    var tReleaseKey = releaseKeyFor(rel, labelName);
     if (!tm.has(trackKey)) {
       tm.set(trackKey, {
-        id: t.id || null, key: trackKey, name: t.name, mixName: t.mix_name || '',
+        id: t.id || null,
+        key: trackKey,                       // RP-BPI-002A — stable track key
+        beatportId: t.id || null,            // RP-BPI-002A — alias esplicito
+        name: t.name, mixName: t.mix_name || '',
         slug: t.slug || '',
+        // Legacy artist arrays (preserved for backward compat)
         artists: artistsRaw.map(function (a) { return { id: a.id || null, name: a.name, slug: a.slug || '' }; }),
         remixers: remixersRaw.map(function (a) { return { id: a.id || null, name: a.name, slug: a.slug || '' }; }),
-        label: labelName, labelId: label.id || null, labelSlug: label.slug || '',
+        // RP-BPI-002A — stable artist/remixer keys
+        artistIds: primaryArtistKeys.slice(),
+        remixerIds: remixerKeys.slice(),
+        // Legacy label fields (preserved)
+        label: labelName, labelId: label.id || null,
+        labelKey: lblKey,                    // RP-BPI-002A — stable label key
+        labelSlug: label.slug || '',
+        // RP-BPI-002A — stable release key (link Track → Release)
+        releaseId: tReleaseKey,
         primaryGenre: gn, subGenre: (t.sub_genre && t.sub_genre.name) || null,
         bpm: t.bpm || null, keyCamelot: keyCamelot, keyName: keyName,
         releaseDate: releaseDate, coverArt: coverArt, sampleUrl: t.sample_url || '',
@@ -208,12 +268,13 @@ function processTracks(tracks, gn, lm, am, tm, rm) {
     } else {
       var tr = tm.get(trackKey);
       tr.positions.push({ genre: gn, position: pos, points: pts, seenAt: NOW });
+      if (!tr.releaseId && tReleaseKey) tr.releaseId = tReleaseKey;
     }
 
     // === RP-BPI-001 — RELEASE MAP ===
-    var rel = t.release || null;
+    // RP-BPI-002A — artistIds[] e trackIds[] ora contengono STABLE KEYS.
     if (rel && (rel.id || rel.slug)) {
-      var releaseKey = rel.id ? ('bp_rel_' + rel.id) : ('nm_rel_' + (rel.slug || rel.name || '') + '|' + labelName);
+      var releaseKey = releaseKeyFor(rel, labelName);
       var releaseId = rel.id || null;
       var releaseSlug = rel.slug || '';
       var releaseName = rel.name || '';
@@ -222,29 +283,42 @@ function processTracks(tracks, gn, lm, am, tm, rm) {
         : '';
       var releaseCatalog = rel.catalog_number || rel.catalogNumber || '';
       var releaseImage = (rel.image && rel.image.uri) || coverArt || '';
-      var trackId = t.id || null;
+      var trackBpId = t.id || null;
       var trackBpm = (typeof t.bpm === 'number' && t.bpm > 0) ? t.bpm : null;
       var allArtistsOnTrack = artistsRaw.concat(remixersRaw);
 
       if (!rm.has(releaseKey)) {
         var newRel = {
-          id: releaseId, beatportId: releaseId, name: releaseName, slug: releaseSlug,
+          id: releaseId, beatportId: releaseId,
+          key: releaseKey,                   // RP-BPI-002A — stable release key
+          name: releaseName, slug: releaseSlug,
           url: releaseUrl, catalogNumber: releaseCatalog, releaseDate: releaseDate,
-          imageUrl: releaseImage, labelId: label.id || null, labelName: labelName,
-          artistIds: [], artistNames: [], trackIds: [], trackCount: 0,
+          imageUrl: releaseImage,
+          labelId: label.id || null,         // legacy BP id
+          labelKey: lblKey,                  // RP-BPI-002A — stable label key
+          labelName: labelName,
+          artistIds: [],                     // RP-BPI-002A — stable artist keys
+          artistBpIds: [],                   // RP-BPI-002A — legacy BP ids
+          artistNames: [],
+          trackIds: [],                      // RP-BPI-002A — stable track keys
+          trackBpIds: [],                    // RP-BPI-002A — legacy BP ids
+          trackCount: 0,
           genres: [], bpmAverage: null, keyDistribution: {},
           firstSeen: NOW, lastSeen: NOW
         };
         var seenArtistKeys = {};
         allArtistsOnTrack.forEach(function (a) {
-          var aKey = a.id ? ('bp_' + a.id) : ('nm_' + (a.name || '').toUpperCase().trim());
+          var aKey = artistKey(a);
+          if (!aKey) return;
           if (!seenArtistKeys[aKey]) {
             seenArtistKeys[aKey] = true;
-            newRel.artistIds.push(a.id || null);
+            newRel.artistIds.push(aKey);
+            newRel.artistBpIds.push(a.id || null);
             newRel.artistNames.push(a.name || '');
           }
         });
-        if (trackId != null) newRel.trackIds.push(trackId);
+        if (trackKey) newRel.trackIds.push(trackKey);
+        if (trackBpId != null) newRel.trackBpIds.push(trackBpId);
         newRel.trackCount = newRel.trackIds.length;
         if (newRel.genres.indexOf(gn) === -1) newRel.genres.push(gn);
         var bpmSum = 0, bpmCount = 0;
@@ -254,19 +328,23 @@ function processTracks(tracks, gn, lm, am, tm, rm) {
         rm.set(releaseKey, newRel);
       } else {
         var exRel = rm.get(releaseKey);
+        // Merge artistIds (stable keys, dedup) + artistBpIds (legacy) + artistNames
         allArtistsOnTrack.forEach(function (a) {
-          var aKey = a.id ? ('bp_' + a.id) : ('nm_' + (a.name || '').toUpperCase().trim());
-          var alreadyPresent = false;
-          for (var ai = 0; ai < exRel.artistIds.length; ai++) {
-            var exKey = exRel.artistIds[ai] ? ('bp_' + exRel.artistIds[ai]) : ('nm_' + (exRel.artistNames[ai] || '').toUpperCase().trim());
-            if (exKey === aKey) { alreadyPresent = true; break; }
-          }
-          if (!alreadyPresent) {
-            exRel.artistIds.push(a.id || null);
+          var aKey = artistKey(a);
+          if (!aKey) return;
+          if (exRel.artistIds.indexOf(aKey) === -1) {
+            exRel.artistIds.push(aKey);
+            exRel.artistBpIds.push(a.id || null);
             exRel.artistNames.push(a.name || '');
           }
         });
-        if (trackId != null && exRel.trackIds.indexOf(trackId) === -1) exRel.trackIds.push(trackId);
+        // Merge trackIds (stable key, dedup) + trackBpIds (legacy, dedup)
+        if (trackKey && exRel.trackIds.indexOf(trackKey) === -1) {
+          exRel.trackIds.push(trackKey);
+        }
+        if (trackBpId != null && exRel.trackBpIds.indexOf(trackBpId) === -1) {
+          exRel.trackBpIds.push(trackBpId);
+        }
         exRel.trackCount = exRel.trackIds.length;
         if (exRel.genres.indexOf(gn) === -1) exRel.genres.push(gn);
         if (trackBpm != null) {
@@ -281,6 +359,7 @@ function processTracks(tracks, gn, lm, am, tm, rm) {
         if (keyCamelot) exRel.keyDistribution[keyCamelot] = (exRel.keyDistribution[keyCamelot] || 0) + 1;
         exRel.lastSeen = NOW;
         if (!exRel.labelId && label.id) exRel.labelId = label.id;
+        if (!exRel.labelKey && lblKey) exRel.labelKey = lblKey;
         if (!exRel.labelName) exRel.labelName = labelName;
         if (!exRel.imageUrl && releaseImage) exRel.imageUrl = releaseImage;
         if (!exRel.releaseDate && releaseDate) exRel.releaseDate = releaseDate;
@@ -314,11 +393,18 @@ for (const gn of Object.keys(sampleByGenre)) {
   gR[gn] = la;
 
   // Merge artists
+  // RP-BPI-002A — merge anche di labelIds[] (stable keys)
   am.forEach((v, k) => {
     if (globalAM.has(k)) {
       const ex = globalAM.get(k);
       v.genres.forEach(g => { if (!ex.genres.includes(g)) ex.genres.push(g); });
       v.labelsPublishedOn.forEach(ln => { if (!ex.labelsPublishedOn.includes(ln)) ex.labelsPublishedOn.push(ln); });
+      // RP-BPI-002A — merge stable label keys
+      if (Array.isArray(v.labelIds)) {
+        v.labelIds.forEach(lk => {
+          if (lk && !ex.labelIds.includes(lk)) ex.labelIds.push(lk);
+        });
+      }
       for (const g2 in v.tracksByGenre) {
         if (!ex.tracksByGenre[g2]) ex.tracksByGenre[g2] = [];
         ex.tracksByGenre[g2].push(...v.tracksByGenre[g2]);
@@ -336,29 +422,33 @@ for (const gn of Object.keys(sampleByGenre)) {
     if (globalTM.has(k)) {
       const ex = globalTM.get(k);
       ex.positions.push(...v.positions);
+      // RP-BPI-002A — fill releaseId se la prima occorrenza non lo aveva
+      if (!ex.releaseId && v.releaseId) ex.releaseId = v.releaseId;
     } else {
       globalTM.set(k, v);
     }
   });
 
   // RP-BPI-001 — Merge releases across genres
+  // RP-BPI-002A — artistIds[] e trackIds[] ora contengono STABLE KEYS.
   rm.forEach((v, k) => {
     if (globalRM.has(k)) {
       const exR = globalRM.get(k);
-      v.artistIds.forEach((aid, idx) => {
-        const aKey = aid ? ('bp_' + aid) : ('nm_' + (v.artistNames[idx] || '').toUpperCase().trim());
-        let alreadyPresent = false;
-        for (let ai = 0; ai < exR.artistIds.length; ai++) {
-          const exKey = exR.artistIds[ai] ? ('bp_' + exR.artistIds[ai]) : ('nm_' + (exR.artistNames[ai] || '').toUpperCase().trim());
-          if (exKey === aKey) { alreadyPresent = true; break; }
-        }
-        if (!alreadyPresent) {
-          exR.artistIds.push(aid);
+      // Merge artistIds (stable keys, dedup) + artistBpIds (legacy) + artistNames
+      v.artistIds.forEach((aKey, idx) => {
+        if (!aKey) return;
+        if (!exR.artistIds.includes(aKey)) {
+          exR.artistIds.push(aKey);
+          exR.artistBpIds.push(v.artistBpIds[idx] != null ? v.artistBpIds[idx] : null);
           exR.artistNames.push(v.artistNames[idx] || '');
         }
       });
-      v.trackIds.forEach(tid => {
-        if (tid != null && !exR.trackIds.includes(tid)) exR.trackIds.push(tid);
+      // Merge trackIds (stable keys, dedup) + trackBpIds (legacy, dedup)
+      v.trackIds.forEach((tKey, idx) => {
+        if (!tKey) return;
+        if (!exR.trackIds.includes(tKey)) exR.trackIds.push(tKey);
+        const tBpId = v.trackBpIds[idx];
+        if (tBpId != null && !exR.trackBpIds.includes(tBpId)) exR.trackBpIds.push(tBpId);
       });
       exR.trackCount = exR.trackIds.length;
       v.genres.forEach(gn2 => {
@@ -381,6 +471,7 @@ for (const gn of Object.keys(sampleByGenre)) {
       }
       if (v.lastSeen > exR.lastSeen) exR.lastSeen = v.lastSeen;
       if (!exR.labelId && v.labelId) exR.labelId = v.labelId;
+      if (!exR.labelKey && v.labelKey) exR.labelKey = v.labelKey;
       if (!exR.labelName && v.labelName) exR.labelName = v.labelName;
       if (!exR.imageUrl && v.imageUrl) exR.imageUrl = v.imageUrl;
       if (!exR.releaseDate && v.releaseDate) exR.releaseDate = v.releaseDate;
@@ -399,6 +490,7 @@ for (const gn of Object.keys(sampleByGenre)) {
 }
 
 // === Build labels (v1 shape — backward compatible) ===
+// RP-BPI-002A — aggiunto campo `key` (stable label key) oltre a `beatportId`.
 const lM = {};
 for (const gn in gR) {
   for (const lb of gR[gn]) {
@@ -411,6 +503,8 @@ for (const gn in gR) {
       if (lb.id) lM[nm].beatportId = lb.id;
       if (lb.slug) lM[nm].slug = lb.slug;
       if (lb.imageUrl) lM[nm].imageUrl = lb.imageUrl;
+      // RP-BPI-002A — stable label key (alias del campo `key` in lm)
+      if (lb.key) lM[nm].key = lb.key;
     }
     if (!lM[nm].genres.includes(gn)) lM[nm].genres.push(gn);
     lM[nm].rankByGenre[gn] = lb.rank;
@@ -486,6 +580,8 @@ const out = {
   _meta: {
     source: 'beatport',
     version: 2,
+    // RP-BPI-002A — schemaVersion esplicito per future migration path.
+    schemaVersion: 2,
     scrapedAt: NOW,
     totalLabels: Object.keys(lM).length,
     totalArtists: artistsArr.length,
@@ -661,39 +757,53 @@ if (palmRelease) {
   assert('palm release has 3 artistNames', palmRelease.artistNames.length, 3);
   assert('palm release artistNames = [John Summit, venbee, Odd Mob]', palmRelease.artistNames.sort(), ['John Summit', 'venbee', 'Odd Mob'].sort());
   assert('palm release trackCount = 1', palmRelease.trackCount, 1);
-  assert('palm release trackIds = [19711254]', palmRelease.trackIds, [19711254]);
+  // RP-BPI-002A — trackIds[] ora contiene STABLE KEYS (non più BP ids raw).
+  assert('palm release trackIds = [bp_19711254]', palmRelease.trackIds, ['bp_19711254']);
+  // RP-BPI-002A — trackBpIds[] mantiene i BP ids legacy per backward compat.
+  assert('palm release trackBpIds = [19711254]', palmRelease.trackBpIds, [19711254]);
   assert('palm release bpmAverage = 132', palmRelease.bpmAverage, 132);
   assert('palm release keyDistribution = { "2A": 1 }', palmRelease.keyDistribution, { '2A': 1 });
   assert('palm release genres = ["Tech House"]', palmRelease.genres, ['Tech House']);
   assert('palm release labelName = "EXPERTS ONLY"', palmRelease.labelName, 'EXPERTS ONLY');
   assert('palm release url contains beatport.com/release/', palmRelease.url.indexOf('https://www.beatport.com/release/'), 0);
+  // RP-BPI-002A — artistIds[] contiene STABLE KEYS (bp_<id> per BP artists).
+  assert('palm release artistIds = [bp_610028, bp_1068825, bp_353575]', palmRelease.artistIds.sort(),
+    ['bp_610028', 'bp_1068825', 'bp_353575'].sort());
+  // RP-BPI-002A — labelKey è lo stable label key (bp_lbl_<id> per Experts Only).
+  assert('palm release labelKey = bp_lbl_103008', palmRelease.labelKey, 'bp_lbl_103008');
+  // RP-BPI-002A — key è lo stable release key (bp_rel_<id>).
+  assert('palm release key = bp_rel_4803379', palmRelease.key, 'bp_rel_4803379');
 }
 
 // La release "lose control" (stessa traccia cross-genre Tech House + Minimal / Deep Tech,
 // stessa release.slug='' su Solid Grooves) deve essere MERGED in un singolo record:
 //   - 1 artista (Mochakk)
-//   - 1 traccia (19711256) — dedup trackIds
+//   - 1 traccia (bp_19711256) — dedup trackIds (stable key)
 //   - 2 generi (Tech House + Minimal / Deep Tech)
 //   - bpmAverage 128 (singola traccia, bpm 128)
 //   - keyDistribution: { '6A': 2 } (2 occorrenze di 6A — una per genere)
-const loseControlRelease = out.releases.find(r => r.trackIds.includes(19711256));
-assert('lose control release found by trackId 19711256', !!loseControlRelease, true);
+// RP-BPI-002A — trackIds[] contiene STABLE KEYS.
+const loseControlRelease = out.releases.find(r => r.trackIds.includes('bp_19711256'));
+assert('lose control release found by stable trackKey bp_19711256', !!loseControlRelease, true);
 if (loseControlRelease) {
   assert('lose control release has 1 artist (Mochakk)', loseControlRelease.artistNames.length, 1);
   assert('lose control release artistNames = [Mochakk]', loseControlRelease.artistNames, ['Mochakk']);
   assert('lose control release trackCount = 1 (dedup)', loseControlRelease.trackCount, 1);
-  assert('lose control release trackIds = [19711256]', loseControlRelease.trackIds, [19711256]);
+  assert('lose control release trackIds = [bp_19711256]', loseControlRelease.trackIds, ['bp_19711256']);
+  assert('lose control release trackBpIds = [19711256]', loseControlRelease.trackBpIds, [19711256]);
   assert('lose control release genres = [Tech House, Minimal / Deep Tech]', loseControlRelease.genres.sort(), ['Tech House', 'Minimal / Deep Tech'].sort());
   assert('lose control release bpmAverage = 128', loseControlRelease.bpmAverage, 128);
   // La traccia 19711256 appare 2 volte (Tech House pos 12 + Minimal pos 2), entrambe con keyCamelot 6A
   assert('lose control release keyDistribution = { "6A": 2 }', loseControlRelease.keyDistribution, { '6A': 2 });
+  // RP-BPI-002A — artistIds = [bp_770001] (Mochakk BP id 770001)
+  assert('lose control release artistIds = [bp_770001]', loseControlRelease.artistIds, ['bp_770001']);
 }
 
 // Adam Beyer's tracks on Drumcode: code reader (19711260) e server farm (19711261)
 // sono 2 release separate (slug diversi), ognuna con 1 traccia.
-// Verifica che esistano 2 release distinte con trackId 19711260 e 19711261
-const codeReaderRel = out.releases.find(r => r.trackIds.includes(19711260));
-const serverFarmRel = out.releases.find(r => r.trackIds.includes(19711261));
+// Verifica che esistano 2 release distinte con stable trackKey bp_19711260 e bp_19711261
+const codeReaderRel = out.releases.find(r => r.trackIds.includes('bp_19711260'));
+const serverFarmRel = out.releases.find(r => r.trackIds.includes('bp_19711261'));
 assert('code reader release found', !!codeReaderRel, true);
 assert('server farm release found', !!serverFarmRel, true);
 assert('code reader and server farm are DIFFERENT releases', codeReaderRel !== serverFarmRel, true);
@@ -701,21 +811,268 @@ if (codeReaderRel) {
   assert('code reader release labelName = DRUMCODE', codeReaderRel.labelName, 'DRUMCODE');
   assert('code reader release artistNames = [Adam Beyer]', codeReaderRel.artistNames, ['Adam Beyer']);
   assert('code reader release bpmAverage = 135', codeReaderRel.bpmAverage, 135);
+  // RP-BPI-002A — labelKey = bp_lbl_<id> per Drumcode (id 1234)
+  assert('code reader release labelKey = bp_lbl_1234', codeReaderRel.labelKey, 'bp_lbl_1234');
+  assert('code reader release artistIds = [bp_1456]', codeReaderRel.artistIds, ['bp_1456']);
 }
 if (serverFarmRel) {
   assert('server farm release artistNames = [Adam Beyer, Layton Giordani]', serverFarmRel.artistNames, ['Adam Beyer', 'Layton Giordani']);
   assert('server farm release bpmAverage = 133', serverFarmRel.bpmAverage, 133);
+  // RP-BPI-002A — artistIds (stable keys, ordine corrisponde ad artistNames)
+  assert('server farm release artistIds = [bp_1456, bp_7800]', serverFarmRel.artistIds, ['bp_1456', 'bp_7800']);
 }
 
 // dub layers release: track 19711270 su Solid Grooves, artista Mochakk + remixer Wade
-//   → artistIds deve contenere sia Mochakk che Wade
-const dubLayersRel = out.releases.find(r => r.trackIds.includes(19711270));
+//   → artistIds deve contenere sia Mochakk che Wade (come STABLE KEYS)
+const dubLayersRel = out.releases.find(r => r.trackIds.includes('bp_19711270'));
 assert('dub layers release found', !!dubLayersRel, true);
 if (dubLayersRel) {
   assert('dub layers release has 2 artists (Mochakk + Wade)', dubLayersRel.artistNames.length, 2);
   assert('dub layers release artistNames = [Mochakk, Wade]', dubLayersRel.artistNames.sort(), ['Mochakk', 'Wade'].sort());
   assert('dub layers release bpmAverage = 127', dubLayersRel.bpmAverage, 127);
+  // RP-BPI-002A — artistIds contiene stable keys per Mochakk + Wade
+  assert('dub layers release artistIds = [bp_770001, bp_9999]', dubLayersRel.artistIds.sort(), ['bp_770001', 'bp_9999'].sort());
 }
+
+// ====================================================================
+// RP-BPI-002A — DATA MODEL NORMALIZATION ASSERTIONS
+// ====================================================================
+console.log('\n=== RP-BPI-002A DATA MODEL ASSERTIONS ===');
+
+// --- _meta.schemaVersion ---
+assert('_meta.schemaVersion = 2', out._meta.schemaVersion, 2);
+assert('_meta.version = 2 (legacy preserved)', out._meta.version, 2);
+assert('_meta.source = "beatport" (legacy preserved)', out._meta.source, 'beatport');
+
+// --- Entity uniqueness ---
+
+// Labels: no duplicate `id` (the synthetic lbl_<slug>) and no duplicate `key` (stable bp_lbl_<id>)
+const labelIds = out.labels.map(l => l.id).filter(Boolean);
+const labelKeys = out.labels.map(l => l.key).filter(Boolean);
+assert('label ids are unique', new Set(labelIds).size, labelIds.length);
+assert('label keys are unique', new Set(labelKeys).size, labelKeys.length);
+assert('4 labels in output', out.labels.length, 4);
+
+// Artists: no duplicate `id` (stable key bp_<id> / nm_<name>)
+const artistIds = out.artists.map(a => a.id).filter(Boolean);
+assert('artist ids are unique', new Set(artistIds).size, artistIds.length);
+assert('7 artists in output', out.artists.length, 7);
+
+// Tracks: no duplicate `key` (stable track key)
+const trackKeys = out.tracks.map(t => t.key).filter(Boolean);
+assert('track keys are unique', new Set(trackKeys).size, trackKeys.length);
+assert('7 tracks in output (cross-genre dedup)', out.tracks.length, 7);
+
+// Releases: no duplicate `key` (stable release key)
+const releaseKeys = out.releases.map(r => r.key).filter(Boolean);
+assert('release keys are unique', new Set(releaseKeys).size, releaseKeys.length);
+assert('7 releases in output (1 per unique release.id)', out.releases.length, 7);
+
+// --- Track entity: explicit stable references ---
+
+// Every track must have: id (BP id), key (stable track key), beatportId (alias),
+// artistIds[] (stable keys), remixerIds[] (stable keys), labelKey (stable),
+// releaseId (stable release key), label (legacy name), labelId (legacy BP id)
+const trackHasAllRefs = out.tracks.every(t =>
+  typeof t.id !== 'undefined' &&
+  typeof t.key === 'string' && t.key.length > 0 &&
+  typeof t.beatportId !== 'undefined' &&
+  Array.isArray(t.artistIds) &&
+  Array.isArray(t.remixerIds) &&
+  typeof t.labelKey === 'string' && t.labelKey.length > 0 &&
+  typeof t.releaseId === 'string' && t.releaseId.length > 0 &&
+  typeof t.label === 'string' && t.label.length > 0 &&   // legacy name
+  typeof t.labelId !== 'undefined'                        // legacy BP id (may be null)
+);
+assert('every track has all stable + legacy references', trackHasAllRefs, true);
+
+// Track "palm of my hands" (id 19711254) — verify each reference target exists
+const palmTrack = out.tracks.find(t => t.id === 19711254);
+assert('palm track found by id 19711254', !!palmTrack, true);
+if (palmTrack) {
+  // key = stable track key
+  assert('palm track.key = bp_19711254', palmTrack.key, 'bp_19711254');
+  assert('palm track.beatportId = 19711254', palmTrack.beatportId, 19711254);
+  // artistIds = stable keys, must point to existing artists
+  assert('palm track.artistIds = [bp_610028, bp_1068825]', palmTrack.artistIds.sort(), ['bp_610028', 'bp_1068825'].sort());
+  const palmArtistsExist = palmTrack.artistIds.every(aId => out.artists.some(a => a.id === aId));
+  assert('palm track artistIds all point to existing artists', palmArtistsExist, true);
+  // remixerIds = stable keys (Odd Mob)
+  assert('palm track.remixerIds = [bp_353575]', palmTrack.remixerIds, ['bp_353575']);
+  const palmRemixerExists = palmTrack.remixerIds.every(rId => out.artists.some(a => a.id === rId));
+  assert('palm track remixerIds all point to existing artists', palmRemixerExists, true);
+  // labelKey = stable label key, must point to existing label
+  assert('palm track.labelKey = bp_lbl_103008', palmTrack.labelKey, 'bp_lbl_103008');
+  const palmLabelExists = out.labels.some(l => l.key === palmTrack.labelKey);
+  assert('palm track.labelKey points to existing label', palmLabelExists, true);
+  // releaseId = stable release key, must point to existing release
+  assert('palm track.releaseId = bp_rel_4803379', palmTrack.releaseId, 'bp_rel_4803379');
+  const palmReleaseExists = out.releases.some(r => r.key === palmTrack.releaseId);
+  assert('palm track.releaseId points to existing release', palmReleaseExists, true);
+  // Legacy fields still present
+  assert('palm track.label = "EXPERTS ONLY" (legacy name)', palmTrack.label, 'EXPERTS ONLY');
+  assert('palm track.labelId = 103008 (legacy BP id)', palmTrack.labelId, 103008);
+  assert('palm track.artists is array of {id,name,slug} (legacy)', Array.isArray(palmTrack.artists) && palmTrack.artists.length === 2, true);
+  assert('palm track.remixers is array of {id,name,slug} (legacy)', Array.isArray(palmTrack.remixers) && palmTrack.remixers.length === 1, true);
+}
+
+// --- Artist entity: stable id + labelIds[] (stable) + labelsPublishedOn[] (legacy names) ---
+
+// Every artist must have: id (stable key), beatportId (may be null), labelIds[] (stable keys)
+const artistHasAllRefs = out.artists.every(a =>
+  typeof a.id === 'string' && a.id.length > 0 &&
+  typeof a.beatportId !== 'undefined' &&
+  Array.isArray(a.labelIds) &&
+  Array.isArray(a.labelsPublishedOn)   // legacy names
+);
+assert('every artist has id, beatportId, labelIds[], labelsPublishedOn[]', artistHasAllRefs, true);
+
+// John Summit (bp_610028) — verify labelIds references resolve
+const summit002A = out.artists.find(a => a.name === 'John Summit');
+assert('Summit found', !!summit002A, true);
+if (summit002A) {
+  assert('Summit.id = bp_610028', summit002A.id, 'bp_610028');
+  assert('Summit.beatportId = 610028', summit002A.beatportId, 610028);
+  assert('Summit.labelIds = [bp_lbl_103008]', summit002A.labelIds, ['bp_lbl_103008']);
+  assert('Summit.labelsPublishedOn = ["EXPERTS ONLY"] (legacy)', summit002A.labelsPublishedOn, ['EXPERTS ONLY']);
+  // Every labelId must point to an existing label
+  const summitLabelsExist = summit002A.labelIds.every(lId => out.labels.some(l => l.key === lId));
+  assert('Summit labelIds all point to existing labels', summitLabelsExist, true);
+}
+
+// Adam Beyer — published on 2 labels (Drumcode + Truesoul), so labelIds has 2 entries
+const beyer002A = out.artists.find(a => a.name === 'Adam Beyer');
+assert('Beyer found', !!beyer002A, true);
+if (beyer002A) {
+  assert('Beyer.id = bp_1456', beyer002A.id, 'bp_1456');
+  assert('Beyer.labelIds = [bp_lbl_1234, bp_lbl_5678]', beyer002A.labelIds.sort(), ['bp_lbl_1234', 'bp_lbl_5678'].sort());
+  assert('Beyer.labelsPublishedOn = ["DRUMCODE", "TRUESOUL"] (legacy)', beyer002A.labelsPublishedOn.sort(), ['DRUMCODE', 'TRUESOUL'].sort());
+  const beyerLabelsExist = beyer002A.labelIds.every(lId => out.labels.some(l => l.key === lId));
+  assert('Beyer labelIds all point to existing labels', beyerLabelsExist, true);
+}
+
+// --- Label entity: stable key (bp_lbl_<id> or nm_lbl_<name>) + legacy `id` (lbl_<slug>) ---
+
+// Every label must have: id (legacy synthetic), name (upper), key (stable), beatportId (may be null)
+const labelHasAllRefs = out.labels.every(l =>
+  typeof l.id === 'string' && l.id.length > 0 &&
+  typeof l.name === 'string' && l.name.length > 0 &&
+  typeof l.key === 'string' && l.key.length > 0 &&
+  typeof l.beatportId !== 'undefined'
+);
+assert('every label has id (legacy), name, key (stable), beatportId', labelHasAllRefs, true);
+
+// Experts Only — verify both ids
+const expertsOnly = out.labels.find(l => l.name === 'EXPERTS ONLY');
+assert('Experts Only found', !!expertsOnly, true);
+if (expertsOnly) {
+  assert('Experts Only.id = lbl_experts_only (legacy)', expertsOnly.id, 'lbl_experts_only');
+  assert('Experts Only.key = bp_lbl_103008 (stable)', expertsOnly.key, 'bp_lbl_103008');
+  assert('Experts Only.beatportId = 103008', expertsOnly.beatportId, 103008);
+}
+
+// --- Release entity: stable key + stable references ---
+
+// Every release must have: id (BP id, may be null), beatportId (may be null), key (stable),
+// labelKey (stable), artistIds[] (stable keys), trackIds[] (stable keys),
+// artistBpIds[] (legacy BP ids), trackBpIds[] (legacy BP ids), labelId (legacy BP id)
+const releaseHasAllRefs = out.releases.every(r =>
+  typeof r.id !== 'undefined' &&
+  typeof r.beatportId !== 'undefined' &&
+  typeof r.key === 'string' && r.key.length > 0 &&
+  typeof r.labelKey === 'string' && r.labelKey.length > 0 &&
+  Array.isArray(r.artistIds) &&
+  Array.isArray(r.trackIds) &&
+  Array.isArray(r.artistBpIds) &&
+  Array.isArray(r.trackBpIds) &&
+  typeof r.labelId !== 'undefined' &&
+  typeof r.labelName === 'string'   // legacy name
+);
+assert('every release has stable key + stable refs + legacy refs', releaseHasAllRefs, true);
+
+// Every release.artistIds must point to existing artists
+const releaseArtistsValid = out.releases.every(r =>
+  r.artistIds.every(aId => out.artists.some(a => a.id === aId))
+);
+assert('every release.artistIds points to existing artists', releaseArtistsValid, true);
+
+// Every release.trackIds must point to existing tracks
+const releaseTracksValid = out.releases.every(r =>
+  r.trackIds.every(tId => out.tracks.some(t => t.key === tId))
+);
+assert('every release.trackIds points to existing tracks', releaseTracksValid, true);
+
+// Every release.labelKey must point to existing label
+const releaseLabelsValid = out.releases.every(r =>
+  out.labels.some(l => l.key === r.labelKey)
+);
+assert('every release.labelKey points to existing label', releaseLabelsValid, true);
+
+// artistBpIds.length === artistIds.length (parallel arrays)
+const releaseBpIdsAligned = out.releases.every(r => r.artistBpIds.length === r.artistIds.length);
+assert('every release.artistBpIds.length === artistIds.length', releaseBpIdsAligned, true);
+
+// trackBpIds.length <= trackIds.length (some stable keys may not have BP id when name-only fallback)
+// In our sample all tracks have BP ids, so they should be equal.
+const releaseTrackBpIdsAligned = out.releases.every(r => r.trackBpIds.length === r.trackIds.length);
+assert('every release.trackBpIds.length === trackIds.length (sample all have BP ids)', releaseTrackBpIdsAligned, true);
+
+// --- Backward compatibility: legacy fields still present ---
+
+// Track legacy fields: artists[] {id,name,slug}, remixers[] {id,name,slug}, label (name), labelId (BP id), labelSlug
+const trackLegacyFields = out.tracks.every(t =>
+  Array.isArray(t.artists) && t.artists.every(a => 'id' in a && 'name' in a && 'slug' in a) &&
+  Array.isArray(t.remixers) && t.remixers.every(a => 'id' in a && 'name' in a && 'slug' in a) &&
+  typeof t.label === 'string' &&
+  typeof t.labelId !== 'undefined' &&
+  typeof t.labelSlug === 'string'
+);
+assert('every track preserves legacy fields (artists[], remixers[], label, labelId, labelSlug)', trackLegacyFields, true);
+
+// Artist legacy fields: labelsPublishedOn (names array)
+const artistLegacyFields = out.artists.every(a => Array.isArray(a.labelsPublishedOn));
+assert('every artist preserves legacy labelsPublishedOn[] (names)', artistLegacyFields, true);
+
+// Label legacy fields: id (lbl_<slug>), beatportId, slug, imageUrl (may be undefined for labels without logo),
+// genres, rankByGenre, pointsByGenre, trending
+const labelLegacyFields = out.labels.every(l =>
+  typeof l.id === 'string' &&
+  typeof l.beatportId !== 'undefined' &&
+  typeof l.slug === 'string' &&
+  // imageUrl può essere undefined (label senza logo) — backward compat con v1
+  // dove il campo viene settato solo se presente.
+  (typeof l.imageUrl === 'string' || typeof l.imageUrl === 'undefined') &&
+  Array.isArray(l.genres) &&
+  typeof l.rankByGenre === 'object' &&
+  typeof l.pointsByGenre === 'object' &&
+  typeof l.trending === 'boolean'
+);
+assert('every label preserves all legacy fields (id, beatportId, slug, imageUrl, genres, rankByGenre, pointsByGenre, trending)', labelLegacyFields, true);
+
+// Release legacy fields: labelName (name), labelId (BP id), artistNames[] (names)
+const releaseLegacyFields = out.releases.every(r =>
+  typeof r.labelName === 'string' &&
+  typeof r.labelId !== 'undefined' &&
+  Array.isArray(r.artistNames)
+);
+assert('every release preserves legacy fields (labelName, labelId, artistNames[])', releaseLegacyFields, true);
+
+// --- No name-only references when BP id exists (key invariant) ---
+// All sample artists have BP ids → every artist.id must be 'bp_<id>' (not 'nm_<name>')
+const allArtistsUseBpKey = out.artists.every(a => a.id.startsWith('bp_'));
+assert('all sample artists use bp_ key (no name-only fallback — all have BP ids)', allArtistsUseBpKey, true);
+
+// All sample labels have BP ids → every label.key must be 'bp_lbl_<id>'
+const allLabelsUseBpKey = out.labels.every(l => l.key.startsWith('bp_lbl_'));
+assert('all sample labels use bp_lbl_ key (no name-only fallback — all have BP ids)', allLabelsUseBpKey, true);
+
+// All sample tracks have BP ids → every track.key must be 'bp_<id>'
+const allTracksUseBpKey = out.tracks.every(t => t.key.startsWith('bp_'));
+assert('all sample tracks use bp_ key (no name-only fallback — all have BP ids)', allTracksUseBpKey, true);
+
+// All sample releases have BP ids → every release.key must be 'bp_rel_<id>'
+const allReleasesUseBpKey = out.releases.every(r => r.key.startsWith('bp_rel_'));
+assert('all sample releases use bp_rel_ key (no name-only fallback — all have BP ids)', allReleasesUseBpKey, true);
 
 console.log('\n=== RESULT: ' + pass + ' passed, ' + fail + ' failed ===');
 process.exit(fail > 0 ? 1 : 0);
