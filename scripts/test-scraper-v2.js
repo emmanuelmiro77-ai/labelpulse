@@ -24,7 +24,7 @@ const sampleByGenre = {
       bpm: 132,
       key: { id: 2, name: 'Eb Minor', camelot_number: 2, camelot_letter: 'A' },
       publish_date: '2024-11-08',
-      release: { id: 4803379, name: 'palm of my hands - Odd Mob Extended Remix',
+      release: { id: 4803379, slug: 'palm-of-my-hands-odd-mob-extended-remix', name: 'palm of my hands - Odd Mob Extended Remix',
                  image: { uri: 'https://example.com/cover1.jpg' },
                  label: { id: 103008, name: 'Experts Only', slug: 'experts-only', image: { uri: 'https://example.com/label-experts.jpg' } } },
       sample_url: 'https://example.com/sample1.mp3',
@@ -38,7 +38,8 @@ const sampleByGenre = {
       bpm: 126,
       key: { id: 1, name: 'A Minor', camelot_number: 5, camelot_letter: 'A' },
       publish_date: '2024-09-15',
-      release: { image: { uri: 'https://example.com/cover2.jpg' },
+      release: { id: 4803380, slug: 'walls', name: 'walls',
+                 image: { uri: 'https://example.com/cover2.jpg' },
                  label: { id: 103008, name: 'Experts Only', slug: 'experts-only', image: { uri: 'https://example.com/label-experts.jpg' } } },
       sample_url: '',
       sub_genre: { id: 257, name: 'Latin Tech', slug: 'latin-tech' },
@@ -51,7 +52,8 @@ const sampleByGenre = {
       bpm: 128,
       key: { name: 'G Minor', camelot_number: 6, camelot_letter: 'A' },
       publish_date: '2024-10-01',
-      release: { label: { id: 9001, name: 'Solid Grooves', slug: 'solid-grooves' } },
+      release: { id: 4900001, slug: 'lose-control', name: 'lose control',
+                 label: { id: 9001, name: 'Solid Grooves', slug: 'solid-grooves' } },
       _position: 12
     }
   ],
@@ -63,7 +65,8 @@ const sampleByGenre = {
       bpm: 135,
       key: { name: 'F Minor', camelot_number: 4, camelot_letter: 'A' },
       publish_date: '2024-08-20',
-      release: { label: { id: 1234, name: 'Drumcode', slug: 'drumcode' } },
+      release: { id: 4900002, slug: 'code-reader', name: 'code reader',
+                 label: { id: 1234, name: 'Drumcode', slug: 'drumcode' } },
       _position: 3
     },
     {
@@ -74,7 +77,8 @@ const sampleByGenre = {
       bpm: 133,
       key: { name: 'C Minor', camelot_number: 5, camelot_letter: 'A' },
       publish_date: '2024-07-10',
-      release: { label: { id: 1234, name: 'Drumcode', slug: 'drumcode' } },
+      release: { id: 4900003, slug: 'server-farm', name: 'server farm',
+                 label: { id: 1234, name: 'Drumcode', slug: 'drumcode' } },
       _position: 8
     },
     {
@@ -84,20 +88,23 @@ const sampleByGenre = {
       bpm: 138,
       key: { name: 'G Minor', camelot_number: 6, camelot_letter: 'A' },
       publish_date: '2024-09-05',
-      release: { label: { id: 5678, name: 'Truesoul', slug: 'truesoul' } },
+      release: { id: 4900004, slug: 'industrial-zone', name: 'industrial zone',
+                 label: { id: 5678, name: 'Truesoul', slug: 'truesoul' } },
       _position: 18
     }
   ],
   'Minimal / Deep Tech': [
     {
       // Cross-genre duplicate: same track appears in both Tech House and Minimal / Deep Tech
+      // RP-BPI-001: stessa release.id (4900001) → merge cross-genre
       id: 19711256, name: 'lose control', mix_name: 'Original Mix', slug: 'lose-control',
       artists: [{ id: 770001, name: 'Mochakk', slug: 'mochakk' }],
       remixers: [],
       bpm: 128,
       key: { name: 'G Minor', camelot_number: 6, camelot_letter: 'A' },
       publish_date: '2024-10-01',
-      release: { label: { id: 9001, name: 'Solid Grooves', slug: 'solid-grooves' } },
+      release: { id: 4900001, slug: 'lose-control', name: 'lose control',
+                 label: { id: 9001, name: 'Solid Grooves', slug: 'solid-grooves' } },
       _position: 2
     },
     {
@@ -107,14 +114,16 @@ const sampleByGenre = {
       bpm: 127,
       key: { name: 'A Minor', camelot_number: 8, camelot_letter: 'A' },
       publish_date: '2024-11-01',
-      release: { label: { id: 9001, name: 'Solid Grooves', slug: 'solid-grooves' } },
+      release: { id: 4900005, slug: 'dub-layers', name: 'dub layers',
+                 label: { id: 9001, name: 'Solid Grooves', slug: 'solid-grooves' } },
       _position: 25
     }
   ]
 };
 
 // === Re-implement processTracks (mirror of the scraper) ===
-function processTracks(tracks, gn, lm, am, tm) {
+// RP-BPI-001 — aggiunto parametro rm (releaseMap) e logica di aggregazione release.
+function processTracks(tracks, gn, lm, am, tm, rm) {
   for (var i = 0; i < tracks.length; i++) {
     var t = tracks[i];
     var label = null;
@@ -200,6 +209,91 @@ function processTracks(tracks, gn, lm, am, tm) {
       var tr = tm.get(trackKey);
       tr.positions.push({ genre: gn, position: pos, points: pts, seenAt: NOW });
     }
+
+    // === RP-BPI-001 — RELEASE MAP ===
+    var rel = t.release || null;
+    if (rel && (rel.id || rel.slug)) {
+      var releaseKey = rel.id ? ('bp_rel_' + rel.id) : ('nm_rel_' + (rel.slug || rel.name || '') + '|' + labelName);
+      var releaseId = rel.id || null;
+      var releaseSlug = rel.slug || '';
+      var releaseName = rel.name || '';
+      var releaseUrl = releaseSlug && releaseId
+        ? ('https://www.beatport.com/release/' + releaseSlug + '/' + releaseId)
+        : '';
+      var releaseCatalog = rel.catalog_number || rel.catalogNumber || '';
+      var releaseImage = (rel.image && rel.image.uri) || coverArt || '';
+      var trackId = t.id || null;
+      var trackBpm = (typeof t.bpm === 'number' && t.bpm > 0) ? t.bpm : null;
+      var allArtistsOnTrack = artistsRaw.concat(remixersRaw);
+
+      if (!rm.has(releaseKey)) {
+        var newRel = {
+          id: releaseId, beatportId: releaseId, name: releaseName, slug: releaseSlug,
+          url: releaseUrl, catalogNumber: releaseCatalog, releaseDate: releaseDate,
+          imageUrl: releaseImage, labelId: label.id || null, labelName: labelName,
+          artistIds: [], artistNames: [], trackIds: [], trackCount: 0,
+          genres: [], bpmAverage: null, keyDistribution: {},
+          firstSeen: NOW, lastSeen: NOW
+        };
+        var seenArtistKeys = {};
+        allArtistsOnTrack.forEach(function (a) {
+          var aKey = a.id ? ('bp_' + a.id) : ('nm_' + (a.name || '').toUpperCase().trim());
+          if (!seenArtistKeys[aKey]) {
+            seenArtistKeys[aKey] = true;
+            newRel.artistIds.push(a.id || null);
+            newRel.artistNames.push(a.name || '');
+          }
+        });
+        if (trackId != null) newRel.trackIds.push(trackId);
+        newRel.trackCount = newRel.trackIds.length;
+        if (newRel.genres.indexOf(gn) === -1) newRel.genres.push(gn);
+        var bpmSum = 0, bpmCount = 0;
+        if (trackBpm != null) { bpmSum += trackBpm; bpmCount++; }
+        newRel.bpmAverage = bpmCount > 0 ? Math.round(bpmSum / bpmCount) : null;
+        if (keyCamelot) newRel.keyDistribution[keyCamelot] = 1;
+        rm.set(releaseKey, newRel);
+      } else {
+        var exRel = rm.get(releaseKey);
+        allArtistsOnTrack.forEach(function (a) {
+          var aKey = a.id ? ('bp_' + a.id) : ('nm_' + (a.name || '').toUpperCase().trim());
+          var alreadyPresent = false;
+          for (var ai = 0; ai < exRel.artistIds.length; ai++) {
+            var exKey = exRel.artistIds[ai] ? ('bp_' + exRel.artistIds[ai]) : ('nm_' + (exRel.artistNames[ai] || '').toUpperCase().trim());
+            if (exKey === aKey) { alreadyPresent = true; break; }
+          }
+          if (!alreadyPresent) {
+            exRel.artistIds.push(a.id || null);
+            exRel.artistNames.push(a.name || '');
+          }
+        });
+        if (trackId != null && exRel.trackIds.indexOf(trackId) === -1) exRel.trackIds.push(trackId);
+        exRel.trackCount = exRel.trackIds.length;
+        if (exRel.genres.indexOf(gn) === -1) exRel.genres.push(gn);
+        if (trackBpm != null) {
+          if (typeof exRel._bpmSum !== 'number') {
+            exRel._bpmSum = exRel.bpmAverage || 0;
+            exRel._bpmCount = exRel.bpmAverage != null ? 1 : 0;
+          }
+          exRel._bpmSum += trackBpm;
+          exRel._bpmCount++;
+          exRel.bpmAverage = Math.round(exRel._bpmSum / exRel._bpmCount);
+        }
+        if (keyCamelot) exRel.keyDistribution[keyCamelot] = (exRel.keyDistribution[keyCamelot] || 0) + 1;
+        exRel.lastSeen = NOW;
+        if (!exRel.labelId && label.id) exRel.labelId = label.id;
+        if (!exRel.labelName) exRel.labelName = labelName;
+        if (!exRel.imageUrl && releaseImage) exRel.imageUrl = releaseImage;
+        if (!exRel.releaseDate && releaseDate) exRel.releaseDate = releaseDate;
+        if (!exRel.catalogNumber && releaseCatalog) exRel.catalogNumber = releaseCatalog;
+        if (!exRel.slug && releaseSlug) exRel.slug = releaseSlug;
+        if (!exRel.url && releaseUrl) exRel.url = releaseUrl;
+        if (!exRel.name && releaseName) exRel.name = releaseName;
+        if (exRel.beatportId == null && releaseId != null) {
+          exRel.beatportId = releaseId;
+          exRel.id = releaseId;
+        }
+      }
+    }
   }
 }
 
@@ -207,10 +301,12 @@ function processTracks(tracks, gn, lm, am, tm) {
 const gR = {};
 const globalAM = new Map();
 const globalTM = new Map();
+// RP-BPI-001 — releaseMap globale
+const globalRM = new Map();
 
 for (const gn of Object.keys(sampleByGenre)) {
-  const lm = new Map(), am = new Map(), tm = new Map();
-  processTracks(sampleByGenre[gn], gn, lm, am, tm);
+  const lm = new Map(), am = new Map(), tm = new Map(), rm = new Map();
+  processTracks(sampleByGenre[gn], gn, lm, am, tm, rm);
 
   const la = Array.from(lm.values());
   la.sort((a, b) => b.totalPoints - a.totalPoints);
@@ -242,6 +338,62 @@ for (const gn of Object.keys(sampleByGenre)) {
       ex.positions.push(...v.positions);
     } else {
       globalTM.set(k, v);
+    }
+  });
+
+  // RP-BPI-001 — Merge releases across genres
+  rm.forEach((v, k) => {
+    if (globalRM.has(k)) {
+      const exR = globalRM.get(k);
+      v.artistIds.forEach((aid, idx) => {
+        const aKey = aid ? ('bp_' + aid) : ('nm_' + (v.artistNames[idx] || '').toUpperCase().trim());
+        let alreadyPresent = false;
+        for (let ai = 0; ai < exR.artistIds.length; ai++) {
+          const exKey = exR.artistIds[ai] ? ('bp_' + exR.artistIds[ai]) : ('nm_' + (exR.artistNames[ai] || '').toUpperCase().trim());
+          if (exKey === aKey) { alreadyPresent = true; break; }
+        }
+        if (!alreadyPresent) {
+          exR.artistIds.push(aid);
+          exR.artistNames.push(v.artistNames[idx] || '');
+        }
+      });
+      v.trackIds.forEach(tid => {
+        if (tid != null && !exR.trackIds.includes(tid)) exR.trackIds.push(tid);
+      });
+      exR.trackCount = exR.trackIds.length;
+      v.genres.forEach(gn2 => {
+        if (!exR.genres.includes(gn2)) exR.genres.push(gn2);
+      });
+      if (typeof exR._bpmSum !== 'number') {
+        exR._bpmSum = exR.bpmAverage || 0;
+        exR._bpmCount = exR.bpmAverage != null ? 1 : 0;
+      }
+      if (typeof v._bpmSum === 'number' && typeof v._bpmCount === 'number') {
+        exR._bpmSum += v._bpmSum;
+        exR._bpmCount += v._bpmCount;
+      } else if (v.bpmAverage != null) {
+        exR._bpmSum += v.bpmAverage;
+        exR._bpmCount += 1;
+      }
+      exR.bpmAverage = exR._bpmCount > 0 ? Math.round(exR._bpmSum / exR._bpmCount) : null;
+      for (const kk in v.keyDistribution) {
+        exR.keyDistribution[kk] = (exR.keyDistribution[kk] || 0) + v.keyDistribution[kk];
+      }
+      if (v.lastSeen > exR.lastSeen) exR.lastSeen = v.lastSeen;
+      if (!exR.labelId && v.labelId) exR.labelId = v.labelId;
+      if (!exR.labelName && v.labelName) exR.labelName = v.labelName;
+      if (!exR.imageUrl && v.imageUrl) exR.imageUrl = v.imageUrl;
+      if (!exR.releaseDate && v.releaseDate) exR.releaseDate = v.releaseDate;
+      if (!exR.catalogNumber && v.catalogNumber) exR.catalogNumber = v.catalogNumber;
+      if (!exR.slug && v.slug) exR.slug = v.slug;
+      if (!exR.url && v.url) exR.url = v.url;
+      if (!exR.name && v.name) exR.name = v.name;
+      if (exR.beatportId == null && v.beatportId != null) {
+        exR.beatportId = v.beatportId;
+        exR.id = v.beatportId;
+      }
+    } else {
+      globalRM.set(k, v);
     }
   });
 }
@@ -312,12 +464,25 @@ artistsArr.sort((a, b) => b.totalPoints - a.totalPoints);
 // === Build tracks ===
 const tracksArr = Array.from(globalTM.values());
 
+// === RP-BPI-001 — Build releases (strip campi privati _bpmSum/_bpmCount) ===
+const releasesArr = Array.from(globalRM.values()).map(r => {
+  const clean = {};
+  for (const fk in r) {
+    if (fk === '_bpmSum' || fk === '_bpmCount') continue;
+    clean[fk] = r[fk];
+  }
+  return clean;
+});
+releasesArr.sort((a, b) => b.trackCount - a.trackCount);
+
 // === Output ===
 const out = {
   genres: Object.keys(sampleByGenre),
   labels: Object.values(lM),
   artists: artistsArr,
   tracks: tracksArr,
+  // RP-BPI-001 — releases array prima di _meta
+  releases: releasesArr,
   _meta: {
     source: 'beatport',
     version: 2,
@@ -325,6 +490,8 @@ const out = {
     totalLabels: Object.keys(lM).length,
     totalArtists: artistsArr.length,
     totalTracks: tracksArr.length,
+    // RP-BPI-001 — conteggio release
+    totalReleases: releasesArr.length,
     totalGenres: Object.keys(sampleByGenre).length,
     successGenres: Object.keys(sampleByGenre).length,
     failedGenres: 0
@@ -336,8 +503,9 @@ console.log('\n=== TEST RESULTS ===\n');
 
 console.log('META:');
 console.log('  totalLabels:', out._meta.totalLabels, '(expected: 4 — Experts Only, Solid Grooves, Drumcode, Truesoul)');
-console.log('  totalArtists:', out._meta.totalArtists, '(expected: 6 — John Summit, venbee, Odd Mob, Mochakk, Adam Beyer, Layton Giordani, Wade = 7)');
+console.log('  totalArtists:', out._meta.totalArtists, '(expected: 7 — John Summit, venbee, Odd Mob, Mochakk, Adam Beyer, Layton Giordani, Wade)');
 console.log('  totalTracks:', out._meta.totalTracks, '(expected: 7 — 3 Tech House + 3 Techno + 1 new Minimal = 7 unique, 1 cross-genre duplicate merged)');
+console.log('  totalReleases:', out._meta.totalReleases, '(RP-BPI-001)');
 
 console.log('\nLABELS:');
 out.labels.forEach(l => {
@@ -368,6 +536,15 @@ out.tracks.forEach(t => {
   if (t.remixers.length > 0) console.log('    remixers:', t.remixers.map(a => a.name).join(' + '));
   console.log('    label:', t.label, '/ primaryGenre:', t.primaryGenre, '/ subGenre:', t.subGenre);
   console.log('    positions:', JSON.stringify(t.positions.map(p => ({ g: p.genre, pos: p.position, pts: p.points }))));
+});
+
+console.log('\nRELEASES (RP-BPI-001 — deduplicated):');
+out.releases.forEach(r => {
+  console.log('  #' + r.id + ' "' + r.name + '" — ' + r.trackCount + ' tracks — ' + r.artistNames.join(' + '));
+  console.log('    label:', r.labelName, '/ releaseDate:', r.releaseDate, '/ bpmAvg:', r.bpmAverage);
+  console.log('    genres:', r.genres.join(', '));
+  console.log('    keyDistribution:', JSON.stringify(r.keyDistribution));
+  console.log('    trackIds:', JSON.stringify(r.trackIds));
 });
 
 // === Save sample output JSON for inspection ===
@@ -407,10 +584,13 @@ assert('Beyer has 3 tracks in Techno', beyer.tracksByGenre['Techno Peak Time / D
 assert('Beyer labelsPublishedOn = ["DRUMCODE", "TRUESOUL"]', beyer.labelsPublishedOn.sort(), ['DRUMCODE', 'TRUESOUL'].sort());
 assert('Beyer trending = true', beyer.trending, true);
 
-// Mochakk should have tracks in 2 genres
+// Mochakk should have tracks in 2 genres.
+// In Tech House: only "lose control" (1 track).
+// In Minimal / Deep Tech: "lose control" (cross-genre duplicate) + "dub layers" (2 tracks).
+// (Pre-existing test expected 1 — was already failing before RP-BPI-001; fixed expectation here.)
 const mochakk = out.artists.find(a => a.name === 'Mochakk');
 assert('Mochakk has 1 track in Tech House', mochakk.tracksByGenre['Tech House'].length, 1);
-assert('Mochakk has 1 track in Minimal / Deep Tech', mochakk.tracksByGenre['Minimal / Deep Tech'].length, 1);
+assert('Mochakk has 2 tracks in Minimal / Deep Tech (lose control + dub layers)', mochakk.tracksByGenre['Minimal / Deep Tech'].length, 2);
 
 // Track #19711256 (lose control) should have 2 positions (cross-genre)
 const loseCtrl = out.tracks.find(t => t.id === 19711256);
@@ -424,6 +604,118 @@ assert('Odd Mob has 0 tracks in tracksByGenre', Object.keys(oddMob.tracksByGenre
 // Wade is a remixer in Mochakk's "dub layers" — also remixer-only
 const wade = out.artists.find(a => a.name === 'Wade');
 assert('Wade isRemixerOnly = true', wade.isRemixerOnly, true);
+
+// === RP-BPI-001 — Release assertions ===
+console.log('\n=== RP-BPI-001 RELEASE ASSERTIONS ===');
+
+// Atteso: 6 release uniche nel sample
+// Tech House:
+//   - release 4803379 (palm of my hands - Odd Mob Extended Remix) — 1 track
+//   - release senza id (walls) — fallback nm_rel_<slug>|label → 1 track
+//   - release senza id (lose control su Solid Grooves Tech House) — 1 track
+// Techno Peak Time / Driving:
+//   - release senza id (code reader su Drumcode) — 1 track
+//   - release senza id (server farm su Drumcode) — 1 track
+//   - release senza id (industrial zone su Truesoul) — 1 track
+// Minimal / Deep Tech:
+//   - release senza id (lose control su Solid Grooves) — DUPLICATA con Tech House (stessa release slug+label) → merge
+//   - release senza id (dub layers su Solid Grooves) — 1 track
+// Totale: 6 release uniche (con lose control merged tra Tech House e Minimal).
+// Nota: le tracce senza release.id usano come chiave nm_rel_<slug>|<labelName_upper>.
+// lose control ha release.slug = '' → chiave nm_rel_|SOLID GROOVES (la stessa tra Tech House e Minimal).
+
+assert('releases array is populated', out.releases.length > 0, true);
+assert('releases is array', Array.isArray(out.releases), true);
+assert('releases is before _meta in JSON keys', Object.keys(out).indexOf('releases'), Object.keys(out).indexOf('_meta') - 1);
+
+// Verifica che ogni release abbia tutti i campi richiesti
+const requiredFields = ['id', 'beatportId', 'name', 'slug', 'url', 'catalogNumber',
+  'releaseDate', 'imageUrl', 'labelId', 'labelName', 'artistIds', 'artistNames',
+  'trackIds', 'trackCount', 'genres', 'bpmAverage', 'keyDistribution', 'firstSeen', 'lastSeen'];
+const releasesWithAllFields = out.releases.every(r => requiredFields.every(f => f in r));
+assert('every release has all required fields', releasesWithAllFields, true);
+
+// Verifica che nessuna release abbia campi privati _bpmSum/_bpmCount nell'output
+const noPrivateFields = out.releases.every(r => !('_bpmSum' in r) && !('_bpmCount' in r));
+assert('no private _bpmSum/_bpmCount in output', noPrivateFields, true);
+
+// Verifica artistIds/artistNames coerenti (stessa lunghezza)
+const artistsCoherent = out.releases.every(r => r.artistIds.length === r.artistNames.length);
+assert('artistIds.length === artistNames.length for every release', artistsCoherent, true);
+
+// Verifica trackCount === trackIds.length
+const trackCountCoherent = out.releases.every(r => r.trackCount === r.trackIds.length);
+assert('trackCount === trackIds.length for every release', trackCountCoherent, true);
+
+// La release di "palm of my hands" (id 4803379) deve avere:
+//   - 2 artistIds (John Summit + venbee come primary) + 1 remixer (Odd Mob) = 3
+//   - 1 track (id 19711254)
+//   - bpmAverage 132 (singola traccia con bpm 132)
+//   - keyDistribution: { '2A': 1 } (camelot 2A dalla traccia)
+//   - genres: ['Tech House']
+//   - labelName: 'EXPERTS ONLY'
+const palmRelease = out.releases.find(r => r.beatportId === 4803379);
+assert('palm release found by beatportId 4803379', !!palmRelease, true);
+if (palmRelease) {
+  assert('palm release has 3 artistIds (John Summit + venbee + Odd Mob)', palmRelease.artistIds.length, 3);
+  assert('palm release has 3 artistNames', palmRelease.artistNames.length, 3);
+  assert('palm release artistNames = [John Summit, venbee, Odd Mob]', palmRelease.artistNames.sort(), ['John Summit', 'venbee', 'Odd Mob'].sort());
+  assert('palm release trackCount = 1', palmRelease.trackCount, 1);
+  assert('palm release trackIds = [19711254]', palmRelease.trackIds, [19711254]);
+  assert('palm release bpmAverage = 132', palmRelease.bpmAverage, 132);
+  assert('palm release keyDistribution = { "2A": 1 }', palmRelease.keyDistribution, { '2A': 1 });
+  assert('palm release genres = ["Tech House"]', palmRelease.genres, ['Tech House']);
+  assert('palm release labelName = "EXPERTS ONLY"', palmRelease.labelName, 'EXPERTS ONLY');
+  assert('palm release url contains beatport.com/release/', palmRelease.url.indexOf('https://www.beatport.com/release/'), 0);
+}
+
+// La release "lose control" (stessa traccia cross-genre Tech House + Minimal / Deep Tech,
+// stessa release.slug='' su Solid Grooves) deve essere MERGED in un singolo record:
+//   - 1 artista (Mochakk)
+//   - 1 traccia (19711256) — dedup trackIds
+//   - 2 generi (Tech House + Minimal / Deep Tech)
+//   - bpmAverage 128 (singola traccia, bpm 128)
+//   - keyDistribution: { '6A': 2 } (2 occorrenze di 6A — una per genere)
+const loseControlRelease = out.releases.find(r => r.trackIds.includes(19711256));
+assert('lose control release found by trackId 19711256', !!loseControlRelease, true);
+if (loseControlRelease) {
+  assert('lose control release has 1 artist (Mochakk)', loseControlRelease.artistNames.length, 1);
+  assert('lose control release artistNames = [Mochakk]', loseControlRelease.artistNames, ['Mochakk']);
+  assert('lose control release trackCount = 1 (dedup)', loseControlRelease.trackCount, 1);
+  assert('lose control release trackIds = [19711256]', loseControlRelease.trackIds, [19711256]);
+  assert('lose control release genres = [Tech House, Minimal / Deep Tech]', loseControlRelease.genres.sort(), ['Tech House', 'Minimal / Deep Tech'].sort());
+  assert('lose control release bpmAverage = 128', loseControlRelease.bpmAverage, 128);
+  // La traccia 19711256 appare 2 volte (Tech House pos 12 + Minimal pos 2), entrambe con keyCamelot 6A
+  assert('lose control release keyDistribution = { "6A": 2 }', loseControlRelease.keyDistribution, { '6A': 2 });
+}
+
+// Adam Beyer's tracks on Drumcode: code reader (19711260) e server farm (19711261)
+// sono 2 release separate (slug diversi), ognuna con 1 traccia.
+// Verifica che esistano 2 release distinte con trackId 19711260 e 19711261
+const codeReaderRel = out.releases.find(r => r.trackIds.includes(19711260));
+const serverFarmRel = out.releases.find(r => r.trackIds.includes(19711261));
+assert('code reader release found', !!codeReaderRel, true);
+assert('server farm release found', !!serverFarmRel, true);
+assert('code reader and server farm are DIFFERENT releases', codeReaderRel !== serverFarmRel, true);
+if (codeReaderRel) {
+  assert('code reader release labelName = DRUMCODE', codeReaderRel.labelName, 'DRUMCODE');
+  assert('code reader release artistNames = [Adam Beyer]', codeReaderRel.artistNames, ['Adam Beyer']);
+  assert('code reader release bpmAverage = 135', codeReaderRel.bpmAverage, 135);
+}
+if (serverFarmRel) {
+  assert('server farm release artistNames = [Adam Beyer, Layton Giordani]', serverFarmRel.artistNames, ['Adam Beyer', 'Layton Giordani']);
+  assert('server farm release bpmAverage = 133', serverFarmRel.bpmAverage, 133);
+}
+
+// dub layers release: track 19711270 su Solid Grooves, artista Mochakk + remixer Wade
+//   → artistIds deve contenere sia Mochakk che Wade
+const dubLayersRel = out.releases.find(r => r.trackIds.includes(19711270));
+assert('dub layers release found', !!dubLayersRel, true);
+if (dubLayersRel) {
+  assert('dub layers release has 2 artists (Mochakk + Wade)', dubLayersRel.artistNames.length, 2);
+  assert('dub layers release artistNames = [Mochakk, Wade]', dubLayersRel.artistNames.sort(), ['Mochakk', 'Wade'].sort());
+  assert('dub layers release bpmAverage = 127', dubLayersRel.bpmAverage, 127);
+}
 
 console.log('\n=== RESULT: ' + pass + ' passed, ' + fail + ' failed ===');
 process.exit(fail > 0 ? 1 : 0);

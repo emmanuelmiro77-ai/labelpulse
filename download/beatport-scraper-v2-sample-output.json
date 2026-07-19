@@ -728,6 +728,234 @@
       "seenAt": "2026-06-21T10:00:00.000Z"
     }
   ],
+  "releases": [
+    {
+      "id": 4803379,
+      "beatportId": 4803379,
+      "name": "palm of my hands - Odd Mob Extended Remix",
+      "slug": "palm-of-my-hands-odd-mob-extended-remix",
+      "url": "https://www.beatport.com/release/palm-of-my-hands-odd-mob-extended-remix/4803379",
+      "catalogNumber": "",
+      "releaseDate": "2024-11-08",
+      "imageUrl": "https://example.com/cover1.jpg",
+      "labelId": 103008,
+      "labelName": "EXPERTS ONLY",
+      "artistIds": [
+        610028,
+        1068825,
+        353575
+      ],
+      "artistNames": [
+        "John Summit",
+        "venbee",
+        "Odd Mob"
+      ],
+      "trackIds": [
+        19711254
+      ],
+      "trackCount": 1,
+      "genres": [
+        "Tech House"
+      ],
+      "bpmAverage": 132,
+      "keyDistribution": {
+        "2A": 1
+      },
+      "firstSeen": "2026-06-21T10:00:00.000Z",
+      "lastSeen": "2026-06-21T10:00:00.000Z"
+    },
+    {
+      "id": 4803380,
+      "beatportId": 4803380,
+      "name": "walls",
+      "slug": "walls",
+      "url": "https://www.beatport.com/release/walls/4803380",
+      "catalogNumber": "",
+      "releaseDate": "2024-09-15",
+      "imageUrl": "https://example.com/cover2.jpg",
+      "labelId": 103008,
+      "labelName": "EXPERTS ONLY",
+      "artistIds": [
+        610028
+      ],
+      "artistNames": [
+        "John Summit"
+      ],
+      "trackIds": [
+        19711255
+      ],
+      "trackCount": 1,
+      "genres": [
+        "Tech House"
+      ],
+      "bpmAverage": 126,
+      "keyDistribution": {
+        "5A": 1
+      },
+      "firstSeen": "2026-06-21T10:00:00.000Z",
+      "lastSeen": "2026-06-21T10:00:00.000Z"
+    },
+    {
+      "id": 4900001,
+      "beatportId": 4900001,
+      "name": "lose control",
+      "slug": "lose-control",
+      "url": "https://www.beatport.com/release/lose-control/4900001",
+      "catalogNumber": "",
+      "releaseDate": "2024-10-01",
+      "imageUrl": "",
+      "labelId": 9001,
+      "labelName": "SOLID GROOVES",
+      "artistIds": [
+        770001
+      ],
+      "artistNames": [
+        "Mochakk"
+      ],
+      "trackIds": [
+        19711256
+      ],
+      "trackCount": 1,
+      "genres": [
+        "Tech House",
+        "Minimal / Deep Tech"
+      ],
+      "bpmAverage": 128,
+      "keyDistribution": {
+        "6A": 2
+      },
+      "firstSeen": "2026-06-21T10:00:00.000Z",
+      "lastSeen": "2026-06-21T10:00:00.000Z"
+    },
+    {
+      "id": 4900002,
+      "beatportId": 4900002,
+      "name": "code reader",
+      "slug": "code-reader",
+      "url": "https://www.beatport.com/release/code-reader/4900002",
+      "catalogNumber": "",
+      "releaseDate": "2024-08-20",
+      "imageUrl": "",
+      "labelId": 1234,
+      "labelName": "DRUMCODE",
+      "artistIds": [
+        1456
+      ],
+      "artistNames": [
+        "Adam Beyer"
+      ],
+      "trackIds": [
+        19711260
+      ],
+      "trackCount": 1,
+      "genres": [
+        "Techno Peak Time / Driving"
+      ],
+      "bpmAverage": 135,
+      "keyDistribution": {
+        "4A": 1
+      },
+      "firstSeen": "2026-06-21T10:00:00.000Z",
+      "lastSeen": "2026-06-21T10:00:00.000Z"
+    },
+    {
+      "id": 4900003,
+      "beatportId": 4900003,
+      "name": "server farm",
+      "slug": "server-farm",
+      "url": "https://www.beatport.com/release/server-farm/4900003",
+      "catalogNumber": "",
+      "releaseDate": "2024-07-10",
+      "imageUrl": "",
+      "labelId": 1234,
+      "labelName": "DRUMCODE",
+      "artistIds": [
+        1456,
+        7800
+      ],
+      "artistNames": [
+        "Adam Beyer",
+        "Layton Giordani"
+      ],
+      "trackIds": [
+        19711261
+      ],
+      "trackCount": 1,
+      "genres": [
+        "Techno Peak Time / Driving"
+      ],
+      "bpmAverage": 133,
+      "keyDistribution": {
+        "5A": 1
+      },
+      "firstSeen": "2026-06-21T10:00:00.000Z",
+      "lastSeen": "2026-06-21T10:00:00.000Z"
+    },
+    {
+      "id": 4900004,
+      "beatportId": 4900004,
+      "name": "industrial zone",
+      "slug": "industrial-zone",
+      "url": "https://www.beatport.com/release/industrial-zone/4900004",
+      "catalogNumber": "",
+      "releaseDate": "2024-09-05",
+      "imageUrl": "",
+      "labelId": 5678,
+      "labelName": "TRUESOUL",
+      "artistIds": [
+        1456
+      ],
+      "artistNames": [
+        "Adam Beyer"
+      ],
+      "trackIds": [
+        19711262
+      ],
+      "trackCount": 1,
+      "genres": [
+        "Techno Peak Time / Driving"
+      ],
+      "bpmAverage": 138,
+      "keyDistribution": {
+        "6A": 1
+      },
+      "firstSeen": "2026-06-21T10:00:00.000Z",
+      "lastSeen": "2026-06-21T10:00:00.000Z"
+    },
+    {
+      "id": 4900005,
+      "beatportId": 4900005,
+      "name": "dub layers",
+      "slug": "dub-layers",
+      "url": "https://www.beatport.com/release/dub-layers/4900005",
+      "catalogNumber": "",
+      "releaseDate": "2024-11-01",
+      "imageUrl": "",
+      "labelId": 9001,
+      "labelName": "SOLID GROOVES",
+      "artistIds": [
+        770001,
+        9999
+      ],
+      "artistNames": [
+        "Mochakk",
+        "Wade"
+      ],
+      "trackIds": [
+        19711270
+      ],
+      "trackCount": 1,
+      "genres": [
+        "Minimal / Deep Tech"
+      ],
+      "bpmAverage": 127,
+      "keyDistribution": {
+        "8A": 1
+      },
+      "firstSeen": "2026-06-21T10:00:00.000Z",
+      "lastSeen": "2026-06-21T10:00:00.000Z"
+    }
+  ],
   "_meta": {
     "source": "beatport",
     "version": 2,
@@ -735,6 +963,7 @@
     "totalLabels": 4,
     "totalArtists": 7,
     "totalTracks": 7,
+    "totalReleases": 7,
     "totalGenres": 3,
     "successGenres": 3,
     "failedGenres": 0

@@ -1,7 +1,8 @@
 // ===================================================================
 // LabelPulse Beatport Scraper v2
-// Captures: labels (con loghi), artists (with tracks), full track list per genre
-// Output: JSON with { genres, labels, artists, tracks, _meta }
+// Captures: labels (con loghi), artists (with tracks), full track list per genre,
+//           releases (RP-BPI-001 — release-level aggregation)
+// Output: JSON with { genres, labels, artists, tracks, releases, _meta }
 // Backward-compatible with v1 import (labels[] unchanged, extra fields ignored)
 //
 // LOGHI LABEL: per ogni label viene catturato imageUrl (CDN Beatport) da
@@ -9,6 +10,14 @@
 // avranno imageUrl='' e l'UI mostrerà un fallback con iniziali+gradiente.
 // I loghi sono mostrati automaticamente nelle card e nel detail dialog
 // del Label Finder dopo l'import.
+//
+// RP-BPI-001 — RELEASE ENTITY:
+// Durante processTracks() viene popolato anche releaseMap. Ogni release è
+// deduplicata per id (fallback slug). Se incontrata più volte (più tracce
+// della stessa release, o stessa release in più generi), vengono aggiornati
+// artistIds, trackIds, genres, bpmAverage e keyDistribution senza creare
+// duplicati. Le release sono mergete globalmente come artistMap e trackMap,
+// e incluse nell'output JSON prima di _meta.
 // ===================================================================
 (async function () {
   'use strict';
@@ -58,10 +67,11 @@
   var sleep = function (ms) { return new Promise(function (r) { setTimeout(r, ms); }); };
 
   // ===================================================================
-  // processTracks: popola labelMap (lm), artistMap (am), trackMap (tm)
+  // processTracks: popola labelMap (lm), artistMap (am), trackMap (tm),
+  //                releaseMap (rm) — RP-BPI-001
   // gn = genre name (string)
   // ===================================================================
-  function processTracks(tracks, gn, lm, am, tm) {
+  function processTracks(tracks, gn, lm, am, tm, rm) {
     for (var i = 0; i < tracks.length; i++) {
       var t = tracks[i];
 
@@ -195,23 +205,160 @@
         var tr = tm.get(trackKey);
         tr.positions.push({ genre: gn, position: pos, points: pts, seenAt: NOW });
       }
+
+      // === RELEASE MAP (RP-BPI-001) ===
+      // Deduplica per release.id (fallback slug). Se la release è già nota,
+      // aggiorna artistIds, trackIds, genres, bpmAverage e keyDistribution
+      // senza creare duplicati.
+      var rel = t.release || null;
+      if (rel && (rel.id || rel.slug)) {
+        var releaseKey = rel.id ? ('bp_rel_' + rel.id) : ('nm_rel_' + (rel.slug || rel.name || '') + '|' + labelName);
+        var releaseId = rel.id || null;
+        var releaseSlug = rel.slug || '';
+        var releaseName = rel.name || '';
+        // URL costruito da slug + id (formato Beatport standard)
+        var releaseUrl = releaseSlug && releaseId
+          ? ('https://www.beatport.com/release/' + releaseSlug + '/' + releaseId)
+          : '';
+        var releaseCatalog = rel.catalog_number || rel.catalogNumber || '';
+        var releaseImage = (rel.image && rel.image.uri) || coverArt || '';
+
+        // Campi specifici della traccia corrente (per aggregazione)
+        var trackId = t.id || null;
+        var trackBpm = (typeof t.bpm === 'number' && t.bpm > 0) ? t.bpm : null;
+        // Per artistIds/Names: includiamo sia primary artists che remixers
+        var allArtistsOnTrack = artistsRaw.concat(remixersRaw);
+
+        if (!rm.has(releaseKey)) {
+          // === NUOVA RELEASE ===
+          var newRel = {
+            id: releaseId,
+            beatportId: releaseId,
+            name: releaseName,
+            slug: releaseSlug,
+            url: releaseUrl,
+            catalogNumber: releaseCatalog,
+            releaseDate: releaseDate,
+            imageUrl: releaseImage,
+            labelId: label.id || null,
+            labelName: labelName,
+            artistIds: [],
+            artistNames: [],
+            trackIds: [],
+            trackCount: 0,
+            genres: [],
+            bpmAverage: null,
+            keyDistribution: {},
+            firstSeen: NOW,
+            lastSeen: NOW
+          };
+          // Popola artistIds/Names (dedup per id, fallback nome)
+          var seenArtistKeys = {};
+          allArtistsOnTrack.forEach(function (a) {
+            var aKey = a.id ? ('bp_' + a.id) : ('nm_' + (a.name || '').toUpperCase().trim());
+            if (!seenArtistKeys[aKey]) {
+              seenArtistKeys[aKey] = true;
+              newRel.artistIds.push(a.id || null);
+              newRel.artistNames.push(a.name || '');
+            }
+          });
+          // Popola trackIds
+          if (trackId != null) {
+            newRel.trackIds.push(trackId);
+          }
+          newRel.trackCount = newRel.trackIds.length;
+          // Popola genres
+          if (newRel.genres.indexOf(gn) === -1) newRel.genres.push(gn);
+          // Inizializza bpmAverage e keyDistribution con la traccia corrente
+          var bpmSum = 0, bpmCount = 0;
+          if (trackBpm != null) { bpmSum += trackBpm; bpmCount++; }
+          newRel.bpmAverage = bpmCount > 0 ? Math.round(bpmSum / bpmCount) : null;
+          if (keyCamelot) {
+            newRel.keyDistribution[keyCamelot] = 1;
+          }
+          rm.set(releaseKey, newRel);
+        } else {
+          // === RELEASE ESISTENTE — AGGIORNA ===
+          var exRel = rm.get(releaseKey);
+          // Aggiorna artistIds/Names (dedup)
+          allArtistsOnTrack.forEach(function (a) {
+            var aKey = a.id ? ('bp_' + a.id) : ('nm_' + (a.name || '').toUpperCase().trim());
+            // Cerca match per chiave in artistIds esistenti
+            var alreadyPresent = false;
+            for (var ai = 0; ai < exRel.artistIds.length; ai++) {
+              var exKey = exRel.artistIds[ai] ? ('bp_' + exRel.artistIds[ai]) : ('nm_' + (exRel.artistNames[ai] || '').toUpperCase().trim());
+              if (exKey === aKey) { alreadyPresent = true; break; }
+            }
+            if (!alreadyPresent) {
+              exRel.artistIds.push(a.id || null);
+              exRel.artistNames.push(a.name || '');
+            }
+          });
+          // Aggiorna trackIds (dedup)
+          if (trackId != null && exRel.trackIds.indexOf(trackId) === -1) {
+            exRel.trackIds.push(trackId);
+          }
+          exRel.trackCount = exRel.trackIds.length;
+          // Aggiorna genres (dedup)
+          if (exRel.genres.indexOf(gn) === -1) exRel.genres.push(gn);
+          // Ricalcola bpmAverage su tutte le tracce note.
+          // Approccio: teniamo running sum e count direttamente nella release.
+          // Poiché non abbiamo accesso diretto a tutte le tracce qui, usiamo
+          // un'approssimazione: accumuliamo _bpmSum e _bpmCount come campi
+          // privati (con underscore) e li usiamo per il calcolo.
+          if (trackBpm != null) {
+            if (typeof exRel._bpmSum !== 'number') {
+              // Prima aggregazione dopo la creazione: inizializza con i valori attuali
+              exRel._bpmSum = exRel.bpmAverage || 0;
+              exRel._bpmCount = exRel.bpmAverage != null ? 1 : 0;
+            }
+            exRel._bpmSum += trackBpm;
+            exRel._bpmCount++;
+            exRel.bpmAverage = Math.round(exRel._bpmSum / exRel._bpmCount);
+          }
+          // Aggiorna keyDistribution
+          if (keyCamelot) {
+            exRel.keyDistribution[keyCamelot] = (exRel.keyDistribution[keyCamelot] || 0) + 1;
+          }
+          // Aggiorna lastSeen
+          exRel.lastSeen = NOW;
+          // Aggiorna labelId/labelName se non erano settati (caso edge)
+          if (!exRel.labelId && label.id) exRel.labelId = label.id;
+          if (!exRel.labelName) exRel.labelName = labelName;
+          // Aggiorna imageUrl se non era settato
+          if (!exRel.imageUrl && releaseImage) exRel.imageUrl = releaseImage;
+          // Aggiorna releaseDate se non era settato (manteniamo il primo valore)
+          if (!exRel.releaseDate && releaseDate) exRel.releaseDate = releaseDate;
+          // Aggiorna catalogNumber se non era settato
+          if (!exRel.catalogNumber && releaseCatalog) exRel.catalogNumber = releaseCatalog;
+          // Aggiorna slug/url/name se non erano settati (release senza id inizialmente)
+          if (!exRel.slug && releaseSlug) exRel.slug = releaseSlug;
+          if (!exRel.url && releaseUrl) exRel.url = releaseUrl;
+          if (!exRel.name && releaseName) exRel.name = releaseName;
+          if (exRel.beatportId == null && releaseId != null) {
+            exRel.beatportId = releaseId;
+            exRel.id = releaseId;
+          }
+        }
+      }
     }
   }
 
   // ===================================================================
-  // fetchGenre: tries multiple sources, returns { lm, am, tm }
+  // fetchGenre: tries multiple sources, returns { lm, am, tm, rm }
+  // RP-BPI-001 — rm (releaseMap) è ritornato insieme a lm/am/tm.
   // ===================================================================
   async function fetchGenre(gid, slug, gn) {
-    var lm = new Map(), am = new Map(), tm = new Map();
+    var lm = new Map(), am = new Map(), tm = new Map(), rm = new Map();
     for (var att = 1; att <= 3; att++) {
-      lm = new Map(); am = new Map(); tm = new Map();
+      lm = new Map(); am = new Map(); tm = new Map(); rm = new Map();
       try {
         var r = await fetch('/api/catalog/genres/' + gid + '/top-100/', { credentials: 'include' });
         if (r.ok) {
           var d = await r.json(), tr = d.results || d.tracks || d;
           if (Array.isArray(tr) && tr.length > 0) {
             console.log(S + ' %c API interna: ' + tr.length + ' tracce', c1, cOk);
-            processTracks(tr, gn, lm, am, tm);
+            processTracks(tr, gn, lm, am, tm, rm);
           }
         }
       } catch (e) { /* ignore */ }
@@ -223,7 +370,7 @@
           var d2 = await r2.json(), tr2 = d2.results || d2;
           if (Array.isArray(tr2) && tr2.length > 0) {
             console.log(S + ' %c API v4: ' + tr2.length + ' tracce', c1, cOk);
-            processTracks(tr2, gn, lm, am, tm);
+            processTracks(tr2, gn, lm, am, tm, rm);
           }
         }
       } catch (e) { /* ignore */ }
@@ -241,13 +388,13 @@
                 var res = q[qi].state && q[qi].state.data && q[qi].state.data.results;
                 if (Array.isArray(res) && res.length > 0) {
                   console.log(S + ' %c Next.js data: ' + res.length + ' tracce', c1, cOk);
-                  processTracks(res, gn, lm, am, tm);
+                  processTracks(res, gn, lm, am, tm, rm);
                   break;
                 }
                 var trk = q[qi].state && q[qi].state.data && q[qi].state.data.tracks;
                 if (Array.isArray(trk) && trk.length > 0) {
                   console.log(S + ' %c Next.js data: ' + trk.length + ' tracce', c1, cOk);
-                  processTracks(trk, gn, lm, am, tm);
+                  processTracks(trk, gn, lm, am, tm, rm);
                   break;
                 }
               }
@@ -278,7 +425,7 @@
             });
             if (htmlTracks.length > 0) {
               console.log(S + ' %c HTML parsing (label-only): ' + htmlTracks.length + ' tracce', c1, cOk);
-              processTracks(htmlTracks, gn, lm, am, tm);
+              processTracks(htmlTracks, gn, lm, am, tm, rm);
             }
           }
         }
@@ -292,7 +439,7 @@
       }
     }
     if (lm.size === 0) console.log(S + ' %c Nessun dato dopo 3 tentativi', c1, cErr);
-    return { lm: lm, am: am, tm: tm };
+    return { lm: lm, am: am, tm: tm, rm: rm };
   }
 
   // ===================================================================
@@ -304,6 +451,8 @@
 
   var gR = {}, tL = 0, sC = 0, fC = 0;
   var globalAM = new Map(), globalTM = new Map();
+  // RP-BPI-001 — releaseMap globale, mergeto per-genre come globalAM e globalTM.
+  var globalRM = new Map();
 
   for (var gi = 0; gi < G.length; gi++) {
     var g = G[gi];
@@ -345,10 +494,79 @@
       }
     });
 
+    // === RP-BPI-001 — Merge releases across genres ===
+    // Stessa logica di aggregazione usata in processTracks per le release
+    // già esistenti: dedup artistIds, trackIds, genres; ricalcola bpmAverage;
+    // aggiorna keyDistribution; aggiorna lastSeen e campi mancanti.
+    res.rm.forEach(function (v, k) {
+      if (globalRM.has(k)) {
+        var exR = globalRM.get(k);
+        // Merge artistIds/Names (dedup per chiave bp_<id> o nm_<name>)
+        v.artistIds.forEach(function (aid, idx) {
+          var aKey = aid ? ('bp_' + aid) : ('nm_' + (v.artistNames[idx] || '').toUpperCase().trim());
+          var alreadyPresent = false;
+          for (var ai = 0; ai < exR.artistIds.length; ai++) {
+            var exKey = exR.artistIds[ai] ? ('bp_' + exR.artistIds[ai]) : ('nm_' + (exR.artistNames[ai] || '').toUpperCase().trim());
+            if (exKey === aKey) { alreadyPresent = true; break; }
+          }
+          if (!alreadyPresent) {
+            exR.artistIds.push(aid);
+            exR.artistNames.push(v.artistNames[idx] || '');
+          }
+        });
+        // Merge trackIds (dedup)
+        v.trackIds.forEach(function (tid) {
+          if (tid != null && exR.trackIds.indexOf(tid) === -1) exR.trackIds.push(tid);
+        });
+        exR.trackCount = exR.trackIds.length;
+        // Merge genres (dedup)
+        v.genres.forEach(function (gn2) {
+          if (exR.genres.indexOf(gn2) === -1) exR.genres.push(gn2);
+        });
+        // Ricalcola bpmAverage: combina i running sums delle due mappe.
+        // Inizializza _bpmSum/_bpmCount sul target se non presenti.
+        if (typeof exR._bpmSum !== 'number') {
+          exR._bpmSum = exR.bpmAverage || 0;
+          exR._bpmCount = exR.bpmAverage != null ? 1 : 0;
+        }
+        if (typeof v._bpmSum === 'number' && typeof v._bpmCount === 'number') {
+          // La release source ha accumulatori → combinali
+          exR._bpmSum += v._bpmSum;
+          exR._bpmCount += v._bpmCount;
+        } else if (v.bpmAverage != null) {
+          // Fallback: usa il bpmAverage già calcolato (1 sample)
+          exR._bpmSum += v.bpmAverage;
+          exR._bpmCount += 1;
+        }
+        exR.bpmAverage = exR._bpmCount > 0 ? Math.round(exR._bpmSum / exR._bpmCount) : null;
+        // Merge keyDistribution
+        for (var kk in v.keyDistribution) {
+          exR.keyDistribution[kk] = (exR.keyDistribution[kk] || 0) + v.keyDistribution[kk];
+        }
+        // Aggiorna lastSeen
+        if (v.lastSeen > exR.lastSeen) exR.lastSeen = v.lastSeen;
+        // Aggiorna campi mancanti sul target
+        if (!exR.labelId && v.labelId) exR.labelId = v.labelId;
+        if (!exR.labelName && v.labelName) exR.labelName = v.labelName;
+        if (!exR.imageUrl && v.imageUrl) exR.imageUrl = v.imageUrl;
+        if (!exR.releaseDate && v.releaseDate) exR.releaseDate = v.releaseDate;
+        if (!exR.catalogNumber && v.catalogNumber) exR.catalogNumber = v.catalogNumber;
+        if (!exR.slug && v.slug) exR.slug = v.slug;
+        if (!exR.url && v.url) exR.url = v.url;
+        if (!exR.name && v.name) exR.name = v.name;
+        if (exR.beatportId == null && v.beatportId != null) {
+          exR.beatportId = v.beatportId;
+          exR.id = v.beatportId;
+        }
+      } else {
+        globalRM.set(k, v);
+      }
+    });
+
     if (la.length > 0) {
       sC++;
       var logosHere = la.filter(function (l) { return l.imageUrl; }).length;
-      console.log(S + ' %c  OK ' + la.length + ' label (loghi: ' + logosHere + '/' + la.length + ') \u2014 ' + res.am.size + ' artisti \u2014 ' + res.tm.size + ' tracce \u2014 #1: ' + la[0].name, c1, cOk);
+      console.log(S + ' %c  OK ' + la.length + ' label (loghi: ' + logosHere + '/' + la.length + ') \u2014 ' + res.am.size + ' artisti \u2014 ' + res.tm.size + ' tracce \u2014 ' + res.rm.size + ' release \u2014 #1: ' + la[0].name, c1, cOk);
     } else {
       fC++;
     }
@@ -438,6 +656,26 @@
   var tracksArr = Array.from(globalTM.values());
 
   // ===================================================================
+  // BUILD RELEASES (RP-BPI-001 — global, deduplicated)
+  // ===================================================================
+  // Le release vengono estratte da globalRM. I campi privati _bpmSum e
+  // _bpmCount (usati come accumulatori running) vengono rimossi prima
+  // della serializzazione per non inquinare l'output JSON.
+  var releasesArr = Array.from(globalRM.values()).map(function (r) {
+    // Clona shallow + rimuovi campi privati
+    var clean = {};
+    for (var fk in r) {
+      if (fk === '_bpmSum' || fk === '_bpmCount') continue;
+      clean[fk] = r[fk];
+    }
+    return clean;
+  });
+  // Sort per trackCount desc (release con più tracce in cima)
+  releasesArr.sort(function (a, b) {
+    return b.trackCount - a.trackCount;
+  });
+
+  // ===================================================================
   // OUTPUT
   // ===================================================================
   // Conteggio loghi acquisiti (diagnostica visibile in console + nel JSON)
@@ -449,6 +687,8 @@
     labels: labelArr,
     artists: artistsArr,
     tracks: tracksArr,
+    // RP-BPI-001 — releases array prima di _meta, come richiesto.
+    releases: releasesArr,
     _meta: {
       source: 'beatport',
       version: 2,
@@ -457,6 +697,8 @@
       totalLabelsWithLogo: logosCount,
       totalArtists: artistsArr.length,
       totalTracks: tracksArr.length,
+      // RP-BPI-001 — conteggio release nell'output JSON.
+      totalReleases: releasesArr.length,
       totalGenres: G.length,
       successGenres: sC,
       failedGenres: fC
@@ -476,7 +718,7 @@
 
   console.log(S + ' %c========================================', c1, c1);
   console.log(S + ' %cCOMPLETATO!', c1, cOk);
-  console.log(S + ' %c' + Object.keys(lM).length + ' label, ' + artistsArr.length + ' artisti, ' + tracksArr.length + ' tracce da ' + sC + '/' + G.length + ' generi', c1, cOk);
+  console.log(S + ' %c' + Object.keys(lM).length + ' label, ' + artistsArr.length + ' artisti, ' + tracksArr.length + ' tracce, ' + releasesArr.length + ' release da ' + sC + '/' + G.length + ' generi', c1, cOk);
   console.log(S + ' %cLoghi label acquisiti: ' + logosCount + '/' + labelArr.length + (labelArr.length > 0 ? ' (' + Math.round(logosCount * 100 / labelArr.length) + '%)' : ''), c1, cOk);
   if (fC > 0) console.log(S + ' %c ' + fC + ' generi senza dati', c1, cErr);
   console.log(S + ' %cFile JSON scaricato! Importa in LabelPulse', c1, cOk);
