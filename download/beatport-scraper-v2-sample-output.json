@@ -6,8 +6,25 @@
   ],
   "labels": [
     {
-      "id": "lbl_experts_only",
+      "canonicalId": "lbl_000001",
+      "beatportId": 103008,
       "name": "EXPERTS ONLY",
+      "slug": "experts-only",
+      "imageUrl": "https://example.com/label-experts.jpg",
+      "artistIds": [
+        "art_000001",
+        "art_000002"
+      ],
+      "releaseIds": [
+        "rel_000001",
+        "rel_000002"
+      ],
+      "trackIds": [
+        "trk_000001",
+        "trk_000002"
+      ],
+      "id": "lbl_experts_only",
+      "key": "bp_lbl_103008",
       "genres": [
         "Tech House"
       ],
@@ -18,10 +35,6 @@
         "Tech House": 196
       },
       "trending": true,
-      "beatportId": 103008,
-      "slug": "experts-only",
-      "imageUrl": "https://example.com/label-experts.jpg",
-      "key": "bp_lbl_103008",
       "trendingRankByGenre": {
         "Tech House": 1
       },
@@ -30,8 +43,24 @@
       }
     },
     {
-      "id": "lbl_solid_grooves",
+      "canonicalId": "lbl_000002",
+      "beatportId": 9001,
       "name": "SOLID GROOVES",
+      "slug": "solid-grooves",
+      "imageUrl": "",
+      "artistIds": [
+        "art_000004"
+      ],
+      "releaseIds": [
+        "rel_000003",
+        "rel_000008"
+      ],
+      "trackIds": [
+        "trk_000003",
+        "trk_000008"
+      ],
+      "id": "lbl_solid_grooves",
+      "key": "bp_lbl_9001",
       "genres": [
         "Tech House",
         "Minimal / Deep Tech"
@@ -45,9 +74,6 @@
         "Minimal / Deep Tech": 175
       },
       "trending": true,
-      "beatportId": 9001,
-      "slug": "solid-grooves",
-      "key": "bp_lbl_9001",
       "trendingRankByGenre": {
         "Tech House": 2,
         "Minimal / Deep Tech": 1
@@ -58,8 +84,25 @@
       }
     },
     {
-      "id": "lbl_drumcode",
+      "canonicalId": "lbl_000003",
+      "beatportId": 1234,
       "name": "DRUMCODE",
+      "slug": "drumcode",
+      "imageUrl": "",
+      "artistIds": [
+        "art_000005",
+        "art_000006"
+      ],
+      "releaseIds": [
+        "rel_000004",
+        "rel_000005"
+      ],
+      "trackIds": [
+        "trk_000004",
+        "trk_000005"
+      ],
+      "id": "lbl_drumcode",
+      "key": "bp_lbl_1234",
       "genres": [
         "Techno Peak Time / Driving"
       ],
@@ -70,9 +113,6 @@
         "Techno Peak Time / Driving": 191
       },
       "trending": true,
-      "beatportId": 1234,
-      "slug": "drumcode",
-      "key": "bp_lbl_1234",
       "trendingRankByGenre": {
         "Techno Peak Time / Driving": 1
       },
@@ -81,8 +121,22 @@
       }
     },
     {
-      "id": "lbl_truesoul",
+      "canonicalId": "lbl_000004",
+      "beatportId": 5678,
       "name": "TRUESOUL",
+      "slug": "truesoul",
+      "imageUrl": "",
+      "artistIds": [
+        "art_000005"
+      ],
+      "releaseIds": [
+        "rel_000006"
+      ],
+      "trackIds": [
+        "trk_000006"
+      ],
+      "id": "lbl_truesoul",
+      "key": "bp_lbl_5678",
       "genres": [
         "Techno Peak Time / Driving"
       ],
@@ -93,9 +147,6 @@
         "Techno Peak Time / Driving": 83
       },
       "trending": true,
-      "beatportId": 5678,
-      "slug": "truesoul",
-      "key": "bp_lbl_5678",
       "trendingRankByGenre": {
         "Techno Peak Time / Driving": 2
       },
@@ -106,11 +157,37 @@
   ],
   "artists": [
     {
-      "id": "bp_1456",
+      "canonicalId": "art_000005",
       "beatportId": 1456,
       "name": "Adam Beyer",
       "slug": "adam-beyer",
       "imageUrl": "",
+      "labelIds": [
+        "lbl_000003",
+        "lbl_000004"
+      ],
+      "releaseIds": [
+        "rel_000004",
+        "rel_000005",
+        "rel_000006"
+      ],
+      "trackIds": [
+        "trk_000004",
+        "trk_000005",
+        "trk_000006"
+      ],
+      "totalPoints": 274,
+      "bestPosition": 3,
+      "isRemixerOnly": false,
+      "trending": true,
+      "trendingRankByGenre": {
+        "Techno Peak Time / Driving": 3
+      },
+      "trendingPointsByGenre": {
+        "Techno Peak Time / Driving": 274
+      },
+      "id": "bp_1456",
+      "key": "bp_1456",
       "genres": [
         "Techno Peak Time / Driving"
       ],
@@ -175,28 +252,39 @@
       "labelsPublishedOn": [
         "DRUMCODE",
         "TRUESOUL"
-      ],
-      "labelIds": [
-        "bp_lbl_1234",
-        "bp_lbl_5678"
-      ],
-      "totalPoints": 274,
-      "bestPosition": 3,
-      "isRemixerOnly": false,
-      "trending": true,
-      "trendingRankByGenre": {
-        "Techno Peak Time / Driving": 3
-      },
-      "trendingPointsByGenre": {
-        "Techno Peak Time / Driving": 274
-      }
+      ]
     },
     {
-      "id": "bp_770001",
+      "canonicalId": "art_000004",
       "beatportId": 770001,
       "name": "Mochakk",
       "slug": "mochakk",
       "imageUrl": "",
+      "labelIds": [
+        "lbl_000002"
+      ],
+      "releaseIds": [
+        "rel_000003",
+        "rel_000008"
+      ],
+      "trackIds": [
+        "trk_000003",
+        "trk_000008"
+      ],
+      "totalPoints": 264,
+      "bestPosition": 2,
+      "isRemixerOnly": false,
+      "trending": true,
+      "trendingRankByGenre": {
+        "Tech House": 12,
+        "Minimal / Deep Tech": 2
+      },
+      "trendingPointsByGenre": {
+        "Tech House": 89,
+        "Minimal / Deep Tech": 175
+      },
+      "id": "bp_770001",
+      "key": "bp_770001",
       "genres": [
         "Tech House",
         "Minimal / Deep Tech"
@@ -263,29 +351,37 @@
       },
       "labelsPublishedOn": [
         "SOLID GROOVES"
-      ],
-      "labelIds": [
-        "bp_lbl_9001"
-      ],
-      "totalPoints": 264,
-      "bestPosition": 2,
-      "isRemixerOnly": false,
-      "trending": true,
-      "trendingRankByGenre": {
-        "Tech House": 12,
-        "Minimal / Deep Tech": 2
-      },
-      "trendingPointsByGenre": {
-        "Tech House": 89,
-        "Minimal / Deep Tech": 175
-      }
+      ]
     },
     {
-      "id": "bp_610028",
+      "canonicalId": "art_000001",
       "beatportId": 610028,
       "name": "John Summit",
       "slug": "john-summit",
       "imageUrl": "https://example.com/summit.jpg",
+      "labelIds": [
+        "lbl_000001"
+      ],
+      "releaseIds": [
+        "rel_000001",
+        "rel_000002"
+      ],
+      "trackIds": [
+        "trk_000001",
+        "trk_000002"
+      ],
+      "totalPoints": 196,
+      "bestPosition": 1,
+      "isRemixerOnly": false,
+      "trending": true,
+      "trendingRankByGenre": {
+        "Tech House": 1
+      },
+      "trendingPointsByGenre": {
+        "Tech House": 196
+      },
+      "id": "bp_610028",
+      "key": "bp_610028",
       "genres": [
         "Tech House"
       ],
@@ -331,11 +427,24 @@
       },
       "labelsPublishedOn": [
         "EXPERTS ONLY"
-      ],
+      ]
+    },
+    {
+      "canonicalId": "art_000002",
+      "beatportId": 1068825,
+      "name": "venbee",
+      "slug": "venbee",
+      "imageUrl": "https://example.com/venbee.jpg",
       "labelIds": [
-        "bp_lbl_103008"
+        "lbl_000001"
       ],
-      "totalPoints": 196,
+      "releaseIds": [
+        "rel_000001"
+      ],
+      "trackIds": [
+        "trk_000001"
+      ],
+      "totalPoints": 100,
       "bestPosition": 1,
       "isRemixerOnly": false,
       "trending": true,
@@ -343,15 +452,10 @@
         "Tech House": 1
       },
       "trendingPointsByGenre": {
-        "Tech House": 196
-      }
-    },
-    {
+        "Tech House": 100
+      },
       "id": "bp_1068825",
-      "beatportId": 1068825,
-      "name": "venbee",
-      "slug": "venbee",
-      "imageUrl": "https://example.com/venbee.jpg",
+      "key": "bp_1068825",
       "genres": [
         "Tech House"
       ],
@@ -379,27 +483,35 @@
       },
       "labelsPublishedOn": [
         "EXPERTS ONLY"
-      ],
-      "labelIds": [
-        "bp_lbl_103008"
-      ],
-      "totalPoints": 100,
-      "bestPosition": 1,
-      "isRemixerOnly": false,
-      "trending": true,
-      "trendingRankByGenre": {
-        "Tech House": 1
-      },
-      "trendingPointsByGenre": {
-        "Tech House": 100
-      }
+      ]
     },
     {
-      "id": "bp_7800",
+      "canonicalId": "art_000006",
       "beatportId": 7800,
       "name": "Layton Giordani",
       "slug": "layton-giordani",
       "imageUrl": "",
+      "labelIds": [
+        "lbl_000003"
+      ],
+      "releaseIds": [
+        "rel_000005"
+      ],
+      "trackIds": [
+        "trk_000005"
+      ],
+      "totalPoints": 93,
+      "bestPosition": 8,
+      "isRemixerOnly": false,
+      "trending": true,
+      "trendingRankByGenre": {
+        "Techno Peak Time / Driving": 8
+      },
+      "trendingPointsByGenre": {
+        "Techno Peak Time / Driving": 93
+      },
+      "id": "bp_7800",
+      "key": "bp_7800",
       "genres": [
         "Techno Peak Time / Driving"
       ],
@@ -427,76 +539,101 @@
       },
       "labelsPublishedOn": [
         "DRUMCODE"
-      ],
-      "labelIds": [
-        "bp_lbl_1234"
-      ],
-      "totalPoints": 93,
-      "bestPosition": 8,
-      "isRemixerOnly": false,
-      "trending": true,
-      "trendingRankByGenre": {
-        "Techno Peak Time / Driving": 8
-      },
-      "trendingPointsByGenre": {
-        "Techno Peak Time / Driving": 93
-      }
+      ]
     },
     {
-      "id": "bp_353575",
+      "canonicalId": "art_000003",
       "beatportId": 353575,
       "name": "Odd Mob",
       "slug": "odd-mob",
       "imageUrl": "https://example.com/odd.jpg",
+      "labelIds": [
+        "lbl_000001"
+      ],
+      "releaseIds": [],
+      "trackIds": [],
+      "totalPoints": 0,
+      "bestPosition": 1,
+      "isRemixerOnly": true,
+      "trending": true,
+      "trendingRankByGenre": {},
+      "trendingPointsByGenre": {},
+      "id": "bp_353575",
+      "key": "bp_353575",
       "genres": [
         "Tech House"
       ],
       "tracksByGenre": {},
       "labelsPublishedOn": [
         "EXPERTS ONLY"
-      ],
-      "labelIds": [
-        "bp_lbl_103008"
-      ],
-      "totalPoints": 0,
-      "bestPosition": 1,
-      "isRemixerOnly": true,
-      "trending": true,
-      "trendingRankByGenre": {},
-      "trendingPointsByGenre": {}
+      ]
     },
     {
-      "id": "bp_9999",
+      "canonicalId": "art_000008",
       "beatportId": 9999,
       "name": "Wade",
       "slug": "wade",
       "imageUrl": "",
+      "labelIds": [
+        "lbl_000002"
+      ],
+      "releaseIds": [],
+      "trackIds": [],
+      "totalPoints": 0,
+      "bestPosition": 25,
+      "isRemixerOnly": true,
+      "trending": true,
+      "trendingRankByGenre": {},
+      "trendingPointsByGenre": {},
+      "id": "bp_9999",
+      "key": "bp_9999",
       "genres": [
         "Minimal / Deep Tech"
       ],
       "tracksByGenre": {},
       "labelsPublishedOn": [
         "SOLID GROOVES"
-      ],
-      "labelIds": [
-        "bp_lbl_9001"
-      ],
-      "totalPoints": 0,
-      "bestPosition": 25,
-      "isRemixerOnly": true,
-      "trending": true,
-      "trendingRankByGenre": {},
-      "trendingPointsByGenre": {}
+      ]
     }
   ],
   "tracks": [
     {
-      "id": 19711254,
-      "key": "bp_19711254",
+      "canonicalId": "trk_000001",
       "beatportId": 19711254,
       "name": "palm of my hands",
       "mixName": "Odd Mob Extended Remix",
       "slug": "palm-of-my-hands",
+      "bpm": 132,
+      "keyCamelot": "2A",
+      "keyName": "Eb Minor",
+      "releaseDate": "2024-11-08",
+      "coverArt": "https://example.com/cover1.jpg",
+      "sampleUrl": "https://example.com/sample1.mp3",
+      "primaryGenre": "Tech House",
+      "subGenre": null,
+      "releaseId": "rel_000001",
+      "labelId": "lbl_000001",
+      "artistIds": [
+        "art_000001",
+        "art_000002"
+      ],
+      "remixerIds": [
+        "art_000003"
+      ],
+      "positions": [
+        {
+          "genre": "Tech House",
+          "position": 1,
+          "points": 100,
+          "seenAt": "2026-06-21T10:00:00.000Z"
+        }
+      ],
+      "seenAt": "2026-06-21T10:00:00.000Z",
+      "id": 19711254,
+      "key": "bp_19711254",
+      "label": "EXPERTS ONLY",
+      "beatportLabelId": 103008,
+      "labelSlug": "experts-only",
       "artists": [
         {
           "id": 610028,
@@ -515,69 +652,28 @@
           "name": "Odd Mob",
           "slug": "odd-mob"
         }
-      ],
-      "artistIds": [
-        "bp_610028",
-        "bp_1068825"
-      ],
-      "remixerIds": [
-        "bp_353575"
-      ],
-      "label": "EXPERTS ONLY",
-      "labelId": 103008,
-      "labelKey": "bp_lbl_103008",
-      "labelSlug": "experts-only",
-      "releaseId": "bp_rel_4803379",
-      "primaryGenre": "Tech House",
-      "subGenre": null,
-      "bpm": 132,
-      "keyCamelot": "2A",
-      "keyName": "Eb Minor",
-      "releaseDate": "2024-11-08",
-      "coverArt": "https://example.com/cover1.jpg",
-      "sampleUrl": "https://example.com/sample1.mp3",
-      "positions": [
-        {
-          "genre": "Tech House",
-          "position": 1,
-          "points": 100,
-          "seenAt": "2026-06-21T10:00:00.000Z"
-        }
-      ],
-      "seenAt": "2026-06-21T10:00:00.000Z"
+      ]
     },
     {
-      "id": 19711255,
-      "key": "bp_19711255",
+      "canonicalId": "trk_000002",
       "beatportId": 19711255,
       "name": "walls",
       "mixName": "Original Mix",
       "slug": "walls",
-      "artists": [
-        {
-          "id": 610028,
-          "name": "John Summit",
-          "slug": "john-summit"
-        }
-      ],
-      "remixers": [],
-      "artistIds": [
-        "bp_610028"
-      ],
-      "remixerIds": [],
-      "label": "EXPERTS ONLY",
-      "labelId": 103008,
-      "labelKey": "bp_lbl_103008",
-      "labelSlug": "experts-only",
-      "releaseId": "bp_rel_4803380",
-      "primaryGenre": "Tech House",
-      "subGenre": "Latin Tech",
       "bpm": 126,
       "keyCamelot": "5A",
       "keyName": "A Minor",
       "releaseDate": "2024-09-15",
       "coverArt": "https://example.com/cover2.jpg",
       "sampleUrl": "",
+      "primaryGenre": "Tech House",
+      "subGenre": "Latin Tech",
+      "releaseId": "rel_000002",
+      "labelId": "lbl_000001",
+      "artistIds": [
+        "art_000001"
+      ],
+      "remixerIds": [],
       "positions": [
         {
           "genre": "Tech House",
@@ -586,40 +682,41 @@
           "seenAt": "2026-06-21T10:00:00.000Z"
         }
       ],
-      "seenAt": "2026-06-21T10:00:00.000Z"
+      "seenAt": "2026-06-21T10:00:00.000Z",
+      "id": 19711255,
+      "key": "bp_19711255",
+      "label": "EXPERTS ONLY",
+      "beatportLabelId": 103008,
+      "labelSlug": "experts-only",
+      "artists": [
+        {
+          "id": 610028,
+          "name": "John Summit",
+          "slug": "john-summit"
+        }
+      ],
+      "remixers": []
     },
     {
-      "id": 19711256,
-      "key": "bp_19711256",
+      "canonicalId": "trk_000003",
       "beatportId": 19711256,
       "name": "lose control",
       "mixName": "Original Mix",
       "slug": "lose-control",
-      "artists": [
-        {
-          "id": 770001,
-          "name": "Mochakk",
-          "slug": "mochakk"
-        }
-      ],
-      "remixers": [],
-      "artistIds": [
-        "bp_770001"
-      ],
-      "remixerIds": [],
-      "label": "SOLID GROOVES",
-      "labelId": 9001,
-      "labelKey": "bp_lbl_9001",
-      "labelSlug": "solid-grooves",
-      "releaseId": "bp_rel_4900001",
-      "primaryGenre": "Tech House",
-      "subGenre": null,
       "bpm": 128,
       "keyCamelot": "6A",
       "keyName": "G Minor",
       "releaseDate": "2024-10-01",
       "coverArt": "",
       "sampleUrl": "",
+      "primaryGenre": "Tech House",
+      "subGenre": null,
+      "releaseId": "rel_000003",
+      "labelId": "lbl_000002",
+      "artistIds": [
+        "art_000004"
+      ],
+      "remixerIds": [],
       "positions": [
         {
           "genre": "Tech House",
@@ -634,40 +731,41 @@
           "seenAt": "2026-06-21T10:00:00.000Z"
         }
       ],
-      "seenAt": "2026-06-21T10:00:00.000Z"
+      "seenAt": "2026-06-21T10:00:00.000Z",
+      "id": 19711256,
+      "key": "bp_19711256",
+      "label": "SOLID GROOVES",
+      "beatportLabelId": 9001,
+      "labelSlug": "solid-grooves",
+      "artists": [
+        {
+          "id": 770001,
+          "name": "Mochakk",
+          "slug": "mochakk"
+        }
+      ],
+      "remixers": []
     },
     {
-      "id": 19711260,
-      "key": "bp_19711260",
+      "canonicalId": "trk_000004",
       "beatportId": 19711260,
       "name": "code reader",
       "mixName": "Original Mix",
       "slug": "code-reader",
-      "artists": [
-        {
-          "id": 1456,
-          "name": "Adam Beyer",
-          "slug": "adam-beyer"
-        }
-      ],
-      "remixers": [],
-      "artistIds": [
-        "bp_1456"
-      ],
-      "remixerIds": [],
-      "label": "DRUMCODE",
-      "labelId": 1234,
-      "labelKey": "bp_lbl_1234",
-      "labelSlug": "drumcode",
-      "releaseId": "bp_rel_4900002",
-      "primaryGenre": "Techno Peak Time / Driving",
-      "subGenre": null,
       "bpm": 135,
       "keyCamelot": "4A",
       "keyName": "F Minor",
       "releaseDate": "2024-08-20",
       "coverArt": "",
       "sampleUrl": "",
+      "primaryGenre": "Techno Peak Time / Driving",
+      "subGenre": null,
+      "releaseId": "rel_000004",
+      "labelId": "lbl_000003",
+      "artistIds": [
+        "art_000005"
+      ],
+      "remixerIds": [],
       "positions": [
         {
           "genre": "Techno Peak Time / Driving",
@@ -676,15 +774,56 @@
           "seenAt": "2026-06-21T10:00:00.000Z"
         }
       ],
-      "seenAt": "2026-06-21T10:00:00.000Z"
+      "seenAt": "2026-06-21T10:00:00.000Z",
+      "id": 19711260,
+      "key": "bp_19711260",
+      "label": "DRUMCODE",
+      "beatportLabelId": 1234,
+      "labelSlug": "drumcode",
+      "artists": [
+        {
+          "id": 1456,
+          "name": "Adam Beyer",
+          "slug": "adam-beyer"
+        }
+      ],
+      "remixers": []
     },
     {
-      "id": 19711261,
-      "key": "bp_19711261",
+      "canonicalId": "trk_000005",
       "beatportId": 19711261,
       "name": "server farm",
       "mixName": "Original Mix",
       "slug": "server-farm",
+      "bpm": 133,
+      "keyCamelot": "5A",
+      "keyName": "C Minor",
+      "releaseDate": "2024-07-10",
+      "coverArt": "",
+      "sampleUrl": "",
+      "primaryGenre": "Techno Peak Time / Driving",
+      "subGenre": null,
+      "releaseId": "rel_000005",
+      "labelId": "lbl_000003",
+      "artistIds": [
+        "art_000005",
+        "art_000006"
+      ],
+      "remixerIds": [],
+      "positions": [
+        {
+          "genre": "Techno Peak Time / Driving",
+          "position": 8,
+          "points": 93,
+          "seenAt": "2026-06-21T10:00:00.000Z"
+        }
+      ],
+      "seenAt": "2026-06-21T10:00:00.000Z",
+      "id": 19711261,
+      "key": "bp_19711261",
+      "label": "DRUMCODE",
+      "beatportLabelId": 1234,
+      "labelSlug": "drumcode",
       "artists": [
         {
           "id": 1456,
@@ -697,67 +836,28 @@
           "slug": "layton-giordani"
         }
       ],
-      "remixers": [],
-      "artistIds": [
-        "bp_1456",
-        "bp_7800"
-      ],
-      "remixerIds": [],
-      "label": "DRUMCODE",
-      "labelId": 1234,
-      "labelKey": "bp_lbl_1234",
-      "labelSlug": "drumcode",
-      "releaseId": "bp_rel_4900003",
-      "primaryGenre": "Techno Peak Time / Driving",
-      "subGenre": null,
-      "bpm": 133,
-      "keyCamelot": "5A",
-      "keyName": "C Minor",
-      "releaseDate": "2024-07-10",
-      "coverArt": "",
-      "sampleUrl": "",
-      "positions": [
-        {
-          "genre": "Techno Peak Time / Driving",
-          "position": 8,
-          "points": 93,
-          "seenAt": "2026-06-21T10:00:00.000Z"
-        }
-      ],
-      "seenAt": "2026-06-21T10:00:00.000Z"
+      "remixers": []
     },
     {
-      "id": 19711262,
-      "key": "bp_19711262",
+      "canonicalId": "trk_000006",
       "beatportId": 19711262,
       "name": "industrial zone",
       "mixName": "Original Mix",
       "slug": "industrial-zone",
-      "artists": [
-        {
-          "id": 1456,
-          "name": "Adam Beyer",
-          "slug": "adam-beyer"
-        }
-      ],
-      "remixers": [],
-      "artistIds": [
-        "bp_1456"
-      ],
-      "remixerIds": [],
-      "label": "TRUESOUL",
-      "labelId": 5678,
-      "labelKey": "bp_lbl_5678",
-      "labelSlug": "truesoul",
-      "releaseId": "bp_rel_4900004",
-      "primaryGenre": "Techno Peak Time / Driving",
-      "subGenre": null,
       "bpm": 138,
       "keyCamelot": "6A",
       "keyName": "G Minor",
       "releaseDate": "2024-09-05",
       "coverArt": "",
       "sampleUrl": "",
+      "primaryGenre": "Techno Peak Time / Driving",
+      "subGenre": null,
+      "releaseId": "rel_000006",
+      "labelId": "lbl_000004",
+      "artistIds": [
+        "art_000005"
+      ],
+      "remixerIds": [],
       "positions": [
         {
           "genre": "Techno Peak Time / Driving",
@@ -766,15 +866,57 @@
           "seenAt": "2026-06-21T10:00:00.000Z"
         }
       ],
-      "seenAt": "2026-06-21T10:00:00.000Z"
+      "seenAt": "2026-06-21T10:00:00.000Z",
+      "id": 19711262,
+      "key": "bp_19711262",
+      "label": "TRUESOUL",
+      "beatportLabelId": 5678,
+      "labelSlug": "truesoul",
+      "artists": [
+        {
+          "id": 1456,
+          "name": "Adam Beyer",
+          "slug": "adam-beyer"
+        }
+      ],
+      "remixers": []
     },
     {
-      "id": 19711270,
-      "key": "bp_19711270",
+      "canonicalId": "trk_000008",
       "beatportId": 19711270,
       "name": "dub layers",
       "mixName": "Dub Mix",
       "slug": "dub-layers",
+      "bpm": 127,
+      "keyCamelot": "8A",
+      "keyName": "A Minor",
+      "releaseDate": "2024-11-01",
+      "coverArt": "",
+      "sampleUrl": "",
+      "primaryGenre": "Minimal / Deep Tech",
+      "subGenre": null,
+      "releaseId": "rel_000008",
+      "labelId": "lbl_000002",
+      "artistIds": [
+        "art_000004"
+      ],
+      "remixerIds": [
+        "art_000008"
+      ],
+      "positions": [
+        {
+          "genre": "Minimal / Deep Tech",
+          "position": 25,
+          "points": 76,
+          "seenAt": "2026-06-21T10:00:00.000Z"
+        }
+      ],
+      "seenAt": "2026-06-21T10:00:00.000Z",
+      "id": 19711270,
+      "key": "bp_19711270",
+      "label": "SOLID GROOVES",
+      "beatportLabelId": 9001,
+      "labelSlug": "solid-grooves",
       "artists": [
         {
           "id": 770001,
@@ -788,71 +930,26 @@
           "name": "Wade",
           "slug": "wade"
         }
-      ],
-      "artistIds": [
-        "bp_770001"
-      ],
-      "remixerIds": [
-        "bp_9999"
-      ],
-      "label": "SOLID GROOVES",
-      "labelId": 9001,
-      "labelKey": "bp_lbl_9001",
-      "labelSlug": "solid-grooves",
-      "releaseId": "bp_rel_4900005",
-      "primaryGenre": "Minimal / Deep Tech",
-      "subGenre": null,
-      "bpm": 127,
-      "keyCamelot": "8A",
-      "keyName": "A Minor",
-      "releaseDate": "2024-11-01",
-      "coverArt": "",
-      "sampleUrl": "",
-      "positions": [
-        {
-          "genre": "Minimal / Deep Tech",
-          "position": 25,
-          "points": 76,
-          "seenAt": "2026-06-21T10:00:00.000Z"
-        }
-      ],
-      "seenAt": "2026-06-21T10:00:00.000Z"
+      ]
     }
   ],
   "releases": [
     {
-      "id": 4803379,
+      "canonicalId": "rel_000001",
       "beatportId": 4803379,
-      "key": "bp_rel_4803379",
       "name": "palm of my hands - Odd Mob Extended Remix",
       "slug": "palm-of-my-hands-odd-mob-extended-remix",
       "url": "https://www.beatport.com/release/palm-of-my-hands-odd-mob-extended-remix/4803379",
       "catalogNumber": "",
       "releaseDate": "2024-11-08",
       "imageUrl": "https://example.com/cover1.jpg",
-      "labelId": 103008,
-      "labelKey": "bp_lbl_103008",
-      "labelName": "EXPERTS ONLY",
+      "labelId": "lbl_000001",
       "artistIds": [
-        "bp_610028",
-        "bp_1068825",
-        "bp_353575"
-      ],
-      "artistBpIds": [
-        610028,
-        1068825,
-        353575
-      ],
-      "artistNames": [
-        "John Summit",
-        "venbee",
-        "Odd Mob"
+        "art_000001",
+        "art_000002"
       ],
       "trackIds": [
-        "bp_19711254"
-      ],
-      "trackBpIds": [
-        19711254
+        "trk_000001"
       ],
       "trackCount": 1,
       "genres": [
@@ -863,35 +960,40 @@
         "2A": 1
       },
       "firstSeen": "2026-06-21T10:00:00.000Z",
-      "lastSeen": "2026-06-21T10:00:00.000Z"
+      "lastSeen": "2026-06-21T10:00:00.000Z",
+      "id": 4803379,
+      "key": "bp_rel_4803379",
+      "beatportLabelId": 103008,
+      "labelName": "EXPERTS ONLY",
+      "artistBpIds": [
+        610028,
+        1068825,
+        353575
+      ],
+      "artistNames": [
+        "John Summit",
+        "venbee",
+        "Odd Mob"
+      ],
+      "trackBpIds": [
+        19711254
+      ]
     },
     {
-      "id": 4803380,
+      "canonicalId": "rel_000002",
       "beatportId": 4803380,
-      "key": "bp_rel_4803380",
       "name": "walls",
       "slug": "walls",
       "url": "https://www.beatport.com/release/walls/4803380",
       "catalogNumber": "",
       "releaseDate": "2024-09-15",
       "imageUrl": "https://example.com/cover2.jpg",
-      "labelId": 103008,
-      "labelKey": "bp_lbl_103008",
-      "labelName": "EXPERTS ONLY",
+      "labelId": "lbl_000001",
       "artistIds": [
-        "bp_610028"
-      ],
-      "artistBpIds": [
-        610028
-      ],
-      "artistNames": [
-        "John Summit"
+        "art_000001"
       ],
       "trackIds": [
-        "bp_19711255"
-      ],
-      "trackBpIds": [
-        19711255
+        "trk_000002"
       ],
       "trackCount": 1,
       "genres": [
@@ -902,35 +1004,36 @@
         "5A": 1
       },
       "firstSeen": "2026-06-21T10:00:00.000Z",
-      "lastSeen": "2026-06-21T10:00:00.000Z"
+      "lastSeen": "2026-06-21T10:00:00.000Z",
+      "id": 4803380,
+      "key": "bp_rel_4803380",
+      "beatportLabelId": 103008,
+      "labelName": "EXPERTS ONLY",
+      "artistBpIds": [
+        610028
+      ],
+      "artistNames": [
+        "John Summit"
+      ],
+      "trackBpIds": [
+        19711255
+      ]
     },
     {
-      "id": 4900001,
+      "canonicalId": "rel_000003",
       "beatportId": 4900001,
-      "key": "bp_rel_4900001",
       "name": "lose control",
       "slug": "lose-control",
       "url": "https://www.beatport.com/release/lose-control/4900001",
       "catalogNumber": "",
       "releaseDate": "2024-10-01",
       "imageUrl": "",
-      "labelId": 9001,
-      "labelKey": "bp_lbl_9001",
-      "labelName": "SOLID GROOVES",
+      "labelId": "lbl_000002",
       "artistIds": [
-        "bp_770001"
-      ],
-      "artistBpIds": [
-        770001
-      ],
-      "artistNames": [
-        "Mochakk"
+        "art_000004"
       ],
       "trackIds": [
-        "bp_19711256"
-      ],
-      "trackBpIds": [
-        19711256
+        "trk_000003"
       ],
       "trackCount": 1,
       "genres": [
@@ -942,35 +1045,38 @@
         "6A": 2
       },
       "firstSeen": "2026-06-21T10:00:00.000Z",
-      "lastSeen": "2026-06-21T10:00:00.000Z"
+      "lastSeen": "2026-06-21T10:00:00.000Z",
+      "id": 4900001,
+      "key": "bp_rel_4900001",
+      "beatportLabelId": 9001,
+      "labelName": "SOLID GROOVES",
+      "artistBpIds": [
+        770001,
+        770001
+      ],
+      "artistNames": [
+        "Mochakk",
+        "Mochakk"
+      ],
+      "trackBpIds": [
+        19711256
+      ]
     },
     {
-      "id": 4900002,
+      "canonicalId": "rel_000004",
       "beatportId": 4900002,
-      "key": "bp_rel_4900002",
       "name": "code reader",
       "slug": "code-reader",
       "url": "https://www.beatport.com/release/code-reader/4900002",
       "catalogNumber": "",
       "releaseDate": "2024-08-20",
       "imageUrl": "",
-      "labelId": 1234,
-      "labelKey": "bp_lbl_1234",
-      "labelName": "DRUMCODE",
+      "labelId": "lbl_000003",
       "artistIds": [
-        "bp_1456"
-      ],
-      "artistBpIds": [
-        1456
-      ],
-      "artistNames": [
-        "Adam Beyer"
+        "art_000005"
       ],
       "trackIds": [
-        "bp_19711260"
-      ],
-      "trackBpIds": [
-        19711260
+        "trk_000004"
       ],
       "trackCount": 1,
       "genres": [
@@ -981,38 +1087,37 @@
         "4A": 1
       },
       "firstSeen": "2026-06-21T10:00:00.000Z",
-      "lastSeen": "2026-06-21T10:00:00.000Z"
+      "lastSeen": "2026-06-21T10:00:00.000Z",
+      "id": 4900002,
+      "key": "bp_rel_4900002",
+      "beatportLabelId": 1234,
+      "labelName": "DRUMCODE",
+      "artistBpIds": [
+        1456
+      ],
+      "artistNames": [
+        "Adam Beyer"
+      ],
+      "trackBpIds": [
+        19711260
+      ]
     },
     {
-      "id": 4900003,
+      "canonicalId": "rel_000005",
       "beatportId": 4900003,
-      "key": "bp_rel_4900003",
       "name": "server farm",
       "slug": "server-farm",
       "url": "https://www.beatport.com/release/server-farm/4900003",
       "catalogNumber": "",
       "releaseDate": "2024-07-10",
       "imageUrl": "",
-      "labelId": 1234,
-      "labelKey": "bp_lbl_1234",
-      "labelName": "DRUMCODE",
+      "labelId": "lbl_000003",
       "artistIds": [
-        "bp_1456",
-        "bp_7800"
-      ],
-      "artistBpIds": [
-        1456,
-        7800
-      ],
-      "artistNames": [
-        "Adam Beyer",
-        "Layton Giordani"
+        "art_000005",
+        "art_000006"
       ],
       "trackIds": [
-        "bp_19711261"
-      ],
-      "trackBpIds": [
-        19711261
+        "trk_000005"
       ],
       "trackCount": 1,
       "genres": [
@@ -1023,35 +1128,38 @@
         "5A": 1
       },
       "firstSeen": "2026-06-21T10:00:00.000Z",
-      "lastSeen": "2026-06-21T10:00:00.000Z"
+      "lastSeen": "2026-06-21T10:00:00.000Z",
+      "id": 4900003,
+      "key": "bp_rel_4900003",
+      "beatportLabelId": 1234,
+      "labelName": "DRUMCODE",
+      "artistBpIds": [
+        1456,
+        7800
+      ],
+      "artistNames": [
+        "Adam Beyer",
+        "Layton Giordani"
+      ],
+      "trackBpIds": [
+        19711261
+      ]
     },
     {
-      "id": 4900004,
+      "canonicalId": "rel_000006",
       "beatportId": 4900004,
-      "key": "bp_rel_4900004",
       "name": "industrial zone",
       "slug": "industrial-zone",
       "url": "https://www.beatport.com/release/industrial-zone/4900004",
       "catalogNumber": "",
       "releaseDate": "2024-09-05",
       "imageUrl": "",
-      "labelId": 5678,
-      "labelKey": "bp_lbl_5678",
-      "labelName": "TRUESOUL",
+      "labelId": "lbl_000004",
       "artistIds": [
-        "bp_1456"
-      ],
-      "artistBpIds": [
-        1456
-      ],
-      "artistNames": [
-        "Adam Beyer"
+        "art_000005"
       ],
       "trackIds": [
-        "bp_19711262"
-      ],
-      "trackBpIds": [
-        19711262
+        "trk_000006"
       ],
       "trackCount": 1,
       "genres": [
@@ -1062,38 +1170,36 @@
         "6A": 1
       },
       "firstSeen": "2026-06-21T10:00:00.000Z",
-      "lastSeen": "2026-06-21T10:00:00.000Z"
+      "lastSeen": "2026-06-21T10:00:00.000Z",
+      "id": 4900004,
+      "key": "bp_rel_4900004",
+      "beatportLabelId": 5678,
+      "labelName": "TRUESOUL",
+      "artistBpIds": [
+        1456
+      ],
+      "artistNames": [
+        "Adam Beyer"
+      ],
+      "trackBpIds": [
+        19711262
+      ]
     },
     {
-      "id": 4900005,
+      "canonicalId": "rel_000008",
       "beatportId": 4900005,
-      "key": "bp_rel_4900005",
       "name": "dub layers",
       "slug": "dub-layers",
       "url": "https://www.beatport.com/release/dub-layers/4900005",
       "catalogNumber": "",
       "releaseDate": "2024-11-01",
       "imageUrl": "",
-      "labelId": 9001,
-      "labelKey": "bp_lbl_9001",
-      "labelName": "SOLID GROOVES",
+      "labelId": "lbl_000002",
       "artistIds": [
-        "bp_770001",
-        "bp_9999"
-      ],
-      "artistBpIds": [
-        770001,
-        9999
-      ],
-      "artistNames": [
-        "Mochakk",
-        "Wade"
+        "art_000004"
       ],
       "trackIds": [
-        "bp_19711270"
-      ],
-      "trackBpIds": [
-        19711270
+        "trk_000008"
       ],
       "trackCount": 1,
       "genres": [
@@ -1104,13 +1210,29 @@
         "8A": 1
       },
       "firstSeen": "2026-06-21T10:00:00.000Z",
-      "lastSeen": "2026-06-21T10:00:00.000Z"
+      "lastSeen": "2026-06-21T10:00:00.000Z",
+      "id": 4900005,
+      "key": "bp_rel_4900005",
+      "beatportLabelId": 9001,
+      "labelName": "SOLID GROOVES",
+      "artistBpIds": [
+        770001,
+        9999
+      ],
+      "artistNames": [
+        "Mochakk",
+        "Wade"
+      ],
+      "trackBpIds": [
+        19711270
+      ]
     }
   ],
   "_meta": {
     "source": "beatport",
     "version": 2,
-    "schemaVersion": 2,
+    "schemaVersion": 3,
+    "canonicalModel": 1,
     "scrapedAt": "2026-06-21T10:00:00.000Z",
     "totalLabels": 4,
     "totalArtists": 7,

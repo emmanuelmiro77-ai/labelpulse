@@ -67,20 +67,26 @@
   var sleep = function (ms) { return new Promise(function (r) { setTimeout(r, ms); }); };
 
   // ===================================================================
-  // RP-BPI-002A — STABLE ID HELPERS
+  // RP-BPI-002A — STABLE ID HELPERS (legacy, kept for backward compat output)
   //
-  // Ogni entità ha un identificatore STABILE indipendente dal nome:
-  //   Artist  → 'bp_<beatportId>' oppure 'nm_<NAME_UPPER>' (fallback)
-  //   Label   → 'bp_lbl_<beatportId>' oppure 'nm_lbl_<NAME_UPPER>' (fallback)
-  //   Track   → 'bp_<beatportId>' oppure 'nm_<name>|<LABEL_NAME>' (fallback)
-  //   Release → 'bp_rel_<beatportId>' oppure 'nm_rel_<slug>|<LABEL_NAME>' (fallback)
+  // Queste funzioni producono chiavi "stabili" basate su Beatport id (fallback
+  // name-based). Vengono ancora usate internamente per la DEDUPLICATION durante
+  // lo scraping (Map keys), ma NON sono più l'identificatore canonico.
   //
-  // Queste funzioni vengono usate per popolare i nuovi campi *Ids[]/*Key
-  // nelle entità, in modo che i riferimenti siano sempre basati su ID
-  // (Beatport id quando esiste, fallback name-based quando manca).
-  // I campi legacy (name-based come `label`, `labelId`, `artists`/`remixers`
-  // come array di oggetti `{id,name,slug}`) vengono PRESERVATI per
-  // retrocompatibilità.
+  // RP-BPI-002B — CANONICAL DATA MODEL:
+  // Ogni entità ha UN SOLO identificatore interno (id canonico), generato
+  // sequentialmente e INDIPENDENTE da Beatport. Tutte le relazioni utilizzano
+  // esclusivamente l'id canonico. `beatportId` diventa un attributo
+  // informativo della sorgente, mai usato come chiave relazionale.
+  //
+  //   Track    → 'trk_<n>' (es. trk_000001)
+  //   Release  → 'rel_<n>' (es. rel_000001)
+  //   Artist   → 'art_<n>' (es. art_000001)
+  //   Label    → 'lbl_<n>' (es. lbl_000001)  — SOSTITUISCE il legacy 'lbl_<slug>'
+  //
+  // I campi legacy (name-based o beatportId-based) sono preservati nell'output
+  // per retrocompatibilità, ma NON sono più usati internamente come chiavi
+  // relazionali.
   // ===================================================================
 
   function artistKey(a) {
@@ -112,13 +118,65 @@
   }
 
   // ===================================================================
+  // RP-BPI-002B — CANONICAL ID GENERATORS
+  //
+  // Generano identificativi sequenziali indipendenti da Beatport.
+  // Ogni entità ha il proprio contatore. L'id canonico è l'UNICA chiave
+  // usata nelle relazioni.
+  // ===================================================================
+
+  var canonicalCounters = { track: 0, release: 0, artist: 0, label: 0 };
+  var PAD = 6; // zero-pad a 6 cifre (supporta fino a 999.999 entità per tipo)
+
+  function padNum(n) {
+    var s = String(n);
+    while (s.length < PAD) s = '0' + s;
+    return s;
+  }
+
+  function canonicalTrackId() {
+    canonicalCounters.track++;
+    return 'trk_' + padNum(canonicalCounters.track);
+  }
+
+  function canonicalReleaseId() {
+    canonicalCounters.release++;
+    return 'rel_' + padNum(canonicalCounters.release);
+  }
+
+  function canonicalArtistId() {
+    canonicalCounters.artist++;
+    return 'art_' + padNum(canonicalCounters.artist);
+  }
+
+  function canonicalLabelId() {
+    canonicalCounters.label++;
+    return 'lbl_' + padNum(canonicalCounters.label);
+  }
+
+  // ===================================================================
   // processTracks: popola labelMap (lm), artistMap (am), trackMap (tm),
   //                releaseMap (rm) — RP-BPI-001
   // gn = genre name (string)
   //
-  // RP-BPI-002A — Track/Artist/Label/Release entità vengono popolate con
-  // riferimenti stabili basati su ID (Beatport id quando esiste, fallback
-  // name-based). I campi legacy vengono preservati per retrocompatibilità.
+  // RP-BPI-002A — entità popolate con riferimenti stabili basati su ID.
+  // RP-BPI-002B — CANONICAL DATA MODEL: ogni entità ha UN SOLO id canonico
+  //              (trk_<n>, rel_<n>, art_<n>, lbl_<n>) indipendente da Beatport.
+  //              Tutte le relazioni utilizzano esclusivamente l'id canonico.
+  //              `beatportId` è un attributo informativo della sorgente.
+  //              I campi legacy sono preservati con marcatura _compat.
+  //
+  // Le Map sono keyed per Beatport-derived key (per deduplication interna
+  // durante lo scraping). L'entity `id` field è l'id canonico sequenziale.
+  //
+  // Le relazioni DIRETTE (forward) sono popolate qui:
+  //   Track.releaseId, Track.labelId, Track.artistIds[], Track.remixerIds[]
+  //   Release.labelId, Release.artistIds[], Release.trackIds[]
+  // Le relazioni INVERSE (backward) sono popolate in una fase successiva
+  // (buildCanonicalRelationships) perché richiedono che tutte le entità
+  // siano già state acquisite:
+  //   Artist.labelIds[], Artist.releaseIds[], Artist.trackIds[]
+  //   Label.artistIds[], Label.releaseIds[], Label.trackIds[]
   // ===================================================================
   function processTracks(tracks, gn, lm, am, tm, rm) {
     for (var i = 0; i < tracks.length; i++) {
@@ -134,8 +192,8 @@
       var pos = t._position || (i + 1);
       var pts = Math.max(0, 101 - pos);
 
-      // RP-BPI-002A — stable label key (bp_lbl_<id> o nm_lbl_<name>)
-      var lblKey = labelKey(label);
+      // RP-BPI-002B — Beatport-derived key (per dedup interna, NON è l'id canonico)
+      var lblBpKey = labelKey(label);
 
       // === KEY EXTRACTION ===
       var k = t.key || {};
@@ -149,262 +207,269 @@
       var coverArt = (t.release && t.release.image && t.release.image.uri) || '';
 
       // === LABEL MAP ===
-      // RP-BPI-002A — aggiunto campo `key` (stable id) e `beatportId`.
-      //              La Map è ancora keyed by NAME per backward compat con
-      //              il codice esistente (che cerca per labelName).
-      if (!lm.has(labelName)) {
-        lm.set(labelName, {
-          id: label.id || null,
-          key: lblKey,                       // RP-BPI-002A — stable label key
-          beatportId: label.id || null,      // RP-BPI-002A — alias esplicito
+      // RP-BPI-002B — la label ha id canonico (lbl_<n>). La Map è keyed
+      // per Beatport-derived key (lblBpKey) per dedup interna.
+      if (!lm.has(lblBpKey)) {
+        lm.set(lblBpKey, {
+          // === CANONICAL ===
+          id: canonicalLabelId(),
+          beatportId: label.id || null,
+          // === ATTRIBUTES ===
           name: labelName,
           slug: label.slug || '',
           imageUrl: (label.image && label.image.uri) || '',
-          trackCount: 0,
-          totalPoints: 0,
-          bestPosition: pos
+          // === CANONICAL RELATIONSHIPS (popolati in buildCanonicalRelationships) ===
+          artistIds: [],
+          releaseIds: [],
+          trackIds: [],
+          // === SCRAPER-INTERNAL (per trending computation, non esportati) ===
+          _trackCount: 0,
+          _totalPoints: 0,
+          _bestPosition: pos,
+          _genres: [],
+          _rankByGenre: {},
+          _pointsByGenre: {},
+          // === LEGACY COMPAT (preservati per backward compat, marcati _compat) ===
+          _compat: {
+            // Legacy `id` was 'lbl_<slug>' (name-based synthetic). Preservato per
+            // consumer v1 che lo usano come chiave. L'id canonico è nel campo `id`.
+            legacyId: 'lbl_' + labelName.toLowerCase().replace(/[^a-z0-9]+/g, '_').replace(/_+$/, ''),
+            // Beatport-derived stable key (RP-BPI-002A) — preservato per consumer 002A
+            key: lblBpKey
+          }
         });
       }
-      var lb = lm.get(labelName);
-      lb.trackCount++;
-      lb.totalPoints += pts;
-      if (pos < lb.bestPosition) lb.bestPosition = pos;
+      var lb = lm.get(lblBpKey);
+      lb._trackCount++;
+      lb._totalPoints += pts;
+      if (pos < lb._bestPosition) lb._bestPosition = pos;
+      if (lb._genres.indexOf(gn) === -1) lb._genres.push(gn);
+      // Canonical label id (alias per chiarezza nel codice seguente)
+      var canonicalLabelIdForTrack = lb.id;
 
       // === ARTISTS (primary) ===
       var artistsRaw = Array.isArray(t.artists) ? t.artists.slice() : [];
       var remixersRaw = Array.isArray(t.remixers) ? t.remixers.slice() : [];
 
-      // RP-BPI-002A — stable keys per artisti e remixers della traccia corrente
-      var primaryArtistKeys = artistsRaw.map(artistKey).filter(function (kx) { return kx !== null; });
-      var remixerKeys = remixersRaw.map(artistKey).filter(function (kx) { return kx !== null; });
-
       function processArtist(a, isRemixer) {
-        var key = artistKey(a);
-        if (!key) return;
-        if (!am.has(key)) {
-          am.set(key, {
-            id: key,
+        var bpKey = artistKey(a);
+        if (!bpKey) return null;
+        if (!am.has(bpKey)) {
+          am.set(bpKey, {
+            // === CANONICAL ===
+            id: canonicalArtistId(),
             beatportId: a.id || null,
+            // === ATTRIBUTES ===
             name: a.name,
             slug: a.slug || '',
             imageUrl: (a.image && a.image.uri) || '',
-            genres: [],
-            tracksByGenre: {},
-            labelsPublishedOn: [],            // legacy: array di NAME (backward compat)
-            labelIds: [],                     // RP-BPI-002A — array di stable label keys
-            totalPoints: 0,
-            bestPosition: pos,
-            isRemixerOnly: isRemixer
+            // === CANONICAL RELATIONSHIPS ===
+            // Forward (popolati qui parzialmente, completati in buildCanonicalRelationships)
+            labelIds: [],
+            releaseIds: [],
+            trackIds: [],
+            // === SCRAPER-INTERNAL (per trending computation) ===
+            _genres: [],
+            _tracksByGenre: {},
+            _labelsPublishedOnNames: [],   // legacy name array (preservato)
+            _totalPoints: 0,
+            _bestPosition: pos,
+            _isRemixerOnly: isRemixer,
+            // === LEGACY COMPAT ===
+            _compat: {
+              // Beatport-derived stable key (RP-BPI-002A) — preservato
+              key: bpKey
+            }
           });
         }
-        var ar = am.get(key);
-        if (ar.genres.indexOf(gn) === -1) ar.genres.push(gn);
-        if (ar.labelsPublishedOn.indexOf(labelName) === -1) ar.labelsPublishedOn.push(labelName);
-        // RP-BPI-002A — aggiungi stable label key (dedup)
-        if (lblKey && ar.labelIds.indexOf(lblKey) === -1) ar.labelIds.push(lblKey);
+        var ar = am.get(bpKey);
+        if (ar._genres.indexOf(gn) === -1) ar._genres.push(gn);
+        if (ar._labelsPublishedOnNames.indexOf(labelName) === -1) ar._labelsPublishedOnNames.push(labelName);
+        // Canonical label id (per la relazione Artist → Label)
+        if (canonicalLabelIdForTrack && ar.labelIds.indexOf(canonicalLabelIdForTrack) === -1) {
+          ar.labelIds.push(canonicalLabelIdForTrack);
+        }
 
         if (!isRemixer) {
-          if (!ar.tracksByGenre[gn]) ar.tracksByGenre[gn] = [];
+          if (!ar._tracksByGenre[gn]) ar._tracksByGenre[gn] = [];
           var alreadyInGenre = false;
-          for (var q = 0; q < ar.tracksByGenre[gn].length; q++) {
-            if (ar.tracksByGenre[gn][q].id === t.id) { alreadyInGenre = true; break; }
+          for (var q = 0; q < ar._tracksByGenre[gn].length; q++) {
+            if (ar._tracksByGenre[gn][q].id === t.id) { alreadyInGenre = true; break; }
           }
           if (!alreadyInGenre) {
-            ar.tracksByGenre[gn].push({
-              id: t.id,
-              name: t.name,
-              mixName: t.mix_name || '',
-              position: pos,
-              points: pts,
-              label: labelName,
+            ar._tracksByGenre[gn].push({
+              id: t.id, name: t.name, mixName: t.mix_name || '',
+              position: pos, points: pts, label: labelName,
               labelId: label.id || null,
-              labelKey: lblKey,                 // RP-BPI-002A — stable label key
+              labelKey: lblBpKey,                 // legacy RP-BPI-002A stable key
               labelSlug: label.slug || '',
-              releaseDate: releaseDate,
-              bpm: t.bpm || null,
-              keyCamelot: keyCamelot,
-              keyName: keyName,
-              coverArt: coverArt,
-              sampleUrl: t.sample_url || '',
-              seenAt: NOW
+              releaseDate: releaseDate, bpm: t.bpm || null,
+              keyCamelot: keyCamelot, keyName: keyName, coverArt: coverArt,
+              sampleUrl: t.sample_url || '', seenAt: NOW
             });
           }
-          ar.totalPoints += pts;
-          if (pos < ar.bestPosition) ar.bestPosition = pos;
+          ar._totalPoints += pts;
+          if (pos < ar._bestPosition) ar._bestPosition = pos;
         }
-        // For remixers, we only track that they remixed something (genres + labels already added)
-        // but we don't credit points (it's not "their" track).
-        // If they appear as primary artist elsewhere, isRemixerOnly flag will be false.
-        if (!isRemixer && ar.isRemixerOnly) ar.isRemixerOnly = false;
+        if (!isRemixer && ar._isRemixerOnly) ar._isRemixerOnly = false;
+        // Ritorna l'id canonico dell'artista per uso nel Track/Release
+        return ar.id;
       }
 
-      artistsRaw.forEach(function (a) { processArtist(a, false); });
-      remixersRaw.forEach(function (a) { processArtist(a, true); });
+      // === Track.artistIds[] (canonical) ===
+      var trackArtistCanonicalIds = [];
+      artistsRaw.forEach(function (a) {
+        var cId = processArtist(a, false);
+        if (cId && trackArtistCanonicalIds.indexOf(cId) === -1) trackArtistCanonicalIds.push(cId);
+      });
+      // === Track.remixerIds[] (canonical) ===
+      var trackRemixerCanonicalIds = [];
+      remixersRaw.forEach(function (a) {
+        var cId = processArtist(a, true);
+        if (cId && trackRemixerCanonicalIds.indexOf(cId) === -1) trackRemixerCanonicalIds.push(cId);
+      });
 
-      // === TRACK MAP (deduplicated by Beatport track id) ===
-      var trackKey = trackKeyFor(t, labelName);
-      // RP-BPI-002A — stable release key per linkare Track → Release
+      // === RELEASE MAP (RP-BPI-001 + RP-BPI-002B canonical) ===
       var rel = t.release || null;
-      var tReleaseKey = releaseKeyFor(rel, labelName);
-      if (!tm.has(trackKey)) {
-        tm.set(trackKey, {
-          id: t.id || null,
-          key: trackKey,                     // RP-BPI-002A — stable track key (alias of map key)
-          beatportId: t.id || null,          // RP-BPI-002A — alias esplicito
-          name: t.name,
-          mixName: t.mix_name || '',
-          slug: t.slug || '',
-          // Legacy artist arrays (preservati per backward compat — array di oggetti {id,name,slug})
-          artists: artistsRaw.map(function (a) { return { id: a.id || null, name: a.name, slug: a.slug || '' }; }),
-          remixers: remixersRaw.map(function (a) { return { id: a.id || null, name: a.name, slug: a.slug || '' }; }),
-          // RP-BPI-002A — stable artist/remixer keys (array di stringhe 'bp_<id>'/'nm_<name>')
-          artistIds: primaryArtistKeys.slice(),
-          remixerIds: remixerKeys.slice(),
-          // Legacy label fields (preservati — label è il NAME, labelId è il BP id)
-          label: labelName,
-          labelId: label.id || null,
-          labelKey: lblKey,                  // RP-BPI-002A — stable label key
-          labelSlug: label.slug || '',
-          // RP-BPI-002A — stable release key (link Track → Release)
-          releaseId: tReleaseKey,
-          primaryGenre: gn,
-          subGenre: (t.sub_genre && t.sub_genre.name) || null,
-          bpm: t.bpm || null,
-          keyCamelot: keyCamelot,
-          keyName: keyName,
-          releaseDate: releaseDate,
-          coverArt: coverArt,
-          sampleUrl: t.sample_url || '',
-          positions: [{ genre: gn, position: pos, points: pts, seenAt: NOW }],
-          seenAt: NOW
-        });
-      } else {
-        // Same track seen in another genre — append position entry
-        var tr = tm.get(trackKey);
-        tr.positions.push({ genre: gn, position: pos, points: pts, seenAt: NOW });
-        // RP-BPI-002A — se la traccia esiste già ma releaseId non era settato (race condition edge), fill
-        if (!tr.releaseId && tReleaseKey) tr.releaseId = tReleaseKey;
-      }
-
-      // === RELEASE MAP (RP-BPI-001) ===
-      // Deduplica per release.id (fallback slug). Se la release è già nota,
-      // aggiorna artistIds, trackIds, genres, bpmAverage e keyDistribution
-      // senza creare duplicati.
-      //
-      // RP-BPI-002A — artistIds[] ora contiene STABLE KEYS ('bp_<id>'/'nm_<name>'),
-      //              non più BP ids raw. Il campo legacy artistIds era array
-      //              di BP ids (con null per name-only); per backward compat
-      //              manteniamo `artistBpIds[]` con i BP ids (null-safe).
-      //              Stessa cosa per trackIds → trackBpIds[].
-      if (rel && (rel.id || rel.slug)) {
-        var releaseKey = releaseKeyFor(rel, labelName);
+      var tReleaseCanonicalId = null;
+      var tReleaseBpKey = releaseKeyFor(rel, labelName);
+      if (rel && tReleaseBpKey) {
         var releaseId = rel.id || null;
         var releaseSlug = rel.slug || '';
         var releaseName = rel.name || '';
-        // URL costruito da slug + id (formato Beatport standard)
         var releaseUrl = releaseSlug && releaseId
           ? ('https://www.beatport.com/release/' + releaseSlug + '/' + releaseId)
           : '';
         var releaseCatalog = rel.catalog_number || rel.catalogNumber || '';
         var releaseImage = (rel.image && rel.image.uri) || coverArt || '';
-
-        // Campi specifici della traccia corrente (per aggregazione)
         var trackBpId = t.id || null;
         var trackBpm = (typeof t.bpm === 'number' && t.bpm > 0) ? t.bpm : null;
-        // Per artistIds/Names: includiamo sia primary artists che remixers
-        var allArtistsOnTrack = artistsRaw.concat(remixersRaw);
-        // RP-BPI-002A — stable keys per artisti (primary + remixers)
-        var allArtistKeysOnTrack = primaryArtistKeys.concat(remixerKeys);
+        // RP-BPI-002B — Release.artistIds[] contains ONLY primary artists
+        // (not remixers). Remixers are tracked in Track.remixerIds[] and in
+        // Release._compat.artistBpIds/artistNames (legacy, includes remixers).
+        // This matches the legacy behavior where Label.labelsPublishedOn
+        // contains only primary artists.
+        var allCanonicalArtistIdsOnTrack = trackArtistCanonicalIds.slice();
 
-        if (!rm.has(releaseKey)) {
-          // === NUOVA RELEASE ===
+        if (!rm.has(tReleaseBpKey)) {
+          // === NUOVA RELEASE (canonical id) ===
           var newRel = {
-            id: releaseId,
+            // === CANONICAL ===
+            id: canonicalReleaseId(),
             beatportId: releaseId,
-            key: releaseKey,                 // RP-BPI-002A — stable release key (alias esplicito)
+            // === ATTRIBUTES ===
             name: releaseName,
             slug: releaseSlug,
             url: releaseUrl,
             catalogNumber: releaseCatalog,
             releaseDate: releaseDate,
             imageUrl: releaseImage,
-            labelId: label.id || null,       // legacy: BP id della label (null se mancante)
-            labelKey: lblKey,                // RP-BPI-002A — stable label key
-            labelName: labelName,
-            // RP-BPI-002A — artistIds[] ora contiene STABLE KEYS (legacy era BP ids).
-            // Per backward compat con RP-BPI-001, manteniamo artistBpIds[] con i BP ids.
-            artistIds: [],                   // RP-BPI-002A — stable artist keys ('bp_<id>'/'nm_<name>')
-            artistBpIds: [],                 // RP-BPI-002A — legacy BP ids (alias del vecchio artistIds)
-            artistNames: [],
-            trackIds: [],                    // RP-BPI-002A — stable track keys ('bp_<id>'/'nm_<name>|<label>')
-            trackBpIds: [],                  // RP-BPI-002A — legacy BP track ids (alias del vecchio trackIds)
+            // === CANONICAL RELATIONSHIPS ===
+            labelId: canonicalLabelIdForTrack,         // canonical label id
+            artistIds: [],                             // canonical artist ids
+            trackIds: [],                              // canonical track ids
             trackCount: 0,
+            // === AGGREGATES ===
             genres: [],
             bpmAverage: null,
             keyDistribution: {},
             firstSeen: NOW,
-            lastSeen: NOW
+            lastSeen: NOW,
+            // === SCRAPER-INTERNAL (per bpmAverage running sum) ===
+            _bpmSum: 0,
+            _bpmCount: 0,
+            // === LEGACY COMPAT ===
+            _compat: {
+              // Legacy labelId (BP id, may be null) — preservato
+              labelId: label.id || null,
+              // Legacy labelName (NAME) — preservato
+              labelName: labelName,
+              // Legacy artistBpIds (BP ids parallel array) — preservato
+              artistBpIds: [],
+              // Legacy artistNames (NAME parallel array) — preservato
+              artistNames: [],
+              // Legacy trackBpIds (BP ids) — preservato
+              trackBpIds: [],
+              // Beatport-derived stable key (RP-BPI-002A) — preservato
+              key: tReleaseBpKey
+            }
           };
-          // Popola artistIds/Names (dedup per stable key)
-          var seenArtistKeys = {};
-          allArtistsOnTrack.forEach(function (a, idx) {
-            var aKey = artistKey(a);
-            if (!aKey) return;
-            if (!seenArtistKeys[aKey]) {
-              seenArtistKeys[aKey] = true;
-              newRel.artistIds.push(aKey);
-              newRel.artistBpIds.push(a.id || null);
-              newRel.artistNames.push(a.name || '');
+          // Popola artistIds (canonical, dedup, PRIMARY ONLY) + legacy artistBpIds/artistNames (ALL contributors)
+          // RP-BPI-002B: Release.artistIds[] = primary artists only.
+          //              Release._compat.artistBpIds/artistNames = ALL contributors (primary + remixers),
+          //              for backward compat with RP-BPI-001.
+          var seenArtistCanonicalIds = {};
+          allCanonicalArtistIdsOnTrack.forEach(function (cArtId) {
+            if (!seenArtistCanonicalIds[cArtId]) {
+              seenArtistCanonicalIds[cArtId] = true;
+              newRel.artistIds.push(cArtId);
+              var artistEntry = null;
+              am.forEach(function (av) { if (av.id === cArtId) artistEntry = av; });
+              newRel._compat.artistBpIds.push(artistEntry ? (artistEntry.beatportId || null) : null);
+              newRel._compat.artistNames.push(artistEntry ? artistEntry.name : '');
             }
           });
-          // Popola trackIds (stable key) e trackBpIds (legacy BP id)
-          if (trackKey) newRel.trackIds.push(trackKey);
-          if (trackBpId != null) newRel.trackBpIds.push(trackBpId);
-          newRel.trackCount = newRel.trackIds.length;
-          // Popola genres
-          if (newRel.genres.indexOf(gn) === -1) newRel.genres.push(gn);
-          // Inizializza bpmAverage e keyDistribution con la traccia corrente
-          var bpmSum = 0, bpmCount = 0;
-          if (trackBpm != null) { bpmSum += trackBpm; bpmCount++; }
-          newRel.bpmAverage = bpmCount > 0 ? Math.round(bpmSum / bpmCount) : null;
-          if (keyCamelot) {
-            newRel.keyDistribution[keyCamelot] = 1;
+          // Aggiungi remixers ai soli array legacy (non a Release.artistIds canonical)
+          var allArtistsRawForLegacy = artistsRaw.concat(remixersRaw);
+          var seenLegacyKeys = {};
+          // Marca i primary già aggiunti
+          allCanonicalArtistIdsOnTrack.forEach(function (cArtId) {
+            var artistEntry = null;
+            am.forEach(function (av) { if (av.id === cArtId) artistEntry = av; });
+            if (artistEntry) seenLegacyKeys[artistEntry._compat.key] = true;
+          });
+          allArtistsRawForLegacy.forEach(function (a) {
+            var bpKey = artistKey(a);
+            if (bpKey && !seenLegacyKeys[bpKey]) {
+              seenLegacyKeys[bpKey] = true;
+              // Remixer non in artistIds (canonical), ma aggiunto ai legacy arrays
+              newRel._compat.artistBpIds.push(a.id || null);
+              newRel._compat.artistNames.push(a.name || '');
+            }
+          });
+          // trackIds e trackBpIds verranno popolati dopo (quando il Track ha il suo canonical id)
+          // Per ora inizializziamo bpmAverage con la traccia corrente.
+          if (trackBpm != null) {
+            newRel._bpmSum += trackBpm;
+            newRel._bpmCount++;
+            newRel.bpmAverage = Math.round(newRel._bpmSum / newRel._bpmCount);
           }
-          rm.set(releaseKey, newRel);
+          if (keyCamelot) newRel.keyDistribution[keyCamelot] = 1;
+          if (newRel.genres.indexOf(gn) === -1) newRel.genres.push(gn);
+          rm.set(tReleaseBpKey, newRel);
         } else {
           // === RELEASE ESISTENTE — AGGIORNA ===
-          var exRel = rm.get(releaseKey);
-          // Aggiorna artistIds (stable keys, dedup) + artistBpIds (legacy) + artistNames
-          allArtistsOnTrack.forEach(function (a) {
-            var aKey = artistKey(a);
-            if (!aKey) return;
-            if (exRel.artistIds.indexOf(aKey) === -1) {
-              exRel.artistIds.push(aKey);
-              exRel.artistBpIds.push(a.id || null);
-              exRel.artistNames.push(a.name || '');
+          var exRel = rm.get(tReleaseBpKey);
+          // Merge artistIds (canonical, dedup, PRIMARY ONLY) + legacy artistBpIds/artistNames (ALL contributors)
+          allCanonicalArtistIdsOnTrack.forEach(function (cArtId) {
+            if (exRel.artistIds.indexOf(cArtId) === -1) {
+              exRel.artistIds.push(cArtId);
+              var artistEntry = null;
+              am.forEach(function (av) { if (av.id === cArtId) artistEntry = av; });
+              exRel._compat.artistBpIds.push(artistEntry ? (artistEntry.beatportId || null) : null);
+              exRel._compat.artistNames.push(artistEntry ? artistEntry.name : '');
             }
           });
-          // Aggiorna trackIds (stable key, dedup) + trackBpIds (legacy, dedup)
-          if (trackKey && exRel.trackIds.indexOf(trackKey) === -1) {
-            exRel.trackIds.push(trackKey);
-          }
-          if (trackBpId != null && exRel.trackBpIds.indexOf(trackBpId) === -1) {
-            exRel.trackBpIds.push(trackBpId);
-          }
-          exRel.trackCount = exRel.trackIds.length;
-          // Aggiorna genres (dedup)
-          if (exRel.genres.indexOf(gn) === -1) exRel.genres.push(gn);
-          // Ricalcola bpmAverage su tutte le tracce note.
-          // Approccio: teniamo running sum e count direttamente nella release.
-          // Poiché non abbiamo accesso diretto a tutte le tracce qui, usiamo
-          // un'approssimazione: accumuliamo _bpmSum e _bpmCount come campi
-          // privati (con underscore) e li usiamo per il calcolo.
-          if (trackBpm != null) {
-            if (typeof exRel._bpmSum !== 'number') {
-              // Prima aggregazione dopo la creazione: inizializza con i valori attuali
-              exRel._bpmSum = exRel.bpmAverage || 0;
-              exRel._bpmCount = exRel.bpmAverage != null ? 1 : 0;
+          // Aggiungi remixers ai soli array legacy (non a Release.artistIds canonical)
+          var allArtistsRawForLegacyEx = artistsRaw.concat(remixersRaw);
+          var seenLegacyKeysEx = {};
+          // Marca i primary già presenti nei legacy arrays (match per name)
+          exRel._compat.artistNames.forEach(function (nm) {
+            seenLegacyKeysEx[nm.toUpperCase().trim()] = true;
+          });
+          allArtistsRawForLegacyEx.forEach(function (a) {
+            var nmUpper = (a.name || '').toUpperCase().trim();
+            if (nmUpper && !seenLegacyKeysEx[nmUpper]) {
+              seenLegacyKeysEx[nmUpper] = true;
+              exRel._compat.artistBpIds.push(a.id || null);
+              exRel._compat.artistNames.push(a.name || '');
             }
+          });
+          // trackIds verrà popolato dopo (quando il Track ha il suo canonical id)
+          // Merge genres (dedup)
+          if (exRel.genres.indexOf(gn) === -1) exRel.genres.push(gn);
+          // Ricalcola bpmAverage
+          if (trackBpm != null) {
             exRel._bpmSum += trackBpm;
             exRel._bpmCount++;
             exRel.bpmAverage = Math.round(exRel._bpmSum / exRel._bpmCount);
@@ -413,30 +478,281 @@
           if (keyCamelot) {
             exRel.keyDistribution[keyCamelot] = (exRel.keyDistribution[keyCamelot] || 0) + 1;
           }
-          // Aggiorna lastSeen
           exRel.lastSeen = NOW;
-          // Aggiorna labelId/labelKey/labelName se non erano settati (caso edge)
-          if (!exRel.labelId && label.id) exRel.labelId = label.id;
-          if (!exRel.labelKey && lblKey) exRel.labelKey = lblKey;
-          if (!exRel.labelName) exRel.labelName = labelName;
-          // Aggiorna imageUrl se non era settato
+          // Fill campi mancanti
+          if (!exRel.beatportId && releaseId) exRel.beatportId = releaseId;
+          if (!exRel.labelId && canonicalLabelIdForTrack) exRel.labelId = canonicalLabelIdForTrack;
+          if (!exRel._compat.labelId && label.id) exRel._compat.labelId = label.id;
+          if (!exRel._compat.labelName) exRel._compat.labelName = labelName;
           if (!exRel.imageUrl && releaseImage) exRel.imageUrl = releaseImage;
-          // Aggiorna releaseDate se non era settato (manteniamo il primo valore)
           if (!exRel.releaseDate && releaseDate) exRel.releaseDate = releaseDate;
-          // Aggiorna catalogNumber se non era settato
           if (!exRel.catalogNumber && releaseCatalog) exRel.catalogNumber = releaseCatalog;
-          // Aggiorna slug/url/name se non erano settati (release senza id inizialmente)
           if (!exRel.slug && releaseSlug) exRel.slug = releaseSlug;
           if (!exRel.url && releaseUrl) exRel.url = releaseUrl;
           if (!exRel.name && releaseName) exRel.name = releaseName;
-          if (exRel.beatportId == null && releaseId != null) {
-            exRel.beatportId = releaseId;
-            exRel.id = releaseId;
+        }
+        // Track canonical release id (per il Track entity)
+        tReleaseCanonicalId = rm.get(tReleaseBpKey).id;
+      }
+
+      // === TRACK MAP (canonical id) ===
+      var trackBpKey = trackKeyFor(t, labelName);
+      if (!tm.has(trackBpKey)) {
+        var newTrack = {
+          // === CANONICAL ===
+          id: canonicalTrackId(),
+          beatportId: t.id || null,
+          // === ATTRIBUTES ===
+          name: t.name,
+          mixName: t.mix_name || '',
+          slug: t.slug || '',
+          bpm: t.bpm || null,
+          keyCamelot: keyCamelot,
+          keyName: keyName,
+          releaseDate: releaseDate,
+          coverArt: coverArt,
+          sampleUrl: t.sample_url || '',
+          primaryGenre: gn,
+          subGenre: (t.sub_genre && t.sub_genre.name) || null,
+          // === CANONICAL RELATIONSHIPS ===
+          releaseId: tReleaseCanonicalId,             // canonical release id (may be null if release skipped)
+          labelId: canonicalLabelIdForTrack,           // canonical label id
+          artistIds: trackArtistCanonicalIds.slice(),  // canonical artist ids (primary)
+          remixerIds: trackRemixerCanonicalIds.slice(),// canonical remixer ids
+          // === AGGREGATES ===
+          positions: [{ genre: gn, position: pos, points: pts, seenAt: NOW }],
+          seenAt: NOW,
+          // === LEGACY COMPAT ===
+          _compat: {
+            // Legacy `key` (RP-BPI-002A stable key, Beatport-derived) — preservato
+            key: trackBpKey,
+            // Legacy `label` (NAME) — preservato
+            label: labelName,
+            // Legacy `labelId` (BP id, may be null) — preservato
+            labelId: label.id || null,
+            // Legacy `labelSlug` — preservato
+            labelSlug: label.slug || '',
+            // Legacy `artists` array of {id,name,slug} — preservato
+            artists: artistsRaw.map(function (a) { return { id: a.id || null, name: a.name, slug: a.slug || '' }; }),
+            // Legacy `remixers` array of {id,name,slug} — preservato
+            remixers: remixersRaw.map(function (a) { return { id: a.id || null, name: a.name, slug: a.slug || '' }; })
+          }
+        };
+        tm.set(trackBpKey, newTrack);
+      } else {
+        // Same track seen in another genre — append position entry
+        var tr = tm.get(trackBpKey);
+        tr.positions.push({ genre: gn, position: pos, points: pts, seenAt: NOW });
+        // Fill releaseId if not set
+        if (!tr.releaseId && tReleaseCanonicalId) tr.releaseId = tReleaseCanonicalId;
+      }
+
+      // === AGGIORNA Release.trackIds[] con il canonical track id (ora disponibile) ===
+      if (tReleaseBpKey) {
+        var relToUpdate = rm.get(tReleaseBpKey);
+        var canonicalTrackIdForThisTrack = tm.get(trackBpKey).id;
+        if (relToUpdate && relToUpdate.trackIds.indexOf(canonicalTrackIdForThisTrack) === -1) {
+          relToUpdate.trackIds.push(canonicalTrackIdForThisTrack);
+          relToUpdate.trackCount = relToUpdate.trackIds.length;
+          // Legacy trackBpIds (parallel, dedup)
+          if (t.id != null && relToUpdate._compat.trackBpIds.indexOf(t.id) === -1) {
+            relToUpdate._compat.trackBpIds.push(t.id);
           }
         }
       }
     }
   }
+
+  // ===================================================================
+  // RP-BPI-002B — BUILD CANONICAL RELATIONSHIPS (inverse)
+  //
+  // Popola gli array relazionali INVERSI che non potevano essere
+  // popolati durante processTracks (perché richiedevano che tutte le
+  // entità fossero già acquisite):
+  //   - Artist.trackIds[] (tutte le tracce in cui l'artista compare come primary)
+  //   - Artist.releaseIds[] (tutte le release in cui l'artista compare)
+  //   - Label.trackIds[] (tutte le tracce sulla label)
+  //   - Label.releaseIds[] (tutte le release sulla label)
+  //   - Label.artistIds[] (tutti gli artisti che hanno pubblicato sulla label)
+  //
+  // Questa funzione opera sulle Map GLOBALI (globalTM, globalRM, globalAM,
+  // globalLM) dopo il merge cross-genre.
+  // ===================================================================
+  function buildCanonicalRelationships(globalTM, globalRM, globalAM, globalLM) {
+    // Index artists by canonical id for fast lookup
+    var artistById = new Map();
+    globalAM.forEach(function (a) { artistById.set(a.id, a); });
+    // Index labels by canonical id
+    var labelById = new Map();
+    globalLM.forEach(function (l) { labelById.set(l.id, l); });
+    // Index releases by canonical id
+    var releaseById = new Map();
+    globalRM.forEach(function (r) { releaseById.set(r.id, r); });
+
+    // 1) Per ogni Track: aggiorna Artist.trackIds[], Artist.releaseIds[],
+    //    Label.trackIds[], Label.artistIds[]
+    globalTM.forEach(function (tr) {
+      // Artist ← Track (primary artists)
+      tr.artistIds.forEach(function (aId) {
+        var ar = artistById.get(aId);
+        if (ar && ar.trackIds.indexOf(tr.id) === -1) ar.trackIds.push(tr.id);
+      });
+      // Note: remixers are NOT credited with the track (legacy behavior).
+      // Artist ← Release (via track.releaseId, primary artists only)
+      if (tr.releaseId) {
+        var rel = releaseById.get(tr.releaseId);
+        if (rel) {
+          tr.artistIds.forEach(function (aId) {
+            var ar = artistById.get(aId);
+            if (ar && ar.releaseIds.indexOf(rel.id) === -1) ar.releaseIds.push(rel.id);
+          });
+        }
+      }
+      // Label ← Track
+      if (tr.labelId) {
+        var lb = labelById.get(tr.labelId);
+        if (lb) {
+          if (lb.trackIds.indexOf(tr.id) === -1) lb.trackIds.push(tr.id);
+          // Label ← Artist (primary artists on this track)
+          tr.artistIds.forEach(function (aId) {
+            if (lb.artistIds.indexOf(aId) === -1) lb.artistIds.push(aId);
+          });
+        }
+      }
+    });
+
+    // 2) Per ogni Release: aggiorna Label.releaseIds[], Label.artistIds[],
+    //    Artist.releaseIds[] (artisti della release, primary + remixers)
+    globalRM.forEach(function (r) {
+      if (r.labelId) {
+        var lb = labelById.get(r.labelId);
+        if (lb) {
+          if (lb.releaseIds.indexOf(r.id) === -1) lb.releaseIds.push(r.id);
+          // Label ← Artist (tutti gli artisti della release)
+          r.artistIds.forEach(function (aId) {
+            if (lb.artistIds.indexOf(aId) === -1) lb.artistIds.push(aId);
+          });
+        }
+      }
+      // Artist ← Release (tutti gli artisti della release)
+      r.artistIds.forEach(function (aId) {
+        var ar = artistById.get(aId);
+        if (ar && ar.releaseIds.indexOf(r.id) === -1) ar.releaseIds.push(r.id);
+      });
+    });
+  }
+
+  // ===================================================================
+  // RP-BPI-002B — REMAP CANONICAL IDS (cross-genre orphan fix)
+  //
+  // PROBLEM: canonical ids are generated per-genre in processTracks.
+  // When the same logical entity (e.g. track "lose control") appears in
+  // multiple genres, each genre's processTracks call generates a NEW
+  // canonical id for it (trk_000006 in Minimal, trk_000008 in Tech House).
+  // During cross-genre merge, only ONE entry survives in the global Map
+  // (keyed by Beatport-derived key). The other entry's canonical id
+  // becomes an ORPHAN — it was already used in other entities' relation
+  // fields (e.g. a Tech House release's trackIds contains trk_000008,
+  // but only trk_000006 survives in globalTM).
+  //
+  // SOLUTION: after cross-genre merge, build a remap table from
+  // (per-genre canonical id) → (global canonical id) for entities that
+  // were merged. Then walk all entities and replace orphan canonical ids
+  // in relation fields with the global canonical id.
+  //
+  // The remap is built by indexing the global Maps by Beatport-derived key
+  // (the _compat.key field), and checking if any per-genre canonical id
+  // (from relation fields) is missing from the global set.
+  // ===================================================================
+  function remapCanonicalIds(globalTM, globalRM, globalAM, globalLM) {
+    // Build sets of surviving canonical ids
+    var survivingTrackIds = new Set();
+    globalTM.forEach(function (t) { survivingTrackIds.add(t.id); });
+    var survivingReleaseIds = new Set();
+    globalRM.forEach(function (r) { survivingReleaseIds.add(r.id); });
+    var survivingArtistIds = new Set();
+    globalAM.forEach(function (a) { survivingArtistIds.add(a.id); });
+    var survivingLabelIds = new Set();
+    globalLM.forEach(function (l) { survivingLabelIds.add(l.id); });
+
+    // Build index: Beatport-derived key → global canonical id
+    // (per risolvere l'orphan → global mapping)
+    var trackByKey = new Map();
+    globalTM.forEach(function (t) { trackByKey.set(t._compat.key, t.id); });
+    var releaseByKey = new Map();
+    globalRM.forEach(function (r) { releaseByKey.set(r._compat.key, r.id); });
+    var artistByKey = new Map();
+    globalAM.forEach(function (a) { artistByKey.set(a._compat.key, a.id); });
+    var labelByKey = new Map();
+    globalLM.forEach(function (l) { labelByKey.set(l._compat.key, l.id); });
+
+    var remapTrack = globalRemapRegistry.track;     // per-genre canonical id → global canonical id
+    var remapRelease = globalRemapRegistry.release;
+    var remapArtist = globalRemapRegistry.artist;
+    var remapLabel = globalRemapRegistry.label;
+
+    function remapTrackId(id) {
+      if (id == null) return id;
+      return remapTrack[id] || id;
+    }
+    function remapReleaseId(id) {
+      if (id == null) return id;
+      return remapRelease[id] || id;
+    }
+    function remapArtistId(id) {
+      if (id == null) return id;
+      return remapArtist[id] || id;
+    }
+    function remapLabelId(id) {
+      if (id == null) return id;
+      return remapLabel[id] || id;
+    }
+    function dedup(arr) {
+      var seen = {};
+      var out = [];
+      for (var i = 0; i < arr.length; i++) {
+        var k = String(arr[i]);
+        if (!seen[k]) { seen[k] = true; out.push(arr[i]); }
+      }
+      return out;
+    }
+
+    // Remap Track relations + dedup
+    globalTM.forEach(function (t) {
+      t.releaseId = remapReleaseId(t.releaseId);
+      t.labelId = remapLabelId(t.labelId);
+      t.artistIds = dedup(t.artistIds.map(remapArtistId));
+      t.remixerIds = dedup(t.remixerIds.map(remapArtistId));
+    });
+
+    // Remap Release relations + dedup + ricalcola trackCount
+    globalRM.forEach(function (r) {
+      r.labelId = remapLabelId(r.labelId);
+      r.artistIds = dedup(r.artistIds.map(remapArtistId));
+      r.trackIds = dedup(r.trackIds.map(remapTrackId));
+      r.trackCount = r.trackIds.length;
+    });
+
+    // Remap Artist relations (labelIds was populated during processTracks,
+    // may contain orphan label canonical ids) + dedup
+    globalAM.forEach(function (a) {
+      a.labelIds = dedup(a.labelIds.map(remapLabelId));
+      // releaseIds and trackIds will be populated by buildCanonicalRelationships
+      // AFTER remap, so they'll use the correct global ids.
+    });
+
+    // Label relations are populated by buildCanonicalRelationships after remap,
+    // so no remap needed here.
+  }
+
+  // Global remap registry: populated during cross-genre merge.
+  // Maps per-genre canonical id → global canonical id (for merged entities).
+  var globalRemapRegistry = {
+    track: {},     // { perGenreCanonicalId: globalCanonicalId }
+    release: {},
+    artist: {},
+    label: {}
+  };
 
   // ===================================================================
   // fetchGenre: tries multiple sources, returns { lm, am, tm, rm }
@@ -547,6 +863,10 @@
   var globalAM = new Map(), globalTM = new Map();
   // RP-BPI-001 — releaseMap globale, mergeto per-genre come globalAM e globalTM.
   var globalRM = new Map();
+  // RP-BPI-002B — globalLM (label map keyed by Beatport-derived key, come globalAM/globalTM).
+  // Sostituisce l'uso di gR per le label: ora anche le label sono entità canoniche
+  // con id canonico e relazioni inverse.
+  var globalLM = new Map();
 
   for (var gi = 0; gi < G.length; gi++) {
     var g = G[gi];
@@ -554,79 +874,136 @@
     console.log(S + ' %c[' + pct + '%] ' + g.name + '...', c1, c2);
 
     var res = await fetchGenre(g.id, g.slug, g.name);
+
+    // === RP-BPI-002B — Build per-genre label ranking (per backward compat con
+    //                    il vecchio output `rankByGenre` / `pointsByGenre`).
+    // Le label in res.lm sono già entità canoniche. Calcoliamo rank per genre.
     var la = Array.from(res.lm.values());
-    la.sort(function (a, b) { return b.totalPoints - a.totalPoints; });
-    la.forEach(function (l, i) { l.rank = i + 1; });
+    la.sort(function (a, b) { return b._totalPoints - a._totalPoints; });
+    la.forEach(function (l, i) {
+      // Per-genre rank: salviamo in _rankByGenre e _pointsByGenre (internal)
+      l._rankByGenre[g.name] = i + 1;
+      l._pointsByGenre[g.name] = l._totalPoints;
+      // Marchiamo il rank corrente per compatibilità con vecchio output
+      l.rank = i + 1;
+    });
     gR[g.name] = la;
     tL += la.length;
 
-    // === Merge artists across genres ===
-    // RP-BPI-002A — merge anche di labelIds[] (stable keys) oltre a labelsPublishedOn[] (names).
+    // === Merge labels across genres (RP-BPI-002B) ===
+    // La label Map è keyed per Beatport-derived key (lblBpKey). Quando la stessa
+    // label appare in più generi, mergiamo i contatori internal (_trackCount,
+    // _totalPoints, _bestPosition, _genres, _rankByGenre, _pointsByGenre) e
+    // manteniamo l'id canonico assegnato alla prima occorrenza.
+    // RP-BPI-002B — registriamo il remap per gli id canonici orfani.
+    res.lm.forEach(function (v, k) {
+      if (globalLM.has(k)) {
+        var exL = globalLM.get(k);
+        // Remap: il canonical id per-genre (v.id) → global canonical id (exL.id)
+        if (v.id !== exL.id) {
+          globalRemapRegistry.label[v.id] = exL.id;
+        }
+        exL._trackCount += v._trackCount;
+        exL._totalPoints += v._totalPoints;
+        if (v._bestPosition < exL._bestPosition) exL._bestPosition = v._bestPosition;
+        v._genres.forEach(function (gn2) {
+          if (exL._genres.indexOf(gn2) === -1) exL._genres.push(gn2);
+        });
+        // Merge per-genre rank/points
+        for (var grKey in v._rankByGenre) {
+          exL._rankByGenre[grKey] = v._rankByGenre[grKey];
+        }
+        for (var ppKey in v._pointsByGenre) {
+          exL._pointsByGenre[ppKey] = (exL._pointsByGenre[ppKey] || 0) + v._pointsByGenre[ppKey];
+        }
+        // Fill campi attribute mancanti
+        if (!exL.slug && v.slug) exL.slug = v.slug;
+        if (!exL.imageUrl && v.imageUrl) exL.imageUrl = v.imageUrl;
+        if (exL.beatportId == null && v.beatportId != null) exL.beatportId = v.beatportId;
+      } else {
+        globalLM.set(k, v);
+      }
+    });
+
+    // === Merge artists across genres (RP-BPI-002B canonical) ===
+    // Artist Map keyed per Beatport-derived key (bpKey). Merge:
+    //   - _genres (dedup)
+    //   - _labelsPublishedOnNames (dedup, legacy)
+    //   - labelIds (canonical, dedup — MA possono contenere orfani, risolti in remap)
+    //   - _tracksByGenre (append per genre)
+    //   - _totalPoints, _bestPosition, _isRemixerOnly
     res.am.forEach(function (v, k) {
       if (globalAM.has(k)) {
         var ex = globalAM.get(k);
-        v.genres.forEach(function (gn2) { if (ex.genres.indexOf(gn2) === -1) ex.genres.push(gn2); });
-        v.labelsPublishedOn.forEach(function (ln) { if (ex.labelsPublishedOn.indexOf(ln) === -1) ex.labelsPublishedOn.push(ln); });
-        // RP-BPI-002A — merge stable label keys
+        // Remap: il canonical id per-genre (v.id) → global canonical id (ex.id)
+        if (v.id !== ex.id) {
+          globalRemapRegistry.artist[v.id] = ex.id;
+        }
+        v._genres.forEach(function (gn2) { if (ex._genres.indexOf(gn2) === -1) ex._genres.push(gn2); });
+        v._labelsPublishedOnNames.forEach(function (ln) {
+          if (ex._labelsPublishedOnNames.indexOf(ln) === -1) ex._labelsPublishedOnNames.push(ln);
+        });
+        // Canonical label ids merge (possono contenere orfani, risolti in remap)
         if (Array.isArray(v.labelIds)) {
-          v.labelIds.forEach(function (lk) {
-            if (lk && ex.labelIds.indexOf(lk) === -1) ex.labelIds.push(lk);
+          v.labelIds.forEach(function (lId) {
+            if (lId && ex.labelIds.indexOf(lId) === -1) ex.labelIds.push(lId);
           });
         }
-        for (var gn3 in v.tracksByGenre) {
-          if (!ex.tracksByGenre[gn3]) ex.tracksByGenre[gn3] = [];
-          v.tracksByGenre[gn3].forEach(function (tr2) { ex.tracksByGenre[gn3].push(tr2); });
+        for (var gn3 in v._tracksByGenre) {
+          if (!ex._tracksByGenre[gn3]) ex._tracksByGenre[gn3] = [];
+          v._tracksByGenre[gn3].forEach(function (tr2) { ex._tracksByGenre[gn3].push(tr2); });
         }
-        ex.totalPoints += v.totalPoints;
-        if (v.bestPosition < ex.bestPosition) ex.bestPosition = v.bestPosition;
-        if (!v.isRemixerOnly) ex.isRemixerOnly = false;
+        ex._totalPoints += v._totalPoints;
+        if (v._bestPosition < ex._bestPosition) ex._bestPosition = v._bestPosition;
+        if (!v._isRemixerOnly) ex._isRemixerOnly = false;
       } else {
         globalAM.set(k, v);
       }
     });
 
-    // === Merge tracks across genres ===
+    // === Merge tracks across genres (RP-BPI-002B canonical) ===
+    // Track Map keyed per Beatport-derived key. Merge: append positions,
+    // fill releaseId se mancante.
     res.tm.forEach(function (v, k) {
       if (globalTM.has(k)) {
         var ex = globalTM.get(k);
+        // Remap: il canonical id per-genre (v.id) → global canonical id (ex.id)
+        if (v.id !== ex.id) {
+          globalRemapRegistry.track[v.id] = ex.id;
+        }
         v.positions.forEach(function (p) { ex.positions.push(p); });
-        // RP-BPI-002A — fill releaseId se la prima occorrenza non lo aveva
         if (!ex.releaseId && v.releaseId) ex.releaseId = v.releaseId;
       } else {
         globalTM.set(k, v);
       }
     });
 
-    // === RP-BPI-001 — Merge releases across genres ===
-    // Stessa logica di aggregazione usata in processTracks per le release
-    // già esistenti: dedup artistIds, trackIds, genres; ricalcola bpmAverage;
-    // aggiorna keyDistribution; aggiorna lastSeen e campi mancanti.
-    //
-    // RP-BPI-002A — artistIds[] e trackIds[] ora contengono STABLE KEYS.
-    // La dedup è fatta per stable key (stringa 'bp_<id>' o 'nm_<name>').
-    // artistBpIds[] e trackBpIds[] (legacy BP ids) vengono mantenuti
-    // allineati per backward compat.
+    // === RP-BPI-001 — Merge releases across genres (RP-BPI-002B canonical) ===
     res.rm.forEach(function (v, k) {
       if (globalRM.has(k)) {
         var exR = globalRM.get(k);
-        // Merge artistIds (stable keys, dedup) + artistBpIds (legacy) + artistNames
-        v.artistIds.forEach(function (aKey, idx) {
-          if (!aKey) return;
-          if (exR.artistIds.indexOf(aKey) === -1) {
-            exR.artistIds.push(aKey);
-            exR.artistBpIds.push(v.artistBpIds[idx] != null ? v.artistBpIds[idx] : null);
-            exR.artistNames.push(v.artistNames[idx] || '');
+        // Remap: il canonical id per-genre (v.id) → global canonical id (exR.id)
+        if (v.id !== exR.id) {
+          globalRemapRegistry.release[v.id] = exR.id;
+        }
+        // Merge artistIds (canonical, dedup) + _compat.artistBpIds/artistNames (legacy parallel)
+        v.artistIds.forEach(function (cArtId, idx) {
+          if (!cArtId) return;
+          if (exR.artistIds.indexOf(cArtId) === -1) {
+            exR.artistIds.push(cArtId);
+            exR._compat.artistBpIds.push(v._compat.artistBpIds[idx] != null ? v._compat.artistBpIds[idx] : null);
+            exR._compat.artistNames.push(v._compat.artistNames[idx] || '');
           }
         });
-        // Merge trackIds (stable keys, dedup) + trackBpIds (legacy, dedup)
-        v.trackIds.forEach(function (tKey, idx) {
-          if (!tKey) return;
-          if (exR.trackIds.indexOf(tKey) === -1) {
-            exR.trackIds.push(tKey);
+        // Merge trackIds (canonical, dedup) + _compat.trackBpIds (legacy, dedup)
+        v.trackIds.forEach(function (cTrkId, idx) {
+          if (!cTrkId) return;
+          if (exR.trackIds.indexOf(cTrkId) === -1) {
+            exR.trackIds.push(cTrkId);
           }
-          var tBpId = v.trackBpIds[idx];
-          if (tBpId != null && exR.trackBpIds.indexOf(tBpId) === -1) {
-            exR.trackBpIds.push(tBpId);
+          var tBpId = v._compat.trackBpIds[idx];
+          if (tBpId != null && exR._compat.trackBpIds.indexOf(tBpId) === -1) {
+            exR._compat.trackBpIds.push(tBpId);
           }
         });
         exR.trackCount = exR.trackIds.length;
@@ -634,18 +1011,15 @@
         v.genres.forEach(function (gn2) {
           if (exR.genres.indexOf(gn2) === -1) exR.genres.push(gn2);
         });
-        // Ricalcola bpmAverage: combina i running sums delle due mappe.
-        // Inizializza _bpmSum/_bpmCount sul target se non presenti.
+        // Ricalcola bpmAverage: combina i running sums
         if (typeof exR._bpmSum !== 'number') {
           exR._bpmSum = exR.bpmAverage || 0;
           exR._bpmCount = exR.bpmAverage != null ? 1 : 0;
         }
         if (typeof v._bpmSum === 'number' && typeof v._bpmCount === 'number') {
-          // La release source ha accumulatori → combinali
           exR._bpmSum += v._bpmSum;
           exR._bpmCount += v._bpmCount;
         } else if (v.bpmAverage != null) {
-          // Fallback: usa il bpmAverage già calcolato (1 sample)
           exR._bpmSum += v.bpmAverage;
           exR._bpmCount += 1;
         }
@@ -656,10 +1030,10 @@
         }
         // Aggiorna lastSeen
         if (v.lastSeen > exR.lastSeen) exR.lastSeen = v.lastSeen;
-        // Aggiorna campi mancanti sul target
+        // Fill campi mancanti sul target
         if (!exR.labelId && v.labelId) exR.labelId = v.labelId;
-        if (!exR.labelKey && v.labelKey) exR.labelKey = v.labelKey;
-        if (!exR.labelName && v.labelName) exR.labelName = v.labelName;
+        if (!exR._compat.labelId && v._compat.labelId) exR._compat.labelId = v._compat.labelId;
+        if (!exR._compat.labelName && v._compat.labelName) exR._compat.labelName = v._compat.labelName;
         if (!exR.imageUrl && v.imageUrl) exR.imageUrl = v.imageUrl;
         if (!exR.releaseDate && v.releaseDate) exR.releaseDate = v.releaseDate;
         if (!exR.catalogNumber && v.catalogNumber) exR.catalogNumber = v.catalogNumber;
@@ -668,7 +1042,6 @@
         if (!exR.name && v.name) exR.name = v.name;
         if (exR.beatportId == null && v.beatportId != null) {
           exR.beatportId = v.beatportId;
-          exR.id = v.beatportId;
         }
       } else {
         globalRM.set(k, v);
@@ -685,104 +1058,220 @@
     await sleep(D);
   }
 
+  // ===================================================================
+  // RP-BPI-002B — REMAP CANONICAL IDS (cross-genre orphan fix)
+  //
+  // PRIMA di buildCanonicalRelationships: rimappa gli id canonici orfani
+  // (per-genre) agli id canonici globali sopravvissuti. Questo assicura
+  // che tutte le relazioni puntino a entità esistenti.
+  // ===================================================================
+  remapCanonicalIds(globalTM, globalRM, globalAM, globalLM);
+
+  // ===================================================================
+  // RP-BPI-002B — BUILD CANONICAL RELATIONSHIPS (inverse)
+  //
+  // Ora che tutte le entità sono state acquisite e mergiate globalmente,
+  // e gli id canonici orfani sono stati rimappati, popoliamo gli array
+  // relazionali INVERSI (Artist.trackIds/releaseIds,
+  // Label.artistIds/releaseIds/trackIds).
+  // ===================================================================
+  buildCanonicalRelationships(globalTM, globalRM, globalAM, globalLM);
+
   console.log(S + ' %cCostruzione JSON...', c1, c2);
 
   // ===================================================================
-  // BUILD LABELS (same shape as v1 — backward compatible)
+  // BUILD LABELS — canonical model + legacy compat output
   // ===================================================================
-  var lM = {};
-  for (var gn4 in gR) {
-    for (var li = 0; li < gR[gn4].length; li++) {
-      var lb = gR[gn4][li];
-      var nm = lb.name.toUpperCase().trim();
-      if (!nm) continue;
-      if (!lM[nm]) {
-        lM[nm] = {
-          id: 'lbl_' + nm.toLowerCase().replace(/[^a-z0-9]+/g, '_').replace(/_+$/, ''),
-          name: nm,
-          genres: [],
-          rankByGenre: {},
-          pointsByGenre: {},
-          trending: false
-        };
-        if (lb.id) lM[nm].beatportId = lb.id;
-        if (lb.slug) lM[nm].slug = lb.slug;
-        if (lb.imageUrl) lM[nm].imageUrl = lb.imageUrl;
-        // RP-BPI-002A — stable label key (alias del campo `key` popolato in lm)
-        if (lb.key) lM[nm].key = lb.key;
-      }
-      if (lM[nm].genres.indexOf(gn4) === -1) lM[nm].genres.push(gn4);
-      lM[nm].rankByGenre[gn4] = lb.rank;
-      lM[nm].pointsByGenre[gn4] = lb.totalPoints;
-    }
-  }
-
-  // Trending computation for labels (same as v1)
-  for (var k in lM) {
-    var l = lM[k];
-    var ranks = Object.values(l.rankByGenre);
-    var minR = Math.min.apply(null, ranks);
-    var tPts = Object.values(l.pointsByGenre).reduce(function (a, b) { return a + b; }, 0);
+  // L'output mantiene totale backward compat con v1 + RP-BPI-001 + RP-BPI-002A:
+  //   - `id` (legacy synthetic 'lbl_<slug>') → esposto come `id` (per consumer v1)
+  //   - `beatportId` (BP id) → esposto
+  //   - `key` (RP-BPI-002A stable key 'bp_lbl_<id>') → esposto
+  //   - `genres`, `rankByGenre`, `pointsByGenre`, `trending` → esposti (legacy)
+  //   - `slug`, `imageUrl` → esposti
+  // AGGIUNTI (canonical, RP-BPI-002B):
+  //   - `canonicalId` → l'id canonico (lbl_<n>) — nuovo campo, NON sovrascrive `id`
+  //   - `artistIds`, `releaseIds`, `trackIds` → canonical relationship arrays
+  //
+  // NOTA: per evitare di rompere i consumer v1 che usano `id` come chiave,
+  // esponiamo l'id canonico come `canonicalId` e manteniamo `id` = legacyId.
+  // I nuovi consumer devono usare `canonicalId` come chiave relazionale.
+  // ===================================================================
+  var labelArr = Array.from(globalLM.values()).map(function (l) {
+    // Trending computation (legacy, same as v1)
+    var ranks = Object.values(l._rankByGenre);
+    var minR = ranks.length > 0 ? Math.min.apply(null, ranks) : 999;
+    var tPts = Object.values(l._pointsByGenre).reduce(function (a, b) { return a + b; }, 0);
+    var trending = false;
+    var trendingRankByGenre = {};
+    var trendingPointsByGenre = {};
     if (minR <= 25 || tPts > 500) {
-      l.trending = true;
-      l.trendingRankByGenre = {};
-      l.trendingPointsByGenre = {};
-      for (var gr in l.rankByGenre) {
-        if (l.rankByGenre[gr] <= 50) {
-          l.trendingRankByGenre[gr] = l.rankByGenre[gr];
-          l.trendingPointsByGenre[gr] = l.pointsByGenre[gr];
+      trending = true;
+      for (var gr in l._rankByGenre) {
+        if (l._rankByGenre[gr] <= 50) {
+          trendingRankByGenre[gr] = l._rankByGenre[gr];
+          trendingPointsByGenre[gr] = l._pointsByGenre[gr];
         }
       }
     }
-  }
+    return {
+      // === CANONICAL (RP-BPI-002B) ===
+      canonicalId: l.id,                    // l'id canonico (lbl_<n>)
+      beatportId: l.beatportId,             // attributo informativo della sorgente
+      // === ATTRIBUTES ===
+      name: l.name,
+      slug: l.slug,
+      imageUrl: l.imageUrl,
+      // === CANONICAL RELATIONSHIPS ===
+      artistIds: l.artistIds.slice(),
+      releaseIds: l.releaseIds.slice(),
+      trackIds: l.trackIds.slice(),
+      // === LEGACY (preservato per backward compat) ===
+      id: l._compat.legacyId,               // legacy 'lbl_<slug>' synthetic id
+      key: l._compat.key,                   // RP-BPI-002A stable key 'bp_lbl_<id>'
+      genres: l._genres.slice(),
+      rankByGenre: Object.assign({}, l._rankByGenre),
+      pointsByGenre: Object.assign({}, l._pointsByGenre),
+      trending: trending,
+      trendingRankByGenre: trendingRankByGenre,
+      trendingPointsByGenre: trendingPointsByGenre
+    };
+  });
 
   // ===================================================================
-  // BUILD ARTISTS (with trending computation)
+  // BUILD ARTISTS — canonical model + legacy compat output
   // ===================================================================
-  var artistsArr = Array.from(globalAM.values());
-  artistsArr.forEach(function (a) {
-    // Sort each genre's tracks by points desc
-    for (var gn5 in a.tracksByGenre) {
-      a.tracksByGenre[gn5].sort(function (x, y) { return y.points - x.points; });
+  var artistsArr = Array.from(globalAM.values()).map(function (a) {
+    // Sort each genre's tracks by points desc (legacy behavior)
+    var tracksByGenreOut = {};
+    for (var gn5 in a._tracksByGenre) {
+      tracksByGenreOut[gn5] = a._tracksByGenre[gn5].slice().sort(function (x, y) { return y.points - x.points; });
     }
-    // Trending: best position <= 25 OR total points > 500
-    if (a.bestPosition <= 25 || a.totalPoints > 500) {
-      a.trending = true;
-      a.trendingRankByGenre = {};
-      a.trendingPointsByGenre = {};
-      for (var gn6 in a.tracksByGenre) {
-        var genrePoints = a.tracksByGenre[gn6].reduce(function (acc, t) { return acc + t.points; }, 0);
-        var genreBestPos = a.tracksByGenre[gn6].reduce(function (min, t) { return t.position < min ? t.position : min; }, 999);
+    // Trending computation (legacy)
+    var trending = false;
+    var trendingRankByGenre = {};
+    var trendingPointsByGenre = {};
+    if (a._bestPosition <= 25 || a._totalPoints > 500) {
+      trending = true;
+      for (var gn6 in a._tracksByGenre) {
+        var genrePoints = a._tracksByGenre[gn6].reduce(function (acc, t) { return acc + t.points; }, 0);
+        var genreBestPos = a._tracksByGenre[gn6].reduce(function (min, t) { return t.position < min ? t.position : min; }, 999);
         if (genreBestPos <= 50) {
-          a.trendingRankByGenre[gn6] = genreBestPos;
-          a.trendingPointsByGenre[gn6] = genrePoints;
+          trendingRankByGenre[gn6] = genreBestPos;
+          trendingPointsByGenre[gn6] = genrePoints;
         }
       }
-    } else {
-      a.trending = false;
     }
+    return {
+      // === CANONICAL (RP-BPI-002B) ===
+      canonicalId: a.id,                    // l'id canonico (art_<n>)
+      beatportId: a.beatportId,             // attributo informativo della sorgente
+      // === ATTRIBUTES ===
+      name: a.name,
+      slug: a.slug,
+      imageUrl: a.imageUrl,
+      // === CANONICAL RELATIONSHIPS ===
+      labelIds: a.labelIds.slice(),
+      releaseIds: a.releaseIds.slice(),
+      trackIds: a.trackIds.slice(),
+      // === AGGREGATES (legacy) ===
+      totalPoints: a._totalPoints,
+      bestPosition: a._bestPosition,
+      isRemixerOnly: a._isRemixerOnly,
+      trending: trending,
+      trendingRankByGenre: trendingRankByGenre,
+      trendingPointsByGenre: trendingPointsByGenre,
+      // === LEGACY (preservato per backward compat) ===
+      id: a._compat.key,                    // legacy RP-BPI-002A stable key 'bp_<id>'/'nm_<name>'
+      key: a._compat.key,                   // alias
+      genres: a._genres.slice(),
+      tracksByGenre: tracksByGenreOut,
+      labelsPublishedOn: a._labelsPublishedOnNames.slice()   // legacy NAME array
+    };
   });
   artistsArr.sort(function (a, b) { return b.totalPoints - a.totalPoints; });
 
   // ===================================================================
-  // BUILD TRACKS (global, deduplicated)
+  // BUILD TRACKS — canonical model + legacy compat output
   // ===================================================================
-  var tracksArr = Array.from(globalTM.values());
+  // NOTA IMPORTANTE: nel legacy, `track.labelId` era il BP id della label.
+  // Nel canonical, `track.labelId` è l'id canonico (lbl_<n>).
+  // Per evitare conflitto di naming mantenendo backward compat:
+  //   - Il campo `labelId` nell'output è l'id CANONICO (RP-BPI-002B).
+  //   - Il BP id legacy è preservato in `track.beatportLabelId`.
+  var tracksArr = Array.from(globalTM.values()).map(function (t) {
+    return {
+      // === CANONICAL (RP-BPI-002B) ===
+      canonicalId: t.id,                    // l'id canonico (trk_<n>)
+      beatportId: t.beatportId,             // attributo informativo della sorgente
+      // === ATTRIBUTES ===
+      name: t.name,
+      mixName: t.mixName,
+      slug: t.slug,
+      bpm: t.bpm,
+      keyCamelot: t.keyCamelot,
+      keyName: t.keyName,
+      releaseDate: t.releaseDate,
+      coverArt: t.coverArt,
+      sampleUrl: t.sampleUrl,
+      primaryGenre: t.primaryGenre,
+      subGenre: t.subGenre,
+      // === CANONICAL RELATIONSHIPS ===
+      releaseId: t.releaseId,               // canonical release id (rel_<n>) — may be null
+      labelId: t.labelId,                   // canonical label id (lbl_<n>) — RP-BPI-002B
+      artistIds: t.artistIds.slice(),       // canonical artist ids (primary, art_<n>)
+      remixerIds: t.remixerIds.slice(),     // canonical remixer ids (art_<n>)
+      // === AGGREGATES ===
+      positions: t.positions.slice(),
+      seenAt: t.seenAt,
+      // === LEGACY (preservato per backward compat) ===
+      id: t.beatportId,                     // legacy: BP id (alias of beatportId, may be null)
+      key: t._compat.key,                   // legacy RP-BPI-002A stable key 'bp_<id>'
+      label: t._compat.label,               // legacy NAME
+      // `labelId` legacy (BP id) è ora in `beatportLabelId` per evitare conflitto
+      // con il `labelId` canonical (lbl_<n>).
+      beatportLabelId: t._compat.labelId,   // legacy BP id della label (may be null)
+      labelSlug: t._compat.labelSlug,       // legacy label slug
+      artists: t._compat.artists.slice(),   // legacy array of {id,name,slug}
+      remixers: t._compat.remixers.slice()  // legacy array of {id,name,slug}
+    };
+  });
 
   // ===================================================================
-  // BUILD RELEASES (RP-BPI-001 — global, deduplicated)
+  // BUILD RELEASES — canonical model + legacy compat output
   // ===================================================================
-  // Le release vengono estratte da globalRM. I campi privati _bpmSum e
-  // _bpmCount (usati come accumulatori running) vengono rimossi prima
-  // della serializzazione per non inquinare l'output JSON.
   var releasesArr = Array.from(globalRM.values()).map(function (r) {
-    // Clona shallow + rimuovi campi privati
-    var clean = {};
-    for (var fk in r) {
-      if (fk === '_bpmSum' || fk === '_bpmCount') continue;
-      clean[fk] = r[fk];
-    }
-    return clean;
+    return {
+      // === CANONICAL (RP-BPI-002B) ===
+      canonicalId: r.id,                    // l'id canonico (rel_<n>)
+      beatportId: r.beatportId,             // attributo informativo della sorgente
+      // === ATTRIBUTES ===
+      name: r.name,
+      slug: r.slug,
+      url: r.url,
+      catalogNumber: r.catalogNumber,
+      releaseDate: r.releaseDate,
+      imageUrl: r.imageUrl,
+      // === CANONICAL RELATIONSHIPS ===
+      labelId: r.labelId,                   // canonical label id (lbl_<n>)
+      artistIds: r.artistIds.slice(),       // canonical artist ids (art_<n>)
+      trackIds: r.trackIds.slice(),         // canonical track ids (trk_<n>)
+      trackCount: r.trackCount,
+      // === AGGREGATES ===
+      genres: r.genres.slice(),
+      bpmAverage: r.bpmAverage,
+      keyDistribution: Object.assign({}, r.keyDistribution),
+      firstSeen: r.firstSeen,
+      lastSeen: r.lastSeen,
+      // === LEGACY (preservato per backward compat) ===
+      id: r.beatportId,                     // legacy: BP id (alias of beatportId, may be null)
+      key: r._compat.key,                   // legacy RP-BPI-002A stable key 'bp_rel_<id>'
+      // `labelId` legacy (BP id) è ora in `beatportLabelId` per evitare conflitto.
+      beatportLabelId: r._compat.labelId,   // legacy BP id della label (may be null)
+      labelName: r._compat.labelName,       // legacy NAME della label
+      artistBpIds: r._compat.artistBpIds.slice(),   // legacy BP ids (parallel to artistIds)
+      artistNames: r._compat.artistNames.slice(),   // legacy NAME array (parallel to artistIds)
+      trackBpIds: r._compat.trackBpIds.slice()      // legacy BP track ids (parallel to trackIds)
+    };
   });
   // Sort per trackCount desc (release con più tracce in cima)
   releasesArr.sort(function (a, b) {
@@ -792,8 +1281,6 @@
   // ===================================================================
   // OUTPUT
   // ===================================================================
-  // Conteggio loghi acquisiti (diagnostica visibile in console + nel JSON)
-  var labelArr = Object.values(lM);
   var logosCount = labelArr.filter(function (l) { return l.imageUrl; }).length;
 
   var out = {
@@ -805,17 +1292,20 @@
     releases: releasesArr,
     _meta: {
       source: 'beatport',
-      version: 2,
-      // RP-BPI-002A — schemaVersion esplicito per future migration path.
-      // 2 = modello dati normalizzato con stable ID references.
-      // I campi legacy (name-based) sono ancora presenti per retrocompatibilità.
-      schemaVersion: 2,
+      version: 2,                           // legacy version field (preservato)
+      // RP-BPI-002B — canonical model markers.
+      // schemaVersion 3 = Canonical Data Model (RP-BPI-002B).
+      //   - Ogni entità ha UN SOLO id canonico (canonicalId field).
+      //   - Tutte le relazioni utilizzano esclusivamente canonicalId.
+      //   - beatportId è un attributo informativo della sorgente.
+      //   - I campi legacy sono preservati per backward compat.
+      schemaVersion: 3,
+      canonicalModel: 1,
       scrapedAt: NOW,
       totalLabels: labelArr.length,
       totalLabelsWithLogo: logosCount,
       totalArtists: artistsArr.length,
       totalTracks: tracksArr.length,
-      // RP-BPI-001 — conteggio release nell'output JSON.
       totalReleases: releasesArr.length,
       totalGenres: G.length,
       successGenres: sC,
@@ -836,7 +1326,7 @@
 
   console.log(S + ' %c========================================', c1, c1);
   console.log(S + ' %cCOMPLETATO!', c1, cOk);
-  console.log(S + ' %c' + Object.keys(lM).length + ' label, ' + artistsArr.length + ' artisti, ' + tracksArr.length + ' tracce, ' + releasesArr.length + ' release da ' + sC + '/' + G.length + ' generi', c1, cOk);
+  console.log(S + ' %c' + labelArr.length + ' label, ' + artistsArr.length + ' artisti, ' + tracksArr.length + ' tracce, ' + releasesArr.length + ' release da ' + sC + '/' + G.length + ' generi', c1, cOk);
   console.log(S + ' %cLoghi label acquisiti: ' + logosCount + '/' + labelArr.length + (labelArr.length > 0 ? ' (' + Math.round(logosCount * 100 / labelArr.length) + '%)' : ''), c1, cOk);
   if (fC > 0) console.log(S + ' %c ' + fC + ' generi senza dati', c1, cErr);
   console.log(S + ' %cFile JSON scaricato! Importa in LabelPulse', c1, cOk);
