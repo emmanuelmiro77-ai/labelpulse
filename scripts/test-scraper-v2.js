@@ -124,6 +124,26 @@ const sampleByGenre = {
   ]
 };
 
+
+// ===================================================================
+// CANONICAL GRAPH STRUCTURE
+// ===================================================================
+function createCanonicalGraph() {
+  return {
+    labels: new Map(),
+    artists: new Map(),
+    releases: new Map(),
+    tracks: new Map(),
+    remapRegistry: { track: {}, release: {}, artist: {}, label: {} }
+  };
+}
+
+// ===================================================================
+// CANONICAL GRAPH BUILDER
+// ===================================================================
+function createCanonicalGraphBuilder(graph) {
+  var gR = {};
+
 // === RP-BPI-002B — Canonical ID generators (mirror of the scraper) ===
 const canonicalCounters = { track: 0, release: 0, artist: 0, label: 0 };
 const PAD = 6;
@@ -464,7 +484,11 @@ function processTracks(tracks, gn, lm, am, tm, rm) {
 }
 
 // === buildCanonicalRelationships (mirror of the scraper) ===
-function buildCanonicalRelationships(globalTM, globalRM, globalAM, globalLM) {
+function buildCanonicalRelationships() {
+  var globalTM = graph.tracks;
+  var globalRM = graph.releases;
+  var globalAM = graph.artists;
+  var globalLM = graph.labels;
   var artistById = new Map();
   globalAM.forEach(function (a) { artistById.set(a.id, a); });
   var labelById = new Map();
@@ -514,15 +538,16 @@ function buildCanonicalRelationships(globalTM, globalRM, globalAM, globalLM) {
   });
 }
 
-// === Global remap registry: per-genre canonical id → global canonical id ===
-const globalRemapRegistry = { track: {}, release: {}, artist: {}, label: {} };
-
 // === remapCanonicalIds (mirror of the scraper) ===
-function remapCanonicalIds(globalTM, globalRM, globalAM, globalLM) {
-  function remapTrackId(id) { return id == null ? id : (globalRemapRegistry.track[id] || id); }
-  function remapReleaseId(id) { return id == null ? id : (globalRemapRegistry.release[id] || id); }
-  function remapArtistId(id) { return id == null ? id : (globalRemapRegistry.artist[id] || id); }
-  function remapLabelId(id) { return id == null ? id : (globalRemapRegistry.label[id] || id); }
+function remapCanonicalIds() {
+  var globalTM = graph.tracks;
+  var globalRM = graph.releases;
+  var globalAM = graph.artists;
+  var globalLM = graph.labels;
+  function remapTrackId(id) { return id == null ? id : (graph.remapRegistry.track[id] || id); }
+  function remapReleaseId(id) { return id == null ? id : (graph.remapRegistry.release[id] || id); }
+  function remapArtistId(id) { return id == null ? id : (graph.remapRegistry.artist[id] || id); }
+  function remapLabelId(id) { return id == null ? id : (graph.remapRegistry.label[id] || id); }
   function dedup(arr) {
     var seen = {};
     var out = [];
@@ -550,152 +575,162 @@ function remapCanonicalIds(globalTM, globalRM, globalAM, globalLM) {
   });
 }
 
-// === Run across genres ===
-const gR = {};
-const globalAM = new Map();
-const globalTM = new Map();
-const globalRM = new Map();
-const globalLM = new Map();
 
-for (const gn of Object.keys(sampleByGenre)) {
-  const lm = new Map(), am = new Map(), tm = new Map(), rm = new Map();
-  processTracks(sampleByGenre[gn], gn, lm, am, tm, rm);
+  // === mergeGenreIntoGlobal ===
+  function mergeGenreIntoGlobal(lm, am, tm, rm, genreName) {
+    const la = Array.from(lm.values());
+    la.sort((a, b) => b._totalPoints - a._totalPoints);
+    la.forEach((l, i) => {
+      l._rankByGenre[genreName] = i + 1;
+      l._pointsByGenre[genreName] = l._totalPoints;
+      l.rank = i + 1;
+    });
+    gR[genreName] = la;
 
-  const la = Array.from(lm.values());
-  la.sort((a, b) => b._totalPoints - a._totalPoints);
-  la.forEach((l, i) => {
-    l._rankByGenre[gn] = i + 1;
-    l._pointsByGenre[gn] = l._totalPoints;
-    l.rank = i + 1;
-  });
-  gR[gn] = la;
-
-  // Merge labels
-  lm.forEach((v, k) => {
-    if (globalLM.has(k)) {
-      const exL = globalLM.get(k);
-      // Remap: per-genre canonical id → global canonical id
-      if (v.id !== exL.id) {
-        globalRemapRegistry.label[v.id] = exL.id;
-      }
-      exL._trackCount += v._trackCount;
-      exL._totalPoints += v._totalPoints;
-      if (v._bestPosition < exL._bestPosition) exL._bestPosition = v._bestPosition;
-      v._genres.forEach(gn2 => { if (!exL._genres.includes(gn2)) exL._genres.push(gn2); });
-      for (const grKey in v._rankByGenre) exL._rankByGenre[grKey] = v._rankByGenre[grKey];
-      for (const ppKey in v._pointsByGenre) exL._pointsByGenre[ppKey] = (exL._pointsByGenre[ppKey] || 0) + v._pointsByGenre[ppKey];
-      if (!exL.slug && v.slug) exL.slug = v.slug;
-      if (!exL.imageUrl && v.imageUrl) exL.imageUrl = v.imageUrl;
-      if (exL.beatportId == null && v.beatportId != null) exL.beatportId = v.beatportId;
-    } else {
-      globalLM.set(k, v);
-    }
-  });
-
-  // Merge artists
-  am.forEach((v, k) => {
-    if (globalAM.has(k)) {
-      const ex = globalAM.get(k);
-      // Remap
-      if (v.id !== ex.id) {
-        globalRemapRegistry.artist[v.id] = ex.id;
-      }
-      v._genres.forEach(gn2 => { if (!ex._genres.includes(gn2)) ex._genres.push(gn2); });
-      v._labelsPublishedOnNames.forEach(ln => { if (!ex._labelsPublishedOnNames.includes(ln)) ex._labelsPublishedOnNames.push(ln); });
-      if (Array.isArray(v.labelIds)) {
-        v.labelIds.forEach(lId => { if (lId && !ex.labelIds.includes(lId)) ex.labelIds.push(lId); });
-      }
-      for (const gn3 in v._tracksByGenre) {
-        if (!ex._tracksByGenre[gn3]) ex._tracksByGenre[gn3] = [];
-        ex._tracksByGenre[gn3].push(...v._tracksByGenre[gn3]);
-      }
-      ex._totalPoints += v._totalPoints;
-      if (v._bestPosition < ex._bestPosition) ex._bestPosition = v._bestPosition;
-      if (!v._isRemixerOnly) ex._isRemixerOnly = false;
-    } else {
-      globalAM.set(k, v);
-    }
-  });
-
-  // Merge tracks
-  tm.forEach((v, k) => {
-    if (globalTM.has(k)) {
-      const ex = globalTM.get(k);
-      // Remap
-      if (v.id !== ex.id) {
-        globalRemapRegistry.track[v.id] = ex.id;
-      }
-      ex.positions.push(...v.positions);
-      if (!ex.releaseId && v.releaseId) ex.releaseId = v.releaseId;
-    } else {
-      globalTM.set(k, v);
-    }
-  });
-
-  // Merge releases
-  rm.forEach((v, k) => {
-    if (globalRM.has(k)) {
-      const exR = globalRM.get(k);
-      // Remap
-      if (v.id !== exR.id) {
-        globalRemapRegistry.release[v.id] = exR.id;
-      }
-      v.artistIds.forEach((cArtId, idx) => {
-        if (!cArtId) return;
-        if (!exR.artistIds.includes(cArtId)) {
-          exR.artistIds.push(cArtId);
-          exR._compat.artistBpIds.push(v._compat.artistBpIds[idx] != null ? v._compat.artistBpIds[idx] : null);
-          exR._compat.artistNames.push(v._compat.artistNames[idx] || '');
+    // Merge labels
+    lm.forEach((v, k) => {
+      if (graph.labels.has(k)) {
+        const exL = graph.labels.get(k);
+        if (v.id !== exL.id) {
+          graph.remapRegistry.label[v.id] = exL.id;
         }
-      });
-      v.trackIds.forEach((cTrkId, idx) => {
-        if (!cTrkId) return;
-        if (!exR.trackIds.includes(cTrkId)) exR.trackIds.push(cTrkId);
-        const tBpId = v._compat.trackBpIds[idx];
-        if (tBpId != null && !exR._compat.trackBpIds.includes(tBpId)) exR._compat.trackBpIds.push(tBpId);
-      });
-      exR.trackCount = exR.trackIds.length;
-      v.genres.forEach(gn2 => { if (!exR.genres.includes(gn2)) exR.genres.push(gn2); });
-      if (typeof exR._bpmSum !== 'number') {
-        exR._bpmSum = exR.bpmAverage || 0;
-        exR._bpmCount = exR.bpmAverage != null ? 1 : 0;
+        exL._trackCount += v._trackCount;
+        exL._totalPoints += v._totalPoints;
+        if (v._bestPosition < exL._bestPosition) exL._bestPosition = v._bestPosition;
+        v._genres.forEach(gn2 => { if (!exL._genres.includes(gn2)) exL._genres.push(gn2); });
+        for (const grKey in v._rankByGenre) exL._rankByGenre[grKey] = v._rankByGenre[grKey];
+        for (const ppKey in v._pointsByGenre) exL._pointsByGenre[ppKey] = (exL._pointsByGenre[ppKey] || 0) + v._pointsByGenre[ppKey];
+        if (!exL.slug && v.slug) exL.slug = v.slug;
+        if (!exL.imageUrl && v.imageUrl) exL.imageUrl = v.imageUrl;
+        if (exL.beatportId == null && v.beatportId != null) exL.beatportId = v.beatportId;
+      } else {
+        graph.labels.set(k, v);
       }
-      if (typeof v._bpmSum === 'number' && typeof v._bpmCount === 'number') {
-        exR._bpmSum += v._bpmSum;
-        exR._bpmCount += v._bpmCount;
-      } else if (v.bpmAverage != null) {
-        exR._bpmSum += v.bpmAverage;
-        exR._bpmCount += 1;
+    });
+
+    // Merge artists
+    am.forEach((v, k) => {
+      if (graph.artists.has(k)) {
+        const ex = graph.artists.get(k);
+        if (v.id !== ex.id) {
+          graph.remapRegistry.artist[v.id] = ex.id;
+        }
+        v._genres.forEach(gn2 => { if (!ex._genres.includes(gn2)) ex._genres.push(gn2); });
+        v._labelsPublishedOnNames.forEach(ln => { if (!ex._labelsPublishedOnNames.includes(ln)) ex._labelsPublishedOnNames.push(ln); });
+        if (Array.isArray(v.labelIds)) {
+          v.labelIds.forEach(lId => { if (lId && !ex.labelIds.includes(lId)) ex.labelIds.push(lId); });
+        }
+        for (const gn3 in v._tracksByGenre) {
+          if (!ex._tracksByGenre[gn3]) ex._tracksByGenre[gn3] = [];
+          ex._tracksByGenre[gn3].push(...v._tracksByGenre[gn3]);
+        }
+        ex._totalPoints += v._totalPoints;
+        if (v._bestPosition < ex._bestPosition) ex._bestPosition = v._bestPosition;
+        if (!v._isRemixerOnly) ex._isRemixerOnly = false;
+      } else {
+        graph.artists.set(k, v);
       }
-      exR.bpmAverage = exR._bpmCount > 0 ? Math.round(exR._bpmSum / exR._bpmCount) : null;
-      for (const kk in v.keyDistribution) {
-        exR.keyDistribution[kk] = (exR.keyDistribution[kk] || 0) + v.keyDistribution[kk];
+    });
+
+    // Merge tracks
+    tm.forEach((v, k) => {
+      if (graph.tracks.has(k)) {
+        const ex = graph.tracks.get(k);
+        if (v.id !== ex.id) {
+          graph.remapRegistry.track[v.id] = ex.id;
+        }
+        ex.positions.push(...v.positions);
+        if (!ex.releaseId && v.releaseId) ex.releaseId = v.releaseId;
+      } else {
+        graph.tracks.set(k, v);
       }
-      if (v.lastSeen > exR.lastSeen) exR.lastSeen = v.lastSeen;
-      if (!exR.labelId && v.labelId) exR.labelId = v.labelId;
-      if (!exR._compat.labelId && v._compat.labelId) exR._compat.labelId = v._compat.labelId;
-      if (!exR._compat.labelName && v._compat.labelName) exR._compat.labelName = v._compat.labelName;
-      if (!exR.imageUrl && v.imageUrl) exR.imageUrl = v.imageUrl;
-      if (!exR.releaseDate && v.releaseDate) exR.releaseDate = v.releaseDate;
-      if (!exR.catalogNumber && v.catalogNumber) exR.catalogNumber = v.catalogNumber;
-      if (!exR.slug && v.slug) exR.slug = v.slug;
-      if (!exR.url && v.url) exR.url = v.url;
-      if (!exR.name && v.name) exR.name = v.name;
-      if (exR.beatportId == null && v.beatportId != null) exR.beatportId = v.beatportId;
-    } else {
-      globalRM.set(k, v);
-    }
-  });
+    });
+
+    // Merge releases
+    rm.forEach((v, k) => {
+      if (graph.releases.has(k)) {
+        const exR = graph.releases.get(k);
+        if (v.id !== exR.id) {
+          graph.remapRegistry.release[v.id] = exR.id;
+        }
+        v.artistIds.forEach((cArtId, idx) => {
+          if (!cArtId) return;
+          if (!exR.artistIds.includes(cArtId)) {
+            exR.artistIds.push(cArtId);
+            exR._compat.artistBpIds.push(v._compat.artistBpIds[idx] != null ? v._compat.artistBpIds[idx] : null);
+            exR._compat.artistNames.push(v._compat.artistNames[idx] || '');
+          }
+        });
+        // Merge remixers into legacy arrays
+        var seenLegacyKeysEx = {};
+        exR._compat.artistNames.forEach(function (nm) {
+          seenLegacyKeysEx[nm.toUpperCase().trim()] = true;
+        });
+        v._compat.artistNames.forEach(function (nm, idx) {
+          var nmUpper = (nm || '').toUpperCase().trim();
+          if (nmUpper && !seenLegacyKeysEx[nmUpper]) {
+            seenLegacyKeysEx[nmUpper] = true;
+            exR._compat.artistBpIds.push(v._compat.artistBpIds[idx] != null ? v._compat.artistBpIds[idx] : null);
+            exR._compat.artistNames.push(nm);
+          }
+        });
+        v.trackIds.forEach((cTrkId, idx) => {
+          if (!cTrkId) return;
+          if (!exR.trackIds.includes(cTrkId)) exR.trackIds.push(cTrkId);
+          const tBpId = v._compat.trackBpIds[idx];
+          if (tBpId != null && !exR._compat.trackBpIds.includes(tBpId)) exR._compat.trackBpIds.push(tBpId);
+        });
+        exR.trackCount = exR.trackIds.length;
+        v.genres.forEach(gn2 => { if (!exR.genres.includes(gn2)) exR.genres.push(gn2); });
+        if (typeof exR._bpmSum !== 'number') {
+          exR._bpmSum = exR.bpmAverage || 0;
+          exR._bpmCount = exR.bpmAverage != null ? 1 : 0;
+        }
+        if (typeof v._bpmSum === 'number' && typeof v._bpmCount === 'number') {
+          exR._bpmSum += v._bpmSum;
+          exR._bpmCount += v._bpmCount;
+        } else if (v.bpmAverage != null) {
+          exR._bpmSum += v.bpmAverage;
+          exR._bpmCount += 1;
+        }
+        exR.bpmAverage = exR._bpmCount > 0 ? Math.round(exR._bpmSum / exR._bpmCount) : null;
+        for (const kk in v.keyDistribution) {
+          exR.keyDistribution[kk] = (exR.keyDistribution[kk] || 0) + v.keyDistribution[kk];
+        }
+        if (v.lastSeen > exR.lastSeen) exR.lastSeen = v.lastSeen;
+        if (!exR.labelId && v.labelId) exR.labelId = v.labelId;
+        if (!exR._compat.labelId && v._compat.labelId) exR._compat.labelId = v._compat.labelId;
+        if (!exR._compat.labelName && v._compat.labelName) exR._compat.labelName = v._compat.labelName;
+        if (!exR.imageUrl && v.imageUrl) exR.imageUrl = v.imageUrl;
+        if (!exR.releaseDate && v.releaseDate) exR.releaseDate = v.releaseDate;
+        if (!exR.catalogNumber && v.catalogNumber) exR.catalogNumber = v.catalogNumber;
+        if (!exR.slug && v.slug) exR.slug = v.slug;
+        if (!exR.url && v.url) exR.url = v.url;
+        if (!exR.name && v.name) exR.name = v.name;
+        if (exR.beatportId == null && v.beatportId != null) exR.beatportId = v.beatportId;
+      } else {
+        graph.releases.set(k, v);
+      }
+    });
+
+    return la;
+  }
+
+  return {
+    processTracks: processTracks,
+    mergeGenreIntoGlobal: mergeGenreIntoGlobal,
+    remapCanonicalIds: remapCanonicalIds,
+    buildCanonicalRelationships: buildCanonicalRelationships,
+    graph: graph
+  };
 }
 
-// === Remap canonical ids (fix orphans) — BEFORE buildCanonicalRelationships ===
-remapCanonicalIds(globalTM, globalRM, globalAM, globalLM);
-
-// === Build canonical relationships (inverse) ===
-buildCanonicalRelationships(globalTM, globalRM, globalAM, globalLM);
-
+// ===================================================================
+// EXPORTER
+// ===================================================================
+function createExporter(graph, metaInfo) {
 // === Build labels output (canonical + legacy compat) ===
-const labelArr = Array.from(globalLM.values()).map(l => {
+const labelArr = Array.from(graph.labels.values()).map(l => {
   const ranks = Object.values(l._rankByGenre);
   const minR = ranks.length > 0 ? Math.min(...ranks) : 999;
   const tPts = Object.values(l._pointsByGenre).reduce((a, b) => a + b, 0);
@@ -732,7 +767,7 @@ const labelArr = Array.from(globalLM.values()).map(l => {
 });
 
 // === Build artists output (canonical + legacy compat) ===
-const artistsArr = Array.from(globalAM.values()).map(a => {
+const artistsArr = Array.from(graph.artists.values()).map(a => {
   const tracksByGenreOut = {};
   for (const gn in a._tracksByGenre) {
     tracksByGenreOut[gn] = a._tracksByGenre[gn].slice().sort((x, y) => y.points - x.points);
@@ -776,7 +811,7 @@ const artistsArr = Array.from(globalAM.values()).map(a => {
 artistsArr.sort((a, b) => b.totalPoints - a.totalPoints);
 
 // === Build tracks output (canonical + legacy compat) ===
-const tracksArr = Array.from(globalTM.values()).map(t => ({
+const tracksArr = Array.from(graph.tracks.values()).map(t => ({
   canonicalId: t.id,
   beatportId: t.beatportId,
   name: t.name,
@@ -806,7 +841,7 @@ const tracksArr = Array.from(globalTM.values()).map(t => ({
 }));
 
 // === Build releases output (canonical + legacy compat) ===
-const releasesArr = Array.from(globalRM.values()).map(r => ({
+const releasesArr = Array.from(graph.releases.values()).map(r => ({
   canonicalId: r.id,
   beatportId: r.beatportId,
   name: r.name,
@@ -857,6 +892,38 @@ const out = {
   }
 };
 
+  return { export: function () { return out; } };
+}
+
+// ===================================================================
+// MAIN: Three-phase pipeline
+// ===================================================================
+
+// Create the Canonical Graph and Builder
+const graph = createCanonicalGraph();
+const builder = createCanonicalGraphBuilder(graph);
+
+// Phase 1+2: Beatport Import + Graph construction
+for (const gn of Object.keys(sampleByGenre)) {
+  const lm = new Map(), am = new Map(), tm = new Map(), rm = new Map();
+  builder.processTracks(sampleByGenre[gn], gn, lm, am, tm, rm);
+  builder.mergeGenreIntoGlobal(lm, am, tm, rm, gn);
+}
+
+// Phase 2 (finalize): Fix orphan canonical ids + build inverse relationships
+builder.remapCanonicalIds();
+builder.buildCanonicalRelationships();
+
+// Phase 3: Export
+const exporter = createExporter(graph, {
+  genres: Object.keys(sampleByGenre),
+  scrapedAt: NOW,
+  successGenres: Object.keys(sampleByGenre).length,
+  failedGenres: 0
+});
+const out = exporter.export();
+
+
 // === Save sample output JSON ===
 const samplePath = '/home/z/my-project/download/beatport-scraper-v2-sample-output.json';
 fs.mkdirSync('/home/z/my-project/download', { recursive: true });
@@ -875,6 +942,43 @@ function assert(name, actual, expected) {
     fail++;
   }
 }
+
+console.log('\n=== RP-BPI-002C GRAPH STRUCTURE ===');
+// The CanonicalGraph must contain exactly 4 entity Maps + remapRegistry
+assert('graph has labels Map', graph.labels instanceof Map, true);
+assert('graph has artists Map', graph.artists instanceof Map, true);
+assert('graph has releases Map', graph.releases instanceof Map, true);
+assert('graph has tracks Map', graph.tracks instanceof Map, true);
+assert('graph has remapRegistry', typeof graph.remapRegistry, 'object');
+assert('graph.labels has 4 entries', graph.labels.size, 4);
+assert('graph.artists has 7 entries', graph.artists.size, 7);
+assert('graph.tracks has 7 entries', graph.tracks.size, 7);
+assert('graph.releases has 7 entries', graph.releases.size, 7);
+
+// The builder must expose the 4 methods
+assert('builder has processTracks', typeof builder.processTracks, 'function');
+assert('builder has mergeGenreIntoGlobal', typeof builder.mergeGenreIntoGlobal, 'function');
+assert('builder has remapCanonicalIds', typeof builder.remapCanonicalIds, 'function');
+assert('builder has buildCanonicalRelationships', typeof builder.buildCanonicalRelationships, 'function');
+
+// The exporter must expose the export method
+assert('exporter has export', typeof exporter.export, 'function');
+
+// The graph entities must have canonical ids (not beatportIds as ids)
+const graphLabelIds = Array.from(graph.labels.values()).map(l => l.id);
+assert('graph label ids are canonical (lbl_<n>)', graphLabelIds.every(id => id.startsWith('lbl_')), true);
+const graphArtistIds = Array.from(graph.artists.values()).map(a => a.id);
+assert('graph artist ids are canonical (art_<n>)', graphArtistIds.every(id => id.startsWith('art_')), true);
+const graphTrackIds = Array.from(graph.tracks.values()).map(t => t.id);
+assert('graph track ids are canonical (trk_<n>)', graphTrackIds.every(id => id.startsWith('trk_')), true);
+const graphReleaseIds = Array.from(graph.releases.values()).map(r => r.id);
+assert('graph release ids are canonical (rel_<n>)', graphReleaseIds.every(id => id.startsWith('rel_')), true);
+
+// JSON output must match graph entity counts
+assert('out.labels.length === graph.labels.size', out.labels.length, graph.labels.size);
+assert('out.artists.length === graph.artists.size', out.artists.length, graph.artists.size);
+assert('out.tracks.length === graph.tracks.size', out.tracks.length, graph.tracks.size);
+assert('out.releases.length === graph.releases.size', out.releases.length, graph.releases.size);
 
 console.log('\n=== META ===');
 assert('_meta.schemaVersion = 3', out._meta.schemaVersion, 3);

@@ -67,6 +67,38 @@
   var sleep = function (ms) { return new Promise(function (r) { setTimeout(r, ms); }); };
 
   // ===================================================================
+  // CANONICAL GRAPH STRUCTURE
+  // ===================================================================
+  function createCanonicalGraph() {
+    return {
+      labels: new Map(),
+      artists: new Map(),
+      releases: new Map(),
+      tracks: new Map(),
+      remapRegistry: { track: {}, release: {}, artist: {}, label: {} }
+    };
+  }
+
+  // ===================================================================
+  // CANONICAL GRAPH BUILDER
+  //
+  // RP-BPI-002C — Encapsulates ALL entity construction logic.
+  // The scraper only calls builder methods; it never constructs entities
+  // directly. The builder owns:
+  //   - Canonical id generators (sequential, independent of Beatport)
+  //   - Stable key helpers (for dedup during scraping)
+  //   - processTracks (per-genre entity creation)
+  //   - mergeGenreIntoGlobal (cross-genre merge into graph)
+  //   - remapCanonicalIds (fix orphan canonical ids from cross-genre merge)
+  //   - buildCanonicalRelationships (inverse relation arrays)
+  //
+  // The builder contains NO export logic and NO scraping logic.
+  // ===================================================================
+  function createCanonicalGraphBuilder(graph) {
+    // === Per-genre ranking data (for backward compat rankByGenre/pointsByGenre) ===
+    var gR = {};
+
+  // ===================================================================
   // RP-BPI-002A — STABLE ID HELPERS (legacy, kept for backward compat output)
   //
   // Queste funzioni producono chiavi "stabili" basate su Beatport id (fallback
@@ -578,7 +610,11 @@
   // Questa funzione opera sulle Map GLOBALI (globalTM, globalRM, globalAM,
   // globalLM) dopo il merge cross-genre.
   // ===================================================================
-  function buildCanonicalRelationships(globalTM, globalRM, globalAM, globalLM) {
+  function buildCanonicalRelationships() {
+    var globalTM = graph.tracks;
+    var globalRM = graph.releases;
+    var globalAM = graph.artists;
+    var globalLM = graph.labels;
     // Index artists by canonical id for fast lookup
     var artistById = new Map();
     globalAM.forEach(function (a) { artistById.set(a.id, a); });
@@ -664,7 +700,11 @@
   // (the _compat.key field), and checking if any per-genre canonical id
   // (from relation fields) is missing from the global set.
   // ===================================================================
-  function remapCanonicalIds(globalTM, globalRM, globalAM, globalLM) {
+  function remapCanonicalIds() {
+    var globalTM = graph.tracks;
+    var globalRM = graph.releases;
+    var globalAM = graph.artists;
+    var globalLM = graph.labels;
     // Build sets of surviving canonical ids
     var survivingTrackIds = new Set();
     globalTM.forEach(function (t) { survivingTrackIds.add(t.id); });
@@ -686,10 +726,10 @@
     var labelByKey = new Map();
     globalLM.forEach(function (l) { labelByKey.set(l._compat.key, l.id); });
 
-    var remapTrack = globalRemapRegistry.track;     // per-genre canonical id → global canonical id
-    var remapRelease = globalRemapRegistry.release;
-    var remapArtist = globalRemapRegistry.artist;
-    var remapLabel = globalRemapRegistry.label;
+    var remapTrack = graph.remapRegistry.track;     // per-genre canonical id → global canonical id
+    var remapRelease = graph.remapRegistry.release;
+    var remapArtist = graph.remapRegistry.artist;
+    var remapLabel = graph.remapRegistry.label;
 
     function remapTrackId(id) {
       if (id == null) return id;
@@ -747,338 +787,193 @@
 
   // Global remap registry: populated during cross-genre merge.
   // Maps per-genre canonical id → global canonical id (for merged entities).
-  var globalRemapRegistry = {
+  var graph.remapRegistry = {
     track: {},     // { perGenreCanonicalId: globalCanonicalId }
     release: {},
     artist: {},
     label: {}
   };
 
-  // ===================================================================
-  // fetchGenre: tries multiple sources, returns { lm, am, tm, rm }
-  // RP-BPI-001 — rm (releaseMap) è ritornato insieme a lm/am/tm.
-  // ===================================================================
-  async function fetchGenre(gid, slug, gn) {
-    var lm = new Map(), am = new Map(), tm = new Map(), rm = new Map();
-    for (var att = 1; att <= 3; att++) {
-      lm = new Map(); am = new Map(); tm = new Map(); rm = new Map();
-      try {
-        var r = await fetch('/api/catalog/genres/' + gid + '/top-100/', { credentials: 'include' });
-        if (r.ok) {
-          var d = await r.json(), tr = d.results || d.tracks || d;
-          if (Array.isArray(tr) && tr.length > 0) {
-            console.log(S + ' %c API interna: ' + tr.length + ' tracce', c1, cOk);
-            processTracks(tr, gn, lm, am, tm, rm);
+
+    // === mergeGenreIntoGlobal ===
+    // Merges per-genre Maps (from fetchGenre) into the global graph.
+    // Also populates graph.remapRegistry for orphan canonical id fix.
+    function mergeGenreIntoGlobal(res, genreName) {
+      var la = Array.from(res.lm.values());
+      la.sort(function (a, b) { return b._totalPoints - a._totalPoints; });
+      la.forEach(function (l, i) {
+        l._rankByGenre[genreName] = i + 1;
+        l._pointsByGenre[genreName] = l._totalPoints;
+        l.rank = i + 1;
+      });
+      gR[genreName] = la;
+
+      // === Merge labels ===
+      res.lm.forEach(function (v, k) {
+        if (graph.labels.has(k)) {
+          var exL = graph.labels.get(k);
+          if (v.id !== exL.id) {
+            graph.remapRegistry.label[v.id] = exL.id;
           }
-        }
-      } catch (e) { /* ignore */ }
-      if (lm.size > 0) break;
-
-      try {
-        var r2 = await fetch('https://api.beatport.com/v4/catalog/genres/' + gid + '/top-10-tracks/?per_page=100', { credentials: 'include' });
-        if (r2.ok) {
-          var d2 = await r2.json(), tr2 = d2.results || d2;
-          if (Array.isArray(tr2) && tr2.length > 0) {
-            console.log(S + ' %c API v4: ' + tr2.length + ' tracce', c1, cOk);
-            processTracks(tr2, gn, lm, am, tm, rm);
-          }
-        }
-      } catch (e) { /* ignore */ }
-      if (lm.size > 0) break;
-
-      try {
-        var r3 = await fetch('https://www.beatport.com/genre/' + slug + '/' + gid + '/top-100', { credentials: 'include' });
-        if (r3.ok) {
-          var html = await r3.text(), p = new DOMParser(), doc = p.parseFromString(html, 'text/html'), nd = doc.getElementById('__NEXT_DATA__');
-          if (nd) {
-            var nData = JSON.parse(nd.textContent);
-            var q = nData && nData.props && nData.props.pageProps && nData.props.pageProps.dehydratedState && nData.props.pageProps.dehydratedState.queries;
-            if (q) {
-              for (var qi = 0; qi < q.length; qi++) {
-                var res = q[qi].state && q[qi].state.data && q[qi].state.data.results;
-                if (Array.isArray(res) && res.length > 0) {
-                  console.log(S + ' %c Next.js data: ' + res.length + ' tracce', c1, cOk);
-                  processTracks(res, gn, lm, am, tm, rm);
-                  break;
-                }
-                var trk = q[qi].state && q[qi].state.data && q[qi].state.data.tracks;
-                if (Array.isArray(trk) && trk.length > 0) {
-                  console.log(S + ' %c Next.js data: ' + trk.length + ' tracce', c1, cOk);
-                  processTracks(trk, gn, lm, am, tm, rm);
-                  break;
-                }
-              }
-            }
-          }
-          // HTML fallback: label-only (artist data not reliably extractable from HTML)
-          if (lm.size === 0) {
-            var tEls = doc.querySelectorAll('[data-testid="track-row"],.track-grid-content,.bucket-item');
-            var htmlTracks = [];
-            tEls.forEach(function (el, idx) {
-              try {
-                var lEl = el.querySelector('[data-testid="label-name"],.buk-track-labels a,.track-label a');
-                var lName = lEl ? lEl.textContent.trim() : null;
-                var lHref = lEl ? lEl.getAttribute('href') : '';
-                var lIdM = lHref.match(/\/label\/(\d+)/);
-                if (lName) {
-                  htmlTracks.push({
-                    id: null,
-                    name: '',
-                    mix_name: '',
-                    artists: [],
-                    remixers: [],
-                    release: { label: { id: lIdM ? parseInt(lIdM[1]) : null, name: lName, slug: lHref.split('/').pop() || '' } },
-                    _position: idx + 1
-                  });
-                }
-              } catch (e) { /* ignore */ }
-            });
-            if (htmlTracks.length > 0) {
-              console.log(S + ' %c HTML parsing (label-only): ' + htmlTracks.length + ' tracce', c1, cOk);
-              processTracks(htmlTracks, gn, lm, am, tm, rm);
-            }
-          }
-        }
-      } catch (e) {
-        console.log(S + ' %c Errore: ' + e.message, c1, cErr);
-      }
-      if (lm.size > 0) break;
-      if (att < 3) {
-        console.log(S + ' %c 0 label, retry ' + att + '/2 in 1.5s...', c1, c2);
-        await sleep(1500);
-      }
-    }
-    if (lm.size === 0) console.log(S + ' %c Nessun dato dopo 3 tentativi', c1, cErr);
-    return { lm: lm, am: am, tm: tm, rm: rm };
-  }
-
-  // ===================================================================
-  // MAIN LOOP
-  // ===================================================================
-  console.log(S + ' %c========================================', c1, c1);
-  console.log(S + ' %cINIZIO ESTRAZIONE', c1, cOk);
-  console.log(S + ' %c========================================', c1, c1);
-
-  var gR = {}, tL = 0, sC = 0, fC = 0;
-  var globalAM = new Map(), globalTM = new Map();
-  // RP-BPI-001 — releaseMap globale, mergeto per-genre come globalAM e globalTM.
-  var globalRM = new Map();
-  // RP-BPI-002B — globalLM (label map keyed by Beatport-derived key, come globalAM/globalTM).
-  // Sostituisce l'uso di gR per le label: ora anche le label sono entità canoniche
-  // con id canonico e relazioni inverse.
-  var globalLM = new Map();
-
-  for (var gi = 0; gi < G.length; gi++) {
-    var g = G[gi];
-    var pct = Math.round(((gi + 1) / G.length) * 100);
-    console.log(S + ' %c[' + pct + '%] ' + g.name + '...', c1, c2);
-
-    var res = await fetchGenre(g.id, g.slug, g.name);
-
-    // === RP-BPI-002B — Build per-genre label ranking (per backward compat con
-    //                    il vecchio output `rankByGenre` / `pointsByGenre`).
-    // Le label in res.lm sono già entità canoniche. Calcoliamo rank per genre.
-    var la = Array.from(res.lm.values());
-    la.sort(function (a, b) { return b._totalPoints - a._totalPoints; });
-    la.forEach(function (l, i) {
-      // Per-genre rank: salviamo in _rankByGenre e _pointsByGenre (internal)
-      l._rankByGenre[g.name] = i + 1;
-      l._pointsByGenre[g.name] = l._totalPoints;
-      // Marchiamo il rank corrente per compatibilità con vecchio output
-      l.rank = i + 1;
-    });
-    gR[g.name] = la;
-    tL += la.length;
-
-    // === Merge labels across genres (RP-BPI-002B) ===
-    // La label Map è keyed per Beatport-derived key (lblBpKey). Quando la stessa
-    // label appare in più generi, mergiamo i contatori internal (_trackCount,
-    // _totalPoints, _bestPosition, _genres, _rankByGenre, _pointsByGenre) e
-    // manteniamo l'id canonico assegnato alla prima occorrenza.
-    // RP-BPI-002B — registriamo il remap per gli id canonici orfani.
-    res.lm.forEach(function (v, k) {
-      if (globalLM.has(k)) {
-        var exL = globalLM.get(k);
-        // Remap: il canonical id per-genre (v.id) → global canonical id (exL.id)
-        if (v.id !== exL.id) {
-          globalRemapRegistry.label[v.id] = exL.id;
-        }
-        exL._trackCount += v._trackCount;
-        exL._totalPoints += v._totalPoints;
-        if (v._bestPosition < exL._bestPosition) exL._bestPosition = v._bestPosition;
-        v._genres.forEach(function (gn2) {
-          if (exL._genres.indexOf(gn2) === -1) exL._genres.push(gn2);
-        });
-        // Merge per-genre rank/points
-        for (var grKey in v._rankByGenre) {
-          exL._rankByGenre[grKey] = v._rankByGenre[grKey];
-        }
-        for (var ppKey in v._pointsByGenre) {
-          exL._pointsByGenre[ppKey] = (exL._pointsByGenre[ppKey] || 0) + v._pointsByGenre[ppKey];
-        }
-        // Fill campi attribute mancanti
-        if (!exL.slug && v.slug) exL.slug = v.slug;
-        if (!exL.imageUrl && v.imageUrl) exL.imageUrl = v.imageUrl;
-        if (exL.beatportId == null && v.beatportId != null) exL.beatportId = v.beatportId;
-      } else {
-        globalLM.set(k, v);
-      }
-    });
-
-    // === Merge artists across genres (RP-BPI-002B canonical) ===
-    // Artist Map keyed per Beatport-derived key (bpKey). Merge:
-    //   - _genres (dedup)
-    //   - _labelsPublishedOnNames (dedup, legacy)
-    //   - labelIds (canonical, dedup — MA possono contenere orfani, risolti in remap)
-    //   - _tracksByGenre (append per genre)
-    //   - _totalPoints, _bestPosition, _isRemixerOnly
-    res.am.forEach(function (v, k) {
-      if (globalAM.has(k)) {
-        var ex = globalAM.get(k);
-        // Remap: il canonical id per-genre (v.id) → global canonical id (ex.id)
-        if (v.id !== ex.id) {
-          globalRemapRegistry.artist[v.id] = ex.id;
-        }
-        v._genres.forEach(function (gn2) { if (ex._genres.indexOf(gn2) === -1) ex._genres.push(gn2); });
-        v._labelsPublishedOnNames.forEach(function (ln) {
-          if (ex._labelsPublishedOnNames.indexOf(ln) === -1) ex._labelsPublishedOnNames.push(ln);
-        });
-        // Canonical label ids merge (possono contenere orfani, risolti in remap)
-        if (Array.isArray(v.labelIds)) {
-          v.labelIds.forEach(function (lId) {
-            if (lId && ex.labelIds.indexOf(lId) === -1) ex.labelIds.push(lId);
+          exL._trackCount += v._trackCount;
+          exL._totalPoints += v._totalPoints;
+          if (v._bestPosition < exL._bestPosition) exL._bestPosition = v._bestPosition;
+          v._genres.forEach(function (gn2) {
+            if (exL._genres.indexOf(gn2) === -1) exL._genres.push(gn2);
           });
-        }
-        for (var gn3 in v._tracksByGenre) {
-          if (!ex._tracksByGenre[gn3]) ex._tracksByGenre[gn3] = [];
-          v._tracksByGenre[gn3].forEach(function (tr2) { ex._tracksByGenre[gn3].push(tr2); });
-        }
-        ex._totalPoints += v._totalPoints;
-        if (v._bestPosition < ex._bestPosition) ex._bestPosition = v._bestPosition;
-        if (!v._isRemixerOnly) ex._isRemixerOnly = false;
-      } else {
-        globalAM.set(k, v);
-      }
-    });
-
-    // === Merge tracks across genres (RP-BPI-002B canonical) ===
-    // Track Map keyed per Beatport-derived key. Merge: append positions,
-    // fill releaseId se mancante.
-    res.tm.forEach(function (v, k) {
-      if (globalTM.has(k)) {
-        var ex = globalTM.get(k);
-        // Remap: il canonical id per-genre (v.id) → global canonical id (ex.id)
-        if (v.id !== ex.id) {
-          globalRemapRegistry.track[v.id] = ex.id;
-        }
-        v.positions.forEach(function (p) { ex.positions.push(p); });
-        if (!ex.releaseId && v.releaseId) ex.releaseId = v.releaseId;
-      } else {
-        globalTM.set(k, v);
-      }
-    });
-
-    // === RP-BPI-001 — Merge releases across genres (RP-BPI-002B canonical) ===
-    res.rm.forEach(function (v, k) {
-      if (globalRM.has(k)) {
-        var exR = globalRM.get(k);
-        // Remap: il canonical id per-genre (v.id) → global canonical id (exR.id)
-        if (v.id !== exR.id) {
-          globalRemapRegistry.release[v.id] = exR.id;
-        }
-        // Merge artistIds (canonical, dedup) + _compat.artistBpIds/artistNames (legacy parallel)
-        v.artistIds.forEach(function (cArtId, idx) {
-          if (!cArtId) return;
-          if (exR.artistIds.indexOf(cArtId) === -1) {
-            exR.artistIds.push(cArtId);
-            exR._compat.artistBpIds.push(v._compat.artistBpIds[idx] != null ? v._compat.artistBpIds[idx] : null);
-            exR._compat.artistNames.push(v._compat.artistNames[idx] || '');
+          for (var grKey in v._rankByGenre) {
+            exL._rankByGenre[grKey] = v._rankByGenre[grKey];
           }
-        });
-        // Merge trackIds (canonical, dedup) + _compat.trackBpIds (legacy, dedup)
-        v.trackIds.forEach(function (cTrkId, idx) {
-          if (!cTrkId) return;
-          if (exR.trackIds.indexOf(cTrkId) === -1) {
-            exR.trackIds.push(cTrkId);
+          for (var ppKey in v._pointsByGenre) {
+            exL._pointsByGenre[ppKey] = (exL._pointsByGenre[ppKey] || 0) + v._pointsByGenre[ppKey];
           }
-          var tBpId = v._compat.trackBpIds[idx];
-          if (tBpId != null && exR._compat.trackBpIds.indexOf(tBpId) === -1) {
-            exR._compat.trackBpIds.push(tBpId);
-          }
-        });
-        exR.trackCount = exR.trackIds.length;
-        // Merge genres (dedup)
-        v.genres.forEach(function (gn2) {
-          if (exR.genres.indexOf(gn2) === -1) exR.genres.push(gn2);
-        });
-        // Ricalcola bpmAverage: combina i running sums
-        if (typeof exR._bpmSum !== 'number') {
-          exR._bpmSum = exR.bpmAverage || 0;
-          exR._bpmCount = exR.bpmAverage != null ? 1 : 0;
+          if (!exL.slug && v.slug) exL.slug = v.slug;
+          if (!exL.imageUrl && v.imageUrl) exL.imageUrl = v.imageUrl;
+          if (exL.beatportId == null && v.beatportId != null) exL.beatportId = v.beatportId;
+        } else {
+          graph.labels.set(k, v);
         }
-        if (typeof v._bpmSum === 'number' && typeof v._bpmCount === 'number') {
-          exR._bpmSum += v._bpmSum;
-          exR._bpmCount += v._bpmCount;
-        } else if (v.bpmAverage != null) {
-          exR._bpmSum += v.bpmAverage;
-          exR._bpmCount += 1;
-        }
-        exR.bpmAverage = exR._bpmCount > 0 ? Math.round(exR._bpmSum / exR._bpmCount) : null;
-        // Merge keyDistribution
-        for (var kk in v.keyDistribution) {
-          exR.keyDistribution[kk] = (exR.keyDistribution[kk] || 0) + v.keyDistribution[kk];
-        }
-        // Aggiorna lastSeen
-        if (v.lastSeen > exR.lastSeen) exR.lastSeen = v.lastSeen;
-        // Fill campi mancanti sul target
-        if (!exR.labelId && v.labelId) exR.labelId = v.labelId;
-        if (!exR._compat.labelId && v._compat.labelId) exR._compat.labelId = v._compat.labelId;
-        if (!exR._compat.labelName && v._compat.labelName) exR._compat.labelName = v._compat.labelName;
-        if (!exR.imageUrl && v.imageUrl) exR.imageUrl = v.imageUrl;
-        if (!exR.releaseDate && v.releaseDate) exR.releaseDate = v.releaseDate;
-        if (!exR.catalogNumber && v.catalogNumber) exR.catalogNumber = v.catalogNumber;
-        if (!exR.slug && v.slug) exR.slug = v.slug;
-        if (!exR.url && v.url) exR.url = v.url;
-        if (!exR.name && v.name) exR.name = v.name;
-        if (exR.beatportId == null && v.beatportId != null) {
-          exR.beatportId = v.beatportId;
-        }
-      } else {
-        globalRM.set(k, v);
-      }
-    });
+      });
 
-    if (la.length > 0) {
-      sC++;
-      var logosHere = la.filter(function (l) { return l.imageUrl; }).length;
-      console.log(S + ' %c  OK ' + la.length + ' label (loghi: ' + logosHere + '/' + la.length + ') \u2014 ' + res.am.size + ' artisti \u2014 ' + res.tm.size + ' tracce \u2014 ' + res.rm.size + ' release \u2014 #1: ' + la[0].name, c1, cOk);
-    } else {
-      fC++;
+      // === Merge artists ===
+      res.am.forEach(function (v, k) {
+        if (graph.artists.has(k)) {
+          var ex = graph.artists.get(k);
+          if (v.id !== ex.id) {
+            graph.remapRegistry.artist[v.id] = ex.id;
+          }
+          v._genres.forEach(function (gn2) { if (ex._genres.indexOf(gn2) === -1) ex._genres.push(gn2); });
+          v._labelsPublishedOnNames.forEach(function (ln) {
+            if (ex._labelsPublishedOnNames.indexOf(ln) === -1) ex._labelsPublishedOnNames.push(ln);
+          });
+          if (Array.isArray(v.labelIds)) {
+            v.labelIds.forEach(function (lId) {
+              if (lId && ex.labelIds.indexOf(lId) === -1) ex.labelIds.push(lId);
+            });
+          }
+          for (var gn3 in v._tracksByGenre) {
+            if (!ex._tracksByGenre[gn3]) ex._tracksByGenre[gn3] = [];
+            v._tracksByGenre[gn3].forEach(function (tr2) { ex._tracksByGenre[gn3].push(tr2); });
+          }
+          ex._totalPoints += v._totalPoints;
+          if (v._bestPosition < ex._bestPosition) ex._bestPosition = v._bestPosition;
+          if (!v._isRemixerOnly) ex._isRemixerOnly = false;
+        } else {
+          graph.artists.set(k, v);
+        }
+      });
+
+      // === Merge tracks ===
+      res.tm.forEach(function (v, k) {
+        if (graph.tracks.has(k)) {
+          var ex = graph.tracks.get(k);
+          if (v.id !== ex.id) {
+            graph.remapRegistry.track[v.id] = ex.id;
+          }
+          v.positions.forEach(function (p) { ex.positions.push(p); });
+          if (!ex.releaseId && v.releaseId) ex.releaseId = v.releaseId;
+        } else {
+          graph.tracks.set(k, v);
+        }
+      });
+
+      // === Merge releases ===
+      res.rm.forEach(function (v, k) {
+        if (graph.releases.has(k)) {
+          var exR = graph.releases.get(k);
+          if (v.id !== exR.id) {
+            graph.remapRegistry.release[v.id] = exR.id;
+          }
+          v.artistIds.forEach(function (cArtId, idx) {
+            if (!cArtId) return;
+            if (exR.artistIds.indexOf(cArtId) === -1) {
+              exR.artistIds.push(cArtId);
+              exR._compat.artistBpIds.push(v._compat.artistBpIds[idx] != null ? v._compat.artistBpIds[idx] : null);
+              exR._compat.artistNames.push(v._compat.artistNames[idx] || '');
+            }
+          });
+          // Merge remixers into legacy arrays
+          var allArtistsRawForLegacyEx = v._compat._allArtistsRaw || [];
+          // Actually, remixers are already in _compat.artistBpIds/artistNames from processTracks
+          // So we just need to merge any new ones
+          var seenLegacyKeysEx = {};
+          exR._compat.artistNames.forEach(function (nm) {
+            seenLegacyKeysEx[nm.toUpperCase().trim()] = true;
+          });
+          v._compat.artistNames.forEach(function (nm, idx) {
+            var nmUpper = (nm || '').toUpperCase().trim();
+            if (nmUpper && !seenLegacyKeysEx[nmUpper]) {
+              seenLegacyKeysEx[nmUpper] = true;
+              exR._compat.artistBpIds.push(v._compat.artistBpIds[idx] != null ? v._compat.artistBpIds[idx] : null);
+              exR._compat.artistNames.push(nm);
+            }
+          });
+          v.trackIds.forEach(function (cTrkId, idx) {
+            if (!cTrkId) return;
+            if (exR.trackIds.indexOf(cTrkId) === -1) {
+              exR.trackIds.push(cTrkId);
+            }
+            var tBpId = v._compat.trackBpIds[idx];
+            if (tBpId != null && exR._compat.trackBpIds.indexOf(tBpId) === -1) {
+              exR._compat.trackBpIds.push(tBpId);
+            }
+          });
+          exR.trackCount = exR.trackIds.length;
+          v.genres.forEach(function (gn2) {
+            if (exR.genres.indexOf(gn2) === -1) exR.genres.push(gn2);
+          });
+          if (typeof exR._bpmSum !== 'number') {
+            exR._bpmSum = exR.bpmAverage || 0;
+            exR._bpmCount = exR.bpmAverage != null ? 1 : 0;
+          }
+          if (typeof v._bpmSum === 'number' && typeof v._bpmCount === 'number') {
+            exR._bpmSum += v._bpmSum;
+            exR._bpmCount += v._bpmCount;
+          } else if (v.bpmAverage != null) {
+            exR._bpmSum += v.bpmAverage;
+            exR._bpmCount += 1;
+          }
+          exR.bpmAverage = exR._bpmCount > 0 ? Math.round(exR._bpmSum / exR._bpmCount) : null;
+          for (var kk in v.keyDistribution) {
+            exR.keyDistribution[kk] = (exR.keyDistribution[kk] || 0) + v.keyDistribution[kk];
+          }
+          if (v.lastSeen > exR.lastSeen) exR.lastSeen = v.lastSeen;
+          if (!exR.labelId && v.labelId) exR.labelId = v.labelId;
+          if (!exR._compat.labelId && v._compat.labelId) exR._compat.labelId = v._compat.labelId;
+          if (!exR._compat.labelName && v._compat.labelName) exR._compat.labelName = v._compat.labelName;
+          if (!exR.imageUrl && v.imageUrl) exR.imageUrl = v.imageUrl;
+          if (!exR.releaseDate && v.releaseDate) exR.releaseDate = v.releaseDate;
+          if (!exR.catalogNumber && v.catalogNumber) exR.catalogNumber = v.catalogNumber;
+          if (!exR.slug && v.slug) exR.slug = v.slug;
+          if (!exR.url && v.url) exR.url = v.url;
+          if (!exR.name && v.name) exR.name = v.name;
+          if (exR.beatportId == null && v.beatportId != null) exR.beatportId = v.beatportId;
+        } else {
+          graph.releases.set(k, v);
+        }
+      });
+
+      return la;  // return label array for logging
     }
-    await sleep(D);
+
+    return {
+      processTracks: processTracks,
+      mergeGenreIntoGlobal: mergeGenreIntoGlobal,
+      remapCanonicalIds: remapCanonicalIds,
+      buildCanonicalRelationships: buildCanonicalRelationships,
+      graph: graph
+    };
   }
 
   // ===================================================================
-  // RP-BPI-002B — REMAP CANONICAL IDS (cross-genre orphan fix)
+  // EXPORTER
   //
-  // PRIMA di buildCanonicalRelationships: rimappa gli id canonici orfani
-  // (per-genre) agli id canonici globali sopravvissuti. Questo assicura
-  // che tutte le relazioni puntino a entità esistenti.
+  // RP-BPI-002C — Receives a CanonicalGraph and produces the final JSON.
+  // No scraping logic, no entity construction — only serialization.
+  // The output is IDENTICAL to the pre-002C format (same fields, same ordering).
   // ===================================================================
-  remapCanonicalIds(globalTM, globalRM, globalAM, globalLM);
-
-  // ===================================================================
-  // RP-BPI-002B — BUILD CANONICAL RELATIONSHIPS (inverse)
-  //
-  // Ora che tutte le entità sono state acquisite e mergiate globalmente,
-  // e gli id canonici orfani sono stati rimappati, popoliamo gli array
-  // relazionali INVERSI (Artist.trackIds/releaseIds,
-  // Label.artistIds/releaseIds/trackIds).
-  // ===================================================================
-  buildCanonicalRelationships(globalTM, globalRM, globalAM, globalLM);
-
-  console.log(S + ' %cCostruzione JSON...', c1, c2);
-
+  function createExporter(graph, metaInfo) {
+  
   // ===================================================================
   // BUILD LABELS — canonical model + legacy compat output
   // ===================================================================
@@ -1096,7 +991,7 @@
   // esponiamo l'id canonico come `canonicalId` e manteniamo `id` = legacyId.
   // I nuovi consumer devono usare `canonicalId` come chiave relazionale.
   // ===================================================================
-  var labelArr = Array.from(globalLM.values()).map(function (l) {
+  var labelArr = Array.from(graph.labels.values()).map(function (l) {
     // Trending computation (legacy, same as v1)
     var ranks = Object.values(l._rankByGenre);
     var minR = ranks.length > 0 ? Math.min.apply(null, ranks) : 999;
@@ -1140,7 +1035,7 @@
   // ===================================================================
   // BUILD ARTISTS — canonical model + legacy compat output
   // ===================================================================
-  var artistsArr = Array.from(globalAM.values()).map(function (a) {
+  var artistsArr = Array.from(graph.artists.values()).map(function (a) {
     // Sort each genre's tracks by points desc (legacy behavior)
     var tracksByGenreOut = {};
     for (var gn5 in a._tracksByGenre) {
@@ -1198,7 +1093,7 @@
   // Per evitare conflitto di naming mantenendo backward compat:
   //   - Il campo `labelId` nell'output è l'id CANONICO (RP-BPI-002B).
   //   - Il BP id legacy è preservato in `track.beatportLabelId`.
-  var tracksArr = Array.from(globalTM.values()).map(function (t) {
+  var tracksArr = Array.from(graph.tracks.values()).map(function (t) {
     return {
       // === CANONICAL (RP-BPI-002B) ===
       canonicalId: t.id,                    // l'id canonico (trk_<n>)
@@ -1239,7 +1134,7 @@
   // ===================================================================
   // BUILD RELEASES — canonical model + legacy compat output
   // ===================================================================
-  var releasesArr = Array.from(globalRM.values()).map(function (r) {
+  var releasesArr = Array.from(graph.releases.values()).map(function (r) {
     return {
       // === CANONICAL (RP-BPI-002B) ===
       canonicalId: r.id,                    // l'id canonico (rel_<n>)
@@ -1279,39 +1174,187 @@
   });
 
   // ===================================================================
-  // OUTPUT
+  // OUTPUT OBJECT (assembled by Exporter from graph + metaInfo)
   // ===================================================================
   var logosCount = labelArr.filter(function (l) { return l.imageUrl; }).length;
 
   var out = {
-    genres: G.map(function (g) { return g.name; }),
+    genres: metaInfo.genres.map(function (g) { return g.name; }),
     labels: labelArr,
     artists: artistsArr,
     tracks: tracksArr,
-    // RP-BPI-001 — releases array prima di _meta, come richiesto.
     releases: releasesArr,
     _meta: {
       source: 'beatport',
-      version: 2,                           // legacy version field (preservato)
-      // RP-BPI-002B — canonical model markers.
-      // schemaVersion 3 = Canonical Data Model (RP-BPI-002B).
-      //   - Ogni entità ha UN SOLO id canonico (canonicalId field).
-      //   - Tutte le relazioni utilizzano esclusivamente canonicalId.
-      //   - beatportId è un attributo informativo della sorgente.
-      //   - I campi legacy sono preservati per backward compat.
+      version: 2,
       schemaVersion: 3,
       canonicalModel: 1,
-      scrapedAt: NOW,
+      scrapedAt: metaInfo.scrapedAt,
       totalLabels: labelArr.length,
       totalLabelsWithLogo: logosCount,
       totalArtists: artistsArr.length,
       totalTracks: tracksArr.length,
       totalReleases: releasesArr.length,
-      totalGenres: G.length,
-      successGenres: sC,
-      failedGenres: fC
+      totalGenres: metaInfo.genres.length,
+      successGenres: metaInfo.successGenres,
+      failedGenres: metaInfo.failedGenres
     }
   };
+
+    return { export: function () { return out; } };
+  }
+
+  // ===================================================================
+  // fetchGenre: tries multiple sources, returns { lm, am, tm, rm }
+  // RP-BPI-001 — rm (releaseMap) è ritornato insieme a lm/am/tm.
+  // ===================================================================
+  async function fetchGenre(gid, slug, gn, builder) {
+    var lm = new Map(), am = new Map(), tm = new Map(), rm = new Map();
+    for (var att = 1; att <= 3; att++) {
+      lm = new Map(); am = new Map(); tm = new Map(); rm = new Map();
+      try {
+        var r = await fetch('/api/catalog/genres/' + gid + '/top-100/', { credentials: 'include' });
+        if (r.ok) {
+          var d = await r.json(), tr = d.results || d.tracks || d;
+          if (Array.isArray(tr) && tr.length > 0) {
+            console.log(S + ' %c API interna: ' + tr.length + ' tracce', c1, cOk);
+            builder.processTracks(tr, gn, lm, am, tm, rm);
+          }
+        }
+      } catch (e) { /* ignore */ }
+      if (lm.size > 0) break;
+
+      try {
+        var r2 = await fetch('https://api.beatport.com/v4/catalog/genres/' + gid + '/top-10-tracks/?per_page=100', { credentials: 'include' });
+        if (r2.ok) {
+          var d2 = await r2.json(), tr2 = d2.results || d2;
+          if (Array.isArray(tr2) && tr2.length > 0) {
+            console.log(S + ' %c API v4: ' + tr2.length + ' tracce', c1, cOk);
+            builder.processTracks(tr2, gn, lm, am, tm, rm);
+          }
+        }
+      } catch (e) { /* ignore */ }
+      if (lm.size > 0) break;
+
+      try {
+        var r3 = await fetch('https://www.beatport.com/genre/' + slug + '/' + gid + '/top-100', { credentials: 'include' });
+        if (r3.ok) {
+          var html = await r3.text(), p = new DOMParser(), doc = p.parseFromString(html, 'text/html'), nd = doc.getElementById('__NEXT_DATA__');
+          if (nd) {
+            var nData = JSON.parse(nd.textContent);
+            var q = nData && nData.props && nData.props.pageProps && nData.props.pageProps.dehydratedState && nData.props.pageProps.dehydratedState.queries;
+            if (q) {
+              for (var qi = 0; qi < q.length; qi++) {
+                var res = q[qi].state && q[qi].state.data && q[qi].state.data.results;
+                if (Array.isArray(res) && res.length > 0) {
+                  console.log(S + ' %c Next.js data: ' + res.length + ' tracce', c1, cOk);
+                  builder.processTracks(res, gn, lm, am, tm, rm);
+                  break;
+                }
+                var trk = q[qi].state && q[qi].state.data && q[qi].state.data.tracks;
+                if (Array.isArray(trk) && trk.length > 0) {
+                  console.log(S + ' %c Next.js data: ' + trk.length + ' tracce', c1, cOk);
+                  builder.processTracks(trk, gn, lm, am, tm, rm);
+                  break;
+                }
+              }
+            }
+          }
+          // HTML fallback: label-only (artist data not reliably extractable from HTML)
+          if (lm.size === 0) {
+            var tEls = doc.querySelectorAll('[data-testid="track-row"],.track-grid-content,.bucket-item');
+            var htmlTracks = [];
+            tEls.forEach(function (el, idx) {
+              try {
+                var lEl = el.querySelector('[data-testid="label-name"],.buk-track-labels a,.track-label a');
+                var lName = lEl ? lEl.textContent.trim() : null;
+                var lHref = lEl ? lEl.getAttribute('href') : '';
+                var lIdM = lHref.match(/\/label\/(\d+)/);
+                if (lName) {
+                  htmlTracks.push({
+                    id: null,
+                    name: '',
+                    mix_name: '',
+                    artists: [],
+                    remixers: [],
+                    release: { label: { id: lIdM ? parseInt(lIdM[1]) : null, name: lName, slug: lHref.split('/').pop() || '' } },
+                    _position: idx + 1
+                  });
+                }
+              } catch (e) { /* ignore */ }
+            });
+            if (htmlTracks.length > 0) {
+              console.log(S + ' %c HTML parsing (label-only): ' + htmlTracks.length + ' tracce', c1, cOk);
+              builder.processTracks(htmlTracks, gn, lm, am, tm, rm);
+            }
+          }
+        }
+      } catch (e) {
+        console.log(S + ' %c Errore: ' + e.message, c1, cErr);
+      }
+      if (lm.size > 0) break;
+      if (att < 3) {
+        console.log(S + ' %c 0 label, retry ' + att + '/2 in 1.5s...', c1, c2);
+        await sleep(1500);
+      }
+    }
+    if (lm.size === 0) console.log(S + ' %c Nessun dato dopo 3 tentativi', c1, cErr);
+    return { lm: lm, am: am, tm: tm, rm: rm };
+  }
+
+  // ===================================================================
+  // MAIN: Three-phase pipeline
+  //
+  // Phase 1: Beatport Import (fetchGenre reads Beatport, calls builder.processTracks)
+  // Phase 2: CanonicalGraphBuilder (merge + remap + build relationships)
+  // Phase 3: Exporter (serialize graph to JSON)
+  // ===================================================================
+  console.log(S + ' %c========================================', c1, c1);
+  console.log(S + ' %cINIZIO ESTRAZIONE', c1, cOk);
+  console.log(S + ' %c========================================', c1, c1);
+
+  var sC = 0, fC = 0, tL = 0;
+
+  // Create the Canonical Graph and Builder
+  var graph = createCanonicalGraph();
+  var builder = createCanonicalGraphBuilder(graph);
+
+  for (var gi = 0; gi < G.length; gi++) {
+    var g = G[gi];
+    var pct = Math.round(((gi + 1) / G.length) * 100);
+    console.log(S + ' %c[' + pct + '%] ' + g.name + '...', c1, c2);
+
+    // Phase 1: Beatport Import
+    var res = await fetchGenre(g.id, g.slug, g.name, builder);
+
+    // Phase 2: Merge per-genre data into the global graph
+    var la = builder.mergeGenreIntoGlobal(res, g.name);
+    tL += la.length;
+
+    if (la.length > 0) {
+      sC++;
+      var logosHere = la.filter(function (l) { return l.imageUrl; }).length;
+      console.log(S + ' %c  OK ' + la.length + ' label (loghi: ' + logosHere + '/' + la.length + ') \u2014 ' + res.am.size + ' artisti \u2014 ' + res.tm.size + ' tracce \u2014 ' + res.rm.size + ' release \u2014 #1: ' + la[0].name, c1, cOk);
+    } else {
+      fC++;
+    }
+    await sleep(D);
+  }
+
+  // Phase 2 (finalize): Fix orphan canonical ids + build inverse relationships
+  builder.remapCanonicalIds();
+  builder.buildCanonicalRelationships();
+
+  console.log(S + ' %cCostruzione JSON...', c1, c2);
+
+  // Phase 3: Export
+  var exporter = createExporter(graph, {
+    genres: G,
+    scrapedAt: NOW,
+    successGenres: sC,
+    failedGenres: fC
+  });
+  var out = exporter.export();
 
   var js = JSON.stringify(out, null, 2),
     bl = new Blob([js], { type: 'application/json' }),
@@ -1326,8 +1369,8 @@
 
   console.log(S + ' %c========================================', c1, c1);
   console.log(S + ' %cCOMPLETATO!', c1, cOk);
-  console.log(S + ' %c' + labelArr.length + ' label, ' + artistsArr.length + ' artisti, ' + tracksArr.length + ' tracce, ' + releasesArr.length + ' release da ' + sC + '/' + G.length + ' generi', c1, cOk);
-  console.log(S + ' %cLoghi label acquisiti: ' + logosCount + '/' + labelArr.length + (labelArr.length > 0 ? ' (' + Math.round(logosCount * 100 / labelArr.length) + '%)' : ''), c1, cOk);
+  console.log(S + ' %c' + out._meta.totalLabels + ' label, ' + out._meta.totalArtists + ' artisti, ' + out._meta.totalTracks + ' tracce, ' + out._meta.totalReleases + ' release da ' + sC + '/' + G.length + ' generi', c1, cOk);
+  console.log(S + ' %cLoghi label acquisiti: ' + out._meta.totalLabelsWithLogo + '/' + out._meta.totalLabels + (out._meta.totalLabels > 0 ? ' (' + Math.round(out._meta.totalLabelsWithLogo * 100 / out._meta.totalLabels) + '%)' : ''), c1, cOk);
   if (fC > 0) console.log(S + ' %c ' + fC + ' generi senza dati', c1, cErr);
   console.log(S + ' %cFile JSON scaricato! Importa in LabelPulse', c1, cOk);
   console.log(S + ' %c========================================', c1, c1);
