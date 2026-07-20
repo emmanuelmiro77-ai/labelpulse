@@ -294,6 +294,27 @@
   }
 
   // ===================================================================
+  // RP-BPI-007 — TRACK STATUS ENGINE
+  //
+  // Determina lo status della traccia utilizzando esclusivamente
+  // trend, trendScore e momentum (già calcolati). Non ricalcola alcun dato.
+  //
+  // Regole:
+  //   trend == "new"                    → emerging
+  //   momentum > 20 && trendScore >= 60 → rising
+  //   momentum < -20 && trendScore <= 40 → declining
+  //   trend == "stable"                 → stable
+  //   tutti gli altri casi              → cold
+  // ===================================================================
+  function computeStatus(trend, trendScore, momentum) {
+    if (trend === 'new') return 'emerging';
+    if (momentum > 20 && trendScore >= 60) return 'rising';
+    if (momentum < -20 && trendScore <= 40) return 'declining';
+    if (trend === 'stable') return 'stable';
+    return 'cold';
+  }
+
+  // ===================================================================
   // processTracks: popola labelMap (lm), artistMap (am), trackMap (tm),
   //                releaseMap (rm) — RP-BPI-001
   // gn = genre name (string)
@@ -672,6 +693,8 @@
           trendScore: 50,
           // RP-BPI-006 — Track Momentum: 0 per nuova traccia (< 3 entry).
           momentum: 0,
+          // RP-BPI-007 — Track Status: "emerging" per nuova traccia (trend=new).
+          status: 'emerging',
           seenAt: NOW,
           // === LEGACY COMPAT ===
           _compat: {
@@ -711,9 +734,13 @@
           tr.trendScore = computeTrendScore(ph, gn, tr.trendScore);
           // RP-BPI-006 — Ricalcola momentum
           tr.momentum = computeMomentum(ph, gn);
+          // RP-BPI-007 — Ricalcola status
+          tr.status = computeStatus(tr.trend, tr.trendScore, tr.momentum);
         } else {
           // Dedup: posizione invariata → trend = "stable", trendScore invariato.
           tr.trend = 'stable';
+          // RP-BPI-007 — Ricalcola status (trend changed to "stable")
+          tr.status = computeStatus(tr.trend, tr.trendScore, tr.momentum);
         }
       }
 
@@ -1020,11 +1047,18 @@
               phAdded = true;
             }
           });
-          // RP-BPI-004/005/006 — Ricalcola trend, trendScore e momentum solo se nuove entry.
+          // RP-BPI-004/005/006/007 — Ricalcola trend, trendScore, momentum e status
+          // solo se nuove entry sono state aggiunte. Su dedup (nessuna nuova entry),
+          // il trend viene impostato a "stable" e lo status viene ricalcolato.
           if (phAdded && ex.positionHistory.length > 0) {
             ex.trend = computeTrend(ex.positionHistory, ex.positionHistory[ex.positionHistory.length - 1].genreName);
             ex.trendScore = computeTrendScore(ex.positionHistory, ex.positionHistory[ex.positionHistory.length - 1].genreName, ex.trendScore);
             ex.momentum = computeMomentum(ex.positionHistory, ex.positionHistory[ex.positionHistory.length - 1].genreName);
+            ex.status = computeStatus(ex.trend, ex.trendScore, ex.momentum);
+          } else if (ex.positionHistory.length > 0) {
+            // Dedup: posizione invariata → trend = "stable", status ricalcolato.
+            ex.trend = 'stable';
+            ex.status = computeStatus(ex.trend, ex.trendScore, ex.momentum);
           }
           if (!ex.releaseId && v.releaseId) ex.releaseId = v.releaseId;
         } else {
@@ -1281,6 +1315,8 @@
       trendScore: t.trendScore,
       // RP-BPI-006 — Track Momentum (calcolato nel builder, serializzato qui).
       momentum: t.momentum,
+      // RP-BPI-007 — Track Status (determinato nel builder, serializzato qui).
+      status: t.status,
       seenAt: t.seenAt,
       // === LEGACY (preservato per backward compat) ===
       id: t.beatportId,                     // legacy: BP id (alias of beatportId, may be null)

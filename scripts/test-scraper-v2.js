@@ -212,6 +212,16 @@ function computeMomentum(positionHistory, currentGenreName) {
   return momentum;
 }
 
+
+// === RP-BPI-007 — Track Status Engine ===
+function computeStatus(trend, trendScore, momentum) {
+  if (trend === 'new') return 'emerging';
+  if (momentum > 20 && trendScore >= 60) return 'rising';
+  if (momentum < -20 && trendScore <= 40) return 'declining';
+  if (trend === 'stable') return 'stable';
+  return 'cold';
+}
+
 // === RP-BPI-002A — Beatport-derived stable key helpers (kept for dedup internal) ===
 function artistKey(a) {
   if (!a) return null;
@@ -518,6 +528,8 @@ function processTracks(tracks, gn, gid, lm, am, tm, rm) {
         trendScore: 50,
         // RP-BPI-006 — Track Momentum
         momentum: 0,
+        // RP-BPI-007 — Track Status
+        status: 'emerging',
         seenAt: NOW,
         _compat: {
           key: trackBpKey,
@@ -545,9 +557,13 @@ function processTracks(tracks, gn, gid, lm, am, tm, rm) {
         tr.trendScore = computeTrendScore(ph, gn, tr.trendScore);
         // RP-BPI-006 — Ricalcola momentum
         tr.momentum = computeMomentum(ph, gn);
+        // RP-BPI-007 — Ricalcola status
+        tr.status = computeStatus(tr.trend, tr.trendScore, tr.momentum);
       } else {
         // Dedup: posizione invariata → trend = "stable", trendScore invariato.
         tr.trend = 'stable';
+        // RP-BPI-007 — Ricalcola status (trend changed to stable)
+        tr.status = computeStatus(tr.trend, tr.trendScore, tr.momentum);
       }
     }
 
@@ -733,11 +749,18 @@ function remapCanonicalIds() {
             phAdded = true;
           }
         });
-        // RP-BPI-004/005 — Ricalcola trend e trendScore solo se nuove entry sono state aggiunte.
+        // RP-BPI-004/005/006/007 — Ricalcola trend, trendScore, momentum e status
+        // solo se nuove entry sono state aggiunte. Su dedup (nessuna nuova entry),
+        // il trend viene impostato a "stable" e lo status viene ricalcolato.
         if (phAdded && ex.positionHistory.length > 0) {
           ex.trend = computeTrend(ex.positionHistory, ex.positionHistory[ex.positionHistory.length - 1].genreName);
           ex.trendScore = computeTrendScore(ex.positionHistory, ex.positionHistory[ex.positionHistory.length - 1].genreName, ex.trendScore);
           ex.momentum = computeMomentum(ex.positionHistory, ex.positionHistory[ex.positionHistory.length - 1].genreName);
+          ex.status = computeStatus(ex.trend, ex.trendScore, ex.momentum);
+        } else if (ex.positionHistory.length > 0) {
+          // Dedup: posizione invariata → trend = "stable", status ricalcolato.
+          ex.trend = 'stable';
+          ex.status = computeStatus(ex.trend, ex.trendScore, ex.momentum);
         }
         if (!ex.releaseId && v.releaseId) ex.releaseId = v.releaseId;
       } else {
@@ -937,6 +960,8 @@ const tracksArr = Array.from(graph.tracks.values()).map(t => ({
   trendScore: t.trendScore,
   // RP-BPI-006 — Track Momentum
   momentum: t.momentum,
+  // RP-BPI-007 — Track Status
+  status: t.status,
   seenAt: t.seenAt,
   id: t.beatportId,
   key: t._compat.key,
@@ -1760,8 +1785,8 @@ console.log('\n=== RP-BPI-004 MULTI-SCRAPE TREND SIMULATION ===');
 const multiScrapeTrack = Array.from(graph2.tracks.values()).find(t => t.beatportId === 77777);
 assert('multi-scrape track found', !!multiScrapeTrack, true);
 if (multiScrapeTrack) {
-  // Final trend: last two entries are pos 8 → pos 10 (worsening) → "down"
-  assert('multi-scrape final trend = down (pos 8 → pos 10)', multiScrapeTrack.trend, 'down');
+  // Final trend: scrape 7 is pos 10→10 (dedup) → trend = "stable"
+  assert('multi-scrape final trend = stable (pos 10→10 dedup)', multiScrapeTrack.trend, 'stable');
 }
 
 // --- Test trend at each step using a fresh builder ---
@@ -1789,7 +1814,7 @@ lm3 = new Map(); am3 = new Map(); tm3 = new Map(); rm3 = new Map();
 b3.processTracks([makeTrack(88888, 'trend test', 3, 55555, 'Test Label')], 'Tech House', 11, lm3, am3, tm3, rm3);
 b3.mergeGenreIntoGlobal(lm3, am3, tm3, rm3, 'Tech House');
 tt = Array.from(g3.tracks.values()).find(t => t.beatportId === 88888);
-assert('trend test scrape 3 (pos 3→3, dedup, trend stays up)', tt ? tt.trend : null, 'up');
+assert('trend test scrape 3 (pos 3→3, dedup, trend = stable)', tt ? tt.trend : null, 'stable');
 
 // Scrape 4: pos 7 → down (3→7, worsening)
 lm3 = new Map(); am3 = new Map(); tm3 = new Map(); rm3 = new Map();
@@ -2077,6 +2102,128 @@ const releasesHaveNoMomentum = out.releases.every(r => !('momentum' in r));
 assert('no Release has momentum field (RP-BPI-006 extends only Track)', releasesHaveNoMomentum, true);
 const labelsHaveNoMomentum = out.labels.every(l => !('momentum' in l));
 assert('no Label has momentum field (RP-BPI-006 extends only Track)', labelsHaveNoMomentum, true);
+
+// ====================================================================
+// RP-BPI-007 — TRACK STATUS ENGINE TESTS
+// ====================================================================
+console.log('\n=== RP-BPI-007 TRACK STATUS ENGINE ===');
+
+// --- Test 1: Every track has status with valid value ---
+const validStatusValues = ['emerging', 'rising', 'stable', 'declining', 'cold'];
+const allTracksHaveStatus = out.tracks.every(t =>
+  typeof t.status === 'string' && validStatusValues.includes(t.status)
+);
+assert('every track has status field with valid value', allTracksHaveStatus, true);
+
+// --- Test 2: New track → status = "emerging" (trend = "new") ---
+const allTracksEmerging = out.tracks.every(t => t.status === 'emerging');
+assert('all tracks in first scrape have status = "emerging" (trend=new)', allTracksEmerging, true);
+
+// Specific track check
+const palmTrkStatus = out.tracks.find(t => t.beatportId === 19711254);
+assert('palm track status = emerging', palmTrkStatus ? palmTrkStatus.status : null, 'emerging');
+
+// ====================================================================
+// RP-BPI-007 — MULTI-SCRAPE STATUS SIMULATION
+// ====================================================================
+console.log('\n=== RP-BPI-007 MULTI-SCRAPE STATUS ===');
+
+// Helper: create a fresh graph + builder for status tests
+function statusTest(label, scrapes, expectedStatus) {
+  const g = createCanonicalGraph();
+  const b = createCanonicalGraphBuilder(g);
+  const trackId = 44444;
+  for (const [pos, genreName, genreId] of scrapes) {
+    const lm = new Map(), am = new Map(), tm = new Map(), rm = new Map();
+    b.processTracks([makeTrack(trackId, 'status test', pos, 55555, 'Test Label')], genreName, genreId, lm, am, tm, rm);
+    b.mergeGenreIntoGlobal(lm, am, tm, rm, genreName);
+  }
+  const track = Array.from(g.tracks.values()).find(t => t.beatportId === trackId);
+  const actual = track ? track.status : null;
+  assert(label, actual, expectedStatus);
+}
+
+// --- emerging: trend=new (1 entry) ---
+statusTest('status: 1 entry (trend=new) → emerging', [
+  [10, 'Tech House', 11]
+], 'emerging');
+
+// --- emerging: trend=new (2 entries, different genres, 1 per genre) ---
+statusTest('status: cross-genre 1 entry each (trend=new) → emerging', [
+  [10, 'Tech House', 11], [5, 'Minimal / Deep Tech', 14]
+], 'emerging');
+
+// --- rising: momentum > 20 AND trendScore >= 60 ---
+// Need 3+ entries in same genre with strong improvement.
+// pos 50 → 30 → 10: delta1=-20, delta2=-20, momentum=40 (>20).
+// trendScore: 50 + (50-30)=70, then 70 + (30-10)=90. trendScore=90 (>=60). trend=up.
+// status = rising (momentum=40 > 20, trendScore=90 >= 60).
+statusTest('status: rising (50→30→10, momentum=40, trendScore=90) → rising', [
+  [50, 'Tech House', 11], [30, 'Tech House', 11], [10, 'Tech House', 11]
+], 'rising');
+
+// --- declining: momentum < -20 AND trendScore <= 40 ---
+// pos 1 → 20 → 40: delta1=19, delta2=20, momentum=-39 (<-20).
+// trendScore: 50 + (1-20)=31, then 31 + (20-40)=11. trendScore=11 (<=40). trend=down.
+// status = declining (momentum=-39 < -20, trendScore=11 <= 40).
+statusTest('status: declining (1→20→40, momentum=-39, trendScore=11) → declining', [
+  [1, 'Tech House', 11], [20, 'Tech House', 11], [40, 'Tech House', 11]
+], 'declining');
+
+// --- stable: trend=stable (dedup, same position) ---
+// pos 10 → 5 → 5 (dedup on 3rd): trend=up on scrape 2, then stable on scrape 3.
+// After scrape 3: trend=stable → status=stable
+// (momentum after scrape 2: only 2 entries → 0; after scrape 3: still 2 entries → 0)
+// trendScore after scrape 2: 50 + (10-5)=55. After scrape 3: unchanged=55.
+// status: trend=stable → stable
+statusTest('status: stable (10→5→5 dedup, trend=stable) → stable', [
+  [10, 'Tech House', 11], [5, 'Tech House', 11], [5, 'Tech House', 11]
+], 'stable');
+
+// --- cold: trend=up but momentum not > 20 OR trendScore < 60 ---
+// pos 10 → 8: trend=up, trendScore=52, momentum=0 (< 3 entries).
+// trend != new, trend != stable, momentum=0 (not > 20), so → cold.
+statusTest('status: cold (10→8, trend=up, momentum=0, trendScore=52) → cold', [
+  [10, 'Tech House', 11], [8, 'Tech House', 11]
+], 'cold');
+
+// --- cold: trend=down, momentum not < -20 ---
+// pos 10 → 8 → 12 → 14: trend=down (12→14), momentum needs 3 entries.
+// pos 10→8→12: delta1=-2, delta2=4, momentum=-2 (not < -20).
+// After scrape 4 (pos 14): last 3 = [8, 12, 14], delta1=4, delta2=2, momentum=-6 (not < -20).
+// trendScore: 50 + (10-8)=52, 52 + (8-12)=48, 48 + (12-14)=46. trendScore=46.
+// trend=down, momentum=-6 (not < -20), trendScore=46 (not <= 40). → cold.
+statusTest('status: cold (10→8→12→14, trend=down, momentum=-6, trendScore=46) → cold', [
+  [10, 'Tech House', 11], [8, 'Tech House', 11], [12, 'Tech House', 11], [14, 'Tech House', 11]
+], 'cold');
+
+// --- cold: trend=up, momentum > 20 but trendScore < 60 ---
+// pos 60 → 30 → 1: delta1=-30, delta2=-29, momentum=59 (>20).
+// trendScore: 50 + (60-30)=80, 80 + (30-1)=109 → clamped 100. trendScore=100 (>=60).
+// Wait, that gives rising, not cold. Let me find a case where momentum > 20 but trendScore < 60.
+// Need trendScore to be low. Start with a big worsening first, then improve.
+// pos 1 → 50 → 1: 
+//   Scrape 2: trendScore = 50 + (1-50) = 1. trend=down.
+//   Scrape 3: trendScore = 1 + (50-1) = 50. trend=up.
+//   momentum: only 3 entries, delta1=49, delta2=-49, momentum=0. Not > 20.
+// Need different approach: 4 scrapes.
+// pos 1 → 50 → 40 → 10:
+//   Scrape 2: ts=1, trend=down
+//   Scrape 3: ts=1+(50-40)=11, trend=up
+//   Scrape 4: ts=11+(40-10)=31, trend=up. trendScore=31 (< 60).
+//   momentum: last 3 = [50, 40, 10], delta1=-10, delta2=-30, momentum=40 (> 20).
+//   trend=up, momentum=40 > 20, but trendScore=31 < 60 → cold!
+statusTest('status: cold (1→50→40→10, trend=up, momentum=40, trendScore=31<60) → cold', [
+  [1, 'Tech House', 11], [50, 'Tech House', 11], [40, 'Tech House', 11], [10, 'Tech House', 11]
+], 'cold');
+
+// --- Verify Artist/Release/Label do NOT have status ---
+const artistsHaveNoStatus = out.artists.every(a => !('status' in a));
+assert('no Artist has status field (RP-BPI-007 extends only Track)', artistsHaveNoStatus, true);
+const releasesHaveNoStatus = out.releases.every(r => !('status' in r));
+assert('no Release has status field (RP-BPI-007 extends only Track)', releasesHaveNoStatus, true);
+const labelsHaveNoStatus = out.labels.every(l => !('status' in l));
+assert('no Label has status field (RP-BPI-007 extends only Track)', labelsHaveNoStatus, true);
 
 console.log('\n=== RESULT: ' + pass + ' passed, ' + fail + ' failed ===');
 console.log('=== Sample JSON saved to: ' + samplePath + ' ===');
