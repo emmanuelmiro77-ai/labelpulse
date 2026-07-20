@@ -170,6 +170,26 @@ function computeTrend(positionHistory, currentGenreName) {
   return 'stable';
 }
 
+// === RP-BPI-005 — Track Trend Score ===
+function computeTrendScore(positionHistory, currentGenreName, prevTrendScore) {
+  var trend = computeTrend(positionHistory, currentGenreName);
+  if (trend === 'new') {
+    return 50;
+  }
+  if (trend === 'stable') {
+    return prevTrendScore;
+  }
+  var genre = currentGenreName || positionHistory[positionHistory.length - 1].genreName;
+  var sameGenre = positionHistory.filter(function (e) { return e.genreName === genre; });
+  var last = sameGenre[sameGenre.length - 1];
+  var prev = sameGenre[sameGenre.length - 2];
+  var delta = prev.position - last.position;
+  var score = (typeof prevTrendScore === 'number' ? prevTrendScore : 50) + delta;
+  if (score < 0) score = 0;
+  if (score > 100) score = 100;
+  return score;
+}
+
 // === RP-BPI-002A — Beatport-derived stable key helpers (kept for dedup internal) ===
 function artistKey(a) {
   if (!a) return null;
@@ -472,6 +492,8 @@ function processTracks(tracks, gn, gid, lm, am, tm, rm) {
         positionHistory: [{ scrapedAt: NOW, genreId: gid, genreName: gn, position: pos }],
         // RP-BPI-004 — Track Trend
         trend: 'new',
+        // RP-BPI-005 — Track Trend Score
+        trendScore: 50,
         seenAt: NOW,
         _compat: {
           key: trackBpKey,
@@ -493,9 +515,14 @@ function processTracks(tracks, gn, gid, lm, am, tm, rm) {
       var differs = !lastEntry || lastEntry.genreName !== gn || lastEntry.position !== pos;
       if (differs) {
         ph.push({ scrapedAt: NOW, genreId: gid, genreName: gn, position: pos });
+        // RP-BPI-004 — Ricalcola trend
+        tr.trend = computeTrend(ph, gn);
+        // RP-BPI-005 — Ricalcola trendScore
+        tr.trendScore = computeTrendScore(ph, gn, tr.trendScore);
+      } else {
+        // Dedup: posizione invariata → trend = "stable", trendScore invariato.
+        tr.trend = 'stable';
       }
-      // RP-BPI-004 — Ricalcola trend
-      tr.trend = computeTrend(ph, gn);
     }
 
     // === Aggiorna Release.trackIds[] con il canonical track id ===
@@ -671,16 +698,19 @@ function remapCanonicalIds() {
         }
         ex.positions.push(...v.positions);
         // RP-BPI-003 — Merge positionHistory with dedup
+        var phAdded = false;
         v.positionHistory.forEach(function (phEntry) {
           var lastPh = ex.positionHistory.length > 0 ? ex.positionHistory[ex.positionHistory.length - 1] : null;
           var phDiffers = !lastPh || lastPh.genreName !== phEntry.genreName || lastPh.position !== phEntry.position;
           if (phDiffers) {
             ex.positionHistory.push(phEntry);
+            phAdded = true;
           }
         });
-        // RP-BPI-004 — Ricalcola trend dopo merge
-        if (ex.positionHistory.length > 0) {
+        // RP-BPI-004/005 — Ricalcola trend e trendScore solo se nuove entry sono state aggiunte.
+        if (phAdded && ex.positionHistory.length > 0) {
           ex.trend = computeTrend(ex.positionHistory, ex.positionHistory[ex.positionHistory.length - 1].genreName);
+          ex.trendScore = computeTrendScore(ex.positionHistory, ex.positionHistory[ex.positionHistory.length - 1].genreName, ex.trendScore);
         }
         if (!ex.releaseId && v.releaseId) ex.releaseId = v.releaseId;
       } else {
@@ -876,6 +906,8 @@ const tracksArr = Array.from(graph.tracks.values()).map(t => ({
   positionHistory: t.positionHistory.slice(),
   // RP-BPI-004 — Track Trend
   trend: t.trend,
+  // RP-BPI-005 — Track Trend Score
+  trendScore: t.trendScore,
   seenAt: t.seenAt,
   id: t.beatportId,
   key: t._compat.key,
@@ -1776,6 +1808,125 @@ const releasesHaveNoTrend = out.releases.every(r => !('trend' in r));
 assert('no Release has trend field (RP-BPI-004 extends only Track)', releasesHaveNoTrend, true);
 const labelsHaveNoTrend = out.labels.every(l => !('trend' in l));
 assert('no Label has trend field (RP-BPI-004 extends only Track)', labelsHaveNoTrend, true);
+
+// ====================================================================
+// RP-BPI-005 — TRACK TREND SCORE TESTS
+// ====================================================================
+console.log('\n=== RP-BPI-005 TRACK TREND SCORE ===');
+
+// --- Test 1: Every track has trendScore (integer 0-100) ---
+const allTracksHaveTrendScore = out.tracks.every(t =>
+  typeof t.trendScore === 'number' &&
+  Number.isInteger(t.trendScore) &&
+  t.trendScore >= 0 && t.trendScore <= 100
+);
+assert('every track has trendScore (integer 0-100)', allTracksHaveTrendScore, true);
+
+// --- Test 2: New track → trendScore = 50 ---
+// All tracks in the first scrape have trend = "new" → trendScore = 50.
+const allTracksTrendScore50 = out.tracks.every(t => t.trendScore === 50);
+assert('all tracks in first scrape have trendScore = 50 (new)', allTracksTrendScore50, true);
+
+// Specific track check
+const palmTrkScore = out.tracks.find(t => t.beatportId === 19711254);
+assert('palm track trendScore = 50 (new)', palmTrkScore ? palmTrkScore.trendScore : null, 50);
+
+// ====================================================================
+// RP-BPI-005 — MULTI-SCRAPE TREND SCORE SIMULATION
+// ====================================================================
+console.log('\n=== RP-BPI-005 MULTI-SCRAPE TREND SCORE ===');
+
+// Use a fresh graph for precise trendScore testing
+const g5 = createCanonicalGraph();
+const b5 = createCanonicalGraphBuilder(g5);
+
+// Scrape 1: pos 10 → new → trendScore = 50
+let lm5 = new Map(), am5 = new Map(), tm5 = new Map(), rm5 = new Map();
+b5.processTracks([makeTrack(66666, 'score test', 10, 55555, 'Test Label')], 'Tech House', 11, lm5, am5, tm5, rm5);
+b5.mergeGenreIntoGlobal(lm5, am5, tm5, rm5, 'Tech House');
+let st5 = Array.from(g5.tracks.values()).find(t => t.beatportId === 66666);
+assert('score scrape 1 (pos 10, new) → trendScore = 50', st5 ? st5.trendScore : null, 50);
+
+// Scrape 2: pos 8 → up (10→8, delta=+2) → trendScore = 50 + 2 = 52
+lm5 = new Map(); am5 = new Map(); tm5 = new Map(); rm5 = new Map();
+b5.processTracks([makeTrack(66666, 'score test', 8, 55555, 'Test Label')], 'Tech House', 11, lm5, am5, tm5, rm5);
+b5.mergeGenreIntoGlobal(lm5, am5, tm5, rm5, 'Tech House');
+st5 = Array.from(g5.tracks.values()).find(t => t.beatportId === 66666);
+assert('score scrape 2 (pos 10→8, slight up) → trendScore = 52', st5 ? st5.trendScore : null, 52);
+
+// Scrape 3: pos 1 → up (8→1, delta=+7) → trendScore = 52 + 7 = 59 (strong improvement)
+lm5 = new Map(); am5 = new Map(); tm5 = new Map(); rm5 = new Map();
+b5.processTracks([makeTrack(66666, 'score test', 1, 55555, 'Test Label')], 'Tech House', 11, lm5, am5, tm5, rm5);
+b5.mergeGenreIntoGlobal(lm5, am5, tm5, rm5, 'Tech House');
+st5 = Array.from(g5.tracks.values()).find(t => t.beatportId === 66666);
+assert('score scrape 3 (pos 8→1, strong up) → trendScore = 59', st5 ? st5.trendScore : null, 59);
+
+// Scrape 4: pos 5 → down (1→5, delta=-4) → trendScore = 59 - 4 = 55 (slight worsening)
+lm5 = new Map(); am5 = new Map(); tm5 = new Map(); rm5 = new Map();
+b5.processTracks([makeTrack(66666, 'score test', 5, 55555, 'Test Label')], 'Tech House', 11, lm5, am5, tm5, rm5);
+b5.mergeGenreIntoGlobal(lm5, am5, tm5, rm5, 'Tech House');
+st5 = Array.from(g5.tracks.values()).find(t => t.beatportId === 66666);
+assert('score scrape 4 (pos 1→5, slight down) → trendScore = 55', st5 ? st5.trendScore : null, 55);
+
+// Scrape 5: pos 50 → down (5→50, delta=-45) → trendScore = 55 - 45 = 10 (strong worsening)
+lm5 = new Map(); am5 = new Map(); tm5 = new Map(); rm5 = new Map();
+b5.processTracks([makeTrack(66666, 'score test', 50, 55555, 'Test Label')], 'Tech House', 11, lm5, am5, tm5, rm5);
+b5.mergeGenreIntoGlobal(lm5, am5, tm5, rm5, 'Tech House');
+st5 = Array.from(g5.tracks.values()).find(t => t.beatportId === 66666);
+assert('score scrape 5 (pos 5→50, strong down) → trendScore = 10', st5 ? st5.trendScore : null, 10);
+
+// Scrape 6: pos 50 → stable (dedup, no new entry) → trendScore stays 10
+lm5 = new Map(); am5 = new Map(); tm5 = new Map(); rm5 = new Map();
+b5.processTracks([makeTrack(66666, 'score test', 50, 55555, 'Test Label')], 'Tech House', 11, lm5, am5, tm5, rm5);
+b5.mergeGenreIntoGlobal(lm5, am5, tm5, rm5, 'Tech House');
+st5 = Array.from(g5.tracks.values()).find(t => t.beatportId === 66666);
+assert('score scrape 6 (pos 50→50, stable/dedup) → trendScore = 10 (unchanged)', st5 ? st5.trendScore : null, 10);
+
+// --- Test: Lower limit (0) ---
+console.log('\n=== RP-BPI-005 LIMIT TESTS ===');
+
+const g6 = createCanonicalGraph();
+const b6 = createCanonicalGraphBuilder(g6);
+
+// Scrape 1: pos 10 → new → trendScore = 50
+let lm6 = new Map(), am6 = new Map(), tm6 = new Map(), rm6 = new Map();
+b6.processTracks([makeTrack(77778, 'limit test low', 10, 55555, 'Test Label')], 'Tech House', 11, lm6, am6, tm6, rm6);
+b6.mergeGenreIntoGlobal(lm6, am6, tm6, rm6, 'Tech House');
+let lt = Array.from(g6.tracks.values()).find(t => t.beatportId === 77778);
+assert('limit low scrape 1 (pos 10) → trendScore = 50', lt ? lt.trendScore : null, 50);
+
+// Scrape 2: pos 80 → down (10→80, delta=-70) → trendScore = 50 - 70 = -20 → clamped to 0
+lm6 = new Map(); am6 = new Map(); tm6 = new Map(); rm6 = new Map();
+b6.processTracks([makeTrack(77778, 'limit test low', 80, 55555, 'Test Label')], 'Tech House', 11, lm6, am6, tm6, rm6);
+b6.mergeGenreIntoGlobal(lm6, am6, tm6, rm6, 'Tech House');
+lt = Array.from(g6.tracks.values()).find(t => t.beatportId === 77778);
+assert('limit low scrape 2 (pos 10→80, delta=-70) → trendScore = 0 (clamped)', lt ? lt.trendScore : null, 0);
+
+// --- Test: Upper limit (100) ---
+const g7 = createCanonicalGraph();
+const b7 = createCanonicalGraphBuilder(g7);
+
+// Scrape 1: pos 90 → new → trendScore = 50
+let lm7 = new Map(), am7 = new Map(), tm7 = new Map(), rm7 = new Map();
+b7.processTracks([makeTrack(77779, 'limit test high', 90, 55555, 'Test Label')], 'Tech House', 11, lm7, am7, tm7, rm7);
+b7.mergeGenreIntoGlobal(lm7, am7, tm7, rm7, 'Tech House');
+let ht = Array.from(g7.tracks.values()).find(t => t.beatportId === 77779);
+assert('limit high scrape 1 (pos 90) → trendScore = 50', ht ? ht.trendScore : null, 50);
+
+// Scrape 2: pos 1 → up (90→1, delta=+89) → trendScore = 50 + 89 = 139 → clamped to 100
+lm7 = new Map(); am7 = new Map(); tm7 = new Map(); rm7 = new Map();
+b7.processTracks([makeTrack(77779, 'limit test high', 1, 55555, 'Test Label')], 'Tech House', 11, lm7, am7, tm7, rm7);
+b7.mergeGenreIntoGlobal(lm7, am7, tm7, rm7, 'Tech House');
+ht = Array.from(g7.tracks.values()).find(t => t.beatportId === 77779);
+assert('limit high scrape 2 (pos 90→1, delta=+89) → trendScore = 100 (clamped)', ht ? ht.trendScore : null, 100);
+
+// --- Verify Artist/Release/Label do NOT have trendScore ---
+const artistsHaveNoTrendScore = out.artists.every(a => !('trendScore' in a));
+assert('no Artist has trendScore field (RP-BPI-005 extends only Track)', artistsHaveNoTrendScore, true);
+const releasesHaveNoTrendScore = out.releases.every(r => !('trendScore' in r));
+assert('no Release has trendScore field (RP-BPI-005 extends only Track)', releasesHaveNoTrendScore, true);
+const labelsHaveNoTrendScore = out.labels.every(l => !('trendScore' in l));
+assert('no Label has trendScore field (RP-BPI-005 extends only Track)', labelsHaveNoTrendScore, true);
 
 console.log('\n=== RESULT: ' + pass + ' passed, ' + fail + ' failed ===');
 console.log('=== Sample JSON saved to: ' + samplePath + ' ===');

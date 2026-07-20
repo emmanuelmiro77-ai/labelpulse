@@ -221,6 +221,42 @@
   }
 
   // ===================================================================
+  // RP-BPI-005 — TRACK TREND SCORE
+  //
+  // Calcola un punteggio intero (0-100) che riflette l'andamento della
+  // traccia nel tempo. Il calcolo viene fatto durante la costruzione del
+  // Canonical Graph (nel builder), NON nell'Exporter.
+  //
+  // Regole:
+  //   - Track nuova (1 entry per genere) → trendScore = 50
+  //   - Trend "up"   → trendScore += (prev.position - last.position)
+  //                    (miglioramento: differenza positiva)
+  //   - Trend "down" → trendScore -= (last.position - prev.position)
+  //                    (peggioramento: differenza negativa)
+  //   - Trend "stable" → trendScore invariato (mantiene valore precedente)
+  //   - Risultato sempre clamped tra 0 e 100.
+  // ===================================================================
+  function computeTrendScore(positionHistory, currentGenreName, prevTrendScore) {
+    var trend = computeTrend(positionHistory, currentGenreName);
+    if (trend === 'new') {
+      return 50;
+    }
+    if (trend === 'stable') {
+      return prevTrendScore;
+    }
+    // Filtra le entry dello stesso genere per trovare le ultime due
+    var genre = currentGenreName || positionHistory[positionHistory.length - 1].genreName;
+    var sameGenre = positionHistory.filter(function (e) { return e.genreName === genre; });
+    var last = sameGenre[sameGenre.length - 1];
+    var prev = sameGenre[sameGenre.length - 2];
+    var delta = prev.position - last.position; // positivo se miglioramento (up), negativo se peggioramento (down)
+    var score = (typeof prevTrendScore === 'number' ? prevTrendScore : 50) + delta;
+    if (score < 0) score = 0;
+    if (score > 100) score = 100;
+    return score;
+  }
+
+  // ===================================================================
   // processTracks: popola labelMap (lm), artistMap (am), trackMap (tm),
   //                releaseMap (rm) — RP-BPI-001
   // gn = genre name (string)
@@ -595,6 +631,8 @@
           // RP-BPI-004 — Track Trend: calcolato durante la costruzione del graph.
           // "new" per la prima acquisizione (1 entry in positionHistory).
           trend: 'new',
+          // RP-BPI-005 — Track Trend Score: 50 per nuova traccia.
+          trendScore: 50,
           seenAt: NOW,
           // === LEGACY COMPAT ===
           _compat: {
@@ -628,10 +666,14 @@
         var differs = !lastEntry || lastEntry.genreName !== gn || lastEntry.position !== pos;
         if (differs) {
           ph.push({ scrapedAt: NOW, genreId: gid, genreName: gn, position: pos });
+          // RP-BPI-004 — Ricalcola il trend dopo l'aggiornamento di positionHistory.
+          tr.trend = computeTrend(ph, gn);
+          // RP-BPI-005 — Ricalcola trendScore
+          tr.trendScore = computeTrendScore(ph, gn, tr.trendScore);
+        } else {
+          // Dedup: posizione invariata → trend = "stable", trendScore invariato.
+          tr.trend = 'stable';
         }
-        // RP-BPI-004 — Ricalcola il trend dopo l'aggiornamento di positionHistory.
-        // Il trend è basato sulle ultime due entry dello stesso genere.
-        tr.trend = computeTrend(ph, gn);
       }
 
       // === AGGIORNA Release.trackIds[] con il canonical track id (ora disponibile) ===
@@ -928,17 +970,19 @@
           v.positions.forEach(function (p) { ex.positions.push(p); });
           // RP-BPI-003 — Merge positionHistory: append per-genre entries
           // with dedup (skip if same genreName+position as last entry).
+          var phAdded = false;
           v.positionHistory.forEach(function (phEntry) {
             var lastPh = ex.positionHistory.length > 0 ? ex.positionHistory[ex.positionHistory.length - 1] : null;
             var phDiffers = !lastPh || lastPh.genreName !== phEntry.genreName || lastPh.position !== phEntry.position;
             if (phDiffers) {
               ex.positionHistory.push(phEntry);
+              phAdded = true;
             }
           });
-          // RP-BPI-004 — Ricalcola il trend dopo il merge di positionHistory.
-          // Usa l'genreName dell'ultima entry come genere corrente.
-          if (ex.positionHistory.length > 0) {
+          // RP-BPI-004/005 — Ricalcola trend e trendScore solo se nuove entry sono state aggiunte.
+          if (phAdded && ex.positionHistory.length > 0) {
             ex.trend = computeTrend(ex.positionHistory, ex.positionHistory[ex.positionHistory.length - 1].genreName);
+            ex.trendScore = computeTrendScore(ex.positionHistory, ex.positionHistory[ex.positionHistory.length - 1].genreName, ex.trendScore);
           }
           if (!ex.releaseId && v.releaseId) ex.releaseId = v.releaseId;
         } else {
@@ -1191,6 +1235,8 @@
       positionHistory: t.positionHistory.slice(),
       // RP-BPI-004 — Track Trend: calcolato nel builder, non nell'exporter.
       trend: t.trend,
+      // RP-BPI-005 — Track Trend Score (calcolato nel builder, serializzato qui).
+      trendScore: t.trendScore,
       seenAt: t.seenAt,
       // === LEGACY (preservato per backward compat) ===
       id: t.beatportId,                     // legacy: BP id (alias of beatportId, may be null)
