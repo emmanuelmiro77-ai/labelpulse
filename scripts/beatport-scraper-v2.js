@@ -315,6 +315,44 @@
   }
 
   // ===================================================================
+  // RP-BPI-008 — TRACK INSIGHTS ENGINE
+  //
+  // Costruisce un oggetto insights utilizzando esclusivamente i dati
+  // già presenti in positionHistory. Non ricalcola trend/trendScore/
+  // momentum/status. Non introduce nuovi dati persistenti.
+  //
+  // Campi:
+  //   hasHistory      — true se positionHistory ha almeno 1 entry
+  //   historyEntries  — numero totale di entry
+  //   latestGenre     — genre dell'ultima entry (null se vuoto)
+  //   latestPosition  — posizione dell'ultima entry (null se vuoto)
+  //   bestPosition    — posizione minima nella history (null se vuoto)
+  //   worstPosition   — posizione massima nella history (null se vuoto)
+  // ===================================================================
+  function computeInsights(positionHistory) {
+    if (!Array.isArray(positionHistory) || positionHistory.length === 0) {
+      return {
+        hasHistory: false,
+        historyEntries: 0,
+        latestGenre: null,
+        latestPosition: null,
+        bestPosition: null,
+        worstPosition: null
+      };
+    }
+    var last = positionHistory[positionHistory.length - 1];
+    var positions = positionHistory.map(function (e) { return e.position; });
+    return {
+      hasHistory: true,
+      historyEntries: positionHistory.length,
+      latestGenre: last.genreName,
+      latestPosition: last.position,
+      bestPosition: Math.min.apply(null, positions),
+      worstPosition: Math.max.apply(null, positions)
+    };
+  }
+
+  // ===================================================================
   // processTracks: popola labelMap (lm), artistMap (am), trackMap (tm),
   //                releaseMap (rm) — RP-BPI-001
   // gn = genre name (string)
@@ -695,6 +733,8 @@
           momentum: 0,
           // RP-BPI-007 — Track Status: "emerging" per nuova traccia (trend=new).
           status: 'emerging',
+          // RP-BPI-008 — Track Insights: costruiti da positionHistory.
+          insights: computeInsights([{ scrapedAt: NOW, genreId: gid, genreName: gn, position: pos }]),
           seenAt: NOW,
           // === LEGACY COMPAT ===
           _compat: {
@@ -736,11 +776,15 @@
           tr.momentum = computeMomentum(ph, gn);
           // RP-BPI-007 — Ricalcola status
           tr.status = computeStatus(tr.trend, tr.trendScore, tr.momentum);
+          // RP-BPI-008 — Ricalcola insights
+          tr.insights = computeInsights(ph);
         } else {
           // Dedup: posizione invariata → trend = "stable", trendScore invariato.
           tr.trend = 'stable';
           // RP-BPI-007 — Ricalcola status (trend changed to "stable")
           tr.status = computeStatus(tr.trend, tr.trendScore, tr.momentum);
+          // RP-BPI-008 — Ricalcola insights (positionHistory unchanged, but recompute for consistency)
+          tr.insights = computeInsights(ph);
         }
       }
 
@@ -1055,10 +1099,14 @@
             ex.trendScore = computeTrendScore(ex.positionHistory, ex.positionHistory[ex.positionHistory.length - 1].genreName, ex.trendScore);
             ex.momentum = computeMomentum(ex.positionHistory, ex.positionHistory[ex.positionHistory.length - 1].genreName);
             ex.status = computeStatus(ex.trend, ex.trendScore, ex.momentum);
+            // RP-BPI-008 — Ricalcola insights
+            ex.insights = computeInsights(ex.positionHistory);
           } else if (ex.positionHistory.length > 0) {
             // Dedup: posizione invariata → trend = "stable", status ricalcolato.
             ex.trend = 'stable';
             ex.status = computeStatus(ex.trend, ex.trendScore, ex.momentum);
+            // RP-BPI-008 — Ricalcola insights
+            ex.insights = computeInsights(ex.positionHistory);
           }
           if (!ex.releaseId && v.releaseId) ex.releaseId = v.releaseId;
         } else {
@@ -1317,6 +1365,8 @@
       momentum: t.momentum,
       // RP-BPI-007 — Track Status (determinato nel builder, serializzato qui).
       status: t.status,
+      // RP-BPI-008 — Track Insights (costruiti nel builder, serializzati qui).
+      insights: t.insights,
       seenAt: t.seenAt,
       // === LEGACY (preservato per backward compat) ===
       id: t.beatportId,                     // legacy: BP id (alias of beatportId, may be null)

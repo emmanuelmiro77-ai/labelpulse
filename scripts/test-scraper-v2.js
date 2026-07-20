@@ -222,6 +222,31 @@ function computeStatus(trend, trendScore, momentum) {
   return 'cold';
 }
 
+
+// === RP-BPI-008 — Track Insights Engine ===
+function computeInsights(positionHistory) {
+  if (!Array.isArray(positionHistory) || positionHistory.length === 0) {
+    return {
+      hasHistory: false,
+      historyEntries: 0,
+      latestGenre: null,
+      latestPosition: null,
+      bestPosition: null,
+      worstPosition: null
+    };
+  }
+  var last = positionHistory[positionHistory.length - 1];
+  var positions = positionHistory.map(function (e) { return e.position; });
+  return {
+    hasHistory: true,
+    historyEntries: positionHistory.length,
+    latestGenre: last.genreName,
+    latestPosition: last.position,
+    bestPosition: Math.min.apply(null, positions),
+    worstPosition: Math.max.apply(null, positions)
+  };
+}
+
 // === RP-BPI-002A — Beatport-derived stable key helpers (kept for dedup internal) ===
 function artistKey(a) {
   if (!a) return null;
@@ -530,6 +555,8 @@ function processTracks(tracks, gn, gid, lm, am, tm, rm) {
         momentum: 0,
         // RP-BPI-007 — Track Status
         status: 'emerging',
+        // RP-BPI-008 — Track Insights
+        insights: computeInsights([{ scrapedAt: NOW, genreId: gid, genreName: gn, position: pos }]),
         seenAt: NOW,
         _compat: {
           key: trackBpKey,
@@ -559,11 +586,15 @@ function processTracks(tracks, gn, gid, lm, am, tm, rm) {
         tr.momentum = computeMomentum(ph, gn);
         // RP-BPI-007 — Ricalcola status
         tr.status = computeStatus(tr.trend, tr.trendScore, tr.momentum);
+        // RP-BPI-008 — Ricalcola insights
+        tr.insights = computeInsights(ph);
       } else {
         // Dedup: posizione invariata → trend = "stable", trendScore invariato.
         tr.trend = 'stable';
         // RP-BPI-007 — Ricalcola status (trend changed to stable)
         tr.status = computeStatus(tr.trend, tr.trendScore, tr.momentum);
+        // RP-BPI-008 — Ricalcola insights
+        tr.insights = computeInsights(ph);
       }
     }
 
@@ -757,10 +788,12 @@ function remapCanonicalIds() {
           ex.trendScore = computeTrendScore(ex.positionHistory, ex.positionHistory[ex.positionHistory.length - 1].genreName, ex.trendScore);
           ex.momentum = computeMomentum(ex.positionHistory, ex.positionHistory[ex.positionHistory.length - 1].genreName);
           ex.status = computeStatus(ex.trend, ex.trendScore, ex.momentum);
+            ex.insights = computeInsights(ex.positionHistory);
         } else if (ex.positionHistory.length > 0) {
           // Dedup: posizione invariata → trend = "stable", status ricalcolato.
           ex.trend = 'stable';
           ex.status = computeStatus(ex.trend, ex.trendScore, ex.momentum);
+            ex.insights = computeInsights(ex.positionHistory);
         }
         if (!ex.releaseId && v.releaseId) ex.releaseId = v.releaseId;
       } else {
@@ -962,6 +995,8 @@ const tracksArr = Array.from(graph.tracks.values()).map(t => ({
   momentum: t.momentum,
   // RP-BPI-007 — Track Status
   status: t.status,
+  // RP-BPI-008 — Track Insights
+  insights: t.insights,
   seenAt: t.seenAt,
   id: t.beatportId,
   key: t._compat.key,
@@ -2224,6 +2259,102 @@ const releasesHaveNoStatus = out.releases.every(r => !('status' in r));
 assert('no Release has status field (RP-BPI-007 extends only Track)', releasesHaveNoStatus, true);
 const labelsHaveNoStatus = out.labels.every(l => !('status' in l));
 assert('no Label has status field (RP-BPI-007 extends only Track)', labelsHaveNoStatus, true);
+
+// ====================================================================
+// RP-BPI-008 — TRACK INSIGHTS ENGINE TESTS
+// ====================================================================
+console.log('\n=== RP-BPI-008 TRACK INSIGHTS ENGINE ===');
+
+// --- Test 1: Every track has insights object with all required fields ---
+const allTracksHaveInsights = out.tracks.every(t =>
+  typeof t.insights === 'object' && t.insights !== null &&
+  typeof t.insights.hasHistory === 'boolean' &&
+  typeof t.insights.historyEntries === 'number' &&
+  (t.insights.latestGenre === null || typeof t.insights.latestGenre === 'string') &&
+  (t.insights.latestPosition === null || typeof t.insights.latestPosition === 'number') &&
+  (t.insights.bestPosition === null || typeof t.insights.bestPosition === 'number') &&
+  (t.insights.worstPosition === null || typeof t.insights.worstPosition === 'number')
+);
+assert('every track has insights object with all required fields', allTracksHaveInsights, true);
+
+// --- Test 2: All tracks in first scrape have hasHistory=true, historyEntries >= 1 ---
+const allTracksHaveHistory = out.tracks.every(t =>
+  t.insights.hasHistory === true && t.insights.historyEntries >= 1
+);
+assert('all tracks in first scrape have insights.hasHistory=true, historyEntries>=1', allTracksHaveHistory, true);
+
+// --- Test 3: Specific track — "palm of my hands" (1 entry, Tech House, pos 1) ---
+const palmInsights = out.tracks.find(t => t.beatportId === 19711254);
+assert('palm insights.hasHistory = true', palmInsights ? palmInsights.insights.hasHistory : null, true);
+assert('palm insights.historyEntries = 1', palmInsights ? palmInsights.insights.historyEntries : null, 1);
+assert('palm insights.latestGenre = Tech House', palmInsights ? palmInsights.insights.latestGenre : null, 'Tech House');
+assert('palm insights.latestPosition = 1', palmInsights ? palmInsights.insights.latestPosition : null, 1);
+assert('palm insights.bestPosition = 1 (only entry)', palmInsights ? palmInsights.insights.bestPosition : null, 1);
+assert('palm insights.worstPosition = 1 (only entry)', palmInsights ? palmInsights.insights.worstPosition : null, 1);
+
+// --- Test 4: "lose control" (2 entries: Tech House pos 12, Minimal/Deep Tech pos 2) ---
+const loseCtrlInsights = out.tracks.find(t => t.beatportId === 19711256);
+assert('lose control insights.hasHistory = true', loseCtrlInsights ? loseCtrlInsights.insights.hasHistory : null, true);
+assert('lose control insights.historyEntries = 2', loseCtrlInsights ? loseCtrlInsights.insights.historyEntries : null, 2);
+// Last entry is Minimal / Deep Tech (processed after Tech House)
+assert('lose control insights.latestGenre = Minimal / Deep Tech', loseCtrlInsights ? loseCtrlInsights.insights.latestGenre : null, 'Minimal / Deep Tech');
+assert('lose control insights.latestPosition = 2', loseCtrlInsights ? loseCtrlInsights.insights.latestPosition : null, 2);
+// bestPosition = min(12, 2) = 2
+assert('lose control insights.bestPosition = 2 (min of 12, 2)', loseCtrlInsights ? loseCtrlInsights.insights.bestPosition : null, 2);
+// worstPosition = max(12, 2) = 12
+assert('lose control insights.worstPosition = 12 (max of 12, 2)', loseCtrlInsights ? loseCtrlInsights.insights.worstPosition : null, 12);
+
+// ====================================================================
+// RP-BPI-008 — MULTI-SCRAPE INSIGHTS SIMULATION
+// ====================================================================
+console.log('\n=== RP-BPI-008 MULTI-SCRAPE INSIGHTS ===');
+
+// Helper: create a fresh graph + builder for insights tests
+function insightsTest(label, scrapes, expectedInsights) {
+  const g = createCanonicalGraph();
+  const b = createCanonicalGraphBuilder(g);
+  const trackId = 33333;
+  for (const [pos, genreName, genreId] of scrapes) {
+    const lm = new Map(), am = new Map(), tm = new Map(), rm = new Map();
+    b.processTracks([makeTrack(trackId, 'insights test', pos, 55555, 'Test Label')], genreName, genreId, lm, am, tm, rm);
+    b.mergeGenreIntoGlobal(lm, am, tm, rm, genreName);
+  }
+  const track = Array.from(g.tracks.values()).find(t => t.beatportId === trackId);
+  if (!track) { assert(label, null, expectedInsights); return; }
+  for (const key in expectedInsights) {
+    assert(label + ' — ' + key, track.insights[key], expectedInsights[key]);
+  }
+}
+
+// --- One entry ---
+insightsTest('insights: 1 entry (pos 5, Tech House)', [
+  [5, 'Tech House', 11]
+], { hasHistory: true, historyEntries: 1, latestGenre: 'Tech House', latestPosition: 5, bestPosition: 5, worstPosition: 5 });
+
+// --- Multiple entries, same genre ---
+insightsTest('insights: 3 entries (pos 10→5→1, Tech House)', [
+  [10, 'Tech House', 11], [5, 'Tech House', 11], [1, 'Tech House', 11]
+], { hasHistory: true, historyEntries: 3, latestGenre: 'Tech House', latestPosition: 1, bestPosition: 1, worstPosition: 10 });
+
+// --- Cross-genre: best/worst across genres ---
+// TH:10, MDT:3: latestGenre=MDT, latestPosition=3, best=3, worst=10
+insightsTest('insights: cross-genre (TH:10, MDT:3)', [
+  [10, 'Tech House', 11], [3, 'Minimal / Deep Tech', 14]
+], { hasHistory: true, historyEntries: 2, latestGenre: 'Minimal / Deep Tech', latestPosition: 3, bestPosition: 3, worstPosition: 10 });
+
+// --- 4 entries with mixed positions ---
+// TH:20→10→30→5: best=5, worst=30, latest=5
+insightsTest('insights: 4 entries (20→10→30→5)', [
+  [20, 'Tech House', 11], [10, 'Tech House', 11], [30, 'Tech House', 11], [5, 'Tech House', 11]
+], { hasHistory: true, historyEntries: 4, latestGenre: 'Tech House', latestPosition: 5, bestPosition: 5, worstPosition: 30 });
+
+// --- Verify Artist/Release/Label do NOT have insights ---
+const artistsHaveNoInsights = out.artists.every(a => !('insights' in a));
+assert('no Artist has insights field (RP-BPI-008 extends only Track)', artistsHaveNoInsights, true);
+const releasesHaveNoInsights = out.releases.every(r => !('insights' in r));
+assert('no Release has insights field (RP-BPI-008 extends only Track)', releasesHaveNoInsights, true);
+const labelsHaveNoInsights = out.labels.every(l => !('insights' in l));
+assert('no Label has insights field (RP-BPI-008 extends only Track)', labelsHaveNoInsights, true);
 
 console.log('\n=== RESULT: ' + pass + ' passed, ' + fail + ' failed ===');
 console.log('=== Sample JSON saved to: ' + samplePath + ' ===');

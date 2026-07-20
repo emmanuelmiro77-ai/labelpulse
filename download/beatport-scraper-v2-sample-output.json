@@ -640,6 +640,14 @@
       "trendScore": 50,
       "momentum": 0,
       "status": "emerging",
+      "insights": {
+        "hasHistory": true,
+        "historyEntries": 1,
+        "latestGenre": "Tech House",
+        "latestPosition": 1,
+        "bestPosition": 1,
+        "worstPosition": 1
+      },
       "seenAt": "2026-06-21T10:00:00.000Z",
       "id": 19711254,
       "key": "bp_19711254",
@@ -706,6 +714,14 @@
       "trendScore": 50,
       "momentum": 0,
       "status": "emerging",
+      "insights": {
+        "hasHistory": true,
+        "historyEntries": 1,
+        "latestGenre": "Tech House",
+        "latestPosition": 5,
+        "bestPosition": 5,
+        "worstPosition": 5
+      },
       "seenAt": "2026-06-21T10:00:00.000Z",
       "id": 19711255,
       "key": "bp_19711255",
@@ -773,6 +789,14 @@
       "trendScore": 50,
       "momentum": 0,
       "status": "emerging",
+      "insights": {
+        "hasHistory": true,
+        "historyEntries": 2,
+        "latestGenre": "Minimal / Deep Tech",
+        "latestPosition": 2,
+        "bestPosition": 2,
+        "worstPosition": 12
+      },
       "seenAt": "2026-06-21T10:00:00.000Z",
       "id": 19711256,
       "key": "bp_19711256",
@@ -828,6 +852,14 @@
       "trendScore": 50,
       "momentum": 0,
       "status": "emerging",
+      "insights": {
+        "hasHistory": true,
+        "historyEntries": 1,
+        "latestGenre": "Techno Peak Time / Driving",
+        "latestPosition": 3,
+        "bestPosition": 3,
+        "worstPosition": 3
+      },
       "seenAt": "2026-06-21T10:00:00.000Z",
       "id": 19711260,
       "key": "bp_19711260",
@@ -884,6 +916,14 @@
       "trendScore": 50,
       "momentum": 0,
       "status": "emerging",
+      "insights": {
+        "hasHistory": true,
+        "historyEntries": 1,
+        "latestGenre": "Techno Peak Time / Driving",
+        "latestPosition": 8,
+        "bestPosition": 8,
+        "worstPosition": 8
+      },
       "seenAt": "2026-06-21T10:00:00.000Z",
       "id": 19711261,
       "key": "bp_19711261",
@@ -944,6 +984,14 @@
       "trendScore": 50,
       "momentum": 0,
       "status": "emerging",
+      "insights": {
+        "hasHistory": true,
+        "historyEntries": 1,
+        "latestGenre": "Techno Peak Time / Driving",
+        "latestPosition": 18,
+        "bestPosition": 18,
+        "worstPosition": 18
+      },
       "seenAt": "2026-06-21T10:00:00.000Z",
       "id": 19711262,
       "key": "bp_19711262",
@@ -1001,6 +1049,14 @@
       "trendScore": 50,
       "momentum": 0,
       "status": "emerging",
+      "insights": {
+        "hasHistory": true,
+        "historyEntries": 1,
+        "latestGenre": "Minimal / Deep Tech",
+        "latestPosition": 25,
+        "bestPosition": 25,
+        "worstPosition": 25
+      },
       "seenAt": "2026-06-21T10:00:00.000Z",
       "id": 19711270,
       "key": "bp_19711270",
