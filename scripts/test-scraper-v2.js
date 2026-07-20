@@ -190,6 +190,28 @@ function computeTrendScore(positionHistory, currentGenreName, prevTrendScore) {
   return score;
 }
 
+
+// === RP-BPI-006 — Track Momentum ===
+function computeMomentum(positionHistory, currentGenreName) {
+  if (!Array.isArray(positionHistory) || positionHistory.length < 3) {
+    return 0;
+  }
+  var genre = currentGenreName || positionHistory[positionHistory.length - 1].genreName;
+  var sameGenre = positionHistory.filter(function (e) { return e.genreName === genre; });
+  if (sameGenre.length < 3) {
+    return 0;
+  }
+  var p1 = sameGenre[sameGenre.length - 3].position;
+  var p2 = sameGenre[sameGenre.length - 2].position;
+  var p3 = sameGenre[sameGenre.length - 1].position;
+  var delta1 = p2 - p1;
+  var delta2 = p3 - p2;
+  var momentum = -(delta1 + delta2);
+  if (momentum < -100) momentum = -100;
+  if (momentum > 100) momentum = 100;
+  return momentum;
+}
+
 // === RP-BPI-002A — Beatport-derived stable key helpers (kept for dedup internal) ===
 function artistKey(a) {
   if (!a) return null;
@@ -494,6 +516,8 @@ function processTracks(tracks, gn, gid, lm, am, tm, rm) {
         trend: 'new',
         // RP-BPI-005 — Track Trend Score
         trendScore: 50,
+        // RP-BPI-006 — Track Momentum
+        momentum: 0,
         seenAt: NOW,
         _compat: {
           key: trackBpKey,
@@ -519,6 +543,8 @@ function processTracks(tracks, gn, gid, lm, am, tm, rm) {
         tr.trend = computeTrend(ph, gn);
         // RP-BPI-005 — Ricalcola trendScore
         tr.trendScore = computeTrendScore(ph, gn, tr.trendScore);
+        // RP-BPI-006 — Ricalcola momentum
+        tr.momentum = computeMomentum(ph, gn);
       } else {
         // Dedup: posizione invariata → trend = "stable", trendScore invariato.
         tr.trend = 'stable';
@@ -711,6 +737,7 @@ function remapCanonicalIds() {
         if (phAdded && ex.positionHistory.length > 0) {
           ex.trend = computeTrend(ex.positionHistory, ex.positionHistory[ex.positionHistory.length - 1].genreName);
           ex.trendScore = computeTrendScore(ex.positionHistory, ex.positionHistory[ex.positionHistory.length - 1].genreName, ex.trendScore);
+          ex.momentum = computeMomentum(ex.positionHistory, ex.positionHistory[ex.positionHistory.length - 1].genreName);
         }
         if (!ex.releaseId && v.releaseId) ex.releaseId = v.releaseId;
       } else {
@@ -908,6 +935,8 @@ const tracksArr = Array.from(graph.tracks.values()).map(t => ({
   trend: t.trend,
   // RP-BPI-005 — Track Trend Score
   trendScore: t.trendScore,
+  // RP-BPI-006 — Track Momentum
+  momentum: t.momentum,
   seenAt: t.seenAt,
   id: t.beatportId,
   key: t._compat.key,
@@ -1927,6 +1956,127 @@ const releasesHaveNoTrendScore = out.releases.every(r => !('trendScore' in r));
 assert('no Release has trendScore field (RP-BPI-005 extends only Track)', releasesHaveNoTrendScore, true);
 const labelsHaveNoTrendScore = out.labels.every(l => !('trendScore' in l));
 assert('no Label has trendScore field (RP-BPI-005 extends only Track)', labelsHaveNoTrendScore, true);
+
+// ====================================================================
+// RP-BPI-006 — TRACK MOMENTUM TESTS
+// ====================================================================
+console.log('\n=== RP-BPI-006 TRACK MOMENTUM ===');
+
+// --- Test 1: Every track has momentum (integer -100..+100) ---
+const allTracksHaveMomentum = out.tracks.every(t =>
+  typeof t.momentum === 'number' &&
+  Number.isInteger(t.momentum) &&
+  t.momentum >= -100 && t.momentum <= 100
+);
+assert('every track has momentum (integer -100..+100)', allTracksHaveMomentum, true);
+
+// --- Test 2: New track / < 3 entries → momentum = 0 ---
+// All tracks in the first scrape have < 3 entries per genre → momentum = 0.
+const allTracksMomentum0 = out.tracks.every(t => t.momentum === 0);
+assert('all tracks in first scrape have momentum = 0 (< 3 entries per genre)', allTracksMomentum0, true);
+
+// ====================================================================
+// RP-BPI-006 — MULTI-SCRAPE MOMENTUM SIMULATION
+// ====================================================================
+console.log('\n=== RP-BPI-006 MULTI-SCRAPE MOMENTUM ===');
+
+// Helper: create a fresh graph + builder for momentum tests
+function momentumTest(label, scrapes, expectedMomentum) {
+  const g = createCanonicalGraph();
+  const b = createCanonicalGraphBuilder(g);
+  const trackId = 55555;
+  for (const [pos, genreName, genreId] of scrapes) {
+    const lm = new Map(), am = new Map(), tm = new Map(), rm = new Map();
+    b.processTracks([makeTrack(trackId, 'momentum test', pos, 55555, 'Test Label')], genreName, genreId, lm, am, tm, rm);
+    b.mergeGenreIntoGlobal(lm, am, tm, rm, genreName);
+  }
+  const track = Array.from(g.tracks.values()).find(t => t.beatportId === trackId);
+  const actual = track ? track.momentum : null;
+  assert(label, actual, expectedMomentum);
+}
+
+// --- Less than 3 entries → momentum = 0 ---
+momentumTest('momentum: 1 entry → 0', [[10, 'Tech House', 11]], 0);
+momentumTest('momentum: 2 entries → 0', [[10, 'Tech House', 11], [8, 'Tech House', 11]], 0);
+
+// --- Constant growth (positions decreasing = improving) ---
+// pos 10 → 7 → 4: delta1 = 7-10 = -3, delta2 = 4-7 = -3, momentum = -(-3 + -3) = 6
+momentumTest('momentum: constant growth (10→7→4) → +6', [
+  [10, 'Tech House', 11], [7, 'Tech House', 11], [4, 'Tech House', 11]
+], 6);
+
+// --- Constant decline (positions increasing = worsening) ---
+// pos 1 → 5 → 9: delta1 = 5-1 = 4, delta2 = 9-5 = 4, momentum = -(4+4) = -8
+momentumTest('momentum: constant decline (1→5→9) → -8', [
+  [1, 'Tech House', 11], [5, 'Tech House', 11], [9, 'Tech House', 11]
+], -8);
+
+// --- Mixed: improving then worsening (decelerating) ---
+// pos 10 → 5 → 8: delta1 = 5-10 = -5, delta2 = 8-5 = 3, momentum = -(-5+3) = 2
+momentumTest('momentum: mixed (10→5→8, decelerating) → +2', [
+  [10, 'Tech House', 11], [5, 'Tech House', 11], [8, 'Tech House', 11]
+], 2);
+
+// --- Mixed: worsening then improving (turnaround) ---
+// pos 1 → 8 → 3: delta1 = 8-1 = 7, delta2 = 3-8 = -5, momentum = -(7 + -5) = -2
+momentumTest('momentum: mixed (1→8→3, turnaround) → -2', [
+  [1, 'Tech House', 11], [8, 'Tech House', 11], [3, 'Tech House', 11]
+], -2);
+
+// --- Strong constant growth → hit +100 limit ---
+// pos 100 → 50 → 1: delta1 = 50-100 = -50, delta2 = 1-50 = -49, momentum = -(-50 + -49) = 99
+momentumTest('momentum: strong growth (100→50→1) → +99', [
+  [100, 'Tech House', 11], [50, 'Tech House', 11], [1, 'Tech House', 11]
+], 99);
+
+// --- Stronger constant growth → clamped to +100 ---
+// pos 100 → 50 → 1 → 1 → 50 → 1: last 3 = [50, 1, 1]? No, dedup prevents same pos consecutive.
+// Let's do: 100 → 60 → 20 → 1: 4 entries, last 3 = [60, 20, 1]
+// delta1 = 20-60 = -40, delta2 = 1-20 = -19, momentum = -(-40 + -19) = 59. Not enough.
+// Better: 100 → 40 → 1: delta1 = -60, delta2 = -39, momentum = 99. Still 99.
+// To get > 100: 100 → 1 → 100: delta1 = -99, delta2 = 99, momentum = 0. Not helpful.
+// We need delta1 + delta2 < -100. e.g. 100 → 1 → 1 (dedup!) — can't.
+// 100 → 1 → 2 (dedup won't trigger, 1→2 is different):
+//   delta1 = 1-100 = -99, delta2 = 2-1 = 1, momentum = -(-99+1) = 98. Not > 100.
+// 200 → 100 → 1: delta1 = -100, delta2 = -99, momentum = 199 → clamped 100
+momentumTest('momentum: extreme growth (200→100→1) → +100 (clamped)', [
+  [200, 'Tech House', 11], [100, 'Tech House', 11], [1, 'Tech House', 11]
+], 100);
+
+// --- Strong constant decline → clamped to -100 ---
+// pos 1 → 100 → 200: delta1 = 99, delta2 = 100, momentum = -199 → clamped -100
+momentumTest('momentum: extreme decline (1→100→200) → -100 (clamped)', [
+  [1, 'Tech House', 11], [100, 'Tech House', 11], [200, 'Tech House', 11]
+], -100);
+
+// --- 4 entries: uses last 3 only ---
+// pos 50 → 40 → 30 → 20: last 3 = [40, 30, 20]
+// delta1 = 30-40 = -10, delta2 = 20-30 = -10, momentum = -(-10 + -10) = 20
+momentumTest('momentum: 4 entries, uses last 3 (50→40→30→20) → +20', [
+  [50, 'Tech House', 11], [40, 'Tech House', 11], [30, 'Tech House', 11], [20, 'Tech House', 11]
+], 20);
+
+// --- Cross-genre: < 3 entries per genre → 0 ---
+momentumTest('momentum: cross-genre (TH:10, MDT:5, TH:3) → 0 (only 2 TH entries)', [
+  [10, 'Tech House', 11], [5, 'Minimal / Deep Tech', 14], [3, 'Tech House', 11]
+], 0);
+
+// --- Cross-genre: 3 entries in same genre (with other genre in between) ---
+// TH:10, MDT:5, TH:3, MDT:2, TH:1: TH has 3 entries [10, 3, 1]
+// delta1 = 3-10 = -7, delta2 = 1-3 = -2, momentum = -(-7 + -2) = 9
+momentumTest('momentum: cross-genre 3 TH entries (TH:10, MDT:5, TH:3, MDT:2, TH:1) → +9', [
+  [10, 'Tech House', 11], [5, 'Minimal / Deep Tech', 14],
+  [3, 'Tech House', 11], [2, 'Minimal / Deep Tech', 14],
+  [1, 'Tech House', 11]
+], 9);
+
+// --- Verify Artist/Release/Label do NOT have momentum ---
+const artistsHaveNoMomentum = out.artists.every(a => !('momentum' in a));
+assert('no Artist has momentum field (RP-BPI-006 extends only Track)', artistsHaveNoMomentum, true);
+const releasesHaveNoMomentum = out.releases.every(r => !('momentum' in r));
+assert('no Release has momentum field (RP-BPI-006 extends only Track)', releasesHaveNoMomentum, true);
+const labelsHaveNoMomentum = out.labels.every(l => !('momentum' in l));
+assert('no Label has momentum field (RP-BPI-006 extends only Track)', labelsHaveNoMomentum, true);
 
 console.log('\n=== RESULT: ' + pass + ' passed, ' + fail + ' failed ===');
 console.log('=== Sample JSON saved to: ' + samplePath + ' ===');

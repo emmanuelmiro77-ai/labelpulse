@@ -257,6 +257,43 @@
   }
 
   // ===================================================================
+  // RP-BPI-006 — TRACK MOMENTUM
+  //
+  // Calcola un punteggio intero (-100..+100) che riflette l'accelerazione
+  // della traccia (cambio di velocità di salita/discesa in classifica).
+  // Completamente indipendente da trend e trendScore.
+  //
+  // Regole:
+  //   - Se < 3 entry dello stesso genere → momentum = 0
+  //   - Altrimenti, considera le ultime 3 entry dello stesso genere:
+  //       delta1 = pos2 - pos1
+  //       delta2 = pos3 - pos2
+  //       momentum = -(delta1 + delta2)
+  //     (negativo perché posizione più bassa = meglio: se le posizioni
+  //      scendono, delta1+delta2 è negativo, e momentum diventa positivo)
+  //   - Clamp tra -100 e +100.
+  // ===================================================================
+  function computeMomentum(positionHistory, currentGenreName) {
+    if (!Array.isArray(positionHistory) || positionHistory.length < 3) {
+      return 0;
+    }
+    var genre = currentGenreName || positionHistory[positionHistory.length - 1].genreName;
+    var sameGenre = positionHistory.filter(function (e) { return e.genreName === genre; });
+    if (sameGenre.length < 3) {
+      return 0;
+    }
+    var p1 = sameGenre[sameGenre.length - 3].position;
+    var p2 = sameGenre[sameGenre.length - 2].position;
+    var p3 = sameGenre[sameGenre.length - 1].position;
+    var delta1 = p2 - p1;
+    var delta2 = p3 - p2;
+    var momentum = -(delta1 + delta2);
+    if (momentum < -100) momentum = -100;
+    if (momentum > 100) momentum = 100;
+    return momentum;
+  }
+
+  // ===================================================================
   // processTracks: popola labelMap (lm), artistMap (am), trackMap (tm),
   //                releaseMap (rm) — RP-BPI-001
   // gn = genre name (string)
@@ -633,6 +670,8 @@
           trend: 'new',
           // RP-BPI-005 — Track Trend Score: 50 per nuova traccia.
           trendScore: 50,
+          // RP-BPI-006 — Track Momentum: 0 per nuova traccia (< 3 entry).
+          momentum: 0,
           seenAt: NOW,
           // === LEGACY COMPAT ===
           _compat: {
@@ -670,6 +709,8 @@
           tr.trend = computeTrend(ph, gn);
           // RP-BPI-005 — Ricalcola trendScore
           tr.trendScore = computeTrendScore(ph, gn, tr.trendScore);
+          // RP-BPI-006 — Ricalcola momentum
+          tr.momentum = computeMomentum(ph, gn);
         } else {
           // Dedup: posizione invariata → trend = "stable", trendScore invariato.
           tr.trend = 'stable';
@@ -979,10 +1020,11 @@
               phAdded = true;
             }
           });
-          // RP-BPI-004/005 — Ricalcola trend e trendScore solo se nuove entry sono state aggiunte.
+          // RP-BPI-004/005/006 — Ricalcola trend, trendScore e momentum solo se nuove entry.
           if (phAdded && ex.positionHistory.length > 0) {
             ex.trend = computeTrend(ex.positionHistory, ex.positionHistory[ex.positionHistory.length - 1].genreName);
             ex.trendScore = computeTrendScore(ex.positionHistory, ex.positionHistory[ex.positionHistory.length - 1].genreName, ex.trendScore);
+            ex.momentum = computeMomentum(ex.positionHistory, ex.positionHistory[ex.positionHistory.length - 1].genreName);
           }
           if (!ex.releaseId && v.releaseId) ex.releaseId = v.releaseId;
         } else {
@@ -1237,6 +1279,8 @@
       trend: t.trend,
       // RP-BPI-005 — Track Trend Score (calcolato nel builder, serializzato qui).
       trendScore: t.trendScore,
+      // RP-BPI-006 — Track Momentum (calcolato nel builder, serializzato qui).
+      momentum: t.momentum,
       seenAt: t.seenAt,
       // === LEGACY (preservato per backward compat) ===
       id: t.beatportId,                     // legacy: BP id (alias of beatportId, may be null)
