@@ -144,6 +144,13 @@ function createCanonicalGraph() {
 function createCanonicalGraphBuilder(graph) {
   var gR = {};
 
+  // RP-BPI-009 — Engine instances
+  var historyEngine = createHistoryEngine();
+  var trendEngine = createTrendEngine();
+  var momentumEngine = createMomentumEngine();
+  var statusEngine = createStatusEngine();
+  var insightsEngine = createInsightsEngine();
+
 // === RP-BPI-002B — Canonical ID generators (mirror of the scraper) ===
 const canonicalCounters = { track: 0, release: 0, artist: 0, label: 0 };
 const PAD = 6;
@@ -153,98 +160,133 @@ function canonicalReleaseId() { canonicalCounters.release++; return 'rel_' + pad
 function canonicalArtistId() { canonicalCounters.artist++; return 'art_' + padNum(canonicalCounters.artist); }
 function canonicalLabelId() { canonicalCounters.label++; return 'lbl_' + padNum(canonicalCounters.label); }
 
-// === RP-BPI-004 — Track Trend Engine ===
-function computeTrend(positionHistory, currentGenreName) {
-  if (!Array.isArray(positionHistory) || positionHistory.length <= 1) {
-    return 'new';
+// === RP-BPI-009 — ENGINE MODULES (mirrors the scraper) ===
+
+// --- HistoryEngine (RP-BPI-003) ---
+function createHistoryEngine() {
+  function addEntry(positionHistory, scrapedAt, genreId, genreName, position) {
+    var lastEntry = positionHistory.length > 0 ? positionHistory[positionHistory.length - 1] : null;
+    var differs = !lastEntry || lastEntry.genreName !== genreName || lastEntry.position !== position;
+    if (differs) {
+      positionHistory.push({ scrapedAt: scrapedAt, genreId: genreId, genreName: genreName, position: position });
+      return true;
+    }
+    return false;
   }
-  var genre = currentGenreName || positionHistory[positionHistory.length - 1].genreName;
-  var sameGenre = positionHistory.filter(function (e) { return e.genreName === genre; });
-  if (sameGenre.length < 2) {
-    return 'new';
+  function mergeHistory(targetHistory, sourceHistory) {
+    var phAdded = false;
+    sourceHistory.forEach(function (phEntry) {
+      var lastPh = targetHistory.length > 0 ? targetHistory[targetHistory.length - 1] : null;
+      var phDiffers = !lastPh || lastPh.genreName !== phEntry.genreName || lastPh.position !== phEntry.position;
+      if (phDiffers) {
+        targetHistory.push(phEntry);
+        phAdded = true;
+      }
+    });
+    return phAdded;
   }
-  var last = sameGenre[sameGenre.length - 1];
-  var prev = sameGenre[sameGenre.length - 2];
-  if (last.position < prev.position) return 'up';
-  if (last.position > prev.position) return 'down';
-  return 'stable';
+  return { addEntry: addEntry, mergeHistory: mergeHistory };
 }
 
-// === RP-BPI-005 — Track Trend Score ===
-function computeTrendScore(positionHistory, currentGenreName, prevTrendScore) {
-  var trend = computeTrend(positionHistory, currentGenreName);
-  if (trend === 'new') {
-    return 50;
+// --- TrendEngine (RP-BPI-004 + RP-BPI-005) ---
+function createTrendEngine() {
+  function computeTrend(positionHistory, currentGenreName) {
+    if (!Array.isArray(positionHistory) || positionHistory.length <= 1) {
+      return 'new';
+    }
+    var genre = currentGenreName || positionHistory[positionHistory.length - 1].genreName;
+    var sameGenre = positionHistory.filter(function (e) { return e.genreName === genre; });
+    if (sameGenre.length < 2) {
+      return 'new';
+    }
+    var last = sameGenre[sameGenre.length - 1];
+    var prev = sameGenre[sameGenre.length - 2];
+    if (last.position < prev.position) return 'up';
+    if (last.position > prev.position) return 'down';
+    return 'stable';
   }
-  if (trend === 'stable') {
-    return prevTrendScore;
+  function computeTrendScore(positionHistory, currentGenreName, prevTrendScore) {
+    var trend = computeTrend(positionHistory, currentGenreName);
+    if (trend === 'new') {
+      return 50;
+    }
+    if (trend === 'stable') {
+      return prevTrendScore;
+    }
+    var genre = currentGenreName || positionHistory[positionHistory.length - 1].genreName;
+    var sameGenre = positionHistory.filter(function (e) { return e.genreName === genre; });
+    var last = sameGenre[sameGenre.length - 1];
+    var prev = sameGenre[sameGenre.length - 2];
+    var delta = prev.position - last.position;
+    var score = (typeof prevTrendScore === 'number' ? prevTrendScore : 50) + delta;
+    if (score < 0) score = 0;
+    if (score > 100) score = 100;
+    return score;
   }
-  var genre = currentGenreName || positionHistory[positionHistory.length - 1].genreName;
-  var sameGenre = positionHistory.filter(function (e) { return e.genreName === genre; });
-  var last = sameGenre[sameGenre.length - 1];
-  var prev = sameGenre[sameGenre.length - 2];
-  var delta = prev.position - last.position;
-  var score = (typeof prevTrendScore === 'number' ? prevTrendScore : 50) + delta;
-  if (score < 0) score = 0;
-  if (score > 100) score = 100;
-  return score;
+  return { computeTrend: computeTrend, computeTrendScore: computeTrendScore };
 }
 
-
-// === RP-BPI-006 — Track Momentum ===
-function computeMomentum(positionHistory, currentGenreName) {
-  if (!Array.isArray(positionHistory) || positionHistory.length < 3) {
-    return 0;
+// --- MomentumEngine (RP-BPI-006) ---
+function createMomentumEngine() {
+  function computeMomentum(positionHistory, currentGenreName) {
+    if (!Array.isArray(positionHistory) || positionHistory.length < 3) {
+      return 0;
+    }
+    var genre = currentGenreName || positionHistory[positionHistory.length - 1].genreName;
+    var sameGenre = positionHistory.filter(function (e) { return e.genreName === genre; });
+    if (sameGenre.length < 3) {
+      return 0;
+    }
+    var p1 = sameGenre[sameGenre.length - 3].position;
+    var p2 = sameGenre[sameGenre.length - 2].position;
+    var p3 = sameGenre[sameGenre.length - 1].position;
+    var delta1 = p2 - p1;
+    var delta2 = p3 - p2;
+    var momentum = -(delta1 + delta2);
+    if (momentum < -100) momentum = -100;
+    if (momentum > 100) momentum = 100;
+    return momentum;
   }
-  var genre = currentGenreName || positionHistory[positionHistory.length - 1].genreName;
-  var sameGenre = positionHistory.filter(function (e) { return e.genreName === genre; });
-  if (sameGenre.length < 3) {
-    return 0;
-  }
-  var p1 = sameGenre[sameGenre.length - 3].position;
-  var p2 = sameGenre[sameGenre.length - 2].position;
-  var p3 = sameGenre[sameGenre.length - 1].position;
-  var delta1 = p2 - p1;
-  var delta2 = p3 - p2;
-  var momentum = -(delta1 + delta2);
-  if (momentum < -100) momentum = -100;
-  if (momentum > 100) momentum = 100;
-  return momentum;
+  return { computeMomentum: computeMomentum };
 }
 
-
-// === RP-BPI-007 — Track Status Engine ===
-function computeStatus(trend, trendScore, momentum) {
-  if (trend === 'new') return 'emerging';
-  if (momentum > 20 && trendScore >= 60) return 'rising';
-  if (momentum < -20 && trendScore <= 40) return 'declining';
-  if (trend === 'stable') return 'stable';
-  return 'cold';
+// --- StatusEngine (RP-BPI-007) ---
+function createStatusEngine() {
+  function computeStatus(trend, trendScore, momentum) {
+    if (trend === 'new') return 'emerging';
+    if (momentum > 20 && trendScore >= 60) return 'rising';
+    if (momentum < -20 && trendScore <= 40) return 'declining';
+    if (trend === 'stable') return 'stable';
+    return 'cold';
+  }
+  return { computeStatus: computeStatus };
 }
 
-
-// === RP-BPI-008 — Track Insights Engine ===
-function computeInsights(positionHistory) {
-  if (!Array.isArray(positionHistory) || positionHistory.length === 0) {
+// --- InsightsEngine (RP-BPI-008) ---
+function createInsightsEngine() {
+  function computeInsights(positionHistory) {
+    if (!Array.isArray(positionHistory) || positionHistory.length === 0) {
+      return {
+        hasHistory: false,
+        historyEntries: 0,
+        latestGenre: null,
+        latestPosition: null,
+        bestPosition: null,
+        worstPosition: null
+      };
+    }
+    var last = positionHistory[positionHistory.length - 1];
+    var positions = positionHistory.map(function (e) { return e.position; });
     return {
-      hasHistory: false,
-      historyEntries: 0,
-      latestGenre: null,
-      latestPosition: null,
-      bestPosition: null,
-      worstPosition: null
+      hasHistory: true,
+      historyEntries: positionHistory.length,
+      latestGenre: last.genreName,
+      latestPosition: last.position,
+      bestPosition: Math.min.apply(null, positions),
+      worstPosition: Math.max.apply(null, positions)
     };
   }
-  var last = positionHistory[positionHistory.length - 1];
-  var positions = positionHistory.map(function (e) { return e.position; });
-  return {
-    hasHistory: true,
-    historyEntries: positionHistory.length,
-    latestGenre: last.genreName,
-    latestPosition: last.position,
-    bestPosition: Math.min.apply(null, positions),
-    worstPosition: Math.max.apply(null, positions)
-  };
+  return { computeInsights: computeInsights };
 }
 
 // === RP-BPI-002A — Beatport-derived stable key helpers (kept for dedup internal) ===
@@ -556,7 +598,7 @@ function processTracks(tracks, gn, gid, lm, am, tm, rm) {
         // RP-BPI-007 — Track Status
         status: 'emerging',
         // RP-BPI-008 — Track Insights
-        insights: computeInsights([{ scrapedAt: NOW, genreId: gid, genreName: gn, position: pos }]),
+        insights: insightsEngine.computeInsights([{ scrapedAt: NOW, genreId: gid, genreName: gn, position: pos }]),
         seenAt: NOW,
         _compat: {
           key: trackBpKey,
@@ -574,27 +616,19 @@ function processTracks(tracks, gn, gid, lm, am, tm, rm) {
       if (!tr.releaseId && tReleaseCanonicalId) tr.releaseId = tReleaseCanonicalId;
       // RP-BPI-003 — Position History: dedup consecutivi
       var ph = tr.positionHistory;
-      var lastEntry = ph.length > 0 ? ph[ph.length - 1] : null;
-      var differs = !lastEntry || lastEntry.genreName !== gn || lastEntry.position !== pos;
-      if (differs) {
-        ph.push({ scrapedAt: NOW, genreId: gid, genreName: gn, position: pos });
-        // RP-BPI-004 — Ricalcola trend
-        tr.trend = computeTrend(ph, gn);
-        // RP-BPI-005 — Ricalcola trendScore
-        tr.trendScore = computeTrendScore(ph, gn, tr.trendScore);
-        // RP-BPI-006 — Ricalcola momentum
-        tr.momentum = computeMomentum(ph, gn);
-        // RP-BPI-007 — Ricalcola status
-        tr.status = computeStatus(tr.trend, tr.trendScore, tr.momentum);
-        // RP-BPI-008 — Ricalcola insights
-        tr.insights = computeInsights(ph);
+      var added = historyEngine.addEntry(ph, NOW, gid, gn, pos);
+      if (added) {
+        // RP-BPI-004/005/006/007/008 — Recompute all derived fields via engines
+        tr.trend = trendEngine.computeTrend(ph, gn);
+        tr.trendScore = trendEngine.computeTrendScore(ph, gn, tr.trendScore);
+        tr.momentum = momentumEngine.computeMomentum(ph, gn);
+        tr.status = statusEngine.computeStatus(tr.trend, tr.trendScore, tr.momentum);
+        tr.insights = insightsEngine.computeInsights(ph);
       } else {
-        // Dedup: posizione invariata → trend = "stable", trendScore invariato.
+        // Dedup: posizione invariata → trend = "stable"
         tr.trend = 'stable';
-        // RP-BPI-007 — Ricalcola status (trend changed to stable)
-        tr.status = computeStatus(tr.trend, tr.trendScore, tr.momentum);
-        // RP-BPI-008 — Ricalcola insights
-        tr.insights = computeInsights(ph);
+        tr.status = statusEngine.computeStatus(tr.trend, tr.trendScore, tr.momentum);
+        tr.insights = insightsEngine.computeInsights(ph);
       }
     }
 
@@ -770,30 +804,19 @@ function remapCanonicalIds() {
           graph.remapRegistry.track[v.id] = ex.id;
         }
         ex.positions.push(...v.positions);
-        // RP-BPI-003 — Merge positionHistory with dedup
-        var phAdded = false;
-        v.positionHistory.forEach(function (phEntry) {
-          var lastPh = ex.positionHistory.length > 0 ? ex.positionHistory[ex.positionHistory.length - 1] : null;
-          var phDiffers = !lastPh || lastPh.genreName !== phEntry.genreName || lastPh.position !== phEntry.position;
-          if (phDiffers) {
-            ex.positionHistory.push(phEntry);
-            phAdded = true;
-          }
-        });
-        // RP-BPI-004/005/006/007 — Ricalcola trend, trendScore, momentum e status
-        // solo se nuove entry sono state aggiunte. Su dedup (nessuna nuova entry),
-        // il trend viene impostato a "stable" e lo status viene ricalcolato.
+        // RP-BPI-003/009 — Merge positionHistory via HistoryEngine
+        var phAdded = historyEngine.mergeHistory(ex.positionHistory, v.positionHistory);
+        // RP-BPI-004/005/006/007/008/009 — Ricalcola tutti i campi derivati via engines
         if (phAdded && ex.positionHistory.length > 0) {
-          ex.trend = computeTrend(ex.positionHistory, ex.positionHistory[ex.positionHistory.length - 1].genreName);
-          ex.trendScore = computeTrendScore(ex.positionHistory, ex.positionHistory[ex.positionHistory.length - 1].genreName, ex.trendScore);
-          ex.momentum = computeMomentum(ex.positionHistory, ex.positionHistory[ex.positionHistory.length - 1].genreName);
-          ex.status = computeStatus(ex.trend, ex.trendScore, ex.momentum);
-            ex.insights = computeInsights(ex.positionHistory);
+          ex.trend = trendEngine.computeTrend(ex.positionHistory, ex.positionHistory[ex.positionHistory.length - 1].genreName);
+          ex.trendScore = trendEngine.computeTrendScore(ex.positionHistory, ex.positionHistory[ex.positionHistory.length - 1].genreName, ex.trendScore);
+          ex.momentum = momentumEngine.computeMomentum(ex.positionHistory, ex.positionHistory[ex.positionHistory.length - 1].genreName);
+          ex.status = statusEngine.computeStatus(ex.trend, ex.trendScore, ex.momentum);
+          ex.insights = insightsEngine.computeInsights(ex.positionHistory);
         } else if (ex.positionHistory.length > 0) {
-          // Dedup: posizione invariata → trend = "stable", status ricalcolato.
           ex.trend = 'stable';
-          ex.status = computeStatus(ex.trend, ex.trendScore, ex.momentum);
-            ex.insights = computeInsights(ex.positionHistory);
+          ex.status = statusEngine.computeStatus(ex.trend, ex.trendScore, ex.momentum);
+          ex.insights = insightsEngine.computeInsights(ex.positionHistory);
         }
         if (!ex.releaseId && v.releaseId) ex.releaseId = v.releaseId;
       } else {

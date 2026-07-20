@@ -98,6 +98,13 @@
     // === Per-genre ranking data (for backward compat rankByGenre/pointsByGenre) ===
     var gR = {};
 
+    // RP-BPI-009 — Engine instances
+    var historyEngine = createHistoryEngine();
+    var trendEngine = createTrendEngine();
+    var momentumEngine = createMomentumEngine();
+    var statusEngine = createStatusEngine();
+    var insightsEngine = createInsightsEngine();
+
   // ===================================================================
   // RP-BPI-002A — STABLE ID HELPERS (legacy, kept for backward compat output)
   //
@@ -187,169 +194,144 @@
   }
 
   // ===================================================================
-  // RP-BPI-004 — TRACK TREND ENGINE
+  // RP-BPI-009 — ENGINE MODULES
   //
-  // Calcola il trend di una traccia in base alla sua positionHistory.
-  // Il calcolo viene fatto durante la costruzione del Canonical Graph
-  // (nel builder), NON nell'Exporter.
-  //
-  // Regole:
-  //   - Se positionHistory ha 0 o 1 entry → trend = "new"
-  //   - Altrimenti, trova le ultime due entry dello STESSO genere.
-  //     Se non ci sono due entry dello stesso genere → trend = "new"
-  //     (la traccia è apparsa per la prima volta in quel genere).
-  //   - Confronta le posizioni delle ultime due entry dello stesso genere:
-  //       posizione migliorata (numero più basso) → trend = "up"
-  //       posizione peggiorata (numero più alto)  → trend = "down"
-  //       posizione invariata                     → trend = "stable"
+  // The builder's computation logic is extracted into 5 internal engine
+  // modules. Each engine contains exclusively its own logic. The builder
+  // coordinates their execution.
   // ===================================================================
-  function computeTrend(positionHistory, currentGenreName) {
-    if (!Array.isArray(positionHistory) || positionHistory.length <= 1) {
-      return 'new';
+
+  // --- HistoryEngine (RP-BPI-003) ---
+  // Manages positionHistory: adding entries with dedup, and merging
+  // per-genre histories into the global track.
+  function createHistoryEngine() {
+    function addEntry(positionHistory, scrapedAt, genreId, genreName, position) {
+      var lastEntry = positionHistory.length > 0 ? positionHistory[positionHistory.length - 1] : null;
+      var differs = !lastEntry || lastEntry.genreName !== genreName || lastEntry.position !== position;
+      if (differs) {
+        positionHistory.push({ scrapedAt: scrapedAt, genreId: genreId, genreName: genreName, position: position });
+        return true;
+      }
+      return false;
     }
-    // Filtra le entry dello stesso genere corrente (o dell'ultima entry)
-    var genre = currentGenreName || positionHistory[positionHistory.length - 1].genreName;
-    var sameGenre = positionHistory.filter(function (e) { return e.genreName === genre; });
-    if (sameGenre.length < 2) {
-      return 'new';
+    function mergeHistory(targetHistory, sourceHistory) {
+      var phAdded = false;
+      sourceHistory.forEach(function (phEntry) {
+        var lastPh = targetHistory.length > 0 ? targetHistory[targetHistory.length - 1] : null;
+        var phDiffers = !lastPh || lastPh.genreName !== phEntry.genreName || lastPh.position !== phEntry.position;
+        if (phDiffers) {
+          targetHistory.push(phEntry);
+          phAdded = true;
+        }
+      });
+      return phAdded;
     }
-    var last = sameGenre[sameGenre.length - 1];
-    var prev = sameGenre[sameGenre.length - 2];
-    if (last.position < prev.position) return 'up';
-    if (last.position > prev.position) return 'down';
-    return 'stable';
+    return { addEntry: addEntry, mergeHistory: mergeHistory };
   }
 
-  // ===================================================================
-  // RP-BPI-005 — TRACK TREND SCORE
-  //
-  // Calcola un punteggio intero (0-100) che riflette l'andamento della
-  // traccia nel tempo. Il calcolo viene fatto durante la costruzione del
-  // Canonical Graph (nel builder), NON nell'Exporter.
-  //
-  // Regole:
-  //   - Track nuova (1 entry per genere) → trendScore = 50
-  //   - Trend "up"   → trendScore += (prev.position - last.position)
-  //                    (miglioramento: differenza positiva)
-  //   - Trend "down" → trendScore -= (last.position - prev.position)
-  //                    (peggioramento: differenza negativa)
-  //   - Trend "stable" → trendScore invariato (mantiene valore precedente)
-  //   - Risultato sempre clamped tra 0 e 100.
-  // ===================================================================
-  function computeTrendScore(positionHistory, currentGenreName, prevTrendScore) {
-    var trend = computeTrend(positionHistory, currentGenreName);
-    if (trend === 'new') {
-      return 50;
+  // --- TrendEngine (RP-BPI-004 + RP-BPI-005) ---
+  // Computes trend and trendScore from positionHistory.
+  function createTrendEngine() {
+    function computeTrend(positionHistory, currentGenreName) {
+      if (!Array.isArray(positionHistory) || positionHistory.length <= 1) {
+        return 'new';
+      }
+      var genre = currentGenreName || positionHistory[positionHistory.length - 1].genreName;
+      var sameGenre = positionHistory.filter(function (e) { return e.genreName === genre; });
+      if (sameGenre.length < 2) {
+        return 'new';
+      }
+      var last = sameGenre[sameGenre.length - 1];
+      var prev = sameGenre[sameGenre.length - 2];
+      if (last.position < prev.position) return 'up';
+      if (last.position > prev.position) return 'down';
+      return 'stable';
     }
-    if (trend === 'stable') {
-      return prevTrendScore;
+    function computeTrendScore(positionHistory, currentGenreName, prevTrendScore) {
+      var trend = computeTrend(positionHistory, currentGenreName);
+      if (trend === 'new') {
+        return 50;
+      }
+      if (trend === 'stable') {
+        return prevTrendScore;
+      }
+      var genre = currentGenreName || positionHistory[positionHistory.length - 1].genreName;
+      var sameGenre = positionHistory.filter(function (e) { return e.genreName === genre; });
+      var last = sameGenre[sameGenre.length - 1];
+      var prev = sameGenre[sameGenre.length - 2];
+      var delta = prev.position - last.position;
+      var score = (typeof prevTrendScore === 'number' ? prevTrendScore : 50) + delta;
+      if (score < 0) score = 0;
+      if (score > 100) score = 100;
+      return score;
     }
-    // Filtra le entry dello stesso genere per trovare le ultime due
-    var genre = currentGenreName || positionHistory[positionHistory.length - 1].genreName;
-    var sameGenre = positionHistory.filter(function (e) { return e.genreName === genre; });
-    var last = sameGenre[sameGenre.length - 1];
-    var prev = sameGenre[sameGenre.length - 2];
-    var delta = prev.position - last.position; // positivo se miglioramento (up), negativo se peggioramento (down)
-    var score = (typeof prevTrendScore === 'number' ? prevTrendScore : 50) + delta;
-    if (score < 0) score = 0;
-    if (score > 100) score = 100;
-    return score;
+    return { computeTrend: computeTrend, computeTrendScore: computeTrendScore };
   }
 
-  // ===================================================================
-  // RP-BPI-006 — TRACK MOMENTUM
-  //
-  // Calcola un punteggio intero (-100..+100) che riflette l'accelerazione
-  // della traccia (cambio di velocità di salita/discesa in classifica).
-  // Completamente indipendente da trend e trendScore.
-  //
-  // Regole:
-  //   - Se < 3 entry dello stesso genere → momentum = 0
-  //   - Altrimenti, considera le ultime 3 entry dello stesso genere:
-  //       delta1 = pos2 - pos1
-  //       delta2 = pos3 - pos2
-  //       momentum = -(delta1 + delta2)
-  //     (negativo perché posizione più bassa = meglio: se le posizioni
-  //      scendono, delta1+delta2 è negativo, e momentum diventa positivo)
-  //   - Clamp tra -100 e +100.
-  // ===================================================================
-  function computeMomentum(positionHistory, currentGenreName) {
-    if (!Array.isArray(positionHistory) || positionHistory.length < 3) {
-      return 0;
+  // --- MomentumEngine (RP-BPI-006) ---
+  // Computes momentum from the last 3 same-genre entries.
+  function createMomentumEngine() {
+    function computeMomentum(positionHistory, currentGenreName) {
+      if (!Array.isArray(positionHistory) || positionHistory.length < 3) {
+        return 0;
+      }
+      var genre = currentGenreName || positionHistory[positionHistory.length - 1].genreName;
+      var sameGenre = positionHistory.filter(function (e) { return e.genreName === genre; });
+      if (sameGenre.length < 3) {
+        return 0;
+      }
+      var p1 = sameGenre[sameGenre.length - 3].position;
+      var p2 = sameGenre[sameGenre.length - 2].position;
+      var p3 = sameGenre[sameGenre.length - 1].position;
+      var delta1 = p2 - p1;
+      var delta2 = p3 - p2;
+      var momentum = -(delta1 + delta2);
+      if (momentum < -100) momentum = -100;
+      if (momentum > 100) momentum = 100;
+      return momentum;
     }
-    var genre = currentGenreName || positionHistory[positionHistory.length - 1].genreName;
-    var sameGenre = positionHistory.filter(function (e) { return e.genreName === genre; });
-    if (sameGenre.length < 3) {
-      return 0;
-    }
-    var p1 = sameGenre[sameGenre.length - 3].position;
-    var p2 = sameGenre[sameGenre.length - 2].position;
-    var p3 = sameGenre[sameGenre.length - 1].position;
-    var delta1 = p2 - p1;
-    var delta2 = p3 - p2;
-    var momentum = -(delta1 + delta2);
-    if (momentum < -100) momentum = -100;
-    if (momentum > 100) momentum = 100;
-    return momentum;
+    return { computeMomentum: computeMomentum };
   }
 
-  // ===================================================================
-  // RP-BPI-007 — TRACK STATUS ENGINE
-  //
-  // Determina lo status della traccia utilizzando esclusivamente
-  // trend, trendScore e momentum (già calcolati). Non ricalcola alcun dato.
-  //
-  // Regole:
-  //   trend == "new"                    → emerging
-  //   momentum > 20 && trendScore >= 60 → rising
-  //   momentum < -20 && trendScore <= 40 → declining
-  //   trend == "stable"                 → stable
-  //   tutti gli altri casi              → cold
-  // ===================================================================
-  function computeStatus(trend, trendScore, momentum) {
-    if (trend === 'new') return 'emerging';
-    if (momentum > 20 && trendScore >= 60) return 'rising';
-    if (momentum < -20 && trendScore <= 40) return 'declining';
-    if (trend === 'stable') return 'stable';
-    return 'cold';
+  // --- StatusEngine (RP-BPI-007) ---
+  // Determines status from trend, trendScore, and momentum.
+  function createStatusEngine() {
+    function computeStatus(trend, trendScore, momentum) {
+      if (trend === 'new') return 'emerging';
+      if (momentum > 20 && trendScore >= 60) return 'rising';
+      if (momentum < -20 && trendScore <= 40) return 'declining';
+      if (trend === 'stable') return 'stable';
+      return 'cold';
+    }
+    return { computeStatus: computeStatus };
   }
 
-  // ===================================================================
-  // RP-BPI-008 — TRACK INSIGHTS ENGINE
-  //
-  // Costruisce un oggetto insights utilizzando esclusivamente i dati
-  // già presenti in positionHistory. Non ricalcola trend/trendScore/
-  // momentum/status. Non introduce nuovi dati persistenti.
-  //
-  // Campi:
-  //   hasHistory      — true se positionHistory ha almeno 1 entry
-  //   historyEntries  — numero totale di entry
-  //   latestGenre     — genre dell'ultima entry (null se vuoto)
-  //   latestPosition  — posizione dell'ultima entry (null se vuoto)
-  //   bestPosition    — posizione minima nella history (null se vuoto)
-  //   worstPosition   — posizione massima nella history (null se vuoto)
-  // ===================================================================
-  function computeInsights(positionHistory) {
-    if (!Array.isArray(positionHistory) || positionHistory.length === 0) {
+  // --- InsightsEngine (RP-BPI-008) ---
+  // Builds insights object from positionHistory.
+  function createInsightsEngine() {
+    function computeInsights(positionHistory) {
+      if (!Array.isArray(positionHistory) || positionHistory.length === 0) {
+        return {
+          hasHistory: false,
+          historyEntries: 0,
+          latestGenre: null,
+          latestPosition: null,
+          bestPosition: null,
+          worstPosition: null
+        };
+      }
+      var last = positionHistory[positionHistory.length - 1];
+      var positions = positionHistory.map(function (e) { return e.position; });
       return {
-        hasHistory: false,
-        historyEntries: 0,
-        latestGenre: null,
-        latestPosition: null,
-        bestPosition: null,
-        worstPosition: null
+        hasHistory: true,
+        historyEntries: positionHistory.length,
+        latestGenre: last.genreName,
+        latestPosition: last.position,
+        bestPosition: Math.min.apply(null, positions),
+        worstPosition: Math.max.apply(null, positions)
       };
     }
-    var last = positionHistory[positionHistory.length - 1];
-    var positions = positionHistory.map(function (e) { return e.position; });
-    return {
-      hasHistory: true,
-      historyEntries: positionHistory.length,
-      latestGenre: last.genreName,
-      latestPosition: last.position,
-      bestPosition: Math.min.apply(null, positions),
-      worstPosition: Math.max.apply(null, positions)
-    };
+    return { computeInsights: computeInsights };
   }
 
   // ===================================================================
@@ -734,7 +716,7 @@
           // RP-BPI-007 — Track Status: "emerging" per nuova traccia (trend=new).
           status: 'emerging',
           // RP-BPI-008 — Track Insights: costruiti da positionHistory.
-          insights: computeInsights([{ scrapedAt: NOW, genreId: gid, genreName: gn, position: pos }]),
+          insights: insightsEngine.computeInsights([{ scrapedAt: NOW, genreId: gid, genreName: gn, position: pos }]),
           seenAt: NOW,
           // === LEGACY COMPAT ===
           _compat: {
@@ -764,27 +746,19 @@
         // Questo evita duplicati consecutivi quando la stessa traccia appare
         // nello stesso genere alla stessa posizione in scrape successivi.
         var ph = tr.positionHistory;
-        var lastEntry = ph.length > 0 ? ph[ph.length - 1] : null;
-        var differs = !lastEntry || lastEntry.genreName !== gn || lastEntry.position !== pos;
-        if (differs) {
-          ph.push({ scrapedAt: NOW, genreId: gid, genreName: gn, position: pos });
-          // RP-BPI-004 — Ricalcola il trend dopo l'aggiornamento di positionHistory.
-          tr.trend = computeTrend(ph, gn);
-          // RP-BPI-005 — Ricalcola trendScore
-          tr.trendScore = computeTrendScore(ph, gn, tr.trendScore);
-          // RP-BPI-006 — Ricalcola momentum
-          tr.momentum = computeMomentum(ph, gn);
-          // RP-BPI-007 — Ricalcola status
-          tr.status = computeStatus(tr.trend, tr.trendScore, tr.momentum);
-          // RP-BPI-008 — Ricalcola insights
-          tr.insights = computeInsights(ph);
+        var added = historyEngine.addEntry(ph, NOW, gid, gn, pos);
+        if (added) {
+          // RP-BPI-004/005/006/007/008 — Recompute all derived fields via engines
+          tr.trend = trendEngine.computeTrend(ph, gn);
+          tr.trendScore = trendEngine.computeTrendScore(ph, gn, tr.trendScore);
+          tr.momentum = momentumEngine.computeMomentum(ph, gn);
+          tr.status = statusEngine.computeStatus(tr.trend, tr.trendScore, tr.momentum);
+          tr.insights = insightsEngine.computeInsights(ph);
         } else {
-          // Dedup: posizione invariata → trend = "stable", trendScore invariato.
+          // Dedup: posizione invariata → trend = "stable"
           tr.trend = 'stable';
-          // RP-BPI-007 — Ricalcola status (trend changed to "stable")
-          tr.status = computeStatus(tr.trend, tr.trendScore, tr.momentum);
-          // RP-BPI-008 — Ricalcola insights (positionHistory unchanged, but recompute for consistency)
-          tr.insights = computeInsights(ph);
+          tr.status = statusEngine.computeStatus(tr.trend, tr.trendScore, tr.momentum);
+          tr.insights = insightsEngine.computeInsights(ph);
         }
       }
 
@@ -1080,33 +1054,19 @@
             graph.remapRegistry.track[v.id] = ex.id;
           }
           v.positions.forEach(function (p) { ex.positions.push(p); });
-          // RP-BPI-003 — Merge positionHistory: append per-genre entries
-          // with dedup (skip if same genreName+position as last entry).
-          var phAdded = false;
-          v.positionHistory.forEach(function (phEntry) {
-            var lastPh = ex.positionHistory.length > 0 ? ex.positionHistory[ex.positionHistory.length - 1] : null;
-            var phDiffers = !lastPh || lastPh.genreName !== phEntry.genreName || lastPh.position !== phEntry.position;
-            if (phDiffers) {
-              ex.positionHistory.push(phEntry);
-              phAdded = true;
-            }
-          });
-          // RP-BPI-004/005/006/007 — Ricalcola trend, trendScore, momentum e status
-          // solo se nuove entry sono state aggiunte. Su dedup (nessuna nuova entry),
-          // il trend viene impostato a "stable" e lo status viene ricalcolato.
+          // RP-BPI-003/009 — Merge positionHistory via HistoryEngine
+          var phAdded = historyEngine.mergeHistory(ex.positionHistory, v.positionHistory);
+          // RP-BPI-004/005/006/007/008/009 — Ricalcola tutti i campi derivati via engines
           if (phAdded && ex.positionHistory.length > 0) {
-            ex.trend = computeTrend(ex.positionHistory, ex.positionHistory[ex.positionHistory.length - 1].genreName);
-            ex.trendScore = computeTrendScore(ex.positionHistory, ex.positionHistory[ex.positionHistory.length - 1].genreName, ex.trendScore);
-            ex.momentum = computeMomentum(ex.positionHistory, ex.positionHistory[ex.positionHistory.length - 1].genreName);
-            ex.status = computeStatus(ex.trend, ex.trendScore, ex.momentum);
-            // RP-BPI-008 — Ricalcola insights
-            ex.insights = computeInsights(ex.positionHistory);
+            ex.trend = trendEngine.computeTrend(ex.positionHistory, ex.positionHistory[ex.positionHistory.length - 1].genreName);
+            ex.trendScore = trendEngine.computeTrendScore(ex.positionHistory, ex.positionHistory[ex.positionHistory.length - 1].genreName, ex.trendScore);
+            ex.momentum = momentumEngine.computeMomentum(ex.positionHistory, ex.positionHistory[ex.positionHistory.length - 1].genreName);
+            ex.status = statusEngine.computeStatus(ex.trend, ex.trendScore, ex.momentum);
+            ex.insights = insightsEngine.computeInsights(ex.positionHistory);
           } else if (ex.positionHistory.length > 0) {
-            // Dedup: posizione invariata → trend = "stable", status ricalcolato.
             ex.trend = 'stable';
-            ex.status = computeStatus(ex.trend, ex.trendScore, ex.momentum);
-            // RP-BPI-008 — Ricalcola insights
-            ex.insights = computeInsights(ex.positionHistory);
+            ex.status = statusEngine.computeStatus(ex.trend, ex.trendScore, ex.momentum);
+            ex.insights = insightsEngine.computeInsights(ex.positionHistory);
           }
           if (!ex.releaseId && v.releaseId) ex.releaseId = v.releaseId;
         } else {
