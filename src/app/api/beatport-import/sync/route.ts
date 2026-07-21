@@ -13,6 +13,14 @@ import { runBeatportSync, type SyncReport } from "@/services/beatport-import/syn
  *
  * ADMIN-ONLY: only the admin email can trigger this.
  *
+ * AUTHENTICATION:
+ * - Production: NextAuth session (admin email check). The x-admin-key
+ *   header is COMPLETELY IGNORED in production.
+ * - Development (NODE_ENV === "development"): the x-admin-key header is
+ *   checked FIRST. If it matches process.env.ADMIN_DEV_KEY, the request
+ *   is authorized without requiring a NextAuth session. If the key is
+ *   absent or doesn't match, the normal NextAuth admin check runs.
+ *
  * POST body:
  *   { "scraperJson": { ... } }   — inline JSON
  *   OR
@@ -32,11 +40,35 @@ const ADMIN_EMAILS = new Set([
   "emmanuel.miro77@gmail.com",
 ]);
 
-export async function POST(req: NextRequest) {
-  // Auth check — admin only
+/**
+ * Check if the request is authorized as admin.
+ *
+ * ⚠️ x-admin-key is ONLY available in development (NODE_ENV === "development").
+ * In production, the header is completely ignored and only NextAuth is used.
+ *
+ * @returns true if authorized, false otherwise.
+ */
+async function isAuthorized(req: NextRequest): Promise<boolean> {
+  // --- Development-only: x-admin-key shortcut ---
+  // In production this block is dead code — the condition never evaluates true.
+  if (process.env.NODE_ENV === "development") {
+    const adminKey = req.headers.get("x-admin-key");
+    const expectedKey = process.env.ADMIN_DEV_KEY;
+    if (adminKey && expectedKey && adminKey === expectedKey) {
+      return true;
+    }
+    // Key absent or mismatch → fall through to NextAuth check below.
+  }
+
+  // --- Standard: NextAuth admin email check ---
   const session = await getServerSession(authOptions as any);
   const email = session?.user?.email?.toLowerCase().trim();
-  if (!email || !ADMIN_EMAILS.has(email)) {
+  return !!email && ADMIN_EMAILS.has(email);
+}
+
+export async function POST(req: NextRequest) {
+  // Auth check — admin only
+  if (!(await isAuthorized(req))) {
     return NextResponse.json({ error: "unauthorized — admin only" }, { status: 401 });
   }
 
@@ -85,10 +117,8 @@ export async function POST(req: NextRequest) {
  *
  * Returns service status info.
  */
-export async function GET() {
-  const session = await getServerSession(authOptions as any);
-  const email = session?.user?.email?.toLowerCase().trim();
-  if (!email || !ADMIN_EMAILS.has(email)) {
+export async function GET(req: NextRequest) {
+  if (!(await isAuthorized(req))) {
     return NextResponse.json({ error: "unauthorized — admin only" }, { status: 401 });
   }
 
