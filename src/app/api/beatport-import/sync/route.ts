@@ -107,7 +107,10 @@ export async function POST(req: NextRequest) {
 
     return NextResponse.json({ ok: report.success, report });
   } catch (err: any) {
-    console.error("[/api/beatport-import/sync] error:", err);
+    console.error("[Beatport Sync] Unhandled error:", err);
+    if (err instanceof Error) {
+      console.error(err.stack);
+    }
     return NextResponse.json({ error: err.message }, { status: 500 });
   }
 }
