@@ -480,6 +480,7 @@ export function LabelFinder() {
   const [detailStatus, setDetailStatus] = useState<"open" | "closed" | "unknown">("unknown");
   const [detailSubmissionType, setDetailSubmissionType] = useState<"email" | "webform" | "platform">("email");
   const [detailSaved, setDetailSaved] = useState(false);
+  const [detailName, setDetailName] = useState("");
 
   // Inline pitch demo picker state
   // pitchEpMode toggles between single-pick (click a chip → fills the form
@@ -983,6 +984,7 @@ export function LabelFinder() {
     setDetailStatus(label.status);
     setDetailSubmissionType(label.submissionType);
     setDetailSaved(false);
+    setDetailName(label.name || "");
     setShowPitch(false);
     setPitchTrackName("");
     setPitchArtistName(userProfile.artistName || "");
@@ -2080,7 +2082,25 @@ export function LabelFinder() {
                 <DialogHeader>
                   <DialogTitle className="flex items-center gap-2 flex-wrap">
                     <LabelLogo label={detailLabel} size={36} />
-                    <span>{detailLabel.name}</span>
+                    {/* Name: editable for "Unknown" labels and custom labels;
+                        read-only for Beatport labels with a valid name. */}
+                    {(detailLabel.name === "Unknown" || detailLabel.isCustom) ? (
+                      <Input
+                        value={detailName}
+                        onChange={(e) => setDetailName(e.target.value)}
+                        onBlur={() => {
+                          const trimmed = detailName.trim();
+                          if (trimmed && trimmed !== detailLabel.name) {
+                            saveDetailField("name", trimmed);
+                            setDetailLabel({ ...detailLabel, name: trimmed });
+                          }
+                        }}
+                        placeholder={locale === "it" ? "Nome label" : "Label name"}
+                        className="h-8 text-sm font-semibold max-w-[200px]"
+                      />
+                    ) : (
+                      <span>{detailLabel.name}</span>
+                    )}
                     <button
                       onClick={() => toggleFavoriteLabel(detailLabel.id)}
                       className="shrink-0 hover:scale-110 transition-transform"
