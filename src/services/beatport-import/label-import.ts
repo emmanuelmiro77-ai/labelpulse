@@ -217,6 +217,18 @@ function mergeLabel(existing: StoredLabel, scraperFields: Partial<StoredLabel>):
   // Overwrite only scraper-sourced fields
   for (const field of SCRAPER_FIELDS) {
     if (scraperFields[field] !== undefined) {
+      // Guard: never overwrite a valid existing name with null, undefined,
+      // empty string, or "Unknown". The scraper name is only applied when
+      // it contains a real value. This protects personal/manual labels
+      // that may have a user-customized name.
+      if (field === "name") {
+        const newName = scraperFields.name;
+        if (newName && typeof newName === "string" && newName.trim() !== "" && newName !== "Unknown") {
+          merged.name = newName;
+        }
+        // Otherwise: keep existing name (already set via spread above)
+        continue;
+      }
       (merged as any)[field] = scraperFields[field];
     }
   }
@@ -239,7 +251,10 @@ function mergeLabel(existing: StoredLabel, scraperFields: Partial<StoredLabel>):
 function createLabelFromScraper(scraperFields: Partial<StoredLabel>, id: string): StoredLabel {
   return {
     id,
-    name: scraperFields.name || "",
+    // "Unknown" is only used when the record truly has no name.
+    name: (scraperFields.name && typeof scraperFields.name === "string" && scraperFields.name.trim() !== "")
+      ? scraperFields.name
+      : "Unknown",
     genres: scraperFields.genres || [],
     rankByGenre: scraperFields.rankByGenre || {},
     pointsByGenre: scraperFields.pointsByGenre || {},
