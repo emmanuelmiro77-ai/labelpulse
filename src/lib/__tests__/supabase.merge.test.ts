@@ -77,7 +77,9 @@ describe("Sync State — mergeGlobalWithPersonal", () => {
     }
 
     // Verifica che i campi Beatport arrivino dal globale
-    expect(result.name).toBe("Updated Name");
+    // Nota: name viene preservato dal locale quando isCustom === true
+    // (la label è manuale, il nome globale non è autoritativo)
+    expect(result.name).toBe("Test Label"); // isCustom=true → local name preserved
     expect(result.rankByGenre).toEqual({ techno: 1 });
   });
 

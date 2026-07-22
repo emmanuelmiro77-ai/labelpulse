@@ -555,6 +555,21 @@ function mergeGlobalAndPersonalLabel(global: any, personal: any): any {
       merged[f] = v;
     }
   }
+  // 🔒 FIX: preserve the personal label name when the global name is not
+  // authoritative (same logic as mergeGlobalWithPersonal above).
+  const globalName = global?.name;
+  const globalNameIsInvalid =
+    !globalName ||
+    typeof globalName !== "string" ||
+    globalName.trim() === "" ||
+    globalName === "Unknown";
+
+  if (personal?.isCustom === true) {
+    merged.name = personal.name;
+  } else if (globalNameIsInvalid && personal?.name && String(personal.name).trim() !== "") {
+    merged.name = personal.name;
+  }
+
   return merged;
 }
 
@@ -1512,6 +1527,33 @@ export function mergeGlobalWithPersonal(existingLabel: any, newGlobalData: any):
     if (existingLabel[field] !== undefined) {
       preservedPersonalData[field] = existingLabel[field];
     }
+  }
+
+  // 🔒 FIX: preserve the local label name when the global name is not
+  // authoritative. The global row stores Beatport-sourced names; if a
+  // label was manually renamed (e.g., from "Unknown" to "MODVL"), that
+  // custom name lives only in the local/personal store. Without this
+  // guard, every Beatport Sync overwrites the custom name with the
+  // stale "Unknown" from the global row.
+  //
+  // Rules:
+  //   1. Custom labels (isCustom === true): always keep localLabel.name.
+  //   2. Global name is empty/null/undefined/"Unknown": keep localLabel.name
+  //      if the local label has a real name.
+  //   3. Global name is a valid Beatport name: use it (default behavior).
+  const globalName = newGlobalData?.name;
+  const globalNameIsInvalid =
+    !globalName ||
+    typeof globalName !== "string" ||
+    globalName.trim() === "" ||
+    globalName === "Unknown";
+
+  if (existingLabel.isCustom === true) {
+    // Custom label — always preserve the local name.
+    preservedPersonalData.name = existingLabel.name;
+  } else if (globalNameIsInvalid && existingLabel.name && existingLabel.name.trim() !== "") {
+    // Global name is not authoritative but local has a real name — keep it.
+    preservedPersonalData.name = existingLabel.name;
   }
 
   return {
