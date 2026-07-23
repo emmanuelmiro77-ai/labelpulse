@@ -1859,7 +1859,11 @@ export const useAppStore = create<AppState>()(
             beatport_link: updated.beatportLink,
             contact_info: updated.contactInfo,
             is_custom: updated.isCustom || false,
-            custom_name: updated.isCustom ? updated.name : undefined,
+            // 🔒 FIX: salva SEMPRE custom_name quando l'utente modifica il nome,
+            // non solo per le label custom. Questo permette di rinominare le
+            // label Beatport (es. "Unknown" → "MODVL") senza trasformarle in
+            // label custom. Il nome Beatport originale resta nel global row.
+            custom_name: updated.name,
             custom_genre: updated.isCustom ? updated.genre : undefined,
           }).catch((err) => console.error("[cloud sync] failed:", err));
         }
@@ -3666,6 +3670,13 @@ export async function loadFromCloud(): Promise<void> {
               customLinks: localLabel.customLinks || [],
               isCustom: localLabel.isCustom || false,
               isFavorite: localLabel.isFavorite || false,
+              // 🔒 FIX: preserva il nome personalizzato dal locale.
+              // Se l'utente ha rinominato la label (es. "Unknown" → "MODVL"),
+              // il nome personalizzato vive solo nel local store (verrà
+              // ripristinato da loadFromNewTables che legge custom_name da
+              // label_personal_data). Qui preserviamo il nome locale per
+              // evitare il flash "Unknown" → "MODVL" durante il boot.
+              name: localLabel.name || cl.name,
             };
           }
           return cl;
@@ -4049,6 +4060,13 @@ export async function loadFromNewTables(): Promise<void> {
             if (al.soundcloud_link) existing.soundcloudLink = al.soundcloud_link;
             if (al.contact_info) existing.contactInfo = al.contact_info;
             if (al.is_favorite !== undefined) existing.isFavorite = al.is_favorite;
+            // 🔒 FIX: applica custom_name come override del nome visualizzato
+            // anche per le label non-custom (Beatport). Il nome Beatport
+            // originale resta nel global row; custom_name è un override
+            // personale che vive in label_personal_data.
+            if (al.custom_name && al.custom_name.trim()) {
+              existing.name = al.custom_name;
+            }
           }
         }
       }

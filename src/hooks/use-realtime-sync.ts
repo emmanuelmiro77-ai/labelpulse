@@ -211,6 +211,11 @@ function handleLabelDataChange(payload: RealtimePayload) {
       soundcloudLink: newRow.soundcloud_link || labels[idx].soundcloudLink,
       contactInfo: newRow.contact_info || labels[idx].contactInfo,
       isFavorite: newRow.is_favorite ?? labels[idx].isFavorite,
+      // 🔒 FIX: applica custom_name come override del nome visualizzato
+      // anche per le label non-custom (Beatport).
+      ...(newRow.custom_name && newRow.custom_name.trim()
+        ? { name: newRow.custom_name }
+        : {}),
     };
     useAppStore.setState({ labels });
   } else if (newRow.is_custom) {
