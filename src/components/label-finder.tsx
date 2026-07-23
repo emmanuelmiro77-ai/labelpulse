@@ -1057,6 +1057,14 @@ export function LabelFinder() {
       // Double-check the label still exists in the store
       const exists = labels.find(l => l.id === detailLabel.id);
       if (!exists) return;
+      // [DEBUG custom_name] Point 1: saveDetailField
+      console.log("[DEBUG custom_name] 1. saveDetailField", {
+        label_id: detailLabel.id,
+        field,
+        value,
+        currentName: detailLabel.name,
+        isCustom: detailLabel.isCustom,
+      });
       updateLabel(detailLabel.id, { [field]: value });
       setDetailSaved(true);
       setTimeout(() => setDetailSaved(false), 1500);

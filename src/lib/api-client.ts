@@ -163,11 +163,23 @@ export async function apiFetchAllDemos(): Promise<DemoRow[] | null> {
 // ==================== LABEL DATA ====================
 
 export async function apiUpsertLabelData(labelData: LabelDataRow): Promise<boolean> {
+  // [DEBUG custom_name] Point 3: apiUpsertLabelData
+  console.log("[DEBUG custom_name] 3. apiUpsertLabelData", {
+    label_id: labelData.label_id,
+    custom_name: labelData.custom_name,
+    is_custom: labelData.is_custom,
+    fullPayload: labelData,
+  });
   try {
-    await writeDirect(`${API_BASE}/api/label-data`, "POST", labelData);
+    const result = await writeDirect(`${API_BASE}/api/label-data`, "POST", labelData);
+    // [DEBUG custom_name] Point 3b: API response
+    console.log("[DEBUG custom_name] 3b. apiUpsertLabelData response", {
+      label_id: labelData.label_id,
+      response: result,
+    });
     return true;
   } catch (err) {
-    console.error("[apiUpsertLabelData] failed:", err);
+    console.error("[DEBUG custom_name] 3c. apiUpsertLabelData FAILED:", err);
     return false;
   }
 }
