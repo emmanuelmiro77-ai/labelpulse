@@ -1,19 +1,18 @@
 "use client";
 
 /**
- * /projects/[id] — Phase 2 (Project Overview)
+ * /projects/[id] — Lifecycle Engine Foundation
  * =====================================================================
- * Pagina Overview di un singolo Project, raggiungibile cliccando su una
- * card della dashboard `/projects`.
+ * Pagina Overview di un singolo Project.
  *
- * 🔒 Phase 2 constraints:
- * - Mostra ESCLUSIVAMENTE: titolo, artista, status, goal, progress,
- *   next action + pulsante "Continue".
- * - Il pulsante "Continue" NON attiva alcun workflow: in Phase 2 è un
- *   placeholder che torna alla lista `/projects`. Le fasi successive
- *   lo collegheranno al workflow appropriato in base al goal.
+ * 🔒 Lifecycle Engine Foundation constraints:
+ * - TUTTI i valori decisionali (Stage, Goal, Health, Blocking Issues,
+ *   Next Action) provengono ESCLUSIVAMENTE dal Lifecycle Engine
+ *   (`@/lib/project-lifecycle`). La UI si limita a visualizzarli.
+ * - Nessun calcolo decisionale inline nel componente.
  * - Nessun link a Demo / Release / Promotion / Pitch.
- * - Nessun edit inline: questa è una vista di lettura.
+ * - Il pulsante "Continue" NON attiva alcun workflow: in questa fase è
+ *   un placeholder che torna alla lista `/projects`.
  *
  * Se il project non esiste (id non trovato nello store), mostra uno
  * stato vuoto con link per tornare alla lista.
@@ -30,6 +29,11 @@ import {
   Loader2,
   ChevronRight,
   AlertCircle,
+  AlertTriangle,
+  ShieldAlert,
+  Activity,
+  ArrowRight,
+  CheckCircle2,
 } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import {
@@ -39,7 +43,17 @@ import {
   CardTitle,
 } from "@/components/ui/card";
 import { useAppStore } from "@/lib/store";
-import { computeNextAction } from "@/types/project";
+import {
+  computeStage,
+  computeHealth,
+  computeBlockingIssues,
+  computeNextAction,
+  STAGE_LABELS,
+  STAGE_STYLES,
+  HEALTH_LABELS,
+  HEALTH_STYLES,
+  type BlockingIssue,
+} from "@/lib/project-lifecycle";
 
 /**
  * Mappa label → colore per il badge dello status (speculare alla lista).
@@ -84,6 +98,16 @@ function formatDate(iso: string): string {
   }
 }
 
+/**
+ * Icona per la severity di una blocking issue.
+ */
+function BlockingIssueIcon({ severity }: { severity: BlockingIssue["severity"] }) {
+  if (severity === "critical") {
+    return <ShieldAlert className="h-4 w-4 text-red-400 shrink-0 mt-0.5" />;
+  }
+  return <AlertTriangle className="h-4 w-4 text-amber-400 shrink-0 mt-0.5" />;
+}
+
 interface OverviewPageProps {
   params: Promise<{ id: string }>;
 }
@@ -124,9 +148,17 @@ export default function ProjectOverviewPage({ params }: OverviewPageProps) {
     return projects.find((p) => p.id === projectId) ?? null;
   }, [projects, projectId]);
 
-  const nextAction = useMemo(() => {
-    if (!project) return "";
-    return computeNextAction(project.goal, project.progress);
+  // 🔒 TUTTI i valori decisionali provengono dal Lifecycle Engine.
+  // La UI non fa NESSUN calcolo decisionale: solo memoizzazione dei
+  // risultati dell'engine per evitare recompute inutili.
+  const lifecycle = useMemo(() => {
+    if (!project) return null;
+    return {
+      stage: computeStage(project),
+      health: computeHealth(project),
+      blockingIssues: computeBlockingIssues(project),
+      nextAction: computeNextAction(project),
+    };
   }, [project]);
 
   // ---- Render: loading ----
@@ -144,7 +176,7 @@ export default function ProjectOverviewPage({ params }: OverviewPageProps) {
   }
 
   // ---- Render: project non trovato ----
-  if (!project) {
+  if (!project || !lifecycle) {
     return (
       <div className="min-h-screen bg-background text-foreground">
         <header className="sticky top-0 z-10 border-b border-border bg-card/80 backdrop-blur-sm">
@@ -179,6 +211,8 @@ export default function ProjectOverviewPage({ params }: OverviewPageProps) {
     );
   }
 
+  const { stage, health, blockingIssues, nextAction } = lifecycle;
+
   // ---- Render: overview ----
   return (
     <div className="min-h-screen bg-background text-foreground">
@@ -199,7 +233,7 @@ export default function ProjectOverviewPage({ params }: OverviewPageProps) {
       </header>
 
       <main className="max-w-3xl mx-auto px-4 py-6 space-y-4">
-        {/* Card: Overview principale */}
+        {/* Card: Overview principale — Stage / Goal / Health */}
         <Card className="bg-card/60 border-border/30">
           <CardHeader className="pb-3">
             <CardTitle className="text-sm font-semibold text-muted-foreground">
@@ -220,20 +254,33 @@ export default function ProjectOverviewPage({ params }: OverviewPageProps) {
               </p>
             </div>
 
-            {/* Status + Goal */}
+            {/* Stage + Health (dal Lifecycle Engine) */}
             <div className="grid sm:grid-cols-2 gap-3">
               <div>
                 <p className="text-xs uppercase tracking-wider text-muted-foreground/70 font-mono mb-1">
-                  Status
+                  Stage
                 </p>
                 <span
-                  className={`inline-flex items-center px-2.5 py-1 rounded-full border text-xs font-medium ${statusBadgeClass(
-                    project.status,
-                  )}`}
+                  className={`inline-flex items-center px-2.5 py-1 rounded-full border text-xs font-medium ${STAGE_STYLES[stage]}`}
                 >
-                  {project.status.replace("_", " ")}
+                  {STAGE_LABELS[stage]}
                 </span>
               </div>
+              <div>
+                <p className="text-xs uppercase tracking-wider text-muted-foreground/70 font-mono mb-1">
+                  Health
+                </p>
+                <span
+                  className={`inline-flex items-center gap-1.5 px-2.5 py-1 rounded-full border text-xs font-medium ${HEALTH_STYLES[health]}`}
+                >
+                  <Activity className="h-3 w-3" />
+                  {HEALTH_LABELS[health]}
+                </span>
+              </div>
+            </div>
+
+            {/* Goal + Status (dal Project, non decisionali) */}
+            <div className="grid sm:grid-cols-2 gap-3">
               <div>
                 <p className="text-xs uppercase tracking-wider text-muted-foreground/70 font-mono mb-1">
                   Goal
@@ -249,9 +296,21 @@ export default function ProjectOverviewPage({ params }: OverviewPageProps) {
                   </span>
                 )}
               </div>
+              <div>
+                <p className="text-xs uppercase tracking-wider text-muted-foreground/70 font-mono mb-1">
+                  Status
+                </p>
+                <span
+                  className={`inline-flex items-center px-2.5 py-1 rounded-full border text-xs font-medium ${statusBadgeClass(
+                    project.status,
+                  )}`}
+                >
+                  {project.status.replace("_", " ")}
+                </span>
+              </div>
             </div>
 
-            {/* Progress */}
+            {/* Progress (dal Project, non decisionale) */}
             <div>
               <div className="flex items-center justify-between mb-1">
                 <p className="text-xs uppercase tracking-wider text-muted-foreground/70 font-mono">
@@ -271,16 +330,6 @@ export default function ProjectOverviewPage({ params }: OverviewPageProps) {
               </div>
             </div>
 
-            {/* Next action */}
-            <div className="rounded-lg bg-secondary/20 border border-border/20 px-4 py-3">
-              <p className="text-[10px] uppercase tracking-wider text-muted-foreground/70 font-mono mb-1">
-                Next action
-              </p>
-              <p className="text-sm text-foreground/90 leading-relaxed">
-                {nextAction}
-              </p>
-            </div>
-
             {/* Metadata footer */}
             <div className="grid grid-cols-2 gap-3 pt-2 border-t border-border/20 text-xs text-muted-foreground font-mono">
               <div>
@@ -292,6 +341,74 @@ export default function ProjectOverviewPage({ params }: OverviewPageProps) {
                 {formatDate(project.updatedAt)}
               </div>
             </div>
+          </CardContent>
+        </Card>
+
+        {/* Card: Next Action (dal Lifecycle Engine) */}
+        <Card className="bg-card/60 border-primary/30">
+          <CardContent className="p-4">
+            <div className="flex items-start gap-3">
+              <div className="p-2 rounded-lg bg-primary/10 shrink-0">
+                <ArrowRight className="h-4 w-4 text-primary" />
+              </div>
+              <div className="flex-1 min-w-0">
+                <p className="text-[10px] uppercase tracking-wider text-muted-foreground/70 font-mono mb-0.5">
+                  Next action
+                </p>
+                <p className="text-sm font-semibold text-foreground">
+                  {nextAction.label}
+                </p>
+                <p className="text-sm text-muted-foreground mt-1 leading-relaxed">
+                  {nextAction.description}
+                </p>
+              </div>
+            </div>
+          </CardContent>
+        </Card>
+
+        {/* Card: Blocking Issues (dal Lifecycle Engine) */}
+        <Card className="bg-card/60 border-border/30">
+          <CardHeader className="pb-3">
+            <CardTitle className="text-sm font-semibold text-muted-foreground flex items-center justify-between">
+              <span>Blocking issues</span>
+              <span className="text-xs text-muted-foreground/70 font-mono">
+                {blockingIssues.length}{" "}
+                {blockingIssues.length === 1 ? "issue" : "issues"}
+              </span>
+            </CardTitle>
+          </CardHeader>
+          <CardContent>
+            {blockingIssues.length === 0 ? (
+              <div className="flex items-center gap-2 text-sm text-emerald-300/80 py-2">
+                <CheckCircle2 className="h-4 w-4" />
+                <span>Nessun blocco rilevato. Il project è sano.</span>
+              </div>
+            ) : (
+              <ul className="space-y-2.5">
+                {blockingIssues.map((issue) => (
+                  <li
+                    key={issue.id}
+                    className={`flex items-start gap-2.5 rounded-lg border px-3 py-2 ${
+                      issue.severity === "critical"
+                        ? "border-red-500/30 bg-red-500/5"
+                        : "border-amber-500/30 bg-amber-500/5"
+                    }`}
+                  >
+                    <BlockingIssueIcon severity={issue.severity} />
+                    <div className="flex-1 min-w-0">
+                      <p className="text-sm text-foreground/90 leading-snug">
+                        {issue.message}
+                      </p>
+                      {issue.field ? (
+                        <p className="text-[10px] text-muted-foreground/60 font-mono mt-0.5 uppercase tracking-wider">
+                          field: {issue.field}
+                        </p>
+                      ) : null}
+                    </div>
+                  </li>
+                ))}
+              </ul>
+            )}
           </CardContent>
         </Card>
 

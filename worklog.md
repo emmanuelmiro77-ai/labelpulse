@@ -2357,3 +2357,30 @@ Stage Summary:
 - Migration 017 is idempotent and backward compatible with Phase 1 data.
 - /projects/[id] route is the entry point for future workflow integration (Continue button placeholder).
 - All Phase 1 isolation constraints preserved: no links to Demo/Release/Promotion/Pitch.
+
+---
+Task ID: PROJECT-LE
+Agent: Main Agent
+Task: Lifecycle Engine Foundation — single source of truth for Project decisions
+
+Work Log:
+- Created src/lib/project-lifecycle.ts: dedicated module, 100% pure functions, zero external dependencies (only imports `Project` type).
+  - Types: ProjectStage (7 stages: intake/planning/execution/ready/tracking/post_release/closed), ProjectGoal (re-export of 4 goals + ""), ProjectHealth (5: not_started/on_track/at_risk/blocked/stale), NextAction (structured: label + description + kind), BlockingIssue (id + severity + message + field), VisibleWorkspace.
+  - 6 pure functions:
+    - computeStage(project): derives stage from status + progress (idea→intake, in_progress<50→planning, in_progress>=50→execution, ready→ready, submitted→tracking, released→post_release, archived→closed).
+    - computeHealth(project): synthesizes health from stage + blocking issues + staleness (not_started, blocked, stale, at_risk, on_track in priority order).
+    - computeBlockingIssues(project): detects 5 issue types — missing_goal (critical), missing_artist (warning), missing_source_url (warning, goal-conditional), progress_zero_in_advanced_stage (warning), stale_project (warning, >30 days).
+    - computeNextAction(project): picks action by priority — critical issues first, then stage-specific (closed→review, post_release→track, tracking→follow-up, ready→submit, execution/planning→goal-specific prepare/submit, intake→configure).
+    - getAvailableGoals(stage): returns relevant goals per stage (closed→[], post_release/tracking→3 goals, others→all 4).
+    - getVisibleWorkspace(stage, goal): returns logical section names per stage+goal (setup/targets/pitch_draft/outreach/performance/submissions/responses/summary).
+  - Helper metadata exports: STAGE_LABELS, HEALTH_LABELS, HEALTH_STYLES, STAGE_STYLES (for UI rendering consistency).
+- Updated src/app/projects/[id]/page.tsx: Overview page now sources ALL decisional values from the engine. Removed inline computeNextAction import from @/types/project (old Phase 2 static mapping). Added useMemo to compute {stage, health, blockingIssues, nextAction} once per project. UI displays: Stage badge, Health badge (with Activity icon), Goal badge, Status badge, Progress bar, Next Action card (label + description), Blocking Issues list (color-coded by severity: red for critical, amber for warning, green check when empty). Continue button unchanged (still returns to /projects list — no workflow activation per spec).
+- Type-checked: 0 new TypeScript errors (114 baseline → 114 current).
+- Did NOT modify: Release/Demo/Pitch/Promotion modules, existing menus, no project_id added to other tables, no refactoring. The old computeNextAction in @/types/project.ts is left in place (still used by /projects list page Phase 2 cards) — no regression.
+
+Stage Summary:
+- Lifecycle Engine is the single source of truth: any UI wanting Project decisions must call its pure functions.
+- All 6 functions are pure (no side effects, deterministic, easily testable).
+- Engine uses ONLY Project fields (status, goal, progress, sourceUrl, artist, updatedAt) — zero reads from Demo/Release/Promotion/Pitch.
+- Overview page is now a pure renderer: zero decisional logic inline.
+- Ready for Phase 4: engine can be extended to read linked entities when those links are added (future migration).
