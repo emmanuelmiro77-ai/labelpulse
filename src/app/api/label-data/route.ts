@@ -69,14 +69,6 @@ export async function POST(req: NextRequest) {
       custom_links, is_custom, custom_name, custom_genre, is_favorite,
     } = body || {};
 
-    // [DEBUG custom_name] Point 4: POST /api/label-data — received payload
-    console.log("[DEBUG custom_name] 4. POST /api/label-data received", {
-      label_id,
-      custom_name_received: custom_name,
-      is_custom_received: is_custom,
-      fullBody: body,
-    });
-
     if (!label_id) {
       return NextResponse.json({ error: "Missing label_id" }, { status: 400 });
     }
@@ -124,29 +116,12 @@ export async function POST(req: NextRequest) {
       is_favorite: is_favorite ?? false,
     };
 
-    // [DEBUG custom_name] Point 4b: payload sent to Supabase
-    console.log("[DEBUG custom_name] 4b. POST /api/label-data supabase payload", {
-      label_id,
-      custom_name_in_upsert: upsertPayload.custom_name,
-      is_custom_in_upsert: upsertPayload.is_custom,
-      fullUpsertPayload: upsertPayload,
-    });
-
     // Upsert: insert or update on conflict (user_id, label_id)
     const { data, error } = await supabase
       .from("label_personal_data")
       .upsert(upsertPayload, { onConflict: "user_id,label_id" })
       .select()
       .single();
-
-    // [DEBUG custom_name] Point 4c: Supabase response
-    console.log("[DEBUG custom_name] 4c. POST /api/label-data supabase response", {
-      label_id,
-      custom_name_in_response: data?.custom_name,
-      is_custom_in_response: data?.is_custom,
-      error: error?.message,
-      fullResponse: data,
-    });
 
     if (error) {
       console.error("[/api/label-data POST]", error);

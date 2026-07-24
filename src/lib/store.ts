@@ -1837,12 +1837,6 @@ export const useAppStore = create<AppState>()(
       },
 
       updateLabel: (id, updates) => {
-        // [DEBUG custom_name] Point 2: updateLabel
-        console.log("[DEBUG custom_name] 2. updateLabel", {
-          label_id: id,
-          updates,
-          updates_name: updates.name,
-        });
         set((state) => ({
           labels: state.labels.map((l) =>
             l.id === id ? { ...l, ...updates } : l
@@ -1872,14 +1866,6 @@ export const useAppStore = create<AppState>()(
             custom_name: updated.name,
             custom_genre: updated.isCustom ? updated.genre : undefined,
           };
-          // [DEBUG custom_name] Point 2b: payload to apiUpsertLabelData
-          console.log("[DEBUG custom_name] 2b. apiUpsertLabelData payload", {
-            label_id: id,
-            name_in_store: updated.name,
-            custom_name_in_payload: labelDataPayload.custom_name,
-            is_custom: labelDataPayload.is_custom,
-            fullPayload: labelDataPayload,
-          });
           apiUpsertLabelData(labelDataPayload).catch((err) => console.error("[cloud sync] failed:", err));
         }
       },
