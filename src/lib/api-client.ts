@@ -11,6 +11,12 @@
  * riprova al giro successivo.
  */
 
+import type {
+  ProjectInput,
+  ProjectRow,
+  ProjectUpdate,
+} from "@/types/project";
+
 const API_BASE = "";
 
 /**
@@ -542,6 +548,104 @@ export async function apiDeleteCustomArtist(id: string): Promise<boolean> {
     return res.ok;
   } catch (err) {
     console.error("[apiDeleteCustomArtist] failed:", err);
+    return false;
+  }
+}
+
+// ==================== PROJECTS (Phase 1 Foundation) ====================
+//
+// 🔒 Phase 1: entità ISOLATA. Nessun collegamento con Demo / Release /
+// Promotion / Pitch. I metodi sono intenzionalmente separati dalle altre
+// sezioni per evitare accoppiamenti con i moduli esistenti.
+//
+// Le funzioni RESTITUISCONO il dato (non solo boolean) quando il server
+// ritorna la riga creata/aggiornata: lo store può così aggiornare lo stato
+// con il payload canonico del server (incl. timestamp generati DB-side).
+
+export type { Project, ProjectInput, ProjectRow, ProjectUpdate } from "@/types/project";
+
+/**
+ * GET /api/projects → lista tutti i project dell'utente.
+ *
+ * Ritorna `null` su errore (il chiamante decide come gestire — tipicamente
+ * lascia lo stato locale invariato e riprova al giro successivo).
+ */
+export async function apiFetchAllProjects(): Promise<ProjectRow[] | null> {
+  try {
+    const res = await fetch(`${API_BASE}/api/projects`, {
+      cache: "no-store",
+      headers: { "Cache-Control": "no-cache, no-store, must-revalidate" },
+    });
+    if (!res.ok) {
+      console.error("[apiFetchAllProjects] failed:", res.status);
+      return null;
+    }
+    const data = await res.json();
+    return data.projects || [];
+  } catch (err) {
+    console.error("[apiFetchAllProjects] network error:", err);
+    return null;
+  }
+}
+
+/**
+ * POST /api/projects → crea un nuovo project.
+ *
+ * Ritorna il `ProjectRow` creato dal server (con id, created_at, updated_at
+ * canonici), o `null` su errore.
+ */
+export async function apiCreateProject(
+  input: ProjectInput,
+): Promise<ProjectRow | null> {
+  try {
+    const result = await writeDirect<{ project?: ProjectRow }>(
+      `${API_BASE}/api/projects`,
+      "POST",
+      input,
+    );
+    return result?.project ?? null;
+  } catch (err) {
+    console.error("[apiCreateProject] failed:", err);
+    return null;
+  }
+}
+
+/**
+ * PATCH /api/projects?id=<id> → aggiorna un project esistente.
+ *
+ * Ritorna il `ProjectRow` aggiornato dal server, o `null` su errore.
+ */
+export async function apiUpdateProject(
+  id: string,
+  updates: ProjectUpdate,
+): Promise<ProjectRow | null> {
+  try {
+    const result = await writeDirect<{ project?: ProjectRow }>(
+      `${API_BASE}/api/projects?id=${encodeURIComponent(id)}`,
+      "PATCH",
+      updates,
+    );
+    return result?.project ?? null;
+  } catch (err) {
+    console.error("[apiUpdateProject] failed:", err);
+    return null;
+  }
+}
+
+/**
+ * DELETE /api/projects?id=<id> → cancella un project.
+ *
+ * Ritorna `true` se la delete è andata a buon fine, `false` altrimenti.
+ */
+export async function apiDeleteProject(id: string): Promise<boolean> {
+  try {
+    await writeDirect(
+      `${API_BASE}/api/projects?id=${encodeURIComponent(id)}`,
+      "DELETE",
+    );
+    return true;
+  } catch (err) {
+    console.error("[apiDeleteProject] failed:", err);
     return false;
   }
 }

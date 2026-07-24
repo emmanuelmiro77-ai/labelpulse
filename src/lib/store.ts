@@ -22,7 +22,19 @@ import {
   apiCreateRelease,
   apiUpdateRelease,
   apiDeleteRelease,
+  // 🔒 Phase 1: Project CRUD — entità ISOLATA, non collegata ad altri moduli
+  apiFetchAllProjects,
+  apiCreateProject,
+  apiUpdateProject,
+  apiDeleteProject,
 } from "./api-client";
+import type {
+  Project,
+  ProjectInput,
+  ProjectRow,
+  ProjectUpdate,
+} from "@/types/project";
+import { rowToProject } from "@/types/project";
 
 // ==================== TYPES ====================
 
@@ -1224,6 +1236,16 @@ interface AppState {
   addSentCampaign: (campaign: Omit<SentCampaign, "id" | "sentAt">) => string;
   deleteSentCampaign: (id: string) => void;
 
+  // 🔒 Phase 1: Projects — entità ISOLATA. Non collegata a Demo / Release /
+  // Promotion / Pitch. I metodi qui sotto sono intenzionalmente separati
+  // dagli altri moduli: loadProjects() NON viene chiamato da loadFromNewTables()
+  // né da loadFromCloud(). È responsabilità della pagina /projects chiamarlo.
+  projects: Project[];
+  loadProjects: () => Promise<void>;
+  addProject: (input: ProjectInput) => string; // returns new id (optimistic)
+  updateProject: (id: string, updates: ProjectUpdate) => void;
+  deleteProject: (id: string) => void;
+
   // Navigation
   setActiveTab: (tab: "dashboard" | "labels" | "artists" | "rankings" | "demos" | "pitch" | "profile") => void;
 
@@ -1770,6 +1792,8 @@ export const useAppStore = create<AppState>()(
       releases: [] as Release[],
       savedPitches: [] as SavedPitch[],
       sentCampaigns: [] as SentCampaign[],
+      // 🔒 Phase 1: Project state iniziale vuoto. Non viene seedato.
+      projects: [] as Project[],
       lastReplyScanAt: null,
       newRepliesCount: 0,
       rankingsUpdatedAt: null as string | null,
@@ -2153,6 +2177,127 @@ export const useAppStore = create<AppState>()(
         syncToCloud();
         // 🔒 FASE C.5: dual write — delete from pitch_campaigns
         apiDeletePitch(id).catch((err) => console.error("[cloud sync] failed:", err));
+      },
+
+      // ==================== PROJECTS (Phase 1 Foundation) ====================
+      // 🔒 Entità ISOLATA: nessun syncToCloud(), nessun pushRankingsToCloud(),
+      // nessun collegamento con loadFromNewTables. Il cloud sync è gestito
+      // esclusivamente dalle funzioni apiFetchAllProjects / apiCreateProject /
+      // apiUpdateProject / apiDeleteProject, chiamate qui dentro.
+      //
+      // Pattern: optimistic update + background cloud write. Se il cloud write
+      // fallisce, lo stato locale resta aggiornato (l'errore viene solo loggato).
+      // Al prossimo loadProjects() il cloud riallineerà lo stato.
+
+      loadProjects: async () => {
+        if (typeof window === "undefined") return;
+        try {
+          const rows = await apiFetchAllProjects();
+          if (Array.isArray(rows)) {
+            const projects = rows.map(rowToProject);
+            useAppStore.setState({ projects });
+            console.log(
+              `[projects] loadProjects: loaded ${projects.length} projects from cloud`,
+            );
+          }
+        } catch (err) {
+          console.error("[projects] loadProjects failed:", err);
+        }
+      },
+
+      addProject: (input) => {
+        const newId =
+          input.id && input.id.trim() !== ""
+            ? input.id
+            : `proj_${genId()}`;
+        const now = new Date().toISOString();
+        const newProject: Project = {
+          id: newId,
+          title: input.title,
+          artist: input.artist ?? "",
+          status: input.status ?? "idea",
+          sourceUrl: input.source_url ?? "",
+          createdAt: now,
+          updatedAt: now,
+        };
+        // Optimistic update: aggiungi subito in testa alla lista locale.
+        set((state) => ({
+          projects: [newProject, ...state.projects],
+          lastSavedAt: now,
+        }));
+        // Background cloud write. Se fallisce, l'errore è solo loggato:
+        // al prossimo loadProjects() il cloud riallineerà. Non facciamo
+        // rollback ottimistico per non penalizzare UX su reti lente.
+        apiCreateProject({
+          id: newId,
+          title: newProject.title,
+          artist: newProject.artist,
+          status: newProject.status,
+          source_url: newProject.sourceUrl || undefined,
+        })
+          .then((row) => {
+            if (row) {
+              // Riallinea con il payload canonico del server (timestamp DB).
+              const canonical = rowToProject(row as ProjectRow);
+              set((state) => ({
+                projects: state.projects.map((p) =>
+                  p.id === newId ? { ...p, ...canonical } : p,
+                ),
+              }));
+            }
+          })
+          .catch((err) =>
+            console.error("[projects] addProject cloud sync failed:", err),
+          );
+        return newId;
+      },
+
+      updateProject: (id, updates) => {
+        const now = new Date().toISOString();
+        // Optimistic update.
+        set((state) => ({
+          projects: state.projects.map((p) =>
+            p.id === id
+              ? {
+                  ...p,
+                  ...updates,
+                  // source_url (snake) → sourceUrl (camel)
+                  ...(updates.source_url !== undefined
+                    ? { sourceUrl: updates.source_url }
+                    : {}),
+                  updatedAt: now,
+                }
+              : p,
+          ),
+          lastSavedAt: now,
+        }));
+        // Background cloud write.
+        apiUpdateProject(id, updates)
+          .then((row) => {
+            if (row) {
+              const canonical = rowToProject(row as ProjectRow);
+              set((state) => ({
+                projects: state.projects.map((p) =>
+                  p.id === id ? { ...p, ...canonical } : p,
+                ),
+              }));
+            }
+          })
+          .catch((err) =>
+            console.error("[projects] updateProject cloud sync failed:", err),
+          );
+      },
+
+      deleteProject: (id) => {
+        // Optimistic update: rimuovi subito dalla lista locale.
+        set((state) => ({
+          projects: state.projects.filter((p) => p.id !== id),
+          lastSavedAt: new Date().toISOString(),
+        }));
+        // Background cloud write.
+        apiDeleteProject(id).catch((err) =>
+          console.error("[projects] deleteProject cloud sync failed:", err),
+        );
       },
 
       advanceDemoStatus: (id) => {
@@ -3141,6 +3286,10 @@ export const useAppStore = create<AppState>()(
         releases: state.releases,
         savedPitches: state.savedPitches,
         sentCampaigns: state.sentCampaigns,
+        // 🔒 Phase 1: persist projects localmente per UX (istantaneo al boot,
+        // riallineato dal cloud da loadProjects() quando la pagina /projects
+        // viene montata).
+        projects: state.projects,
         activeTab: state.activeTab,
         locale: state.locale,
         userProfile: state.userProfile,
@@ -3253,6 +3402,8 @@ export function setAutoBackupEmail(email: string | null): void {
       rankingSnapshots: state.rankingSnapshots,
       rankingsUpdatedAt: state.rankingsUpdatedAt,
       locale: state.locale,
+      // 🔒 Phase 1: includi projects nello snapshot di backup automatico
+      projects: state.projects,
     });
   }
 }
@@ -3268,7 +3419,8 @@ useAppStore.subscribe((state, prevState) => {
     state.userProfile === prevState.userProfile &&
     state.savedPitches === prevState.savedPitches &&
     state.sentCampaigns === prevState.sentCampaigns &&
-    state.rankingSnapshots === prevState.rankingSnapshots
+    state.rankingSnapshots === prevState.rankingSnapshots &&
+    state.projects === prevState.projects
   ) {
     return;
   }
@@ -3282,6 +3434,8 @@ useAppStore.subscribe((state, prevState) => {
     rankingSnapshots: state.rankingSnapshots,
     rankingsUpdatedAt: state.rankingsUpdatedAt,
     locale: state.locale,
+    // 🔒 Phase 1: includi projects nello snapshot di backup automatico
+    projects: state.projects,
   });
 });
 

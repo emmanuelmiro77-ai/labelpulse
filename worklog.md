@@ -2310,3 +2310,27 @@ Stage Summary:
 - visibleCount (paginazione "Load more") preservato: l'utente ritrova la stessa quantità di card caricate.
 - ArtistList è ora un componente controllato (riceve listState + setListState via props).
 - Back button NON ricostruisce Artist Explorer: si limita a settare selectedArtistId=null. Lo stato listState è nel parent (mai smontato) → ripristino immediato.
+
+---
+Task ID: PROJECT-F1
+Agent: Main Agent
+Task: Phase 1 Foundation — Introduce new "Project" entity (isolated, no links to Demo/Release/Promotion/Pitch)
+
+Work Log:
+- Explored existing patterns: 4 CRUD API routes (/api/demos, /api/releases, /api/promotion-targets, /api/artist-contacts), 2 migration patterns (014_rp034_artist_custom_data, 011_rp005_promotion_targets), api-client.ts writeDirect helper, store.ts persist+partialize+auto-backup subscribe pattern, page.tsx NAV_KEYS (left UNCHANGED).
+- Created src/types/project.ts: Project, ProjectStatus, ProjectRow, ProjectInput, ProjectUpdate interfaces + rowToProject() mapper. snake_case ↔ camelCase boundary isolated here.
+- Created supabase/migrations/016_projects.sql: projects table with id/user_id/title/artist/status/source_url/created_at/updated_at, RLS (select/insert/update/delete own), 2 indexes (user_id; user_id+created_at), updated_at trigger. Includes defensive CREATE OR REPLACE FUNCTION update_updated_at_column() for self-sufficiency. NO FK to other tables.
+- Created src/app/api/projects/route.ts: GET/POST/PATCH/DELETE following the exact pattern of /api/releases (getAdminClient, userId partition key, eq("user_id", userId) on every query). PATCH filters PATCHABLE_COLUMNS, returns 404 if not found. DELETE returns success+count.
+- Extended src/lib/api-client.ts: +104 lines. apiFetchAllProjects (cache: no-store), apiCreateProject/apiUpdateProject (return ProjectRow from server), apiDeleteProject. Re-exports types from @/types/project.
+- Extended src/lib/store.ts: +156 lines. Added `projects: Project[]` to AppState, 4 actions (loadProjects/addProject/updateProject/deleteProject) with optimistic-update + background-cloud-write pattern. NO calls to syncToCloud, NO calls to loadFromNewTables wiring. Added `projects: state.projects` to partialize (persists to IndexedDB), auto-backup subscribe check, and setAutoBackupEmail snapshot.
+- Created src/app/projects/page.tsx: standalone route (NOT in NAV_KEYS). Calls loadProjects() on mount. Shows table with title/artist/status/created_at. Minimal create form (title required, artist/status/source_url optional). Delete button per row with confirm. NO links to Demo/Release/Promotion/Pitch. NO modification to existing menus.
+- Type-checked: 0 new TypeScript errors introduced (verified by stash + re-run).
+- Did NOT modify: page.tsx NAV_KEYS, existing menus, existing loadFromNewTables/loadFromCloud, exportData/importData/restoreFromSnapshot (to honor "no other modifications" + "no regression").
+
+Stage Summary:
+- Project entity fully isolated: 6 new files, 2 modified files, single logical change.
+- Migration 016_projects.sql ready to run on Supabase (RLS enforced, idempotent).
+- /projects URL is the only entry point (no menu integration, per spec).
+- Store actions are self-contained — loadProjects() is only called by the /projects page itself, never by other modules.
+- All cloud writes go through api-client (writeDirect), no direct supabase calls from the store.
+- Ready for Phase 2 (linking Project to other entities) without rework.
