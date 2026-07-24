@@ -2216,6 +2216,12 @@ export const useAppStore = create<AppState>()(
           title: input.title,
           artist: input.artist ?? "",
           status: input.status ?? "idea",
+          goal: input.goal ?? "",
+          progress:
+            typeof input.progress === "number" &&
+            Number.isFinite(input.progress)
+              ? Math.max(0, Math.min(100, Math.round(input.progress)))
+              : 0,
           sourceUrl: input.source_url ?? "",
           createdAt: now,
           updatedAt: now,
@@ -2233,6 +2239,8 @@ export const useAppStore = create<AppState>()(
           title: newProject.title,
           artist: newProject.artist,
           status: newProject.status,
+          goal: newProject.goal,
+          progress: newProject.progress,
           source_url: newProject.sourceUrl || undefined,
         })
           .then((row) => {
@@ -2254,16 +2262,29 @@ export const useAppStore = create<AppState>()(
 
       updateProject: (id, updates) => {
         const now = new Date().toISOString();
+        // Clamp progress in optimistic update (defensive: il server rifà
+        // lo stesso clamp, ma così evitiamo闪烁 di valori fuori range
+        // nella UI prima della risposta del cloud).
+        const sanitizedUpdates: ProjectUpdate = { ...updates };
+        if (
+          typeof sanitizedUpdates.progress === "number" &&
+          Number.isFinite(sanitizedUpdates.progress)
+        ) {
+          sanitizedUpdates.progress = Math.max(
+            0,
+            Math.min(100, Math.round(sanitizedUpdates.progress)),
+          );
+        }
         // Optimistic update.
         set((state) => ({
           projects: state.projects.map((p) =>
             p.id === id
               ? {
                   ...p,
-                  ...updates,
+                  ...sanitizedUpdates,
                   // source_url (snake) → sourceUrl (camel)
-                  ...(updates.source_url !== undefined
-                    ? { sourceUrl: updates.source_url }
+                  ...(sanitizedUpdates.source_url !== undefined
+                    ? { sourceUrl: sanitizedUpdates.source_url }
                     : {}),
                   updatedAt: now,
                 }
@@ -2272,7 +2293,7 @@ export const useAppStore = create<AppState>()(
           lastSavedAt: now,
         }));
         // Background cloud write.
-        apiUpdateProject(id, updates)
+        apiUpdateProject(id, sanitizedUpdates)
           .then((row) => {
             if (row) {
               const canonical = rowToProject(row as ProjectRow);
@@ -3032,13 +3053,25 @@ export const useAppStore = create<AppState>()(
     }),
     {
       name: PRIMARY_KEY,
-      version: 19,  // 🔒 FASE D: bump 18→19 per rimuovere labels dal localStorage (causava QuotaExceededError)
+      version: 20,  // 🔒 Phase 2: bump 19→20 per backfillare goal/progress sui projects esistenti
       storage: createJSONStorage(() => idbStorage), // 🔒 Task 3: IndexedDB invece di localStorage
       migrate: (persisted: any, version: number) => {
         // 🔒 FASE D FIX v19: rimuovi labels dal persisted state (occupavano 4MB+ inutilmente)
         if (version < 19 && persisted && persisted.labels) {
           console.log("[LabelPulse] Migrating v18→v19: removing labels from localStorage (was causing QuotaExceededError)");
           delete persisted.labels;
+        }
+        // 🔒 Phase 2: backfill goal="" e progress=0 sui projects persistiti
+        // da Phase 1 (che non avevano questi campi).
+        if (version < 20 && Array.isArray(persisted.projects)) {
+          persisted.projects = persisted.projects.map((p: any) => ({
+            ...p,
+            goal: typeof p.goal === "string" ? p.goal : "",
+            progress:
+              typeof p.progress === "number" && Number.isFinite(p.progress)
+                ? Math.max(0, Math.min(100, Math.round(p.progress)))
+                : 0,
+          }));
         }
         if (version < 5) {
           if (persisted.demos) {

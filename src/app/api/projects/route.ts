@@ -2,10 +2,15 @@ import { NextRequest, NextResponse } from "next/server";
 import { getAdminClient } from "@/lib/supabase-admin";
 
 /**
- * API /api/projects — CRUD per la tabella `projects` (Phase 1 Foundation)
+ * API /api/projects — CRUD per la tabella `projects`
  *
- * 🔒 Phase 1: entità ISOLATA. Nessun join con demo_submissions,
+ * Phase 1: entità ISOLATA. Nessun join con demo_submissions,
  * user_releases, promotion_targets, pitch_campaigns.
+ *
+ * Phase 2: aggiunti campi `goal` (TEXT) e `progress` (INTEGER 0-100).
+ * Il server clampa `progress` a [0, 100] per sicurezza; `goal` è
+ * accettato come qualunque stringa (la UI dovrebbe usare uno dei
+ * PROJECT_GOALS, ma il DB non lo impone).
  *
  * Tutte le operazioni sono autenticate via NextAuth session.
  * Lo userId della sessione viene usato come partition key (RLS).
@@ -23,8 +28,38 @@ const PATCHABLE_COLUMNS = [
   "title",
   "artist",
   "status",
+  "goal",
+  "progress",
   "source_url",
 ] as const;
+
+/**
+ * Clamp helper per `progress`. Accetta qualunque input (string, number,
+ * undefined) e ritorna un intero 0-100 valido. Valori non numerici → 0.
+ */
+function sanitizeProgress(value: unknown): number {
+  if (typeof value === "number" && Number.isFinite(value)) {
+    return Math.max(0, Math.min(100, Math.round(value)));
+  }
+  if (typeof value === "string") {
+    const n = Number(value);
+    if (Number.isFinite(n)) {
+      return Math.max(0, Math.min(100, Math.round(n)));
+    }
+  }
+  return 0;
+}
+
+/**
+ * Sanitize `goal`: stringa trimmata, '' se vuota/non-stringa.
+ */
+function sanitizeGoal(value: unknown): string {
+  if (typeof value === "string") {
+    const trimmed = value.trim();
+    return trimmed;
+  }
+  return "";
+}
 
 export async function GET() {
   const { supabase, email, userId } = await getAdminClient();
@@ -54,7 +89,7 @@ export async function POST(req: NextRequest) {
 
   try {
     const body = await req.json();
-    const { id, title, artist, status, source_url } = body || {};
+    const { id, title, artist, status, goal, progress, source_url } = body || {};
 
     if (!title || typeof title !== "string" || title.trim() === "") {
       return NextResponse.json(
@@ -76,6 +111,8 @@ export async function POST(req: NextRequest) {
         title: String(title).trim(),
         artist: typeof artist === "string" ? artist : "",
         status: typeof status === "string" && status ? status : "idea",
+        goal: sanitizeGoal(goal),
+        progress: sanitizeProgress(progress),
         source_url: typeof source_url === "string" && source_url ? source_url : null,
       })
       .select()
@@ -119,6 +156,14 @@ export async function PATCH(req: NextRequest) {
     delete updates.id;
     delete updates.user_id;
     delete updates.created_at;
+
+    // Sanitizza i nuovi campi se presenti.
+    if ("goal" in updates) {
+      updates.goal = sanitizeGoal(updates.goal);
+    }
+    if ("progress" in updates) {
+      updates.progress = sanitizeProgress(updates.progress);
+    }
 
     if (Object.keys(updates).length === 0) {
       return NextResponse.json(

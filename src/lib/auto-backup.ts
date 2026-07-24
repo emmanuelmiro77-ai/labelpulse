@@ -38,6 +38,9 @@ export interface StateSnapshot {
   rankingSnapshots: any[];
   rankingsUpdatedAt: string | null;
   locale: string;
+  // 🔒 Phase 1: projects è opzionale per backward compat con snapshot
+  // precedenti alla Phase 1. Nuovi snapshot lo includono sempre.
+  projects?: any[];
 }
 
 /**
@@ -77,6 +80,8 @@ export function saveSnapshot(
     rankingSnapshots: any[];
     rankingsUpdatedAt: string | null;
     locale: string;
+    // 🔒 Phase 1: projects è opzionale per backward compat.
+    projects?: any[];
   }
 ): void {
   if (!email || typeof window === "undefined") return;

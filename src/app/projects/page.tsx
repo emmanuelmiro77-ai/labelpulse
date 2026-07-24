@@ -1,26 +1,37 @@
 "use client";
 
 /**
- * /projects — Phase 1 Foundation
+ * /projects — Phase 2 (Home Dashboard)
  * =====================================================================
- * Pagina STANDALONE per la nuova entità "Project".
+ * Trasforma la pagina Phase 1 in una "dashboard dei Project".
  *
- * 🔒 Phase 1 constraints:
+ * 🔒 Phase 2 constraints (inalterate da Phase 1):
  * - NON è collegata al menu principale (NAV_KEYS in src/app/page.tsx non
  *   è stato modificato). Si raggiunge solo via URL diretto `/projects`.
  * - NON ha link a Demo, Release, Promotion, Pitch, Analyze Release.
- * - Chiama `loadProjects()` dallo store al mount, poi mostra un elenco
- *   read-only con: titolo, artista, stato, data creazione.
- * - Espone un form minimale per creare un nuovo Project (titolo obbligatorio,
- *   artista / status / source_url opzionali) e un pulsante di delete per
- *   ciascuna riga. Nessun edit inline complesso: questa è Phase 1.
  * - Nessun collegamento con dashboard, ranking, o altri moduli.
+ *
+ * Cambi Phase 2:
+ * - Il form di creazione include il campo "What do you want to achieve?"
+ *   con le 4 opzioni (PROJECT_GOALS).
+ * - L'elenco mostra, per ogni Project: titolo, artista, status, goal,
+ *   progress (barra) e next action (calcolata da computeNextAction).
+ * - Cliccando su una card si naviga a `/projects/[id]` (Overview page).
  * =====================================================================
  */
 
 import { useEffect, useState, useCallback } from "react";
 import Link from "next/link";
-import { ArrowLeft, FolderPlus, Trash2, Loader2, Folder } from "lucide-react";
+import { useRouter } from "next/navigation";
+import {
+  ArrowLeft,
+  FolderPlus,
+  Trash2,
+  Loader2,
+  Folder,
+  ChevronRight,
+  Target,
+} from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
@@ -38,7 +49,12 @@ import {
   SelectValue,
 } from "@/components/ui/select";
 import { useAppStore } from "@/lib/store";
-import { PROJECT_STATUSES } from "@/types/project";
+import {
+  PROJECT_STATUSES,
+  PROJECT_GOALS,
+  computeNextAction,
+  type Project,
+} from "@/types/project";
 
 /**
  * Mappa label → colore per il badge dello status.
@@ -60,6 +76,15 @@ function statusBadgeClass(status: string): string {
   );
 }
 
+/** Colore della barra di progress in base al valore. */
+function progressColorClass(progress: number): string {
+  if (progress >= 75) return "bg-emerald-500";
+  if (progress >= 50) return "bg-cyan-500";
+  if (progress >= 25) return "bg-amber-500";
+  if (progress > 0) return "bg-purple-500";
+  return "bg-zinc-600";
+}
+
 /** Formatta una data ISO in formato leggibile (it-IT). */
 function formatDate(iso: string): string {
   if (!iso) return "—";
@@ -77,6 +102,7 @@ function formatDate(iso: string): string {
 }
 
 export default function ProjectsPage() {
+  const router = useRouter();
   const projects = useAppStore((s) => s.projects);
   const loadProjects = useAppStore((s) => s.loadProjects);
   const addProject = useAppStore((s) => s.addProject);
@@ -89,6 +115,7 @@ export default function ProjectsPage() {
   const [title, setTitle] = useState("");
   const [artist, setArtist] = useState("");
   const [status, setStatus] = useState<string>("idea");
+  const [goal, setGoal] = useState<string>("");
   const [sourceUrl, setSourceUrl] = useState("");
 
   // Carica i projects dal cloud al mount. Il load è idempotente: se lo store
@@ -120,10 +147,11 @@ export default function ProjectsPage() {
           title: trimmed,
           artist: artist.trim() || undefined,
           status,
+          goal: goal || undefined,
           source_url: sourceUrl.trim() || undefined,
         });
-        // Reset form (mantieni lo status selezionato: l'utente spesso
-        // crea più project dello stesso status in sequenza).
+        // Reset form (mantieni status e goal selezionati: l'utente spesso
+        // crea più project dello stesso tipo in sequenza).
         setTitle("");
         setArtist("");
         setSourceUrl("");
@@ -131,11 +159,14 @@ export default function ProjectsPage() {
         setSubmitting(false);
       }
     },
-    [title, artist, status, sourceUrl, addProject],
+    [title, artist, status, goal, sourceUrl, addProject],
   );
 
   const handleDelete = useCallback(
-    (id: string, projectTitle: string) => {
+    (e: React.MouseEvent, id: string, projectTitle: string) => {
+      // Ferma la propagazione: il click va sul bottone delete, non sulla card.
+      e.stopPropagation();
+      e.preventDefault();
       const ok = window.confirm(
         `Eliminare il project "${projectTitle}"? L'operazione è irreversibile.`,
       );
@@ -143,6 +174,13 @@ export default function ProjectsPage() {
       deleteProject(id);
     },
     [deleteProject],
+  );
+
+  const handleCardClick = useCallback(
+    (id: string) => {
+      router.push(`/projects/${encodeURIComponent(id)}`);
+    },
+    [router],
   );
 
   return (
@@ -161,7 +199,7 @@ export default function ProjectsPage() {
             Projects
           </h1>
           <span className="ml-auto text-xs text-muted-foreground font-mono">
-            Phase 1 · Foundation
+            Phase 2 · Home
           </span>
         </div>
       </header>
@@ -223,6 +261,24 @@ export default function ProjectsPage() {
                 </Select>
               </div>
               <div className="space-y-1.5 sm:col-span-2">
+                <Label htmlFor="proj-goal" className="text-xs flex items-center gap-1">
+                  <Target className="h-3 w-3" />
+                  What do you want to achieve?
+                </Label>
+                <Select value={goal} onValueChange={setGoal}>
+                  <SelectTrigger id="proj-goal">
+                    <SelectValue placeholder="Seleziona un obiettivo (opzionale)" />
+                  </SelectTrigger>
+                  <SelectContent>
+                    {PROJECT_GOALS.map((g) => (
+                      <SelectItem key={g} value={g}>
+                        {g}
+                      </SelectItem>
+                    ))}
+                  </SelectContent>
+                </Select>
+              </div>
+              <div className="space-y-1.5 sm:col-span-2">
                 <Label htmlFor="proj-source" className="text-xs">
                   Source URL (opzionale)
                 </Label>
@@ -248,13 +304,13 @@ export default function ProjectsPage() {
           </CardContent>
         </Card>
 
-        {/* Elenco Projects */}
+        {/* Elenco Projects — card dashboard */}
         <Card className="bg-card/60 border-border/30">
           <CardHeader className="pb-3">
             <CardTitle className="text-sm font-semibold text-muted-foreground flex items-center justify-between">
               <span className="flex items-center gap-2">
                 <Folder className="h-4 w-4" />
-                Elenco Projects
+                I tuoi Projects
               </span>
               <span className="text-xs text-muted-foreground/70 font-mono">
                 {projects.length} totali
@@ -276,78 +332,118 @@ export default function ProjectsPage() {
                 </p>
               </div>
             ) : (
-              <div className="overflow-x-auto -mx-2">
-                <table className="w-full text-sm">
-                  <thead>
-                    <tr className="text-left text-xs text-muted-foreground border-b border-border/30">
-                      <th className="px-2 py-2 font-medium">Titolo</th>
-                      <th className="px-2 py-2 font-medium">Artista</th>
-                      <th className="px-2 py-2 font-medium">Stato</th>
-                      <th className="px-2 py-2 font-medium whitespace-nowrap">
-                        Creato
-                      </th>
-                      <th className="px-2 py-2 font-medium text-right">
-                        <span className="sr-only">Azioni</span>
-                      </th>
-                    </tr>
-                  </thead>
-                  <tbody>
-                    {projects.map((p) => (
-                      <tr
-                        key={p.id}
-                        className="border-b border-border/20 last:border-0 hover:bg-secondary/20 transition-colors"
-                      >
-                        <td className="px-2 py-3">
-                          <div className="font-medium text-foreground">
-                            {p.title}
-                          </div>
-                          {p.sourceUrl ? (
-                            <a
-                              href={p.sourceUrl}
-                              target="_blank"
-                              rel="noopener noreferrer"
-                              className="text-xs text-primary/70 hover:text-primary truncate block max-w-[220px]"
-                              title={p.sourceUrl}
-                            >
-                              {p.sourceUrl}
-                            </a>
-                          ) : null}
-                        </td>
-                        <td className="px-2 py-3 text-muted-foreground">
-                          {p.artist || "—"}
-                        </td>
-                        <td className="px-2 py-3">
-                          <span
-                            className={`inline-flex items-center px-2 py-0.5 rounded-full border text-xs font-medium ${statusBadgeClass(
-                              p.status,
-                            )}`}
-                          >
-                            {p.status.replace("_", " ")}
-                          </span>
-                        </td>
-                        <td className="px-2 py-3 text-muted-foreground text-xs whitespace-nowrap font-mono">
-                          {formatDate(p.createdAt)}
-                        </td>
-                        <td className="px-2 py-3 text-right">
-                          <Button
-                            variant="ghost"
-                            size="icon"
-                            className="h-8 w-8 text-muted-foreground hover:text-red-400 hover:bg-red-500/10"
-                            onClick={() => handleDelete(p.id, p.title)}
-                            title="Elimina project"
-                          >
-                            <Trash2 className="h-4 w-4" />
-                          </Button>
-                        </td>
-                      </tr>
-                    ))}
-                  </tbody>
-                </table>
+              <div className="grid sm:grid-cols-2 gap-3">
+                {projects.map((p) => (
+                  <ProjectCard
+                    key={p.id}
+                    project={p}
+                    onClick={() => handleCardClick(p.id)}
+                    onDelete={(e) => handleDelete(e, p.id, p.title)}
+                  />
+                ))}
               </div>
             )}
           </CardContent>
         </Card>
       </main>
+    </div>
+  );
+}
+
+// ==================== Sub-component: ProjectCard ====================
+
+interface ProjectCardProps {
+  project: Project;
+  onClick: () => void;
+  onDelete: (e: React.MouseEvent) => void;
+}
+
+function ProjectCard({ project, onClick, onDelete }: ProjectCardProps) {
+  const p = project;
+  const nextAction = computeNextAction(p.goal, p.progress);
+
+  return (
+    <div
+      role="button"
+      tabIndex={0}
+      onClick={onClick}
+      onKeyDown={(e) => {
+        if (e.key === "Enter" || e.key === " ") {
+          e.preventDefault();
+          onClick();
+        }
+      }}
+      className="group relative text-left rounded-xl border border-border/30 bg-card/40 hover:bg-card/70 hover:border-primary/40 transition-all cursor-pointer p-4 focus:outline-none focus:ring-2 focus:ring-primary/40"
+    >
+      {/* Header card: titolo + status badge + chevron */}
+      <div className="flex items-start justify-between gap-2 mb-2">
+        <div className="min-w-0 flex-1">
+          <h3 className="font-semibold text-foreground truncate">
+            {p.title}
+          </h3>
+          <p className="text-xs text-muted-foreground truncate">
+            {p.artist || "—"}
+          </p>
+        </div>
+        <ChevronRight className="h-4 w-4 text-muted-foreground/40 group-hover:text-primary/60 transition-colors shrink-0 mt-1" />
+      </div>
+
+      {/* Badges: status + goal */}
+      <div className="flex flex-wrap items-center gap-1.5 mb-3">
+        <span
+          className={`inline-flex items-center px-2 py-0.5 rounded-full border text-xs font-medium ${statusBadgeClass(
+            p.status,
+          )}`}
+        >
+          {p.status.replace("_", " ")}
+        </span>
+        {p.goal ? (
+          <span className="inline-flex items-center gap-1 px-2 py-0.5 rounded-full border text-xs font-medium bg-primary/10 text-primary border-primary/30">
+            <Target className="h-3 w-3" />
+            {p.goal}
+          </span>
+        ) : null}
+      </div>
+
+      {/* Progress bar */}
+      <div className="mb-3">
+        <div className="flex items-center justify-between text-xs text-muted-foreground mb-1">
+          <span>Progress</span>
+          <span className="font-mono">{p.progress}%</span>
+        </div>
+        <div className="h-1.5 rounded-full bg-secondary/40 overflow-hidden">
+          <div
+            className={`h-full rounded-full transition-all ${progressColorClass(
+              p.progress,
+            )}`}
+            style={{ width: `${p.progress}%` }}
+          />
+        </div>
+      </div>
+
+      {/* Next action */}
+      <div className="rounded-lg bg-secondary/20 border border-border/20 px-3 py-2">
+        <p className="text-[10px] uppercase tracking-wider text-muted-foreground/70 font-mono mb-0.5">
+          Next action
+        </p>
+        <p className="text-sm text-foreground/90 leading-snug">{nextAction}</p>
+      </div>
+
+      {/* Footer: data + delete */}
+      <div className="flex items-center justify-between mt-3 pt-2 border-t border-border/20">
+        <span className="text-xs text-muted-foreground font-mono">
+          {formatDate(p.createdAt)}
+        </span>
+        <Button
+          variant="ghost"
+          size="icon"
+          className="h-7 w-7 text-muted-foreground/60 hover:text-red-400 hover:bg-red-500/10 opacity-0 group-hover:opacity-100 transition-opacity"
+          onClick={onDelete}
+          title="Elimina project"
+        >
+          <Trash2 className="h-3.5 w-3.5" />
+        </Button>
+      </div>
     </div>
   );
 }

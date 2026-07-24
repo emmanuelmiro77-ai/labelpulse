@@ -2334,3 +2334,26 @@ Stage Summary:
 - Store actions are self-contained — loadProjects() is only called by the /projects page itself, never by other modules.
 - All cloud writes go through api-client (writeDirect), no direct supabase calls from the store.
 - Ready for Phase 2 (linking Project to other entities) without rework.
+
+---
+Task ID: PROJECT-P2
+Agent: Main Agent
+Task: Phase 2 — Transform /projects into a Project home dashboard (goal, progress, next action, Overview page)
+
+Work Log:
+- Extended src/types/project.ts: added `goal` (string) and `progress` (number 0-100) to Project/ProjectRow/ProjectInput/ProjectUpdate. Added PROJECT_GOALS const with the 4 required options (Find a label / Promote a released track / Build a DJ campaign / Monitor performance). Added `computeNextAction(goal, progress)` — pure static mapping (goal × progress-quartile → suggested action phrase). rowToProject() now clamps progress and defaults goal="" for Phase 1 rows.
+- Created supabase/migrations/017_projects_goal_progress.sql: ALTER TABLE projects ADD COLUMN goal TEXT NOT NULL DEFAULT '' + progress INTEGER NOT NULL DEFAULT 0. Idempotent (ADD COLUMN IF NOT EXISTS). Added CHECK constraint projects_progress_range (0-100) via DO $$ block (Postgres < 16 compat).
+- Updated src/app/api/projects/route.ts: POST now parses + sanitizes goal/progress. PATCH includes goal/progress in PATCHABLE_COLUMNS + sanitizes them. Added sanitizeProgress() (clamp 0-100, accept number or numeric string) and sanitizeGoal() (trim, default '').
+- Updated src/lib/store.ts: addProject passes goal+progress to apiCreateProject. updateProject clamps progress in optimistic update. Bumped persist version 19→20 with migration that backfills goal="" and progress=0 on Phase 1 persisted projects.
+- Updated src/lib/auto-backup.ts: added optional `projects?: any[]` to StateSnapshot interface and saveSnapshot() parameter type. Fixes pre-existing Phase 1 type errors (124→114 total TS errors). Backward compatible.
+- Rewrote src/app/projects/page.tsx: form now includes "What do you want to achieve?" Select with PROJECT_GOALS. List converted from table to card grid. Each ProjectCard shows: title, artist, status badge, goal badge, progress bar (color-coded), next action (computed via computeNextAction), created date, delete button. Cards are clickable (keyboard-accessible) → navigate to /projects/[id].
+- Created src/app/projects/[id]/page.tsx: Overview page. Resolves Next.js 16 async params. Shows: title, artist, status badge, goal badge, progress bar, next action, created/updated metadata. "Continue" button (returns to /projects list — workflow not yet connected, per Phase 2 spec). Handles loading + not-found states gracefully. Calls loadProjects() on mount if project not in store (direct URL access).
+- Type-checked: 0 new TypeScript errors. Baseline 124 errors → current 114 errors (auto-backup type fix reduced count).
+- Did NOT modify: Release/Demo/Pitch/Promotion modules, existing menus, no project_id added to other tables, no refactoring.
+
+Stage Summary:
+- Project home dashboard fully functional: create with goal, see card grid with progress + next action, click → Overview page.
+- computeNextAction() is a pure function ready to be replaced by dynamic logic in future phases.
+- Migration 017 is idempotent and backward compatible with Phase 1 data.
+- /projects/[id] route is the entry point for future workflow integration (Continue button placeholder).
+- All Phase 1 isolation constraints preserved: no links to Demo/Release/Promotion/Pitch.
