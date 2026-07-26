@@ -804,6 +804,13 @@ function getUserEditCountFromRaw(raw: string | null): number {
 // ha dati, li copia e poi pulisce localStorage.
 const idbStorage: StateStorage = {
   getItem: async (name: string): Promise<string | null> => {
+    // 🔒 SSR GUARD: indexedDB non esiste lato server. Ritorniamo null
+    // prima di qualsiasi chiamata a idb-keyval per evitare
+    // "ReferenceError: indexedDB is not defined" durante l'eval del modulo.
+    // Lato browser il comportamento resta invariato.
+    if (typeof window === "undefined") {
+      return null;
+    }
     try {
       const val = await idbGet(name);
       if (val) return val as string;
