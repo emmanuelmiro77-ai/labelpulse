@@ -56,6 +56,11 @@ import {
   HEALTH_STYLES,
   type BlockingIssue,
 } from "@/lib/project-lifecycle";
+// 🔒 WP-002 — Riutilizzo dei componenti esistenti per il workspace Targets.
+// Nessuna modifica ai componenti stessi: solo import + render.
+import { LabelFinder } from "@/components/label-finder";
+import ArtistExplorer from "@/components/artist-explorer";
+import { ErrorBoundary } from "@/components/error-boundary";
 
 /**
  * Mappa label → colore per il badge dello status (speculare alla lista).
@@ -173,6 +178,29 @@ function sectionMeta(sectionId: string): { label: string; description: string } 
       label: sectionId,
       description: "Sezione del workspace.",
     }
+  );
+}
+
+/**
+ * 🔒 WP-002 — Workspace Targets.
+ * Renderizza i componenti reali Label Finder e Artist Explorer,
+ * già esistenti nel repository. Nessuna modifica a tali componenti:
+ * vengono solo importati e montati.
+ *
+ * Entrambi i componenti sono self-contained (leggono dallo store Zustand).
+ * ErrorBoundary separato per ognuno: un errore in uno non deve bloccare
+ * l'altro né l'intera pagina Overview.
+ */
+function TargetsWorkspace() {
+  return (
+    <div className="space-y-4">
+      <ErrorBoundary>
+        <LabelFinder />
+      </ErrorBoundary>
+      <ErrorBoundary>
+        <ArtistExplorer />
+      </ErrorBoundary>
+    </div>
   );
 }
 
@@ -516,8 +544,29 @@ export default function ProjectOverviewPage({ params }: OverviewPageProps) {
                   Nessuna sezione disponibile per questo stage.
                 </div>
               ) : (
-                <div className="grid sm:grid-cols-2 gap-3">
+                <div className="space-y-4">
                   {workspace.sections.map((sectionId) => {
+                    // 🔒 WP-002 — Workspace Targets: renderizza i componenti
+                    // reali (Label Finder + Artist Explorer) invece della
+                    // card placeholder. Gli altri section id restano
+                    // placeholder con badge "Coming next".
+                    if (sectionId === "targets") {
+                      return (
+                        <div key={sectionId} className="space-y-2">
+                          <div className="flex items-center gap-2">
+                            <h3 className="font-semibold text-foreground text-sm">
+                              {sectionMeta(sectionId).label}
+                            </h3>
+                            {workspace.primary === sectionId ? (
+                              <span className="text-[10px] uppercase tracking-wider text-primary font-mono">
+                                Primary
+                              </span>
+                            ) : null}
+                          </div>
+                          <TargetsWorkspace />
+                        </div>
+                      );
+                    }
                     const meta = sectionMeta(sectionId);
                     const isPrimary = workspace.primary === sectionId;
                     return (
