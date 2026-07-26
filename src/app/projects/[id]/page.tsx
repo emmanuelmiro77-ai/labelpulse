@@ -19,9 +19,8 @@
  * =====================================================================
  */
 
-import { useEffect, useMemo, useState } from "react";
+import { useEffect, useMemo, useRef, useState } from "react";
 import Link from "next/link";
-import { useRouter } from "next/navigation";
 import {
   ArrowLeft,
   Folder,
@@ -34,6 +33,8 @@ import {
   Activity,
   ArrowRight,
   CheckCircle2,
+  LayoutGrid,
+  Sparkles,
 } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import {
@@ -48,6 +49,7 @@ import {
   computeHealth,
   computeBlockingIssues,
   computeNextAction,
+  getVisibleWorkspace,
   STAGE_LABELS,
   STAGE_STYLES,
   HEALTH_LABELS,
@@ -108,17 +110,86 @@ function BlockingIssueIcon({ severity }: { severity: BlockingIssue["severity"] }
   return <AlertTriangle className="h-4 w-4 text-amber-400 shrink-0 mt-0.5" />;
 }
 
+/**
+ * 🔒 WP-001 — Workspace dinamico.
+ * Mappa statica (section id → { label, description }) usata dalla UI per
+ * renderizzare le card del Workspace. Le section id provengono da
+ * `getVisibleWorkspace(stage, goal)` nel Lifecycle Engine.
+ *
+ * Nessun modulo reale è importato qui: la mappa contiene solo label e
+ * descrizioni human-readable. Il badge "Coming next" indica che il
+ * modulo concreto sarà collegato in fasi successive (WP-002+).
+ */
+const SECTION_META: Record<string, { label: string; description: string }> = {
+  summary: {
+    label: "Summary",
+    description:
+      "Riepilogo finale del project: risultati, metriche e note per future reference.",
+  },
+  setup: {
+    label: "Setup",
+    description:
+      "Configura titolo, artista, goal e source URL del project per sbloccare le azioni successive.",
+  },
+  targets: {
+    label: "Targets",
+    description:
+      "Costruisci la lista di label o DJ target per questo project.",
+  },
+  pitch_draft: {
+    label: "Pitch draft",
+    description:
+      "Bozza del pitch personalizzato per ogni target label.",
+  },
+  outreach: {
+    label: "Outreach",
+    description:
+      "Invia promozioni e DM ai DJ target. Traccia follow-up e risposte.",
+  },
+  performance: {
+    label: "Performance",
+    description:
+      "Monitora chart positions, streaming e supporto DJ per il rilascio.",
+  },
+  submissions: {
+    label: "Submissions",
+    description:
+      "Demo e pitch inviati alle label. Traccia stato e risposte.",
+  },
+  responses: {
+    label: "Responses",
+    description:
+      "Risposte ricevute da label e DJ. Classifica e gestisci i feedback.",
+  },
+};
+
+/**
+ * Etichetta fallback per section id non riconosciuti (defensivo: se il
+ * Lifecycle Engine aggiunge una nuova section, la UI non si rompe).
+ */
+function sectionMeta(sectionId: string): { label: string; description: string } {
+  return (
+    SECTION_META[sectionId] ?? {
+      label: sectionId,
+      description: "Sezione del workspace.",
+    }
+  );
+}
+
 interface OverviewPageProps {
   params: Promise<{ id: string }>;
 }
 
 export default function ProjectOverviewPage({ params }: OverviewPageProps) {
-  const router = useRouter();
   const projects = useAppStore((s) => s.projects);
   const loadProjects = useAppStore((s) => s.loadProjects);
 
   const [projectId, setProjectId] = useState<string | null>(null);
   const [isLoading, setIsLoading] = useState<boolean>(true);
+
+  // 🔒 WP-001: ref per scroll-to-workspace. Il pulsante Continue non
+  // naviga più a /projects: scorre alla sezione Workspace.
+  const workspaceRef = useRef<HTMLDivElement | null>(null);
 
   // Next.js 16: params è una Promise. Risolviamola al mount.
   useEffect(() => {
@@ -151,13 +222,23 @@ export default function ProjectOverviewPage({ params }: OverviewPageProps) {
   // 🔒 TUTTI i valori decisionali provengono dal Lifecycle Engine.
   // La UI non fa NESSUN calcolo decisionale: solo memoizzazione dei
   // risultati dell'engine per evitare recompute inutili.
+  // 🔒 WP-001: include anche il workspace visibile, derivato da
+  // getVisibleWorkspace(stage, goal).
   const lifecycle = useMemo(() => {
     if (!project) return null;
+    const stage = computeStage(project);
+    // Project.goal è stringa libera nel tipo; castiamo al tipo union
+    // ProjectGoal atteso da getVisibleWorkspace. I goal non noti
+    // ("") cadono nel branch default dell'engine, che ritorna solo
+    // ["setup"].
+    const goal = (project.goal || "") as Parameters<typeof getVisibleWorkspace>[1];
+    const workspace = getVisibleWorkspace(stage, goal);
     return {
-      stage: computeStage(project),
+      stage,
       health: computeHealth(project),
       blockingIssues: computeBlockingIssues(project),
       nextAction: computeNextAction(project),
+      workspace,
     };
   }, [project]);
 
@@ -211,7 +292,7 @@ export default function ProjectOverviewPage({ params }: OverviewPageProps) {
     );
   }
 
-  const { stage, health, blockingIssues, nextAction } = lifecycle;
+  const { stage, health, blockingIssues, nextAction, workspace } = lifecycle;
 
   // ---- Render: overview ----
   return (
@@ -412,7 +493,71 @@ export default function ProjectOverviewPage({ params }: OverviewPageProps) {
           </CardContent>
         </Card>
 
-        {/* Card: azioni */}
+        {/* 🔒 WP-001 — Sezione Workspace dinamica.
+            Le sezioni sono decise dal Lifecycle Engine tramite
+            getVisibleWorkspace(stage, goal). Ogni section è una card
+            con nome, descrizione e badge "Coming next". Nessun modulo
+            reale è collegato. */}
+        <div ref={workspaceRef} className="scroll-mt-20">
+          <Card className="bg-card/60 border-border/30">
+            <CardHeader className="pb-3">
+              <CardTitle className="text-sm font-semibold text-muted-foreground flex items-center gap-2">
+                <LayoutGrid className="h-4 w-4" />
+                Workspace
+                <span className="text-xs text-muted-foreground/70 font-mono ml-auto">
+                  {workspace.sections.length}{" "}
+                  {workspace.sections.length === 1 ? "sezione" : "sezioni"}
+                </span>
+              </CardTitle>
+            </CardHeader>
+            <CardContent>
+              {workspace.sections.length === 0 ? (
+                <div className="text-center py-6 text-muted-foreground/60 text-sm">
+                  Nessuna sezione disponibile per questo stage.
+                </div>
+              ) : (
+                <div className="grid sm:grid-cols-2 gap-3">
+                  {workspace.sections.map((sectionId) => {
+                    const meta = sectionMeta(sectionId);
+                    const isPrimary = workspace.primary === sectionId;
+                    return (
+                      <div
+                        key={sectionId}
+                        className={`rounded-xl border p-4 transition-colors ${
+                          isPrimary
+                            ? "border-primary/40 bg-primary/5"
+                            : "border-border/30 bg-card/40"
+                        }`}
+                      >
+                        <div className="flex items-start justify-between gap-2 mb-2">
+                          <div className="min-w-0">
+                            <h3 className="font-semibold text-foreground text-sm truncate">
+                              {meta.label}
+                            </h3>
+                            {isPrimary ? (
+                              <span className="text-[10px] uppercase tracking-wider text-primary font-mono">
+                                Primary
+                              </span>
+                            ) : null}
+                          </div>
+                          <span className="shrink-0 inline-flex items-center gap-1 px-2 py-0.5 rounded-full border text-[10px] font-medium bg-amber-500/10 text-amber-300 border-amber-500/30">
+                            <Sparkles className="h-3 w-3" />
+                            Coming next
+                          </span>
+                        </div>
+                        <p className="text-xs text-muted-foreground leading-relaxed">
+                          {meta.description}
+                        </p>
+                      </div>
+                    );
+                  })}
+                </div>
+              )}
+            </CardContent>
+          </Card>
+        </div>
+
+        {/* Card: azioni — Continue scrolla alla sezione Workspace */}
         <Card className="bg-card/60 border-border/30">
           <CardContent className="p-4 flex items-center justify-between gap-3">
             <div>
@@ -420,11 +565,16 @@ export default function ProjectOverviewPage({ params }: OverviewPageProps) {
                 Pronto a continuare?
               </p>
               <p className="text-xs text-muted-foreground">
-                Il workflow sarà disponibile nelle prossime fasi.
+                Vai al Workspace per vedere le sezioni attive di questo project.
               </p>
             </div>
             <Button
-              onClick={() => router.push("/projects")}
+              onClick={() => {
+                workspaceRef.current?.scrollIntoView({
+                  behavior: "smooth",
+                  block: "start",
+                });
+              }}
               className="gap-1"
             >
               Continue
