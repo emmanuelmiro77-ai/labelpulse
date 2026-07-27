@@ -402,6 +402,76 @@ export interface SentCampaign {
 const genId = () =>
   Date.now().toString(36) + Math.random().toString(36).slice(2, 7);
 
+// 🔒 WP-008 — Progress automatico del Project basato sulle Target Labels.
+//
+// Mappa specificata dal task:
+//   0 target      → 0%
+//   1-4 target    → 10%
+//   5-9 target    → 20%
+//   >=10 target   → 30%
+//
+// Funzione PURA: dato il numero di target labels, ritorna il progress.
+// Non legge lo store, non ha side effect. Facilmente testabile.
+function progressFromTargetCount(count: number): number {
+  if (count <= 0) return 0;
+  if (count <= 4) return 10;
+  if (count <= 9) return 20;
+  return 30;
+}
+
+/**
+ * 🔒 WP-008 — Ricalcola e persiste il `progress` di un Project in base
+ * al numero corrente di target labels.
+ *
+ * Da chiamare dopo ogni add/delete/load di target labels per un project.
+ * Esegue:
+ *   1. Conta le target labels del project dallo stato CORRENTE (post-update)
+ *   2. Calcola il nuovo progress con `progressFromTargetCount`
+ *   3. Se il progress è cambiato, aggiorna `projects[i].progress` nello
+ *      stato locale (optimistic)
+ *   4. Pusha il nuovo progress al cloud via `apiUpdateProject` in
+ *      background (no await, no blocco)
+ *
+ * Non ritorna nulla. Errori di cloud sync sono solo loggati: al prossimo
+ * loadProjects() il cloud riallineerà.
+ *
+ * NOTA: questa funzione legge lo stato tramite `useAppStore.getState()`
+ * per evitare di passare `get` come parametro (signature più pulita).
+ * Non è una funzione pura ma è deterministica rispetto allo stato.
+ */
+function recomputeProjectProgress(projectId: string): void {
+  const state = useAppStore.getState();
+  const project = state.projects.find((p) => p.id === projectId);
+  if (!project) return;
+
+  const targetCount = state.projectTargetLabels.filter(
+    (tl) => tl.projectId === projectId,
+  ).length;
+  const newProgress = progressFromTargetCount(targetCount);
+
+  // No-op se il progress non è cambiato. Evita write inutili al cloud
+  // e re-render della UI (la progress bar resta stabile).
+  if (project.progress === newProgress) return;
+
+  // Optimistic update locale.
+  useAppStore.setState((s) => ({
+    projects: s.projects.map((p) =>
+      p.id === projectId
+        ? { ...p, progress: newProgress, updatedAt: new Date().toISOString() }
+        : p,
+    ),
+    lastSavedAt: new Date().toISOString(),
+  }));
+
+  // Background cloud write. Solo il campo `progress` viene patchato.
+  apiUpdateProject(projectId, { progress: newProgress }).catch((err) =>
+    console.error(
+      `[projects] recomputeProjectProgress cloud sync failed for ${projectId}:`,
+      err,
+    ),
+  );
+}
+
 // Convert imported data to Label objects
 function buildLabelsFromData(): Label[] {
   return labelData.labels.map((l) => ({
@@ -2390,6 +2460,12 @@ export const useAppStore = create<AppState>()(
             console.log(
               `[project-target-labels] loadProjectTargetLabels: loaded ${targetLabels.length} target labels for project ${projectId}`,
             );
+            // 🔒 WP-008 — Ricalcola il progress dopo il load dal cloud.
+            // Necessario perché il cloud può avere un numero diverso di
+            // target labels rispetto allo stato locale (es. utente ha
+            // aggiunto target da un altro dispositivo). Va chiamato DOPO
+            // il set() così recomputeProjectProgress vede il nuovo count.
+            recomputeProjectProgress(projectId);
           }
         } catch (err) {
           console.error("[project-target-labels] loadProjectTargetLabels failed:", err);
@@ -2426,6 +2502,10 @@ export const useAppStore = create<AppState>()(
           projectTargetLabels: [...state.projectTargetLabels, newTargetLabel],
           lastSavedAt: now,
         }));
+        // 🔒 WP-008 — Ricalcola il progress del project dopo l'aggiunta.
+        // Va chiamato DOPO il set() così recomputeProjectProgress vede
+        // il nuovo count. Background, no blocco.
+        recomputeProjectProgress(newTargetLabel.projectId);
         // Background cloud write. Se fallisce (incluso 409), l'errore è solo
         // loggato: al prossimo loadProjectTargetLabels() il cloud riallineerà.
         apiCreateProjectTargetLabel({
@@ -2489,6 +2569,10 @@ export const useAppStore = create<AppState>()(
       },
 
       deleteProjectTargetLabel: (id) => {
+        // 🔒 WP-008 — Cattura il projectId PRIMA di rimuovere la target
+        // label. Dopo il set() non sarebbe più reperibile dallo stato.
+        const targetLabel = get().projectTargetLabels.find((tl) => tl.id === id);
+        const projectId = targetLabel?.projectId;
         // Optimistic update: rimuovi subito dalla lista locale.
         set((state) => ({
           projectTargetLabels: state.projectTargetLabels.filter(
@@ -2496,6 +2580,12 @@ export const useAppStore = create<AppState>()(
           ),
           lastSavedAt: new Date().toISOString(),
         }));
+        // 🔒 WP-008 — Ricalcola il progress del project dopo la rimozione.
+        // Va chiamato DOPO il set() così recomputeProjectProgress vede il
+        // nuovo count (decrementato).
+        if (projectId) {
+          recomputeProjectProgress(projectId);
+        }
         // Background cloud write.
         apiDeleteProjectTargetLabel(id).catch((err) =>
           console.error(
