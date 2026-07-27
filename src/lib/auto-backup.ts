@@ -41,6 +41,9 @@ export interface StateSnapshot {
   // 🔒 Phase 1: projects è opzionale per backward compat con snapshot
   // precedenti alla Phase 1. Nuovi snapshot lo includono sempre.
   projects?: any[];
+  // 🔒 WP-006: projectTargetLabels è opzionale per backward compat con
+  // snapshot precedenti a WP-006. Nuovi snapshot lo includono sempre.
+  projectTargetLabels?: any[];
 }
 
 /**
@@ -82,6 +85,8 @@ export function saveSnapshot(
     locale: string;
     // 🔒 Phase 1: projects è opzionale per backward compat.
     projects?: any[];
+    // 🔒 WP-006: projectTargetLabels è opzionale per backward compat.
+    projectTargetLabels?: any[];
   }
 ): void {
   if (!email || typeof window === "undefined") return;

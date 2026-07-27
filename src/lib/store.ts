@@ -27,6 +27,12 @@ import {
   apiCreateProject,
   apiUpdateProject,
   apiDeleteProject,
+  // 🔒 WP-006: ProjectTargetLabel CRUD — relazione Project ↔ Label.
+  // Entità isolata in questo task: nessun collegamento automatico con UI.
+  apiFetchProjectTargetLabels,
+  apiCreateProjectTargetLabel,
+  apiUpdateProjectTargetLabel,
+  apiDeleteProjectTargetLabel,
 } from "./api-client";
 import type {
   Project,
@@ -35,6 +41,14 @@ import type {
   ProjectUpdate,
 } from "@/types/project";
 import { rowToProject } from "@/types/project";
+// 🔒 WP-006 — ProjectTargetLabel: modello e mapper.
+import type {
+  ProjectTargetLabel,
+  ProjectTargetLabelInput,
+  ProjectTargetLabelRow,
+  ProjectTargetLabelUpdate,
+} from "@/types/project-target-label";
+import { rowToProjectTargetLabel } from "@/types/project-target-label";
 
 // ==================== TYPES ====================
 
@@ -1253,6 +1267,17 @@ interface AppState {
   updateProject: (id: string, updates: ProjectUpdate) => void;
   deleteProject: (id: string) => void;
 
+  // 🔒 WP-006 — Project Target Labels. Relazione Project ↔ Label.
+  // Entità ISOLATA in questo task: nessun collegamento con UI o Lifecycle
+  // Engine. I metodi sono chiamati solo dalla futura UI WP-007+.
+  // `projectTargetLabels` è un array piatto (non per-project) per semplicità;
+  // i consumer filtrano per `projectId` via selector.
+  projectTargetLabels: ProjectTargetLabel[];
+  loadProjectTargetLabels: (projectId: string) => Promise<void>;
+  addProjectTargetLabel: (input: ProjectTargetLabelInput) => string | null;
+  updateProjectTargetLabel: (id: string, updates: ProjectTargetLabelUpdate) => void;
+  deleteProjectTargetLabel: (id: string) => void;
+
   // Navigation
   setActiveTab: (tab: "dashboard" | "labels" | "artists" | "rankings" | "demos" | "pitch" | "profile") => void;
 
@@ -1801,6 +1826,8 @@ export const useAppStore = create<AppState>()(
       sentCampaigns: [] as SentCampaign[],
       // 🔒 Phase 1: Project state iniziale vuoto. Non viene seedato.
       projects: [] as Project[],
+      // 🔒 WP-006: Project Target Labels state iniziale vuoto.
+      projectTargetLabels: [] as ProjectTargetLabel[],
       lastReplyScanAt: null,
       newRepliesCount: 0,
       rankingsUpdatedAt: null as string | null,
@@ -2325,6 +2352,156 @@ export const useAppStore = create<AppState>()(
         // Background cloud write.
         apiDeleteProject(id).catch((err) =>
           console.error("[projects] deleteProject cloud sync failed:", err),
+        );
+      },
+
+      // ==================== PROJECT TARGET LABELS (WP-006) ====================
+      // 🔒 Entità ISOLATA: nessun syncToCloud(), nessun collegamento con altri
+      // moduli. Il cloud sync è gestito esclusivamente dalle funzioni
+      // apiFetchProjectTargetLabels / apiCreateProjectTargetLabel /
+      // apiUpdateProjectTargetLabel / apiDeleteProjectTargetLabel.
+      //
+      // Pattern: optimistic update + background cloud write. Se il cloud write
+      // fallisce, lo stato locale resta aggiornato (l'errore viene solo loggato).
+      // Al prossimo loadProjectTargetLabels() il cloud riallineerà lo stato.
+      //
+      // `projectTargetLabels` è un array piatto. `loadProjectTargetLabels(pid)`
+      // sostituisce SOLO le righe di quel projectId (merge per-project),
+      // preservando le righe degli altri project già caricate — questo
+      // permette di cambiare project nella Overview senza dover ricaricare tutto.
+
+      loadProjectTargetLabels: async (projectId) => {
+        if (typeof window === "undefined") return;
+        try {
+          const rows = await apiFetchProjectTargetLabels(projectId);
+          if (Array.isArray(rows)) {
+            const targetLabels = rows.map(rowToProjectTargetLabel);
+            set((state) => ({
+              // Sostituisci solo le righe del projectId richiesto; mantieni
+              // le righe degli altri project (cache locale cross-project).
+              projectTargetLabels: [
+                ...state.projectTargetLabels.filter(
+                  (tl) => tl.projectId !== projectId,
+                ),
+                ...targetLabels,
+              ],
+              lastSavedAt: new Date().toISOString(),
+            }));
+            console.log(
+              `[project-target-labels] loadProjectTargetLabels: loaded ${targetLabels.length} target labels for project ${projectId}`,
+            );
+          }
+        } catch (err) {
+          console.error("[project-target-labels] loadProjectTargetLabels failed:", err);
+        }
+      },
+
+      addProjectTargetLabel: (input) => {
+        const newId =
+          input.id && input.id.trim() !== ""
+            ? input.id
+            : `ptl_${genId()}`;
+        const now = new Date().toISOString();
+        const newTargetLabel: ProjectTargetLabel = {
+          id: newId,
+          projectId: input.project_id,
+          labelId: input.label_id,
+          createdAt: now,
+        };
+        // Defensive: se la (projectId, labelId) esiste già in stato locale,
+        // non duplicare. Ritorna null (coerente con la 409 del server).
+        const exists = get().projectTargetLabels.some(
+          (tl) =>
+            tl.projectId === newTargetLabel.projectId &&
+            tl.labelId === newTargetLabel.labelId,
+        );
+        if (exists) {
+          console.warn(
+            "[project-target-labels] addProjectTargetLabel: target label already exists locally",
+          );
+          return null;
+        }
+        // Optimistic update.
+        set((state) => ({
+          projectTargetLabels: [...state.projectTargetLabels, newTargetLabel],
+          lastSavedAt: now,
+        }));
+        // Background cloud write. Se fallisce (incluso 409), l'errore è solo
+        // loggato: al prossimo loadProjectTargetLabels() il cloud riallineerà.
+        apiCreateProjectTargetLabel({
+          id: newId,
+          project_id: newTargetLabel.projectId,
+          label_id: newTargetLabel.labelId,
+        })
+          .then((row) => {
+            if (row) {
+              const canonical = rowToProjectTargetLabel(row as ProjectTargetLabelRow);
+              set((state) => ({
+                projectTargetLabels: state.projectTargetLabels.map((tl) =>
+                  tl.id === newId ? { ...tl, ...canonical } : tl,
+                ),
+              }));
+            }
+          })
+          .catch((err) =>
+            console.error(
+              "[project-target-labels] addProjectTargetLabel cloud sync failed:",
+              err,
+            ),
+          );
+        return newId;
+      },
+
+      updateProjectTargetLabel: (id, updates) => {
+        const now = new Date().toISOString();
+        // Optimistic update.
+        set((state) => ({
+          projectTargetLabels: state.projectTargetLabels.map((tl) =>
+            tl.id === id
+              ? {
+                  ...tl,
+                  ...(updates.label_id !== undefined
+                    ? { labelId: updates.label_id }
+                    : {}),
+                }
+              : tl,
+          ),
+          lastSavedAt: now,
+        }));
+        // Background cloud write.
+        apiUpdateProjectTargetLabel(id, updates)
+          .then((row) => {
+            if (row) {
+              const canonical = rowToProjectTargetLabel(row as ProjectTargetLabelRow);
+              set((state) => ({
+                projectTargetLabels: state.projectTargetLabels.map((tl) =>
+                  tl.id === id ? { ...tl, ...canonical } : tl,
+                ),
+              }));
+            }
+          })
+          .catch((err) =>
+            console.error(
+              "[project-target-labels] updateProjectTargetLabel cloud sync failed:",
+              err,
+            ),
+          );
+      },
+
+      deleteProjectTargetLabel: (id) => {
+        // Optimistic update: rimuovi subito dalla lista locale.
+        set((state) => ({
+          projectTargetLabels: state.projectTargetLabels.filter(
+            (tl) => tl.id !== id,
+          ),
+          lastSavedAt: new Date().toISOString(),
+        }));
+        // Background cloud write.
+        apiDeleteProjectTargetLabel(id).catch((err) =>
+          console.error(
+            "[project-target-labels] deleteProjectTargetLabel cloud sync failed:",
+            err,
+          ),
         );
       },
 
@@ -3060,7 +3237,7 @@ export const useAppStore = create<AppState>()(
     }),
     {
       name: PRIMARY_KEY,
-      version: 20,  // 🔒 Phase 2: bump 19→20 per backfillare goal/progress sui projects esistenti
+      version: 21,  // 🔒 WP-006: bump 20→21 per backfillare projectTargetLabels su IndexedDB
       storage: createJSONStorage(() => idbStorage), // 🔒 Task 3: IndexedDB invece di localStorage
       migrate: (persisted: any, version: number) => {
         // 🔒 FASE D FIX v19: rimuovi labels dal persisted state (occupavano 4MB+ inutilmente)
@@ -3079,6 +3256,13 @@ export const useAppStore = create<AppState>()(
                 ? Math.max(0, Math.min(100, Math.round(p.progress)))
                 : 0,
           }));
+        }
+        // 🔒 WP-006: backfill projectTargetLabels = [] se mancante (project
+        // pre-WP-006 non avevano questo campo nel persisted state).
+        if (version < 21) {
+          if (!Array.isArray(persisted.projectTargetLabels)) {
+            persisted.projectTargetLabels = [];
+          }
         }
         if (version < 5) {
           if (persisted.demos) {
@@ -3330,6 +3514,10 @@ export const useAppStore = create<AppState>()(
         // riallineato dal cloud da loadProjects() quando la pagina /projects
         // viene montata).
         projects: state.projects,
+        // 🔒 WP-006: persist projectTargetLabels per UX (istantaneo al boot,
+        // riallineato dal cloud da loadProjectTargetLabels() quando la
+        // pagina Overview viene montata).
+        projectTargetLabels: state.projectTargetLabels,
         activeTab: state.activeTab,
         locale: state.locale,
         userProfile: state.userProfile,
@@ -3444,6 +3632,8 @@ export function setAutoBackupEmail(email: string | null): void {
       locale: state.locale,
       // 🔒 Phase 1: includi projects nello snapshot di backup automatico
       projects: state.projects,
+      // 🔒 WP-006: includi projectTargetLabels nello snapshot di backup
+      projectTargetLabels: state.projectTargetLabels,
     });
   }
 }
@@ -3460,7 +3650,8 @@ useAppStore.subscribe((state, prevState) => {
     state.savedPitches === prevState.savedPitches &&
     state.sentCampaigns === prevState.sentCampaigns &&
     state.rankingSnapshots === prevState.rankingSnapshots &&
-    state.projects === prevState.projects
+    state.projects === prevState.projects &&
+    state.projectTargetLabels === prevState.projectTargetLabels
   ) {
     return;
   }
@@ -3476,6 +3667,8 @@ useAppStore.subscribe((state, prevState) => {
     locale: state.locale,
     // 🔒 Phase 1: includi projects nello snapshot di backup automatico
     projects: state.projects,
+    // 🔒 WP-006: includi projectTargetLabels nello snapshot di backup
+    projectTargetLabels: state.projectTargetLabels,
   });
 });
 

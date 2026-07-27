@@ -17,6 +17,14 @@ import type {
   ProjectUpdate,
 } from "@/types/project";
 
+// 🔒 WP-006 — ProjectTargetLabel types (relazione Project ↔ Label).
+import type {
+  ProjectTargetLabel,
+  ProjectTargetLabelInput,
+  ProjectTargetLabelRow,
+  ProjectTargetLabelUpdate,
+} from "@/types/project-target-label";
+
 const API_BASE = "";
 
 /**
@@ -646,6 +654,125 @@ export async function apiDeleteProject(id: string): Promise<boolean> {
     return true;
   } catch (err) {
     console.error("[apiDeleteProject] failed:", err);
+    return false;
+  }
+}
+
+// ==================== PROJECT TARGET LABELS (WP-006) ====================
+//
+// 🔒 WP-006: relazione Project ↔ Label. Entità ISOLATA in questo task:
+// nessun collegamento automatico con Lifecycle Engine o UI. I metodi
+// restituiscono il dato (non solo boolean) quando il server ritorna la
+// riga creata/aggiornata, così lo store può allineare lo stato locale
+// con il payload canonico del server.
+
+export type {
+  ProjectTargetLabel,
+  ProjectTargetLabelInput,
+  ProjectTargetLabelRow,
+  ProjectTargetLabelUpdate,
+} from "@/types/project-target-label";
+
+/**
+ * GET /api/project-target-labels?project_id=<id> → lista target label
+ * per il project specificato.
+ *
+ * Ritorna `null` su errore (il chiamante lascia lo stato locale invariato).
+ */
+export async function apiFetchProjectTargetLabels(
+  projectId: string,
+): Promise<ProjectTargetLabelRow[] | null> {
+  try {
+    const res = await fetch(
+      `${API_BASE}/api/project-target-labels?project_id=${encodeURIComponent(projectId)}`,
+      {
+        cache: "no-store",
+        headers: { "Cache-Control": "no-cache, no-store, must-revalidate" },
+      },
+    );
+    if (!res.ok) {
+      console.error("[apiFetchProjectTargetLabels] failed:", res.status);
+      return null;
+    }
+    const data = await res.json();
+    return data.targetLabels || [];
+  } catch (err) {
+    console.error("[apiFetchProjectTargetLabels] network error:", err);
+    return null;
+  }
+}
+
+/**
+ * POST /api/project-target-labels → crea una nuova target label.
+ *
+ * Ritorna il `ProjectTargetLabelRow` creato dal server, o `null` su errore.
+ * Gestisce esplicitamente il caso 409 (unique violation): ritorna `null`
+ * ma logga come warning, non come errore — il chiamante può scegliere
+ * di ignorarlo (la target label esiste già, stato coerente).
+ */
+export async function apiCreateProjectTargetLabel(
+  input: ProjectTargetLabelInput,
+): Promise<ProjectTargetLabelRow | null> {
+  try {
+    const result = await writeDirect<{ targetLabel?: ProjectTargetLabelRow }>(
+      `${API_BASE}/api/project-target-labels`,
+      "POST",
+      input,
+    );
+    return result?.targetLabel ?? null;
+  } catch (err: any) {
+    // 409 = unique_violation: la (user_id, project_id, label_id) esiste già.
+    // Non è un errore fatale: lo stato cloud è coerente con la richiesta.
+    if (err?.status === 409) {
+      console.warn(
+        "[apiCreateProjectTargetLabel] target label already exists:",
+        err?.body,
+      );
+      return null;
+    }
+    console.error("[apiCreateProjectTargetLabel] failed:", err);
+    return null;
+  }
+}
+
+/**
+ * PATCH /api/project-target-labels?id=<id> → aggiorna una target label.
+ *
+ * Ritorna il `ProjectTargetLabelRow` aggiornato, o `null` su errore.
+ */
+export async function apiUpdateProjectTargetLabel(
+  id: string,
+  updates: ProjectTargetLabelUpdate,
+): Promise<ProjectTargetLabelRow | null> {
+  try {
+    const result = await writeDirect<{ targetLabel?: ProjectTargetLabelRow }>(
+      `${API_BASE}/api/project-target-labels?id=${encodeURIComponent(id)}`,
+      "PATCH",
+      updates,
+    );
+    return result?.targetLabel ?? null;
+  } catch (err) {
+    console.error("[apiUpdateProjectTargetLabel] failed:", err);
+    return null;
+  }
+}
+
+/**
+ * DELETE /api/project-target-labels?id=<id> → cancella una target label.
+ *
+ * Ritorna `true` se la delete è andata a buon fine, `false` altrimenti.
+ */
+export async function apiDeleteProjectTargetLabel(
+  id: string,
+): Promise<boolean> {
+  try {
+    await writeDirect(
+      `${API_BASE}/api/project-target-labels?id=${encodeURIComponent(id)}`,
+      "DELETE",
+    );
+    return true;
+  } catch (err) {
+    console.error("[apiDeleteProjectTargetLabel] failed:", err);
     return false;
   }
 }
