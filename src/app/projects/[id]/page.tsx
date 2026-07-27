@@ -61,6 +61,9 @@ import {
 import { LabelFinder } from "@/components/label-finder";
 import ArtistExplorer from "@/components/artist-explorer";
 import { ErrorBoundary } from "@/components/error-boundary";
+// 🔒 WP-003 — Project Context: provider che espone il Project corrente
+// a tutti i componenti figli. Nessun consumer ancora introdotto.
+import { ProjectProvider } from "@/context/project-context";
 
 /**
  * Mappa label → colore per il badge dello status (speculare alla lista).
@@ -323,8 +326,12 @@ export default function ProjectOverviewPage({ params }: OverviewPageProps) {
   const { stage, health, blockingIssues, nextAction, workspace } = lifecycle;
 
   // ---- Render: overview ----
+  // 🔒 WP-003 — Wrap dell'intero contenuto con ProjectProvider per
+  // esporre il Project corrente a tutti i componenti figli via context.
+  // Nessun consumer ancora introdotto; la UI è funzionalmente invariata.
   return (
-    <div className="min-h-screen bg-background text-foreground">
+    <ProjectProvider value={project}>
+      <div className="min-h-screen bg-background text-foreground">
       {/* Header */}
       <header className="sticky top-0 z-10 border-b border-border bg-card/80 backdrop-blur-sm">
         <div className="max-w-3xl mx-auto px-4 py-3 flex items-center gap-3">
@@ -632,6 +639,7 @@ export default function ProjectOverviewPage({ params }: OverviewPageProps) {
           </CardContent>
         </Card>
       </main>
-    </div>
+      </div>
+    </ProjectProvider>
   );
 }
