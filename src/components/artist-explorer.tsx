@@ -334,110 +334,139 @@ function ArtistCard({
       )
     : false;
 
+  // 🔒 WP-010R — Struttura semantica corretta:
+  //   <div className="card">
+  //     <button onClick={onSelect}>  ← contenuto (clickable, apre il dettaglio)
+  //       avatar + nome + badge + generi + stats
+  //     </button>
+  //     <div className="action-bar">  ← azioni (sibling, NON annidate)
+  //       <Button onClick={onSelect}>Open</Button>
+  //       {project && <Button>Add to Project</Button>}
+  //     </div>
+  //   </div>
+  // Nessun pulsante annidato. La card esterna è un <div> (non clickable):
+  // il click avviene sul <button> contenuto o sul pulsante "Open".
   return (
-    <div
-      role="button"
-      tabIndex={0}
-      onClick={() => onSelect(artist.id)}
-      onKeyDown={(e) => {
-        if (e.key === "Enter" || e.key === " ") {
-          e.preventDefault();
-          onSelect(artist.id);
-        }
-      }}
-      className="group flex w-full items-start gap-3 rounded-xl border border-border/40 bg-card/60 p-3 text-left transition-all hover:border-primary/30 hover:bg-card/80 focus:outline-none focus-visible:ring-2 focus-visible:ring-primary/40 cursor-pointer"
-    >
-      <ArtistAvatar artist={artist} size={64} />
+    <div className="group flex flex-col w-full rounded-xl border border-border/40 bg-card/60 transition-all hover:border-primary/30 hover:bg-card/80 overflow-hidden">
+      {/* Contenuto: button semantico che apre il dettaglio.
+          Ripristinato il pattern pre-WP-010 (<button> invece di
+          <div role="button">) per correttezza HTML. */}
+      <button
+        type="button"
+        onClick={() => onSelect(artist.id)}
+        className="flex w-full items-start gap-3 p-3 text-left focus:outline-none focus-visible:ring-2 focus-visible:ring-primary/40 focus-visible:ring-inset"
+      >
+        <ArtistAvatar artist={artist} size={64} />
 
-      <div className="min-w-0 flex-1">
-        {/* Name + trending flame + Add-to-Project button (WP-010) */}
-        <div className="flex items-center gap-1.5">
-          <h3 className="truncate text-sm font-semibold text-foreground">
-            {artist.name}
-          </h3>
-          {artist.trending && (
-            <Flame
-              className="h-3.5 w-3.5 shrink-0 text-amber-400"
-              aria-label="trending"
-            />
-          )}
-          {artist.isRemixerOnly && (
-            <span
-              className="shrink-0 rounded bg-fuchsia-500/15 px-1 py-0.5 text-[9px] font-semibold uppercase tracking-wide text-fuchsia-400"
-              title={it(locale, "Solo remix", "Remixer only")}
-            >
-              remix
-            </span>
-          )}
-          {/* 🔒 WP-010 — "Add to Project" button.
-              Visibile SOLO quando Artist Explorer è dentro un
-              <ProjectProvider> (project !== null). Fuori dal Provider
-              (tab Artists della home) non viene renderizzato e il
-              comportamento è IDENTICO a prima.
-              - Stop propagation: non triggera onSelect (apertura dettaglio).
-              - Se l'artista è già target del project corrente, mostra
-                stato "aggiunto" (icona Check, disabled).
-              - Al click: crea ProjectTargetArtist via store action
-                (optimistic update + background cloud write). */}
-          {project && (
-            <div className="ml-auto shrink-0">
-              {isAlreadyTarget ? (
-                <span
-                  className="inline-flex items-center gap-1 rounded-md px-1.5 py-0.5 text-[10px] font-medium text-emerald-400"
-                  title="Aggiunto al project"
-                >
-                  <Check className="h-3 w-3" />
-                  Added
-                </span>
-              ) : (
-                <Button
-                  type="button"
-                  variant="ghost"
-                  size="sm"
-                  className="h-7 gap-1 px-2 text-[10px] text-primary hover:text-primary"
-                  onClick={(e) => {
-                    e.stopPropagation();
-                    addProjectTargetArtist({
-                      project_id: project.id,
-                      artist_id: artist.id,
-                    });
-                  }}
-                  title="Aggiungi al project corrente"
-                >
-                  <Target className="h-3 w-3" />
-                  Add to Project
-                </Button>
-              )}
+        <div className="min-w-0 flex-1">
+          {/* Name + trending flame */}
+          <div className="flex items-center gap-1.5">
+            <h3 className="truncate text-sm font-semibold text-foreground">
+              {artist.name}
+            </h3>
+            {artist.trending && (
+              <Flame
+                className="h-3.5 w-3.5 shrink-0 text-amber-400"
+                aria-label="trending"
+              />
+            )}
+            {artist.isRemixerOnly && (
+              <span
+                className="shrink-0 rounded bg-fuchsia-500/15 px-1 py-0.5 text-[9px] font-semibold uppercase tracking-wide text-fuchsia-400"
+                title={it(locale, "Solo remix", "Remixer only")}
+              >
+                remix
+              </span>
+            )}
+          </div>
+
+          {/* Genre badges (top 3) */}
+          {topGenres.length > 0 && (
+            <div className="mt-1 flex flex-wrap gap-1">
+              {topGenres.map((g) => (
+                <GenrePill key={g} name={g} />
+              ))}
             </div>
           )}
-        </div>
 
-        {/* Genre badges (top 3) */}
-        {topGenres.length > 0 && (
-          <div className="mt-1 flex flex-wrap gap-1">
-            {topGenres.map((g) => (
-              <GenrePill key={g} name={g} />
-            ))}
+          {/* Stats line */}
+          <p className="mt-1.5 text-[11px] text-muted-foreground">
+            <span className="font-medium text-foreground/80">{trackCount}</span>{" "}
+            {it(locale, "tracce", "tracks")}
+            {" · "}
+            <span className="font-medium text-foreground/80">{labelCount}</span>{" "}
+            {it(locale, "label", "labels")}
+            {artist.bestPosition && artist.bestPosition > 0 ? (
+              <>
+                {" · "}
+                <span className="font-medium text-emerald-400">
+                  #{artist.bestPosition}
+                </span>{" "}
+                {it(locale, "best pos", "best pos")}
+              </>
+            ) : null}
+          </p>
+        </div>
+      </button>
+
+      {/* 🔒 WP-010R — Action bar (sibling del <button>, non annidata).
+          Contiene le azioni disponibili per la card:
+          - "Open": apre il dettaglio (chiama onSelect, stesso comportamento
+            del click sul corpo).
+          - "Add to Project" / "Added": visibile SOLO quando Artist Explorer
+            è dentro un <ProjectProvider> (project !== null). Fuori dal
+            Provider non viene renderizzato e il comportamento è IDENTICO
+            a prima.
+          L'action bar ha un border-top per separarla visivamente dal
+          contenuto. */}
+      <div className="flex items-center gap-1 border-t border-border/30 px-3 py-1.5 bg-card/40">
+        <Button
+          type="button"
+          variant="ghost"
+          size="sm"
+          className="h-7 gap-1 px-2 text-[10px] text-muted-foreground hover:text-foreground"
+          onClick={() => onSelect(artist.id)}
+          title="Apri dettaglio artista"
+        >
+          <ExternalLink className="h-3 w-3" />
+          Open
+        </Button>
+
+        {/* 🔒 WP-010 — "Add to Project" button (riportato nella action bar).
+            - Se l'artista è già target del project corrente, mostra stato
+              "aggiunto" (icona Check, disabled).
+            - Al click: crea ProjectTargetArtist via store action
+              (optimistic update + background cloud write). */}
+        {project && (
+          <div className="ml-auto shrink-0">
+            {isAlreadyTarget ? (
+              <span
+                className="inline-flex items-center gap-1 rounded-md px-1.5 py-0.5 text-[10px] font-medium text-emerald-400"
+                title="Aggiunto al project"
+              >
+                <Check className="h-3 w-3" />
+                Added
+              </span>
+            ) : (
+              <Button
+                type="button"
+                variant="ghost"
+                size="sm"
+                className="h-7 gap-1 px-2 text-[10px] text-primary hover:text-primary"
+                onClick={() => {
+                  addProjectTargetArtist({
+                    project_id: project.id,
+                    artist_id: artist.id,
+                  });
+                }}
+                title="Aggiungi al project corrente"
+              >
+                <Target className="h-3 w-3" />
+                Add to Project
+              </Button>
+            )}
           </div>
         )}
-
-        {/* Stats line */}
-        <p className="mt-1.5 text-[11px] text-muted-foreground">
-          <span className="font-medium text-foreground/80">{trackCount}</span>{" "}
-          {it(locale, "tracce", "tracks")}
-          {" · "}
-          <span className="font-medium text-foreground/80">{labelCount}</span>{" "}
-          {it(locale, "label", "labels")}
-          {artist.bestPosition && artist.bestPosition > 0 ? (
-            <>
-              {" · "}
-              <span className="font-medium text-emerald-400">
-                #{artist.bestPosition}
-              </span>{" "}
-              {it(locale, "best pos", "best pos")}
-            </>
-          ) : null}
-        </p>
       </div>
     </div>
   );
