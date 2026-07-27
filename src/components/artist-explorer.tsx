@@ -68,6 +68,9 @@ import {
   ListMusic,
   Building2,
   BarChart3,
+  // 🔒 WP-010 — Icone per il pulsante "Add to Project" in ArtistCard.
+  Check,
+  Target,
 } from "lucide-react";
 
 // ============================================================================
@@ -313,16 +316,41 @@ function ArtistCard({
   const labelCount = artist.labelsPublishedOn?.length ?? 0;
   const topGenres = (artist.genres || []).slice(0, 3);
 
+  // 🔒 WP-010 — Project Context. `project` è null quando Artist Explorer è
+  // montato fuori da <ProjectProvider> (es. tab Artists della home). In
+  // quel caso il pulsante "Add to Project" non viene renderizzato e il
+  // comportamento è IDENTICO a prima.
+  const project = useProject();
+  // Leggiamo dallo store direttamente (come fa Label Finder in WP-007):
+  // pattern coerente, niente prop drilling.
+  const projectTargetArtists = useAppStore((s) => s.projectTargetArtists);
+  const addProjectTargetArtist = useAppStore((s) => s.addProjectTargetArtist);
+
+  // Verifica se questo artista è già target del project corrente.
+  const isAlreadyTarget = project
+    ? projectTargetArtists.some(
+        (ta) =>
+          ta.projectId === project.id && ta.artistId === artist.id,
+      )
+    : false;
+
   return (
-    <button
-      type="button"
+    <div
+      role="button"
+      tabIndex={0}
       onClick={() => onSelect(artist.id)}
-      className="group flex w-full items-start gap-3 rounded-xl border border-border/40 bg-card/60 p-3 text-left transition-all hover:border-primary/30 hover:bg-card/80 focus:outline-none focus-visible:ring-2 focus-visible:ring-primary/40"
+      onKeyDown={(e) => {
+        if (e.key === "Enter" || e.key === " ") {
+          e.preventDefault();
+          onSelect(artist.id);
+        }
+      }}
+      className="group flex w-full items-start gap-3 rounded-xl border border-border/40 bg-card/60 p-3 text-left transition-all hover:border-primary/30 hover:bg-card/80 focus:outline-none focus-visible:ring-2 focus-visible:ring-primary/40 cursor-pointer"
     >
       <ArtistAvatar artist={artist} size={64} />
 
       <div className="min-w-0 flex-1">
-        {/* Name + trending flame */}
+        {/* Name + trending flame + Add-to-Project button (WP-010) */}
         <div className="flex items-center gap-1.5">
           <h3 className="truncate text-sm font-semibold text-foreground">
             {artist.name}
@@ -340,6 +368,47 @@ function ArtistCard({
             >
               remix
             </span>
+          )}
+          {/* 🔒 WP-010 — "Add to Project" button.
+              Visibile SOLO quando Artist Explorer è dentro un
+              <ProjectProvider> (project !== null). Fuori dal Provider
+              (tab Artists della home) non viene renderizzato e il
+              comportamento è IDENTICO a prima.
+              - Stop propagation: non triggera onSelect (apertura dettaglio).
+              - Se l'artista è già target del project corrente, mostra
+                stato "aggiunto" (icona Check, disabled).
+              - Al click: crea ProjectTargetArtist via store action
+                (optimistic update + background cloud write). */}
+          {project && (
+            <div className="ml-auto shrink-0">
+              {isAlreadyTarget ? (
+                <span
+                  className="inline-flex items-center gap-1 rounded-md px-1.5 py-0.5 text-[10px] font-medium text-emerald-400"
+                  title="Aggiunto al project"
+                >
+                  <Check className="h-3 w-3" />
+                  Added
+                </span>
+              ) : (
+                <Button
+                  type="button"
+                  variant="ghost"
+                  size="sm"
+                  className="h-7 gap-1 px-2 text-[10px] text-primary hover:text-primary"
+                  onClick={(e) => {
+                    e.stopPropagation();
+                    addProjectTargetArtist({
+                      project_id: project.id,
+                      artist_id: artist.id,
+                    });
+                  }}
+                  title="Aggiungi al project corrente"
+                >
+                  <Target className="h-3 w-3" />
+                  Add to Project
+                </Button>
+              )}
+            </div>
           )}
         </div>
 
@@ -370,7 +439,7 @@ function ArtistCard({
           ) : null}
         </p>
       </div>
-    </button>
+    </div>
   );
 }
 

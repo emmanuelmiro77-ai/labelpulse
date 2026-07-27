@@ -65,7 +65,8 @@ import { ErrorBoundary } from "@/components/error-boundary";
 // a tutti i componenti figli. Nessun consumer ancora introdotto.
 import { ProjectProvider } from "@/context/project-context";
 // 🔒 WP-007 — Icone per la sezione Target Labels.
-import { Trash2, Target as TargetIcon } from "lucide-react";
+// 🔒 WP-010 — UserIcon per la sezione Target Artists.
+import { Trash2, Target as TargetIcon, User as UserIcon } from "lucide-react";
 
 /**
  * Mappa label → colore per il badge dello status (speculare alla lista).
@@ -221,6 +222,12 @@ export default function ProjectOverviewPage({ params }: OverviewPageProps) {
   const allLabels = useAppStore((s) => s.labels);
   const loadProjectTargetLabels = useAppStore((s) => s.loadProjectTargetLabels);
   const deleteProjectTargetLabel = useAppStore((s) => s.deleteProjectTargetLabel);
+  // 🔒 WP-010 — Target Artists: stato e azioni per la sezione dedicata.
+  // Pattern speculare a Target Labels (WP-007).
+  const projectTargetArtists = useAppStore((s) => s.projectTargetArtists);
+  const allArtists = useAppStore((s) => s.artists);
+  const loadProjectTargetArtists = useAppStore((s) => s.loadProjectTargetArtists);
+  const deleteProjectTargetArtist = useAppStore((s) => s.deleteProjectTargetArtist);
 
   const [projectId, setProjectId] = useState<string | null>(null);
   const [isLoading, setIsLoading] = useState<boolean>(true);
@@ -262,6 +269,15 @@ export default function ProjectOverviewPage({ params }: OverviewPageProps) {
       console.error("[project-target-labels] load on mount failed:", err),
     );
   }, [projectId, loadProjectTargetLabels]);
+
+  // 🔒 WP-010 — Carica le target artists del project corrente dal cloud.
+  // Pattern speculare a WP-007 (target labels).
+  useEffect(() => {
+    if (!projectId) return;
+    loadProjectTargetArtists(projectId).catch((err) =>
+      console.error("[project-target-artists] load on mount failed:", err),
+    );
+  }, [projectId, loadProjectTargetArtists]);
 
   const project = useMemo(() => {
     if (!projectId) return null;
@@ -584,6 +600,13 @@ export default function ProjectOverviewPage({ params }: OverviewPageProps) {
                             (tl) => tl.projectId === project.id,
                           )
                         : [];
+                      // 🔒 WP-010 — Filtra le target artists del project
+                      // corrente. Pattern speculare a WP-007.
+                      const projectTargetArtistsList = project
+                        ? projectTargetArtists.filter(
+                            (ta) => ta.projectId === project.id,
+                          )
+                        : [];
                       return (
                         <div key={sectionId} className="space-y-4">
                           <div className="flex items-center gap-2">
@@ -663,6 +686,84 @@ export default function ProjectOverviewPage({ params }: OverviewPageProps) {
                                         className="h-7 w-7 shrink-0 text-muted-foreground hover:text-red-400 hover:bg-red-500/10"
                                         onClick={() =>
                                           deleteProjectTargetLabel(tl.id)
+                                        }
+                                        title="Rimuovi dal project"
+                                      >
+                                        <Trash2 className="h-3.5 w-3.5" />
+                                      </Button>
+                                    </li>
+                                  );
+                                })}
+                              </ul>
+                            )}
+                          </div>
+
+                          {/* 🔒 WP-010 — Sezione "Target Artists".
+                              Mostra gli artisti aggiunti al project corrente
+                              tramite il pulsante "Add to Project" di Artist
+                              Explorer. Legge esclusivamente dallo store
+                              (projectTargetArtists filtrate per project.id).
+                              Nessuna nuova API chiamata qui: il load avviene
+                              nell'useEffect al mount della pagina.
+                              Pattern speculare a Target Labels (WP-007). */}
+                          <div className="rounded-xl border border-border/30 bg-card/40 p-4">
+                            <div className="flex items-center gap-2 mb-3">
+                              <UserIcon className="h-4 w-4 text-primary" />
+                              <h4 className="font-semibold text-foreground text-sm">
+                                Target Artists
+                              </h4>
+                              <span className="text-xs text-muted-foreground/70 font-mono ml-auto">
+                                {projectTargetArtistsList.length}{" "}
+                                {projectTargetArtistsList.length === 1
+                                  ? "artist"
+                                  : "artists"}
+                              </span>
+                            </div>
+                            {projectTargetArtistsList.length === 0 ? (
+                              <div className="text-center py-6 text-muted-foreground/60 text-sm">
+                                <UserIcon className="h-8 w-8 mx-auto mb-2 opacity-40" />
+                                <p>
+                                  Nessun target artist ancora aggiunto.
+                                </p>
+                                <p className="text-xs mt-1">
+                                  Usa il pulsante{" "}
+                                  <span className="text-primary">
+                                    &ldquo;Add to Project&rdquo;
+                                  </span>{" "}
+                                  nelle card sopra per aggiungere artisti a
+                                  questo project.
+                                </p>
+                              </div>
+                            ) : (
+                              <ul className="space-y-1.5">
+                                {projectTargetArtistsList.map((ta) => {
+                                  // Risolvi artist_id → nome artista leggendo
+                                  // dall'array `artists` nello store (globale,
+                                  // popolato da IndexedDB + scraper Beatport).
+                                  const artist = allArtists.find(
+                                    (a) => a.id === ta.artistId,
+                                  );
+                                  const artistName = artist?.name ?? ta.artistId;
+                                  return (
+                                    <li
+                                      key={ta.id}
+                                      className="flex items-center justify-between gap-2 rounded-lg border border-border/20 bg-secondary/20 px-3 py-2"
+                                    >
+                                      <div className="flex-1 min-w-0">
+                                        <p className="text-sm font-medium text-foreground truncate">
+                                          {artistName}
+                                        </p>
+                                        <p className="text-[10px] text-muted-foreground/70 font-mono">
+                                          Aggiunto il{" "}
+                                          {formatDate(ta.createdAt)}
+                                        </p>
+                                      </div>
+                                      <Button
+                                        variant="ghost"
+                                        size="icon"
+                                        className="h-7 w-7 shrink-0 text-muted-foreground hover:text-red-400 hover:bg-red-500/10"
+                                        onClick={() =>
+                                          deleteProjectTargetArtist(ta.id)
                                         }
                                         title="Rimuovi dal project"
                                       >
