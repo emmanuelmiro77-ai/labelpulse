@@ -64,6 +64,8 @@ import { ErrorBoundary } from "@/components/error-boundary";
 // 🔒 WP-003 — Project Context: provider che espone il Project corrente
 // a tutti i componenti figli. Nessun consumer ancora introdotto.
 import { ProjectProvider } from "@/context/project-context";
+// 🔒 WP-007 — Icone per la sezione Target Labels.
+import { Trash2, Target as TargetIcon } from "lucide-react";
 
 /**
  * Mappa label → colore per il badge dello status (speculare alla lista).
@@ -214,6 +216,11 @@ interface OverviewPageProps {
 export default function ProjectOverviewPage({ params }: OverviewPageProps) {
   const projects = useAppStore((s) => s.projects);
   const loadProjects = useAppStore((s) => s.loadProjects);
+  // 🔒 WP-007 — Target Labels: stato e azioni per la sezione dedicata.
+  const projectTargetLabels = useAppStore((s) => s.projectTargetLabels);
+  const allLabels = useAppStore((s) => s.labels);
+  const loadProjectTargetLabels = useAppStore((s) => s.loadProjectTargetLabels);
+  const deleteProjectTargetLabel = useAppStore((s) => s.deleteProjectTargetLabel);
 
   const [projectId, setProjectId] = useState<string | null>(null);
   const [isLoading, setIsLoading] = useState<boolean>(true);
@@ -244,6 +251,17 @@ export default function ProjectOverviewPage({ params }: OverviewPageProps) {
       cancelled = true;
     };
   }, [params, loadProjects]);
+
+  // 🔒 WP-007 — Carica le target labels del project corrente dal cloud.
+  // Si attiva quando projectId diventa disponibile. È idempotente: se lo
+  // store ha già dati (persistiti in IndexedDB), l'utente li vede subito;
+  // poi il cloud riallinea.
+  useEffect(() => {
+    if (!projectId) return;
+    loadProjectTargetLabels(projectId).catch((err) =>
+      console.error("[project-target-labels] load on mount failed:", err),
+    );
+  }, [projectId, loadProjectTargetLabels]);
 
   const project = useMemo(() => {
     if (!projectId) return null;
@@ -558,8 +576,16 @@ export default function ProjectOverviewPage({ params }: OverviewPageProps) {
                     // card placeholder. Gli altri section id restano
                     // placeholder con badge "Coming next".
                     if (sectionId === "targets") {
+                      // 🔒 WP-007 — Filtra le target labels del project
+                      // corrente. `projectTargetLabels` è un array piatto
+                      // nello store; filtriamo per projectId qui.
+                      const projectTargets = project
+                        ? projectTargetLabels.filter(
+                            (tl) => tl.projectId === project.id,
+                          )
+                        : [];
                       return (
-                        <div key={sectionId} className="space-y-2">
+                        <div key={sectionId} className="space-y-4">
                           <div className="flex items-center gap-2">
                             <h3 className="font-semibold text-foreground text-sm">
                               {sectionMeta(sectionId).label}
@@ -571,6 +597,83 @@ export default function ProjectOverviewPage({ params }: OverviewPageProps) {
                             ) : null}
                           </div>
                           <TargetsWorkspace />
+
+                          {/* 🔒 WP-007 — Sezione "Target Labels".
+                              Mostra le label aggiunte al project corrente
+                              tramite il pulsante "Add to Project" di Label
+                              Finder. Legge esclusivamente dallo store
+                              (projectTargetLabels filtrate per project.id).
+                              Nessuna nuova API chiamata qui: il load avviene
+                              nell'useEffect al mount della pagina. */}
+                          <div className="rounded-xl border border-border/30 bg-card/40 p-4">
+                            <div className="flex items-center gap-2 mb-3">
+                              <TargetIcon className="h-4 w-4 text-primary" />
+                              <h4 className="font-semibold text-foreground text-sm">
+                                Target Labels
+                              </h4>
+                              <span className="text-xs text-muted-foreground/70 font-mono ml-auto">
+                                {projectTargets.length}{" "}
+                                {projectTargets.length === 1
+                                  ? "label"
+                                  : "labels"}
+                              </span>
+                            </div>
+                            {projectTargets.length === 0 ? (
+                              <div className="text-center py-6 text-muted-foreground/60 text-sm">
+                                <TargetIcon className="h-8 w-8 mx-auto mb-2 opacity-40" />
+                                <p>
+                                  Nessuna target label ancora aggiunta.
+                                </p>
+                                <p className="text-xs mt-1">
+                                  Usa il pulsante{" "}
+                                  <span className="text-primary">
+                                    &ldquo;Add to Project&rdquo;
+                                  </span>{" "}
+                                  nelle card sopra per aggiungere label a
+                                  questo project.
+                                </p>
+                              </div>
+                            ) : (
+                              <ul className="space-y-1.5">
+                                {projectTargets.map((tl) => {
+                                  // Risolvi label_id → nome label leggendo
+                                  // dall'array `labels` nello store (globale,
+                                  // include seed + cloud + custom).
+                                  const label = allLabels.find(
+                                    (l) => l.id === tl.labelId,
+                                  );
+                                  const labelName = label?.name ?? tl.labelId;
+                                  return (
+                                    <li
+                                      key={tl.id}
+                                      className="flex items-center justify-between gap-2 rounded-lg border border-border/20 bg-secondary/20 px-3 py-2"
+                                    >
+                                      <div className="flex-1 min-w-0">
+                                        <p className="text-sm font-medium text-foreground truncate">
+                                          {labelName}
+                                        </p>
+                                        <p className="text-[10px] text-muted-foreground/70 font-mono">
+                                          Aggiunta il{" "}
+                                          {formatDate(tl.createdAt)}
+                                        </p>
+                                      </div>
+                                      <Button
+                                        variant="ghost"
+                                        size="icon"
+                                        className="h-7 w-7 shrink-0 text-muted-foreground hover:text-red-400 hover:bg-red-500/10"
+                                        onClick={() =>
+                                          deleteProjectTargetLabel(tl.id)
+                                        }
+                                        title="Rimuovi dal project"
+                                      >
+                                        <Trash2 className="h-3.5 w-3.5" />
+                                      </Button>
+                                    </li>
+                                  );
+                                })}
+                              </ul>
+                            )}
+                          </div>
                         </div>
                       );
                     }

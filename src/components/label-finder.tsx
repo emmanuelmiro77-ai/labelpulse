@@ -459,7 +459,7 @@ function LabelDiscoveryIcons({
 }
 
 export function LabelFinder() {
-  const { labels, demos, releases, addLabel, updateLabel, deleteLabel, toggleFavoriteLabel, addDemo, locale, getGenres, setActiveTab, userProfile, setUserProfile, gmailAuth, setGmailAuth, selectedLabelId, setSelectedLabelId, selectedArtistId, setSelectedArtistId, setNavigationReturnTo, artists } =
+  const { labels, demos, releases, addLabel, updateLabel, deleteLabel, toggleFavoriteLabel, addDemo, locale, getGenres, setActiveTab, userProfile, setUserProfile, gmailAuth, setGmailAuth, selectedLabelId, setSelectedLabelId, selectedArtistId, setSelectedArtistId, setNavigationReturnTo, artists, projectTargetLabels, addProjectTargetLabel } =
     useAppStore();
   // 🔒 WP-004 — Project Context. `project` è null quando Label Finder è
   // montato fuori da <ProjectProvider> (es. tab Labels della home). In
@@ -2080,6 +2080,53 @@ export function LabelFinder() {
                         onClick={(e) => { e.stopPropagation(); setDeleteConfirmId(label.id); }}>
                         <Trash2 className="h-3 w-3" />
                       </Button>
+                    </div>
+                  )}
+                  {/* 🔒 WP-007 — "Add to Project" button.
+                      Visibile SOLO quando Label Finder è dentro un
+                      <ProjectProvider> (project !== null). Fuori dal
+                      Provider (tab Labels della home) non viene renderizzato
+                      e il comportamento è IDENTICO a prima.
+                      - Stop propagation: non triggera openDetail.
+                      - Se la label è già target del project corrente,
+                        mostra stato "aggiunto" (icona Check, disabled).
+                      - Al click: crea ProjectTargetLabel via store action
+                        (optimistic update + background cloud write). */}
+                  {project && (
+                    <div className="flex items-center gap-1 shrink-0">
+                      {projectTargetLabels.some(
+                        (tl) =>
+                          tl.projectId === project.id &&
+                          tl.labelId === label.id,
+                      ) ? (
+                        <Button
+                          variant="ghost"
+                          size="sm"
+                          className="h-7 gap-1 text-emerald-400 cursor-default"
+                          onClick={(e) => e.stopPropagation()}
+                          title="Aggiunta al project"
+                        >
+                          <Check className="h-3 w-3" />
+                          <span className="text-[10px]">Added</span>
+                        </Button>
+                      ) : (
+                        <Button
+                          variant="ghost"
+                          size="sm"
+                          className="h-7 gap-1 text-primary hover:text-primary"
+                          onClick={(e) => {
+                            e.stopPropagation();
+                            addProjectTargetLabel({
+                              project_id: project.id,
+                              label_id: label.id,
+                            });
+                          }}
+                          title="Aggiungi al project corrente"
+                        >
+                          <Target className="h-3 w-3" />
+                          <span className="text-[10px]">Add to Project</span>
+                        </Button>
+                      )}
                     </div>
                   )}
                 </div>
