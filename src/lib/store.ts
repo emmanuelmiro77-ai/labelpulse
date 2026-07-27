@@ -49,6 +49,9 @@ import type {
   ProjectTargetLabelUpdate,
 } from "@/types/project-target-label";
 import { rowToProjectTargetLabel } from "@/types/project-target-label";
+// 🔒 WP-008R — Calcolo centralizzato del progress del Project.
+// Tutta la logica decisionale vive nel modulo dedicato.
+import { calculateProjectProgress } from "@/lib/project-progress";
 
 // ==================== TYPES ====================
 
@@ -402,52 +405,27 @@ export interface SentCampaign {
 const genId = () =>
   Date.now().toString(36) + Math.random().toString(36).slice(2, 7);
 
-// 🔒 WP-008 — Progress automatico del Project basato sulle Target Labels.
-//
-// Mappa specificata dal task:
-//   0 target      → 0%
-//   1-4 target    → 10%
-//   5-9 target    → 20%
-//   >=10 target   → 30%
-//
-// Funzione PURA: dato il numero di target labels, ritorna il progress.
-// Non legge lo store, non ha side effect. Facilmente testabile.
-function progressFromTargetCount(count: number): number {
-  if (count <= 0) return 0;
-  if (count <= 4) return 10;
-  if (count <= 9) return 20;
-  return 30;
-}
-
 /**
- * 🔒 WP-008 — Ricalcola e persiste il `progress` di un Project in base
- * al numero corrente di target labels.
+ * 🔒 WP-008R — Ricalcola e persiste il `progress` di un Project.
+ *
+ * Thin wrapper attorno a `calculateProjectProgress` (da `@/lib/project-progress`):
+ * tutta la logica decisionale vive nel modulo dedicato. Questa funzione
+ * si occupa solo di:
+ *   1. Leggere lo stato corrente via `useAppStore.getState()`
+ *   2. Delegare il calcolo a `calculateProjectProgress(projectId, state)`
+ *   3. Se il progress è cambiato, aggiornare `projects[i].progress` nello
+ *      stato locale (optimistic) + pushare al cloud via `apiUpdateProject`
  *
  * Da chiamare dopo ogni add/delete/load di target labels per un project.
- * Esegue:
- *   1. Conta le target labels del project dallo stato CORRENTE (post-update)
- *   2. Calcola il nuovo progress con `progressFromTargetCount`
- *   3. Se il progress è cambiato, aggiorna `projects[i].progress` nello
- *      stato locale (optimistic)
- *   4. Pusha il nuovo progress al cloud via `apiUpdateProject` in
- *      background (no await, no blocco)
- *
- * Non ritorna nulla. Errori di cloud sync sono solo loggati: al prossimo
- * loadProjects() il cloud riallineerà.
- *
- * NOTA: questa funzione legge lo stato tramite `useAppStore.getState()`
- * per evitare di passare `get` come parametro (signature più pulita).
- * Non è una funzione pura ma è deterministica rispetto allo stato.
+ * Non ritorna nulla. Errori di cloud sync sono solo loggati.
  */
 function recomputeProjectProgress(projectId: string): void {
   const state = useAppStore.getState();
   const project = state.projects.find((p) => p.id === projectId);
   if (!project) return;
 
-  const targetCount = state.projectTargetLabels.filter(
-    (tl) => tl.projectId === projectId,
-  ).length;
-  const newProgress = progressFromTargetCount(targetCount);
+  // 🔒 WP-008R — Calcolo delegato al modulo centralizzato.
+  const newProgress = calculateProjectProgress(projectId, state);
 
   // No-op se il progress non è cambiato. Evita write inutili al cloud
   // e re-render della UI (la progress bar resta stabile).
