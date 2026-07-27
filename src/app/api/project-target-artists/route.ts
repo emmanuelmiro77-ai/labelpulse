@@ -2,24 +2,24 @@ import { NextRequest, NextResponse } from "next/server";
 import { getAdminClient } from "@/lib/supabase-admin";
 
 /**
- * API /api/project-target-labels — CRUD per la tabella `project_target_labels`
+ * API /api/project-target-artists — CRUD per la tabella `project_target_artists`
  *
- * 🔒 WP-006: relazione Project ↔ Label. Entità ISOLATA in questo task:
+ * 🔒 WP-009: relazione Project ↔ Artist. Entità ISOLATA in questo task:
  * nessun collegamento automatico con Lifecycle Engine o UI.
  *
  * Tutte le operazioni sono autenticate via NextAuth session.
  * Lo userId della sessione viene usato come partition key (RLS).
- * Impossibile leggere/scrivere target label di un altro utente.
+ * Impossibile leggere/scrivere target artist di un altro utente.
  *
- * GET    /api/project-target-labels?project_id=<id>  → lista target label per project
- * POST   /api/project-target-labels                  → crea una nuova target label
- * PATCH  /api/project-target-labels?id=<id>          → aggiorna una target label esistente
- * DELETE /api/project-target-labels?id=<id>          → cancella una target label
+ * GET    /api/project-target-artists?project_id=<id>  → lista target artist per project
+ * POST   /api/project-target-artists                  → crea una nuova target artist
+ * PATCH  /api/project-target-artists?id=<id>          → aggiorna una target artist esistente
+ * DELETE /api/project-target-artists?id=<id>          → cancella una target artist
  */
 
 // Colonne mutabili via PATCH. Filtriamo esplicitamente per evitare
 // sovrascritture di campi immutabili (id, user_id, project_id, created_at).
-const PATCHABLE_COLUMNS = ["label_id"] as const;
+const PATCHABLE_COLUMNS = ["artist_id"] as const;
 
 export async function GET(req: NextRequest) {
   const { supabase, email, userId } = await getAdminClient();
@@ -38,18 +38,18 @@ export async function GET(req: NextRequest) {
   }
 
   const { data, error } = await supabase
-    .from("project_target_labels")
+    .from("project_target_artists")
     .select("*")
     .eq("user_id", userId)
     .eq("project_id", projectId)
     .order("created_at", { ascending: true });
 
   if (error) {
-    console.error("[/api/project-target-labels GET]", error);
+    console.error("[/api/project-target-artists GET]", error);
     return NextResponse.json({ error: error.message }, { status: 500 });
   }
 
-  return NextResponse.json({ targetLabels: data || [] });
+  return NextResponse.json({ targetArtists: data || [] });
 }
 
 export async function POST(req: NextRequest) {
@@ -60,7 +60,7 @@ export async function POST(req: NextRequest) {
 
   try {
     const body = await req.json();
-    const { id, project_id, label_id } = body || {};
+    const { id, project_id, artist_id } = body || {};
 
     if (
       !project_id ||
@@ -72,9 +72,9 @@ export async function POST(req: NextRequest) {
         { status: 400 },
       );
     }
-    if (!label_id || typeof label_id !== "string" || label_id.trim() === "") {
+    if (!artist_id || typeof artist_id !== "string" || artist_id.trim() === "") {
       return NextResponse.json(
-        { error: "Missing required field: label_id" },
+        { error: "Missing required field: artist_id" },
         { status: 400 },
       );
     }
@@ -82,26 +82,26 @@ export async function POST(req: NextRequest) {
     const finalId =
       id && typeof id === "string" && id.trim() !== ""
         ? String(id)
-        : `ptl_${Date.now()}_${Math.random().toString(36).slice(2, 8)}`;
+        : `pta_${Date.now()}_${Math.random().toString(36).slice(2, 8)}`;
 
     const { data, error } = await supabase
-      .from("project_target_labels")
+      .from("project_target_artists")
       .insert({
         id: finalId,
         user_id: userId,
         project_id: String(project_id).trim(),
-        label_id: String(label_id).trim(),
+        artist_id: String(artist_id).trim(),
       })
       .select()
       .single();
 
     if (error) {
-      console.error("[/api/project-target-labels POST]", error);
-      // 23505 = unique_violation: la (user_id, project_id, label_id) esiste già
+      console.error("[/api/project-target-artists POST]", error);
+      // 23505 = unique_violation: la (user_id, project_id, artist_id) esiste già
       if (error.code === "23505") {
         return NextResponse.json(
           {
-            error: "Target label already exists for this project",
+            error: "Target artist already exists for this project",
             code: error.code,
           },
           { status: 409 },
@@ -110,9 +110,9 @@ export async function POST(req: NextRequest) {
       return NextResponse.json({ error: error.message }, { status: 500 });
     }
 
-    return NextResponse.json({ targetLabel: data });
+    return NextResponse.json({ targetArtist: data });
   } catch (err) {
-    console.error("[/api/project-target-labels POST] exception:", err);
+    console.error("[/api/project-target-artists POST] exception:", err);
     return NextResponse.json({ error: "Internal server error" }, { status: 500 });
   }
 }
@@ -152,13 +152,13 @@ export async function PATCH(req: NextRequest) {
       );
     }
 
-    // Sanitizza label_id se presente.
-    if ("label_id" in updates && typeof updates.label_id === "string") {
-      updates.label_id = updates.label_id.trim();
+    // Sanitizza artist_id se presente.
+    if ("artist_id" in updates && typeof updates.artist_id === "string") {
+      updates.artist_id = updates.artist_id.trim();
     }
 
     const { data, error } = await supabase
-      .from("project_target_labels")
+      .from("project_target_artists")
       .update(updates)
       .eq("id", id)
       .eq("user_id", userId)
@@ -166,11 +166,11 @@ export async function PATCH(req: NextRequest) {
       .single();
 
     if (error) {
-      console.error("[/api/project-target-labels PATCH]", error);
+      console.error("[/api/project-target-artists PATCH]", error);
       if (error.code === "23505") {
         return NextResponse.json(
           {
-            error: "Target label already exists for this project",
+            error: "Target artist already exists for this project",
             code: error.code,
           },
           { status: 409 },
@@ -181,14 +181,14 @@ export async function PATCH(req: NextRequest) {
 
     if (!data) {
       return NextResponse.json(
-        { error: "Target label not found (or not owned by user)" },
+        { error: "Target artist not found (or not owned by user)" },
         { status: 404 },
       );
     }
 
-    return NextResponse.json({ targetLabel: data });
+    return NextResponse.json({ targetArtist: data });
   } catch (err) {
-    console.error("[/api/project-target-labels PATCH] exception:", err);
+    console.error("[/api/project-target-artists PATCH] exception:", err);
     return NextResponse.json({ error: "Internal server error" }, { status: 500 });
   }
 }
@@ -207,20 +207,20 @@ export async function DELETE(req: NextRequest) {
 
   try {
     const { data, error } = await supabase
-      .from("project_target_labels")
+      .from("project_target_artists")
       .delete()
       .eq("id", id)
       .eq("user_id", userId)
       .select();
 
     if (error) {
-      console.error("[/api/project-target-labels DELETE]", error);
+      console.error("[/api/project-target-artists DELETE]", error);
       return NextResponse.json({ error: error.message }, { status: 500 });
     }
 
     return NextResponse.json({ success: true, count: data?.length || 0 });
   } catch (err) {
-    console.error("[/api/project-target-labels DELETE] exception:", err);
+    console.error("[/api/project-target-artists DELETE] exception:", err);
     return NextResponse.json({ error: "Internal server error" }, { status: 500 });
   }
 }

@@ -33,6 +33,12 @@ import {
   apiCreateProjectTargetLabel,
   apiUpdateProjectTargetLabel,
   apiDeleteProjectTargetLabel,
+  // 🔒 WP-009: ProjectTargetArtist CRUD — relazione Project ↔ Artist.
+  // Entità isolata in questo task: nessun collegamento automatico con UI.
+  apiFetchProjectTargetArtists,
+  apiCreateProjectTargetArtist,
+  apiUpdateProjectTargetArtist,
+  apiDeleteProjectTargetArtist,
 } from "./api-client";
 import type {
   Project,
@@ -49,6 +55,14 @@ import type {
   ProjectTargetLabelUpdate,
 } from "@/types/project-target-label";
 import { rowToProjectTargetLabel } from "@/types/project-target-label";
+// 🔒 WP-009 — ProjectTargetArtist: modello e mapper.
+import type {
+  ProjectTargetArtist,
+  ProjectTargetArtistInput,
+  ProjectTargetArtistRow,
+  ProjectTargetArtistUpdate,
+} from "@/types/project-target-artist";
+import { rowToProjectTargetArtist } from "@/types/project-target-artist";
 // 🔒 WP-008R — Calcolo centralizzato del progress del Project.
 // Tutta la logica decisionale vive nel modulo dedicato.
 import { calculateProjectProgress } from "@/lib/project-progress";
@@ -1326,6 +1340,17 @@ interface AppState {
   updateProjectTargetLabel: (id: string, updates: ProjectTargetLabelUpdate) => void;
   deleteProjectTargetLabel: (id: string) => void;
 
+  // 🔒 WP-009 — Project Target Artists. Relazione Project ↔ Artist.
+  // Entità ISOLATA in questo task: nessun collegamento con UI o Lifecycle
+  // Engine. Pattern speculare a projectTargetLabels (WP-006).
+  // `projectTargetArtists` è un array piatto; i consumer filtrano per
+  // `projectId` via selector.
+  projectTargetArtists: ProjectTargetArtist[];
+  loadProjectTargetArtists: (projectId: string) => Promise<void>;
+  addProjectTargetArtist: (input: ProjectTargetArtistInput) => string | null;
+  updateProjectTargetArtist: (id: string, updates: ProjectTargetArtistUpdate) => void;
+  deleteProjectTargetArtist: (id: string) => void;
+
   // Navigation
   setActiveTab: (tab: "dashboard" | "labels" | "artists" | "rankings" | "demos" | "pitch" | "profile") => void;
 
@@ -1876,6 +1901,8 @@ export const useAppStore = create<AppState>()(
       projects: [] as Project[],
       // 🔒 WP-006: Project Target Labels state iniziale vuoto.
       projectTargetLabels: [] as ProjectTargetLabel[],
+      // 🔒 WP-009: Project Target Artists state iniziale vuoto.
+      projectTargetArtists: [] as ProjectTargetArtist[],
       lastReplyScanAt: null,
       newRepliesCount: 0,
       rankingsUpdatedAt: null as string | null,
@@ -2568,6 +2595,156 @@ export const useAppStore = create<AppState>()(
         apiDeleteProjectTargetLabel(id).catch((err) =>
           console.error(
             "[project-target-labels] deleteProjectTargetLabel cloud sync failed:",
+            err,
+          ),
+        );
+      },
+
+      // ==================== PROJECT TARGET ARTISTS (WP-009) ====================
+      // 🔒 Entità ISOLATA: nessun syncToCloud(), nessun collegamento con altri
+      // moduli. Pattern speculare a projectTargetLabels (WP-006).
+      //
+      // NOTA: in WP-009 NON viene chiamato recomputeProjectProgress perché
+      // il calcolo del progress (WP-008R) considera per ora SOLO le target
+      // labels. Quando il calcolo verrà esteso per includere anche le
+      // target artists (fase successiva), basterà modificare il modulo
+      // centralizzato `src/lib/project-progress.ts` — queste azioni non
+      // dovranno essere toccate.
+      //
+      // `projectTargetArtists` è un array piatto. `loadProjectTargetArtists(pid)`
+      // sostituisce SOLO le righe di quel projectId (merge per-project),
+      // preservando le righe degli altri project già caricate.
+
+      loadProjectTargetArtists: async (projectId) => {
+        if (typeof window === "undefined") return;
+        try {
+          const rows = await apiFetchProjectTargetArtists(projectId);
+          if (Array.isArray(rows)) {
+            const targetArtists = rows.map(rowToProjectTargetArtist);
+            set((state) => ({
+              // Sostituisci solo le righe del projectId richiesto; mantieni
+              // le righe degli altri project (cache locale cross-project).
+              projectTargetArtists: [
+                ...state.projectTargetArtists.filter(
+                  (ta) => ta.projectId !== projectId,
+                ),
+                ...targetArtists,
+              ],
+              lastSavedAt: new Date().toISOString(),
+            }));
+            console.log(
+              `[project-target-artists] loadProjectTargetArtists: loaded ${targetArtists.length} target artists for project ${projectId}`,
+            );
+          }
+        } catch (err) {
+          console.error("[project-target-artists] loadProjectTargetArtists failed:", err);
+        }
+      },
+
+      addProjectTargetArtist: (input) => {
+        const newId =
+          input.id && input.id.trim() !== ""
+            ? input.id
+            : `pta_${genId()}`;
+        const now = new Date().toISOString();
+        const newTargetArtist: ProjectTargetArtist = {
+          id: newId,
+          projectId: input.project_id,
+          artistId: input.artist_id,
+          createdAt: now,
+        };
+        // Defensive: se la (projectId, artistId) esiste già in stato locale,
+        // non duplicare. Ritorna null (coerente con la 409 del server).
+        const exists = get().projectTargetArtists.some(
+          (ta) =>
+            ta.projectId === newTargetArtist.projectId &&
+            ta.artistId === newTargetArtist.artistId,
+        );
+        if (exists) {
+          console.warn(
+            "[project-target-artists] addProjectTargetArtist: target artist already exists locally",
+          );
+          return null;
+        }
+        // Optimistic update.
+        set((state) => ({
+          projectTargetArtists: [...state.projectTargetArtists, newTargetArtist],
+          lastSavedAt: now,
+        }));
+        // Background cloud write. Se fallisce (incluso 409), l'errore è solo
+        // loggato: al prossimo loadProjectTargetArtists() il cloud riallineerà.
+        apiCreateProjectTargetArtist({
+          id: newId,
+          project_id: newTargetArtist.projectId,
+          artist_id: newTargetArtist.artistId,
+        })
+          .then((row) => {
+            if (row) {
+              const canonical = rowToProjectTargetArtist(row as ProjectTargetArtistRow);
+              set((state) => ({
+                projectTargetArtists: state.projectTargetArtists.map((ta) =>
+                  ta.id === newId ? { ...ta, ...canonical } : ta,
+                ),
+              }));
+            }
+          })
+          .catch((err) =>
+            console.error(
+              "[project-target-artists] addProjectTargetArtist cloud sync failed:",
+              err,
+            ),
+          );
+        return newId;
+      },
+
+      updateProjectTargetArtist: (id, updates) => {
+        const now = new Date().toISOString();
+        // Optimistic update.
+        set((state) => ({
+          projectTargetArtists: state.projectTargetArtists.map((ta) =>
+            ta.id === id
+              ? {
+                  ...ta,
+                  ...(updates.artist_id !== undefined
+                    ? { artistId: updates.artist_id }
+                    : {}),
+                }
+              : ta,
+          ),
+          lastSavedAt: now,
+        }));
+        // Background cloud write.
+        apiUpdateProjectTargetArtist(id, updates)
+          .then((row) => {
+            if (row) {
+              const canonical = rowToProjectTargetArtist(row as ProjectTargetArtistRow);
+              set((state) => ({
+                projectTargetArtists: state.projectTargetArtists.map((ta) =>
+                  ta.id === id ? { ...ta, ...canonical } : ta,
+                ),
+              }));
+            }
+          })
+          .catch((err) =>
+            console.error(
+              "[project-target-artists] updateProjectTargetArtist cloud sync failed:",
+              err,
+            ),
+          );
+      },
+
+      deleteProjectTargetArtist: (id) => {
+        // Optimistic update: rimuovi subito dalla lista locale.
+        set((state) => ({
+          projectTargetArtists: state.projectTargetArtists.filter(
+            (ta) => ta.id !== id,
+          ),
+          lastSavedAt: new Date().toISOString(),
+        }));
+        // Background cloud write.
+        apiDeleteProjectTargetArtist(id).catch((err) =>
+          console.error(
+            "[project-target-artists] deleteProjectTargetArtist cloud sync failed:",
             err,
           ),
         );
@@ -3305,7 +3482,7 @@ export const useAppStore = create<AppState>()(
     }),
     {
       name: PRIMARY_KEY,
-      version: 21,  // 🔒 WP-006: bump 20→21 per backfillare projectTargetLabels su IndexedDB
+      version: 22,  // 🔒 WP-009: bump 21→22 per backfillare projectTargetArtists su IndexedDB
       storage: createJSONStorage(() => idbStorage), // 🔒 Task 3: IndexedDB invece di localStorage
       migrate: (persisted: any, version: number) => {
         // 🔒 FASE D FIX v19: rimuovi labels dal persisted state (occupavano 4MB+ inutilmente)
@@ -3330,6 +3507,13 @@ export const useAppStore = create<AppState>()(
         if (version < 21) {
           if (!Array.isArray(persisted.projectTargetLabels)) {
             persisted.projectTargetLabels = [];
+          }
+        }
+        // 🔒 WP-009: backfill projectTargetArtists = [] se mancante (project
+        // pre-WP-009 non avevano questo campo nel persisted state).
+        if (version < 22) {
+          if (!Array.isArray(persisted.projectTargetArtists)) {
+            persisted.projectTargetArtists = [];
           }
         }
         if (version < 5) {
@@ -3586,6 +3770,10 @@ export const useAppStore = create<AppState>()(
         // riallineato dal cloud da loadProjectTargetLabels() quando la
         // pagina Overview viene montata).
         projectTargetLabels: state.projectTargetLabels,
+        // 🔒 WP-009: persist projectTargetArtists per UX (istantaneo al boot,
+        // riallineato dal cloud da loadProjectTargetArtists() quando la
+        // pagina Overview viene montata).
+        projectTargetArtists: state.projectTargetArtists,
         activeTab: state.activeTab,
         locale: state.locale,
         userProfile: state.userProfile,
@@ -3702,6 +3890,8 @@ export function setAutoBackupEmail(email: string | null): void {
       projects: state.projects,
       // 🔒 WP-006: includi projectTargetLabels nello snapshot di backup
       projectTargetLabels: state.projectTargetLabels,
+      // 🔒 WP-009: includi projectTargetArtists nello snapshot di backup
+      projectTargetArtists: state.projectTargetArtists,
     });
   }
 }
@@ -3719,7 +3909,8 @@ useAppStore.subscribe((state, prevState) => {
     state.sentCampaigns === prevState.sentCampaigns &&
     state.rankingSnapshots === prevState.rankingSnapshots &&
     state.projects === prevState.projects &&
-    state.projectTargetLabels === prevState.projectTargetLabels
+    state.projectTargetLabels === prevState.projectTargetLabels &&
+    state.projectTargetArtists === prevState.projectTargetArtists
   ) {
     return;
   }
@@ -3737,6 +3928,8 @@ useAppStore.subscribe((state, prevState) => {
     projects: state.projects,
     // 🔒 WP-006: includi projectTargetLabels nello snapshot di backup
     projectTargetLabels: state.projectTargetLabels,
+    // 🔒 WP-009: includi projectTargetArtists nello snapshot di backup
+    projectTargetArtists: state.projectTargetArtists,
   });
 });
 

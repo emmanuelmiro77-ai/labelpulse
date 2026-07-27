@@ -25,6 +25,14 @@ import type {
   ProjectTargetLabelUpdate,
 } from "@/types/project-target-label";
 
+// 🔒 WP-009 — ProjectTargetArtist types (relazione Project ↔ Artist).
+import type {
+  ProjectTargetArtist,
+  ProjectTargetArtistInput,
+  ProjectTargetArtistRow,
+  ProjectTargetArtistUpdate,
+} from "@/types/project-target-artist";
+
 const API_BASE = "";
 
 /**
@@ -773,6 +781,127 @@ export async function apiDeleteProjectTargetLabel(
     return true;
   } catch (err) {
     console.error("[apiDeleteProjectTargetLabel] failed:", err);
+    return false;
+  }
+}
+
+// ==================== PROJECT TARGET ARTISTS (WP-009) ====================
+//
+// 🔒 WP-009: relazione Project ↔ Artist. Entità ISOLATA in questo task:
+// nessun collegamento automatico con Lifecycle Engine o UI. I metodi
+// restituiscono il dato (non solo boolean) quando il server ritorna la
+// riga creata/aggiornata, così lo store può allineare lo stato locale
+// con il payload canonico del server.
+//
+// Pattern speculare a ProjectTargetLabels (WP-006).
+
+export type {
+  ProjectTargetArtist,
+  ProjectTargetArtistInput,
+  ProjectTargetArtistRow,
+  ProjectTargetArtistUpdate,
+} from "@/types/project-target-artist";
+
+/**
+ * GET /api/project-target-artists?project_id=<id> → lista target artist
+ * per il project specificato.
+ *
+ * Ritorna `null` su errore (il chiamante lascia lo stato locale invariato).
+ */
+export async function apiFetchProjectTargetArtists(
+  projectId: string,
+): Promise<ProjectTargetArtistRow[] | null> {
+  try {
+    const res = await fetch(
+      `${API_BASE}/api/project-target-artists?project_id=${encodeURIComponent(projectId)}`,
+      {
+        cache: "no-store",
+        headers: { "Cache-Control": "no-cache, no-store, must-revalidate" },
+      },
+    );
+    if (!res.ok) {
+      console.error("[apiFetchProjectTargetArtists] failed:", res.status);
+      return null;
+    }
+    const data = await res.json();
+    return data.targetArtists || [];
+  } catch (err) {
+    console.error("[apiFetchProjectTargetArtists] network error:", err);
+    return null;
+  }
+}
+
+/**
+ * POST /api/project-target-artists → crea una nuova target artist.
+ *
+ * Ritorna il `ProjectTargetArtistRow` creato dal server, o `null` su errore.
+ * Gestisce esplicitamente il caso 409 (unique violation): ritorna `null`
+ * ma logga come warning, non come errore — il chiamante può scegliere
+ * di ignorarlo (la target artist esiste già, stato coerente).
+ */
+export async function apiCreateProjectTargetArtist(
+  input: ProjectTargetArtistInput,
+): Promise<ProjectTargetArtistRow | null> {
+  try {
+    const result = await writeDirect<{ targetArtist?: ProjectTargetArtistRow }>(
+      `${API_BASE}/api/project-target-artists`,
+      "POST",
+      input,
+    );
+    return result?.targetArtist ?? null;
+  } catch (err: any) {
+    // 409 = unique_violation: la (user_id, project_id, artist_id) esiste già.
+    // Non è un errore fatale: lo stato cloud è coerente con la richiesta.
+    if (err?.status === 409) {
+      console.warn(
+        "[apiCreateProjectTargetArtist] target artist already exists:",
+        err?.body,
+      );
+      return null;
+    }
+    console.error("[apiCreateProjectTargetArtist] failed:", err);
+    return null;
+  }
+}
+
+/**
+ * PATCH /api/project-target-artists?id=<id> → aggiorna una target artist.
+ *
+ * Ritorna il `ProjectTargetArtistRow` aggiornato, o `null` su errore.
+ */
+export async function apiUpdateProjectTargetArtist(
+  id: string,
+  updates: ProjectTargetArtistUpdate,
+): Promise<ProjectTargetArtistRow | null> {
+  try {
+    const result = await writeDirect<{ targetArtist?: ProjectTargetArtistRow }>(
+      `${API_BASE}/api/project-target-artists?id=${encodeURIComponent(id)}`,
+      "PATCH",
+      updates,
+    );
+    return result?.targetArtist ?? null;
+  } catch (err) {
+    console.error("[apiUpdateProjectTargetArtist] failed:", err);
+    return null;
+  }
+}
+
+/**
+ * DELETE /api/project-target-artists?id=<id> → cancella una target artist.
+ *
+ * Ritorna `true` se la delete è andata a buon fine, `false` altrimenti.
+ */
+export async function apiDeleteProjectTargetArtist(
+  id: string,
+): Promise<boolean> {
+  try {
+    await writeDirect(
+      `${API_BASE}/api/project-target-artists?id=${encodeURIComponent(id)}`,
+      "DELETE",
+    );
+    return true;
+  } catch (err) {
+    console.error("[apiDeleteProjectTargetArtist] failed:", err);
     return false;
   }
 }
