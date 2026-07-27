@@ -3,6 +3,11 @@
 import { useAppStore, getLabelTier, type Label, type Artist, type ArtistTrack, type Demo } from "@/lib/store";
 import { t } from "@/lib/i18n";
 import { getLabelDiscoveryUrls } from "@/lib/label-links";
+// 🔒 WP-004 — Project Context: hook opzionale per leggere il Project
+// corrente. Ritorna null quando Label Finder è usato fuori da un
+// <ProjectProvider> (es. tab Labels della home): in quel caso il
+// comportamento del componente è IDENTICO a prima.
+import { useProject } from "@/context/project-context";
 import React, { useState, useMemo, useCallback, useEffect, useRef } from "react";
 import { sendEmail, ensureValidToken } from "@/lib/gmail";
 import {
@@ -456,6 +461,15 @@ function LabelDiscoveryIcons({
 export function LabelFinder() {
   const { labels, demos, releases, addLabel, updateLabel, deleteLabel, toggleFavoriteLabel, addDemo, locale, getGenres, setActiveTab, userProfile, setUserProfile, gmailAuth, setGmailAuth, selectedLabelId, setSelectedLabelId, selectedArtistId, setSelectedArtistId, setNavigationReturnTo, artists } =
     useAppStore();
+  // 🔒 WP-004 — Project Context. `project` è null quando Label Finder è
+  // montato fuori da <ProjectProvider> (es. tab Labels della home). In
+  // quel caso tutte le letture `project?.*` cadono su undefined e il
+  // comportamento è IDENTICO a prima. Nessun salvataggio automatico,
+  // nessun cambio di flusso: il Project è solo contesto interno opzionale.
+  // `project?.artist` è usato come fallback per pitchArtistName quando
+  // userProfile.artistName è vuoto. `project?.goal` è disponibile come
+  // contesto per future personalizzazioni (nessun effetto visibile ora).
+  const project = useProject();
   const genres = getGenres();
   const { toast } = useToast();
   const [sendingEmail, setSendingEmail] = useState(false);
@@ -987,7 +1001,16 @@ export function LabelFinder() {
     setDetailName(label.name || "");
     setShowPitch(false);
     setPitchTrackName("");
-    setPitchArtistName(userProfile.artistName || "");
+    // 🔒 WP-004 — Project-aware fallback: se userProfile.artistName è
+    // vuoto (utente non ha compilato il profilo) MA siamo dentro un
+    // Project con `artist` impostato, usiamo quello come valore iniziale.
+    // - Fuori dal ProjectProvider: project è null → fallback a ""
+    //   (comportamento IDENTICO a prima).
+    // - Nessun salvataggio automatico: l'artist del profile NON viene
+    //   sovrascritto. L'utente può ancora editare il campo manualmente;
+    //   l'eventuale onBlur save verso userProfile resta invariato
+    //   (riga 1409: confronta con userProfile.artistName, non con project).
+    setPitchArtistName(userProfile.artistName || project?.artist || "");
     // ⚠️ scLink is the SoundCloud link OF THE TRACK being pitched, NOT the
     // user's profile SoundCloud link. Previously this was initialized from
     // userProfile.scLink, which (combined with the onBlur handler that saved
@@ -1405,11 +1428,22 @@ export function LabelFinder() {
   }, [demos, detailLabel, pitchTrackName]);
 
   // Save profile fields on blur
+  // 🔒 WP-004 — Project-aware: NON salviamo automaticamente quando il valore
+  // corrente deriva dal fallback del Project (project?.artist). L'auto-save
+  // scatta solo se l'utente ha effettivamente digitato qualcosa di diverso
+  // sia dal userProfile che dal project. Questo rispetta il vincolo
+  // "nessun salvataggio automatico" del task.
   const handlePitchArtistBlur = useCallback(() => {
-    if (pitchArtistName.trim() && pitchArtistName.trim() !== userProfile.artistName) {
-      setUserProfile({ artistName: pitchArtistName.trim() });
+    const trimmed = pitchArtistName.trim();
+    const projectArtist = project?.artist?.trim() || "";
+    if (
+      trimmed &&
+      trimmed !== userProfile.artistName &&
+      trimmed !== projectArtist
+    ) {
+      setUserProfile({ artistName: trimmed });
     }
-  }, [pitchArtistName, userProfile.artistName, setUserProfile]);
+  }, [pitchArtistName, userProfile.artistName, setUserProfile, project]);
 
   const handlePitchScLinkBlur = useCallback(() => {
     // Intentionally a no-op: scLink is the SoundCloud link of the track
