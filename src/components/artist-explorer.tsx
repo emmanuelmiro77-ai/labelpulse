@@ -17,6 +17,11 @@
 import { useAppStore } from "@/lib/store";
 import { getLabelDiscoveryUrls } from "@/lib/label-links";
 import { t, type Locale } from "@/lib/i18n";
+// 🔒 WP-005 — Project Context: hook opzionale per leggere il Project
+// corrente. Ritorna null quando Artist Explorer è usato fuori da un
+// <ProjectProvider> (es. tab Artists della home): in quel caso il
+// comportamento del componente è IDENTICO a prima.
+import { useProject } from "@/context/project-context";
 import React, {
   useState,
   useMemo,
@@ -1735,6 +1740,27 @@ export default function ArtistExplorer() {
   const releases = store.releases || [];
   const selectedReleaseId = store.selectedReleaseId ?? null;
 
+  // 🔒 WP-005 — Project Context. `project` è null quando Artist Explorer è
+  // montato fuori da <ProjectProvider> (es. tab Artists della home). In
+  // quel caso tutte le letture `project?.*` cadono su undefined e il
+  // comportamento è IDENTICO a prima.
+  //
+  // `projectArtistHint` è un contesto iniziale OPZIONALE: espone
+  // l'artista del Project corrente (se presente). NON viene applicato a
+  // `listState.search`, NON triggera filtri, NON effettua ricerche
+  // automatiche. È disponibile come dato per futuri task (es. suggerire
+  // l'artista del Project nell'Add Dialog). In questo task viene solo
+  // incluso nel log di debug esistente (nessun effetto visibile).
+  const project = useProject();
+  const projectArtistHint = useMemo(
+    () => (project && project.artist ? project.artist.trim() : ""),
+    [project],
+  );
+  const projectGoalHint = useMemo(
+    () => (project && project.goal ? project.goal : ""),
+    [project],
+  );
+
   // 🔒 DEBUG RP-027: log render + state changes
   console.log(`[DEBUG ArtistExplorer] ${new Date().toISOString()} RENDER`, {
     selectedArtistId,
@@ -1742,6 +1768,10 @@ export default function ArtistExplorer() {
     activeTab: store.activeTab,
     artistsCount: artists?.length || 0,
     releasesCount: releases.length,
+    // 🔒 WP-005 — Project hints (opzionali, solo per debug). Non modificano
+    // filtri né flusso utente. Sono null/"" fuori dal ProjectProvider.
+    projectArtistHint: projectArtistHint || null,
+    projectGoalHint: projectGoalHint || null,
   });
 
   // Defensive: guard against undefined arrays.
