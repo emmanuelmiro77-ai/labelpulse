@@ -52,9 +52,21 @@ import { useAppStore } from "@/lib/store";
 import {
   PROJECT_STATUSES,
   PROJECT_GOALS,
-  computeNextAction,
   type Project,
 } from "@/types/project";
+// 🔒 WP-011 — Lifecycle Engine come unica fonte di verità per Stage,
+// Health e Next Action. Sostituisce il vecchio computeNextAction static
+// mapping di @/types/project (Phase 2) con le funzioni centralizzate
+// del Lifecycle Engine, coerenti con la Overview /projects/[id].
+import {
+  computeStage,
+  computeHealth,
+  computeNextAction,
+  STAGE_LABELS,
+  STAGE_STYLES,
+  HEALTH_LABELS,
+  HEALTH_STYLES,
+} from "@/lib/project-lifecycle";
 
 /**
  * Mappa label → colore per il badge dello status.
@@ -360,7 +372,13 @@ interface ProjectCardProps {
 
 function ProjectCard({ project, onClick, onDelete }: ProjectCardProps) {
   const p = project;
-  const nextAction = computeNextAction(p.goal, p.progress);
+  // 🔒 WP-011 — Tutti i valori decisionali provengono dal Lifecycle Engine.
+  // computeStage / computeHealth / computeNextAction sono funzioni pure
+  // centralizzate in @/lib/project-lifecycle — stessa fonte usata dalla
+  // Overview /projects/[id]. Nessuna logica decisionale inline.
+  const stage = computeStage(p);
+  const health = computeHealth(p);
+  const nextAction = computeNextAction(p);
 
   return (
     <div
@@ -388,14 +406,20 @@ function ProjectCard({ project, onClick, onDelete }: ProjectCardProps) {
         <ChevronRight className="h-4 w-4 text-muted-foreground/40 group-hover:text-primary/60 transition-colors shrink-0 mt-1" />
       </div>
 
-      {/* Badges: status + goal */}
+      {/* 🔒 WP-011 — Stage + Health badges dal Lifecycle Engine.
+          Sostituiscono il vecchio badge status statico. Stage e Health
+          sono derivati (non persistiti): vengono calcolati da
+          computeStage(p) e computeHealth(p) ad ogni render. */}
       <div className="flex flex-wrap items-center gap-1.5 mb-3">
         <span
-          className={`inline-flex items-center px-2 py-0.5 rounded-full border text-xs font-medium ${statusBadgeClass(
-            p.status,
-          )}`}
+          className={`inline-flex items-center px-2 py-0.5 rounded-full border text-xs font-medium ${STAGE_STYLES[stage]}`}
         >
-          {p.status.replace("_", " ")}
+          {STAGE_LABELS[stage]}
+        </span>
+        <span
+          className={`inline-flex items-center px-2 py-0.5 rounded-full border text-xs font-medium ${HEALTH_STYLES[health]}`}
+        >
+          {HEALTH_LABELS[health]}
         </span>
         {p.goal ? (
           <span className="inline-flex items-center gap-1 px-2 py-0.5 rounded-full border text-xs font-medium bg-primary/10 text-primary border-primary/30">
@@ -421,12 +445,17 @@ function ProjectCard({ project, onClick, onDelete }: ProjectCardProps) {
         </div>
       </div>
 
-      {/* Next action */}
+      {/* 🔒 WP-011 — Next Action dal Lifecycle Engine.
+          computeNextAction(p) ritorna un oggetto strutturato
+          { label, description, kind }. Mostriamo la label (frase breve)
+          come already faceva la vecchia implementazione static mapping. */}
       <div className="rounded-lg bg-secondary/20 border border-border/20 px-3 py-2">
         <p className="text-[10px] uppercase tracking-wider text-muted-foreground/70 font-mono mb-0.5">
           Next action
         </p>
-        <p className="text-sm text-foreground/90 leading-snug">{nextAction}</p>
+        <p className="text-sm text-foreground/90 leading-snug">
+          {nextAction.label}
+        </p>
       </div>
 
       {/* Footer: data + delete */}
