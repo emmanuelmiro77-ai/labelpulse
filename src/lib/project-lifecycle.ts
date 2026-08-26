@@ -214,6 +214,7 @@ export function computeStage(project: Project): ProjectStage {
     case "in_progress":
       return progress >= 50 ? "execution" : "planning";
     case "idea":
+      return progress > 0 ? "planning" : "intake";
     default:
       // Fallback sicuro per status non riconosciuti.
       return "intake";
