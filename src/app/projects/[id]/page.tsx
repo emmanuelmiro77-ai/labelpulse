@@ -217,6 +217,7 @@ interface OverviewPageProps {
 export default function ProjectOverviewPage({ params }: OverviewPageProps) {
   const projects = useAppStore((s) => s.projects);
   const loadProjects = useAppStore((s) => s.loadProjects);
+  const updateProject = useAppStore((s) => s.updateProject);
   // 🔒 WP-007 — Target Labels: stato e azioni per la sezione dedicata.
   const projectTargetLabels = useAppStore((s) => s.projectTargetLabels);
   const allLabels = useAppStore((s) => s.labels);
@@ -830,10 +831,14 @@ export default function ProjectOverviewPage({ params }: OverviewPageProps) {
             </div>
             <Button
               onClick={() => {
-                workspaceRef.current?.scrollIntoView({
-                  behavior: "smooth",
-                  block: "start",
-                });
+                if (stage === "intake" && project.status === "idea") {
+                  updateProject(project.id, { status: "in_progress" });
+                } else {
+                  workspaceRef.current?.scrollIntoView({
+                    behavior: "smooth",
+                    block: "start",
+                  });
+                }
               }}
               className="gap-1"
             >
