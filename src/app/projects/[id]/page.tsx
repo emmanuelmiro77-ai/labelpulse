@@ -236,6 +236,11 @@ export default function ProjectOverviewPage({ params }: OverviewPageProps) {
   // 🔒 WP-001: ref per scroll-to-workspace. Il pulsante Continue non
   // naviga più a /projects: scorre alla sezione Workspace.
   const workspaceRef = useRef<HTMLDivElement | null>(null);
+  // 🔒 Navigazione rapida: ref per scroll diretto alle sezioni Target
+  // Labels e Target Artists, così l'utente non deve scorrere 1200+ label
+  // per raggiungerle.
+  const targetLabelsRef = useRef<HTMLDivElement | null>(null);
+  const targetArtistsRef = useRef<HTMLDivElement | null>(null);
 
   // Next.js 16: params è una Promise. Risolviamola al mount.
   useEffect(() => {
@@ -620,6 +625,45 @@ export default function ProjectOverviewPage({ params }: OverviewPageProps) {
                               </span>
                             ) : null}
                           </div>
+
+                          {/* 🔒 Navigazione rapida: pulsanti per saltare
+                              direttamente alle sezioni Target Labels e
+                              Target Artists senza scorrere tutta la lista
+                              di label/artisti di Label Finder / Artist
+                              Explorer (che può essere 1200+ elementi). */}
+                          <div className="flex flex-wrap items-center gap-2">
+                            <Button
+                              variant="outline"
+                              size="sm"
+                              className="h-8 gap-1.5 text-xs"
+                              onClick={() =>
+                                targetLabelsRef.current?.scrollIntoView({
+                                  behavior: "smooth",
+                                  block: "start",
+                                })
+                              }
+                              title="Vai alle Target Labels"
+                            >
+                              <TargetIcon className="h-3.5 w-3.5" />
+                              Target Labels ({projectTargets.length})
+                            </Button>
+                            <Button
+                              variant="outline"
+                              size="sm"
+                              className="h-8 gap-1.5 text-xs"
+                              onClick={() =>
+                                targetArtistsRef.current?.scrollIntoView({
+                                  behavior: "smooth",
+                                  block: "start",
+                                })
+                              }
+                              title="Vai ai Target Artists"
+                            >
+                              <UserIcon className="h-3.5 w-3.5" />
+                              Target Artists ({projectTargetArtistsList.length})
+                            </Button>
+                          </div>
+
                           <TargetsWorkspace />
 
                           {/* 🔒 WP-007 — Sezione "Target Labels".
@@ -629,7 +673,7 @@ export default function ProjectOverviewPage({ params }: OverviewPageProps) {
                               (projectTargetLabels filtrate per project.id).
                               Nessuna nuova API chiamata qui: il load avviene
                               nell'useEffect al mount della pagina. */}
-                          <div className="rounded-xl border border-border/30 bg-card/40 p-4">
+                          <div ref={targetLabelsRef} className="scroll-mt-20 rounded-xl border border-border/30 bg-card/40 p-4">
                             <div className="flex items-center gap-2 mb-3">
                               <TargetIcon className="h-4 w-4 text-primary" />
                               <h4 className="font-semibold text-foreground text-sm">
@@ -707,7 +751,7 @@ export default function ProjectOverviewPage({ params }: OverviewPageProps) {
                               Nessuna nuova API chiamata qui: il load avviene
                               nell'useEffect al mount della pagina.
                               Pattern speculare a Target Labels (WP-007). */}
-                          <div className="rounded-xl border border-border/30 bg-card/40 p-4">
+                          <div ref={targetArtistsRef} className="scroll-mt-20 rounded-xl border border-border/30 bg-card/40 p-4">
                             <div className="flex items-center gap-2 mb-3">
                               <UserIcon className="h-4 w-4 text-primary" />
                               <h4 className="font-semibold text-foreground text-sm">
