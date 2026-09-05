@@ -706,67 +706,71 @@ export default function ProjectOverviewPage({ params }: OverviewPageProps) {
                               </div>
                             ) : (
                               <>
-                                {/* 🔒 Ricerca testuale Target Labels:
+                                {/* Ricerca testuale Target Labels:
                                     filtra in tempo reale per nome label.
-                                    Combinabile con i filtri esistenti di
-                                    Label Finder (generi, preferiti, stato). */}
-                                {projectTargets.length > 5 && (
-                                  <Input
-                                    value={targetLabelSearch}
-                                    onChange={(e) => setTargetLabelSearch(e.target.value)}
-                                    placeholder="Cerca label..."
-                                    className="mb-3 h-8 text-xs"
-                                  />
+                                    Sempre visibile quando ci sono target. */}
+                                <Input
+                                  value={targetLabelSearch}
+                                  onChange={(e) => setTargetLabelSearch(e.target.value)}
+                                  placeholder="Cerca label..."
+                                  className="mb-3 h-8 text-xs"
+                                />
+                                {targetLabelSearch.trim() === "" ? (
+                                  <div className="text-center py-6 text-muted-foreground/60 text-sm">
+                                    <p className="font-medium">
+                                      Cerca una label per iniziare
+                                    </p>
+                                    <p className="text-xs mt-1">
+                                      Inserisci il nome della label da cercare.
+                                    </p>
+                                  </div>
+                                ) : (
+                                  <ul className="space-y-1.5">
+                                    {projectTargets
+                                      .filter((tl) => {
+                                        const label = allLabels.find(
+                                          (l) => l.id === tl.labelId,
+                                        );
+                                        const labelName = label?.name ?? tl.labelId;
+                                        return labelName.toLowerCase().includes(
+                                          targetLabelSearch.toLowerCase(),
+                                        );
+                                      })
+                                      .map((tl) => {
+                                        const label = allLabels.find(
+                                          (l) => l.id === tl.labelId,
+                                        );
+                                        const labelName = label?.name ?? tl.labelId;
+                                        return (
+                                          <li
+                                            key={tl.id}
+                                            className="flex items-center justify-between gap-2 rounded-lg border border-border/20 bg-secondary/20 px-3 py-2"
+                                          >
+                                            <div className="flex-1 min-w-0">
+                                              <p className="text-sm font-medium text-foreground truncate">
+                                                {labelName}
+                                              </p>
+                                              <p className="text-[10px] text-muted-foreground/70 font-mono">
+                                                Aggiunta il{" "}
+                                                {formatDate(tl.createdAt)}
+                                              </p>
+                                            </div>
+                                            <Button
+                                              variant="ghost"
+                                              size="icon"
+                                              className="h-7 w-7 shrink-0 text-muted-foreground hover:text-red-400 hover:bg-red-500/10"
+                                              onClick={() =>
+                                                deleteProjectTargetLabel(tl.id)
+                                              }
+                                              title="Rimuovi dal project"
+                                            >
+                                              <Trash2 className="h-3.5 w-3.5" />
+                                            </Button>
+                                          </li>
+                                        );
+                                      })}
+                                  </ul>
                                 )}
-                                <ul className="space-y-1.5">
-                                  {projectTargets
-                                    .filter((tl) => {
-                                      if (!targetLabelSearch.trim()) return true;
-                                      const label = allLabels.find(
-                                        (l) => l.id === tl.labelId,
-                                      );
-                                      const labelName = label?.name ?? tl.labelId;
-                                      return labelName.toLowerCase().includes(
-                                        targetLabelSearch.toLowerCase(),
-                                      );
-                                    })
-                                    .map((tl) => {
-                                  // Risolvi label_id → nome label leggendo
-                                  // dall'array `labels` nello store (globale,
-                                  // include seed + cloud + custom).
-                                  const label = allLabels.find(
-                                    (l) => l.id === tl.labelId,
-                                  );
-                                  const labelName = label?.name ?? tl.labelId;
-                                  return (
-                                    <li
-                                      key={tl.id}
-                                      className="flex items-center justify-between gap-2 rounded-lg border border-border/20 bg-secondary/20 px-3 py-2"
-                                    >
-                                      <div className="flex-1 min-w-0">
-                                        <p className="text-sm font-medium text-foreground truncate">
-                                          {labelName}
-                                        </p>
-                                        <p className="text-[10px] text-muted-foreground/70 font-mono">
-                                          Aggiunta il{" "}
-                                          {formatDate(tl.createdAt)}
-                                        </p>
-                                      </div>
-                                      <Button
-                                        variant="ghost"
-                                        size="icon"
-                                        className="h-7 w-7 shrink-0 text-muted-foreground hover:text-red-400 hover:bg-red-500/10"
-                                        onClick={() =>
-                                          deleteProjectTargetLabel(tl.id)
-                                        }
-                                        title="Rimuovi dal project"
-                                      >
-                                        <Trash2 className="h-3.5 w-3.5" />
-                                      </Button>
-                                    </li>
-                                  );
-                                })}
-                              </ul>
                               </>
                             )}
                           </div>
