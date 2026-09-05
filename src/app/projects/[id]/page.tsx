@@ -37,6 +37,7 @@ import {
   Sparkles,
 } from "lucide-react";
 import { Button } from "@/components/ui/button";
+import { Input } from "@/components/ui/input";
 import {
   Card,
   CardContent,
@@ -232,6 +233,8 @@ export default function ProjectOverviewPage({ params }: OverviewPageProps) {
 
   const [projectId, setProjectId] = useState<string | null>(null);
   const [isLoading, setIsLoading] = useState<boolean>(true);
+  // 🔒 Ricerca testuale per filtrare le Target Labels per nome.
+  const [targetLabelSearch, setTargetLabelSearch] = useState("");
 
   // 🔒 WP-001: ref per scroll-to-workspace. Il pulsante Continue non
   // naviga più a /projects: scorre alla sezione Workspace.
@@ -702,8 +705,32 @@ export default function ProjectOverviewPage({ params }: OverviewPageProps) {
                                 </p>
                               </div>
                             ) : (
-                              <ul className="space-y-1.5">
-                                {projectTargets.map((tl) => {
+                              <>
+                                {/* 🔒 Ricerca testuale Target Labels:
+                                    filtra in tempo reale per nome label.
+                                    Combinabile con i filtri esistenti di
+                                    Label Finder (generi, preferiti, stato). */}
+                                {projectTargets.length > 5 && (
+                                  <Input
+                                    value={targetLabelSearch}
+                                    onChange={(e) => setTargetLabelSearch(e.target.value)}
+                                    placeholder="Cerca label..."
+                                    className="mb-3 h-8 text-xs"
+                                  />
+                                )}
+                                <ul className="space-y-1.5">
+                                  {projectTargets
+                                    .filter((tl) => {
+                                      if (!targetLabelSearch.trim()) return true;
+                                      const label = allLabels.find(
+                                        (l) => l.id === tl.labelId,
+                                      );
+                                      const labelName = label?.name ?? tl.labelId;
+                                      return labelName.toLowerCase().includes(
+                                        targetLabelSearch.toLowerCase(),
+                                      );
+                                    })
+                                    .map((tl) => {
                                   // Risolvi label_id → nome label leggendo
                                   // dall'array `labels` nello store (globale,
                                   // include seed + cloud + custom).
@@ -740,6 +767,7 @@ export default function ProjectOverviewPage({ params }: OverviewPageProps) {
                                   );
                                 })}
                               </ul>
+                              </>
                             )}
                           </div>
 
