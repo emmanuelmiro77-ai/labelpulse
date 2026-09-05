@@ -667,6 +667,22 @@ export default function ProjectOverviewPage({ params }: OverviewPageProps) {
                             </Button>
                           </div>
 
+                          {/* 🔒 Ricerca testuale Target Labels:
+                             Campo di ricerca posizionato all'inizio del
+                              blocco Targets, subito sotto i pulsanti di
+                              navigazione rapida. Filtra in tempo reale le
+                              target labels per nome (case-insensitive).
+                              Lo stato `targetLabelSearch` è condiviso con
+                              la sezione Target Labels più sotto. */}
+                          {projectTargets.length > 0 && (
+                            <Input
+                              value={targetLabelSearch}
+                              onChange={(e) => setTargetLabelSearch(e.target.value)}
+                              placeholder="Cerca label..."
+                              className="h-8 text-xs"
+                            />
+                          )}
+
                           <TargetsWorkspace />
 
                           {/* 🔒 WP-007 — Sezione "Target Labels".
@@ -706,15 +722,6 @@ export default function ProjectOverviewPage({ params }: OverviewPageProps) {
                               </div>
                             ) : (
                               <>
-                                {/* Ricerca testuale Target Labels:
-                                    filtra in tempo reale per nome label.
-                                    Sempre visibile quando ci sono target. */}
-                                <Input
-                                  value={targetLabelSearch}
-                                  onChange={(e) => setTargetLabelSearch(e.target.value)}
-                                  placeholder="Cerca label..."
-                                  className="mb-3 h-8 text-xs"
-                                />
                                 {targetLabelSearch.trim() === "" ? (
                                   <div className="text-center py-6 text-muted-foreground/60 text-sm">
                                     <p className="font-medium">
