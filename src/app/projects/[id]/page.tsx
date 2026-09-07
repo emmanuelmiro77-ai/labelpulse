@@ -62,6 +62,8 @@ import {
 import { LabelFinder } from "@/components/label-finder";
 import ArtistExplorer from "@/components/artist-explorer";
 import { ErrorBoundary } from "@/components/error-boundary";
+// 🔒 FindALabelWizard — flusso guidato per goal "Find a label" con 0 target
+import { FindALabelWizard } from "@/components/find-a-label-wizard";
 // 🔒 WP-003 — Project Context: provider che espone il Project corrente
 // a tutti i componenti figli. Nessun consumer ancora introdotto.
 import { ProjectProvider } from "@/context/project-context";
@@ -683,7 +685,11 @@ export default function ProjectOverviewPage({ params }: OverviewPageProps) {
                             />
                           )}
 
-                          <TargetsWorkspace />
+                          {project && project.goal === "Find a label" && projectTargets.length === 0 ? (
+                            <FindALabelWizard project={project} />
+                          ) : (
+                            <TargetsWorkspace />
+                          )}
 
                           {/* 🔒 WP-007 — Sezione "Target Labels".
                               Mostra le label aggiunte al project corrente
