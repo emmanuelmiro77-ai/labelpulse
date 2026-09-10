@@ -685,7 +685,7 @@ export default function ProjectOverviewPage({ params }: OverviewPageProps) {
                             />
                           )}
 
-                          {project && project.goal === "Find a label" && projectTargets.length === 0 ? (
+                          {project && project.goal === "Find a label" ? (
                             <FindALabelWizard project={project} />
                           ) : (
                             <TargetsWorkspace />
