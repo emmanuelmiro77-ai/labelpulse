@@ -52,33 +52,68 @@ export async function POST(req: NextRequest) {
     const supabase = createClient(supabaseUrl, serviceKey);
 
     // Costruisci il payload globale (solo campi Beatport, niente dati personali)
-    const globalPayload = {
-      labels: labels.map((l: any) => ({
-        id: l.id,
-        name: l.name,
-        genres: l.genres || (l.genre ? [l.genre] : []),
-        rankByGenre: l.rankByGenre || {},
-        pointsByGenre: l.pointsByGenre || {},
-        trending: l.trending || false,
-        trendingRankByGenre: l.trendingRankByGenre || {},
-        trendingPointsByGenre: l.trendingPointsByGenre || {},
-        imageUrl: l.imageUrl || null,
-        slug: l.slug || null,
-        beatportId: l.beatportId || null,
-        prevRankByGenre: l.prevRankByGenre || {},
-      })),
-      rankingSnapshots: Array.isArray(rankingSnapshots) ? rankingSnapshots : [],
+    // 🔒 SAFE LOAD: se rankingSnapshots è null o assente, NON includerlo
+    // nel payload → l'upsert non sovrascriverà il campo esistente nel DB.
+    // Se è un array valido, includilo normalmente per aggiornare lo storico.
+    const mappedLabels = labels.map((l: any) => ({
+      id: l.id,
+      name: l.name,
+      genres: l.genres || (l.genre ? [l.genre] : []),
+      rankByGenre: l.rankByGenre || {},
+      pointsByGenre: l.pointsByGenre || {},
+      trending: l.trending || false,
+      trendingRankByGenre: l.trendingRankByGenre || {},
+      trendingPointsByGenre: l.trendingPointsByGenre || {},
+      imageUrl: l.imageUrl || null,
+      slug: l.slug || null,
+      beatportId: l.beatportId || null,
+      prevRankByGenre: l.prevRankByGenre || {},
+    }));
+    const globalPayload: Record<string, any> = {
+      labels: mappedLabels,
       rankingsUpdatedAt: rankingsUpdatedAt || new Date().toISOString(),
       lastGlobalUpdate: new Date().toISOString(),
     };
 
-    console.log(`[push-rankings] Admin ${email} pushing ${globalPayload.labels.length} labels, ${globalPayload.rankingSnapshots.length} snapshots`);
+    // Solo se rankingSnapshots è un array valido lo includiamo nel payload.
+    // null / undefined / assente → il campo NON viene toccato dall'upsert.
+    const hasSnapshots = Array.isArray(rankingSnapshots);
+    if (hasSnapshots) {
+      globalPayload.rankingSnapshots = rankingSnapshots;
+    }
+
+    console.log(`[push-rankings] Admin ${email} pushing ${mappedLabels.length} labels, ${hasSnapshots ? (rankingSnapshots as any[]).length : 0} snapshots${hasSnapshots ? "" : " (preserved from DB)"}`);
+
+    // 🔒 SAFE LOAD: se non abbiamo rankingSnapshots nel payload, dobbiamo
+    // fare un UPDATE selettivo invece di un UPSERT completo, per evitare
+    // di cancellare il campo rankingSnapshots esistente nel DB.
+    // Supabase upsert sostituisce l'intera riga JSON — quindi se omettiamo
+    // rankingSnapshots dal payload, il campo verrebbe cancellato.
+    // Strategia: leggiamo prima la riga esistente, mergiamo i campi, poi upsert.
+    let finalPayload = globalPayload;
+    if (!hasSnapshots) {
+      const { data: existing } = await supabase
+        .from("app_state")
+        .select("data")
+        .eq("id", "global")
+        .maybeSingle();
+
+      if (existing?.data?.rankingSnapshots) {
+        finalPayload = {
+          ...globalPayload,
+          rankingSnapshots: existing.data.rankingSnapshots,
+        };
+        console.log(`[push-rankings] Preserved ${existing.data.rankingSnapshots.length} existing snapshots from DB`);
+      } else {
+        finalPayload = { ...globalPayload, rankingSnapshots: [] };
+      }
+    }
 
     // Upsert nella riga global
     const { error } = await supabase.from("app_state").upsert(
       {
         id: "global",
-        data: globalPayload,
+        data: finalPayload,
         updated_at: new Date().toISOString(),
       },
       { onConflict: "id" }
@@ -94,7 +129,8 @@ export async function POST(req: NextRequest) {
     return NextResponse.json({
       ok: true,
       labelsPushed: globalPayload.labels.length,
-      snapshotsPushed: globalPayload.rankingSnapshots.length,
+      snapshotsPushed: (finalPayload.rankingSnapshots as any[])?.length || 0,
+      snapshotsPreserved: !hasSnapshots,
       updatedAt: globalPayload.rankingsUpdatedAt,
     });
   } catch (err: any) {
