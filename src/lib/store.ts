@@ -66,6 +66,12 @@ import { rowToProjectTargetArtist } from "@/types/project-target-artist";
 // 🔒 WP-008R — Calcolo centralizzato del progress del Project.
 // Tutta la logica decisionale vive nel modulo dedicato.
 import { calculateProjectProgress } from "@/lib/project-progress";
+// 🔒 SAFE LOAD — Utility non-destructive per caricamenti cloud.
+import {
+  unionById,
+  mergeRankingSnapshots,
+  upsertLabelPersonalData,
+} from "@/lib/safe-load";
 
 // ==================== TYPES ====================
 
@@ -4345,7 +4351,10 @@ export async function loadFromCloud(): Promise<void> {
 
         useAppStore.setState({
           labels: dedupedLabels,
-          rankingSnapshots: globalData.rankingSnapshots || [],
+          rankingSnapshots: mergeRankingSnapshots(
+            useAppStore.getState().rankingSnapshots,
+            globalData.rankingSnapshots || [],
+          ),
           rankingsUpdatedAt: globalData.rankingsUpdatedAt || null,
         });
         console.log("[LabelPulse Cloud] UPSERT+DEDUP: cloud=" + globalLabels.length + " + local_only=" + localOnlyLabels.length + " → total=" + dedupedLabels.length);
@@ -4635,7 +4644,10 @@ export async function loadFromNewTables(): Promise<void> {
         parentReleaseId: ad.parent_release_id,
         createdAt: ad.created_at,
       }));
-      useAppStore.setState({ demos: mappedDemos });
+      // 🔒 SAFE LOAD: UNION by id, non REPLACE. Preserva i demo locali
+      // non ancora sincronizzati con il cloud (POST in volo, offline).
+      const currentDemos = useAppStore.getState().demos;
+      useAppStore.setState({ demos: unionById(currentDemos, mappedDemos) });
     }
 
     // 2. Label personal data — Il server è la fonte assoluta di verità per i dati personali.
@@ -4652,26 +4664,22 @@ export async function loadFromNewTables(): Promise<void> {
       // tutti i campi Beatport → le icone label spariscono (fallback iniziali).
       const currentState = useAppStore.getState();
 
-      // Filtriamo via le vecchie label custom (le ricostruiremo dall'API se sono ancora attive)
-      // 🔒 FIX: preserva TUTTI i campi Beatport (imageUrl, slug, beatportId, genres,
-      // rankByGenre, pointsByGenre, trending, etc.) dalle label correnti — NON dropparli.
-      const cleanSeedLabels = currentState.labels
+      // 🔒 SAFE LOAD: NON resettare i campi personali delle label esistenti.
+      // Invece di mappare a defaults e riapplicare, usiamo upsertLabelPersonalData
+      // che preserva i dati locali quando l'API non li ritorna (es. POST in volo).
+      // Le label custom vengono ricostruite dall'API; le seed label mantengono
+      // tutti i campi Beatport + i dati personali correnti, aggiornati con UPSERT.
+      const seedLabels = currentState.labels
         .filter((l: any) => !l.isCustom)
-        .map((l: any) => ({
-          ...l,
-          emails: [],
-          notes: "",
-          status: "unknown",
-          website: "",
-          demoLink: "",
-          socialLink: "",
-          soundcloudLink: "",
-          contactInfo: "",
-        }));
+        .map((l: any) => ({ ...l })); // shallow clone, NO reset
 
-      const labelMap = new Map(cleanSeedLabels.map((l: any) => [l.id, l]));
       const customLabels: any[] = [];
+      const apiForNonCustom = apiLabels.filter((al: any) => !al.is_custom);
 
+      // UPSERT non-destructivo: sovrascrive solo i campi presenti nell'API
+      const updatedSeedLabels = upsertLabelPersonalData(seedLabels, apiForNonCustom);
+
+      // Ricostruisci le custom labels dall'API
       for (const al of apiLabels) {
         if (al.is_custom) {
           customLabels.push({
@@ -4696,32 +4704,12 @@ export async function loadFromNewTables(): Promise<void> {
             trendingRankByGenre: {},
             trendingPointsByGenre: {},
           });
-        } else {
-          // Applica i dati personali alla label seed corrispondente
-          const existing = labelMap.get(al.label_id);
-          if (existing) {
-            if (al.emails) existing.emails = al.emails;
-            if (al.notes) existing.notes = al.notes;
-            if (al.status) existing.status = al.status;
-            if (al.website) existing.website = al.website;
-            if (al.demo_link) existing.demoLink = al.demo_link;
-            if (al.social_link) existing.socialLink = al.social_link;
-            if (al.soundcloud_link) existing.soundcloudLink = al.soundcloud_link;
-            if (al.contact_info) existing.contactInfo = al.contact_info;
-            if (al.is_favorite !== undefined) existing.isFavorite = al.is_favorite;
-            // 🔒 FIX: applica custom_name come override del nome visualizzato
-            // anche per le label non-custom (Beatport). Il nome Beatport
-            // originale resta nel global row; custom_name è un override
-            // personale che vive in label_personal_data.
-            if (al.custom_name && al.custom_name.trim()) {
-              existing.name = al.custom_name;
-            }
-          }
         }
+        // Non-custom labels sono già state aggiornate via upsertLabelPersonalData
       }
 
       useAppStore.setState({
-        labels: [...Array.from(labelMap.values()), ...customLabels],
+        labels: [...updatedSeedLabels, ...customLabels],
       });
     }
 
@@ -4755,9 +4743,12 @@ export async function loadFromNewTables(): Promise<void> {
           drafts.push(mapped);
         }
       }
+      // 🔒 SAFE LOAD: UNION by id, non REPLACE.
+      const currentPitches = useAppStore.getState().savedPitches;
+      const currentCampaigns = useAppStore.getState().sentCampaigns;
       useAppStore.setState({
-        savedPitches: drafts,
-        sentCampaigns: sent,
+        savedPitches: unionById(currentPitches, drafts),
+        sentCampaigns: unionById(currentCampaigns, sent),
       });
     }
 
@@ -4817,7 +4808,9 @@ export async function loadFromNewTables(): Promise<void> {
         createdAt: ar.created_at,
         epSoundCloudUrl: ar.ep_soundcloud_url || "",
       }));
-      useAppStore.setState({ releases: mappedReleases });
+      // 🔒 SAFE LOAD: UNION by id, non REPLACE.
+      const currentReleases = useAppStore.getState().releases;
+      useAppStore.setState({ releases: unionById(currentReleases, mappedReleases) });
     }
 
     console.log("[FASE C.6] loadFromNewTables completed successfully");
@@ -5336,6 +5329,13 @@ async function pushRankingsToCloud(): Promise<void> {
       return;
     }
 
+    // 🔒 SAFE LOAD: NON pushare MAI un array di snapshots vuoto.
+    // Se il locale ha 0 snapshots (es. dopo un clear temporaneo),
+    // pushare `[]` cancellerebbe lo storico globale per tutti gli utenti.
+    const snapshotsToPush = state.rankingSnapshots.length > 0
+      ? state.rankingSnapshots
+      : null; // null = non aggiornare il campo nel DB
+
     console.log(`[push-rankings] Pushing ${labelsWithRank.length} labels + ${state.rankingSnapshots.length} snapshots to cloud...`);
 
     const res = await fetch("/api/admin/push-rankings", {
@@ -5343,7 +5343,7 @@ async function pushRankingsToCloud(): Promise<void> {
       headers: { "Content-Type": "application/json" },
       body: JSON.stringify({
         labels: labelsWithRank,
-        rankingSnapshots: state.rankingSnapshots,
+        rankingSnapshots: snapshotsToPush,
         rankingsUpdatedAt: state.rankingsUpdatedAt || new Date().toISOString(),
       }),
     });
