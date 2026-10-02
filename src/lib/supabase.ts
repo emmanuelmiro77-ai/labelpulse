@@ -1574,7 +1574,7 @@ export function mergeGlobalWithPersonal(existingLabel: any, newGlobalData: any):
  * Chiamata dal realtime GLOBAL quando l'admin pusha nuove classifiche,
  * e da loadFromCloud al login.
  */
-async function applyGlobalDataToStore(globalData: any): Promise<void> {
+export async function applyGlobalDataToStore(globalData: any): Promise<void> {
   const store = useAppStore.getState();
 
   // 🔒 Task 1: Usa mergeGlobalWithPersonal per preservare DINAMICAMENTE i campi personali
@@ -1599,7 +1599,52 @@ async function applyGlobalDataToStore(globalData: any): Promise<void> {
     new Map(combined.map((l: any) => [l.id, l])).values()
   );
 
-  const finalSnapshots = Array.isArray(globalData.rankingSnapshots) ? globalData.rankingSnapshots : [];
+  // 🔒 FIX (data-loss bug 2026-10-02): MERGE rankingSnapshots invece di REPLACE.
+  // Precedentemente questo ramo (chiamato dal realtime GLOBAL channel quando
+  // l'admin pusha nuove classifiche) faceva un REPLACE totale dell'array
+  // rankingSnapshots. Questo causava perdita silenziosa di snapshot locali
+  // non ancora pushati al cloud: se l'utente importava una classificazione
+  // su Device B (creando S_local), e nel frattempo un altro admin pushava
+  // da Device A (con rankingSnapshots che non conteneva S_local), il realtime
+  // su Device B rimpiazzava l'array locale cancellando S_local.
+  //
+  // Coerenza con gli altri cammini:
+  //   - loadFromCloud() (initial boot) usa già mergeRankingSnapshots(local, cloud)
+  //   - applyRemoteData() (personal realtime) usa già mergeSnapshots(local, cloud)
+  //   - push-rankings API preserva cloud snapshots quando il payload è null
+  //
+  // Fix: usa mergeSnapshotsPublic (UNION by id, dedup per timestamp|source).
+  // Lazy-import da store.ts per evitare circular dep.
+  const cloudSnaps = Array.isArray(globalData.rankingSnapshots) ? globalData.rankingSnapshots : [];
+  const localSnaps = Array.isArray(store.rankingSnapshots) ? store.rankingSnapshots : [];
+  let finalSnapshots: any[] = cloudSnaps;
+  try {
+    const storeMod: any = await import("./store");
+    const mergeFn = storeMod?.mergeSnapshotsPublic;
+    if (typeof mergeFn === "function") {
+      finalSnapshots = mergeFn(localSnaps, cloudSnaps);
+    } else {
+      // Fallback manuale (stessa logica di applyRemoteData)
+      const seen = new Set<string>();
+      const out: any[] = [];
+      for (const s of [...localSnaps, ...cloudSnaps]) {
+        if (!s || typeof s !== "object") continue;
+        const key = s.id || `${s.timestamp}|${s.source}`;
+        if (seen.has(key)) continue;
+        seen.add(key);
+        out.push(s);
+      }
+      out.sort(
+        (x, y) =>
+          new Date(x.timestamp || 0).getTime() - new Date(y.timestamp || 0).getTime()
+      );
+      finalSnapshots = out;
+    }
+  } catch {
+    // Se l'import fallisce (raro), mantieni cloudSnaps come fallback.
+    // Meglio avere solo i cloud snapshots che niente.
+    finalSnapshots = cloudSnaps;
+  }
 
   useAppStore.setState({
     labels: dedupedFinalLabels,
@@ -1607,7 +1652,7 @@ async function applyGlobalDataToStore(globalData: any): Promise<void> {
     rankingsUpdatedAt: globalData.rankingsUpdatedAt || null,
   });
 
-  console.log(`[LabelPulse Cloud] ✅ UPSERT+DEDUP: cloud=${cloudLabels.length} + local_only=${localOnlyLabels.length} → total=${dedupedFinalLabels.length}, snapshots=${finalSnapshots.length}`);
+  console.log(`[LabelPulse Cloud] ✅ UPSERT+DEDUP: cloud=${cloudLabels.length} + local_only=${localOnlyLabels.length} → total=${dedupedFinalLabels.length}, snapshots=${finalSnapshots.length} (local=${localSnaps.length} + cloud=${cloudSnaps.length} → merged=${finalSnapshots.length})`);
 }
 
 // ==================== ARTISTS CLOUD SYNC (separate row) ====================
