@@ -68,26 +68,6 @@ import {
   HEALTH_STYLES,
 } from "@/lib/project-lifecycle";
 
-/**
- * Mappa label → colore per il badge dello status.
- * Colori coerenti con il tema dark di LabelPulse (oklch).
- */
-const STATUS_STYLES: Record<string, string> = {
-  idea: "bg-purple-500/15 text-purple-300 border-purple-500/30",
-  in_progress: "bg-cyan-500/15 text-cyan-300 border-cyan-500/30",
-  ready: "bg-amber-500/15 text-amber-300 border-amber-500/30",
-  submitted: "bg-blue-500/15 text-blue-300 border-blue-500/30",
-  released: "bg-emerald-500/15 text-emerald-300 border-emerald-500/30",
-  archived: "bg-zinc-500/15 text-zinc-400 border-zinc-500/30",
-};
-
-function statusBadgeClass(status: string): string {
-  return (
-    STATUS_STYLES[status] ??
-    "bg-secondary/30 text-muted-foreground border-border/40"
-  );
-}
-
 /** Colore della barra di progress in base al valore. */
 function progressColorClass(progress: number): string {
   if (progress >= 75) return "bg-emerald-500";

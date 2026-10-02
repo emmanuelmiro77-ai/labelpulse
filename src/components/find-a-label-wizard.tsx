@@ -53,7 +53,6 @@ import { useAppStore, getLabelTier } from "@/lib/store";
 import type { AudioAnalysisResult, AnalysisProgress } from "@/lib/audio-analysis";
 import {
   findSimilarLabelsAndArtists,
-  profileFromAnalysis,
   explainMatch,
   type TrackProfile,
   type MatchResult,
