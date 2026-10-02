@@ -3,7 +3,6 @@
 import { useAppStore, type DemoStatus } from "@/lib/store";
 import { t } from "@/lib/i18n";
 import { useMemo } from "react";
-import { useRouter } from "next/navigation";
 import {
   Music2,
   Send,
@@ -54,7 +53,6 @@ const STATUS_SHORT: Record<DemoStatus, string> = {
 
 export function Dashboard() {
   const { labels, demos, locale } = useAppStore();
-  const router = useRouter();
 
   const stats = useMemo(() => {
     const totalDemos = demos.length;
@@ -180,13 +178,7 @@ export function Dashboard() {
               <p className="text-sm text-muted-foreground/80">{t(locale, "dash.welcomeStep2")}</p>
               <p className="text-sm text-muted-foreground/80">{t(locale, "dash.welcomeStep3")}</p>
             </div>
-            <Button
-              className="mt-4 gap-2"
-              onClick={() => router.push("/projects")}
-            >
-              <Rocket className="h-4 w-4" />
-              Crea il tuo primo Project
-            </Button>
+
           </CardContent>
         </Card>
       )}

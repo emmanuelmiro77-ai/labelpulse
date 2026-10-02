@@ -17,11 +17,6 @@
 import { useAppStore } from "@/lib/store";
 import { getLabelDiscoveryUrls } from "@/lib/label-links";
 import { t, type Locale } from "@/lib/i18n";
-// 🔒 WP-005 — Project Context: hook opzionale per leggere il Project
-// corrente. Ritorna null quando Artist Explorer è usato fuori da un
-// <ProjectProvider> (es. tab Artists della home): in quel caso il
-// comportamento del componente è IDENTICO a prima.
-import { useProject } from "@/context/project-context";
 import React, {
   useState,
   useMemo,
@@ -68,9 +63,6 @@ import {
   ListMusic,
   Building2,
   BarChart3,
-  // 🔒 WP-010 — Icone per il pulsante "Add to Project" in ArtistCard.
-  Check,
-  Target,
 } from "lucide-react";
 
 // ============================================================================
@@ -316,46 +308,12 @@ function ArtistCard({
   const labelCount = artist.labelsPublishedOn?.length ?? 0;
   const topGenres = (artist.genres || []).slice(0, 3);
 
-  // 🔒 WP-010 — Project Context. `project` è null quando Artist Explorer è
-  // montato fuori da <ProjectProvider> (es. tab Artists della home). In
-  // quel caso il pulsante "Add to Project" non viene renderizzato e il
-  // comportamento è IDENTICO a prima.
-  const project = useProject();
-  // Leggiamo dallo store direttamente (come fa Label Finder in WP-007):
-  // pattern coerente, niente prop drilling.
-  const projectTargetArtists = useAppStore((s) => s.projectTargetArtists);
-  const addProjectTargetArtist = useAppStore((s) => s.addProjectTargetArtist);
-
-  // Verifica se questo artista è già target del project corrente.
-  const isAlreadyTarget = project
-    ? projectTargetArtists.some(
-        (ta) =>
-          ta.projectId === project.id && ta.artistId === artist.id,
-      )
-    : false;
-
-  // 🔒 WP-010R — Struttura semantica corretta:
-  //   <div className="card">
-  //     <button onClick={onSelect}>  ← contenuto (clickable, apre il dettaglio)
-  //       avatar + nome + badge + generi + stats
-  //     </button>
-  //     <div className="action-bar">  ← azioni (sibling, NON annidate)
-  //       <Button onClick={onSelect}>Open</Button>
-  //       {project && <Button>Add to Project</Button>}
-  //     </div>
-  //   </div>
-  // Nessun pulsante annidato. La card esterna è un <div> (non clickable):
-  // il click avviene sul <button> contenuto o sul pulsante "Open".
   return (
-    <div className="group flex flex-col w-full rounded-xl border border-border/40 bg-card/60 transition-all hover:border-primary/30 hover:bg-card/80 overflow-hidden">
-      {/* Contenuto: button semantico che apre il dettaglio.
-          Ripristinato il pattern pre-WP-010 (<button> invece di
-          <div role="button">) per correttezza HTML. */}
-      <button
-        type="button"
-        onClick={() => onSelect(artist.id)}
-        className="flex w-full items-start gap-3 p-3 text-left focus:outline-none focus-visible:ring-2 focus-visible:ring-primary/40 focus-visible:ring-inset"
-      >
+    <button
+      type="button"
+      onClick={() => onSelect(artist.id)}
+      className="group flex w-full items-start gap-3 rounded-xl border border-border/40 bg-card/60 p-3 text-left transition-all hover:border-primary/30 hover:bg-card/80 focus:outline-none focus-visible:ring-2 focus-visible:ring-primary/40"
+    >
         <ArtistAvatar artist={artist} size={64} />
 
         <div className="min-w-0 flex-1">
@@ -407,68 +365,7 @@ function ArtistCard({
             ) : null}
           </p>
         </div>
-      </button>
-
-      {/* 🔒 WP-010R — Action bar (sibling del <button>, non annidata).
-          Contiene le azioni disponibili per la card:
-          - "Open": apre il dettaglio (chiama onSelect, stesso comportamento
-            del click sul corpo).
-          - "Add to Project" / "Added": visibile SOLO quando Artist Explorer
-            è dentro un <ProjectProvider> (project !== null). Fuori dal
-            Provider non viene renderizzato e il comportamento è IDENTICO
-            a prima.
-          L'action bar ha un border-top per separarla visivamente dal
-          contenuto. */}
-      <div className="flex items-center gap-1 border-t border-border/30 px-3 py-1.5 bg-card/40">
-        <Button
-          type="button"
-          variant="ghost"
-          size="sm"
-          className="h-7 gap-1 px-2 text-[10px] text-muted-foreground hover:text-foreground"
-          onClick={() => onSelect(artist.id)}
-          title="Apri dettaglio artista"
-        >
-          <ExternalLink className="h-3 w-3" />
-          Open
-        </Button>
-
-        {/* 🔒 WP-010 — "Add to Project" button (riportato nella action bar).
-            - Se l'artista è già target del project corrente, mostra stato
-              "aggiunto" (icona Check, disabled).
-            - Al click: crea ProjectTargetArtist via store action
-              (optimistic update + background cloud write). */}
-        {project && (
-          <div className="ml-auto shrink-0">
-            {isAlreadyTarget ? (
-              <span
-                className="inline-flex items-center gap-1 rounded-md px-1.5 py-0.5 text-[10px] font-medium text-emerald-400"
-                title="Aggiunto al project"
-              >
-                <Check className="h-3 w-3" />
-                Added
-              </span>
-            ) : (
-              <Button
-                type="button"
-                variant="ghost"
-                size="sm"
-                className="h-7 gap-1 px-2 text-[10px] text-primary hover:text-primary"
-                onClick={() => {
-                  addProjectTargetArtist({
-                    project_id: project.id,
-                    artist_id: artist.id,
-                  });
-                }}
-                title="Aggiungi al project corrente"
-              >
-                <Target className="h-3 w-3" />
-                Add to Project
-              </Button>
-            )}
-          </div>
-        )}
-      </div>
-    </div>
+    </button>
   );
 }
 
@@ -1843,22 +1740,6 @@ export default function ArtistExplorer() {
   // quel caso tutte le letture `project?.*` cadono su undefined e il
   // comportamento è IDENTICO a prima.
   //
-  // `projectArtistHint` è un contesto iniziale OPZIONALE: espone
-  // l'artista del Project corrente (se presente). NON viene applicato a
-  // `listState.search`, NON triggera filtri, NON effettua ricerche
-  // automatiche. È disponibile come dato per futuri task (es. suggerire
-  // l'artista del Project nell'Add Dialog). In questo task viene solo
-  // incluso nel log di debug esistente (nessun effetto visibile).
-  const project = useProject();
-  const projectArtistHint = useMemo(
-    () => (project && project.artist ? project.artist.trim() : ""),
-    [project],
-  );
-  const projectGoalHint = useMemo(
-    () => (project && project.goal ? project.goal : ""),
-    [project],
-  );
-
   // 🔒 DEBUG RP-027: log render + state changes
   console.log(`[DEBUG ArtistExplorer] ${new Date().toISOString()} RENDER`, {
     selectedArtistId,
@@ -1866,10 +1747,6 @@ export default function ArtistExplorer() {
     activeTab: store.activeTab,
     artistsCount: artists?.length || 0,
     releasesCount: releases.length,
-    // 🔒 WP-005 — Project hints (opzionali, solo per debug). Non modificano
-    // filtri né flusso utente. Sono null/"" fuori dal ProjectProvider.
-    projectArtistHint: projectArtistHint || null,
-    projectGoalHint: projectGoalHint || null,
   });
 
   // Defensive: guard against undefined arrays.

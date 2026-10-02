@@ -38,15 +38,6 @@ export interface StateSnapshot {
   rankingSnapshots: any[];
   rankingsUpdatedAt: string | null;
   locale: string;
-  // 🔒 Phase 1: projects è opzionale per backward compat con snapshot
-  // precedenti alla Phase 1. Nuovi snapshot lo includono sempre.
-  projects?: any[];
-  // 🔒 WP-006: projectTargetLabels è opzionale per backward compat con
-  // snapshot precedenti a WP-006. Nuovi snapshot lo includono sempre.
-  projectTargetLabels?: any[];
-  // 🔒 WP-009: projectTargetArtists è opzionale per backward compat con
-  // snapshot precedenti a WP-009. Nuovi snapshot lo includono sempre.
-  projectTargetArtists?: any[];
 }
 
 /**
@@ -86,12 +77,6 @@ export function saveSnapshot(
     rankingSnapshots: any[];
     rankingsUpdatedAt: string | null;
     locale: string;
-    // 🔒 Phase 1: projects è opzionale per backward compat.
-    projects?: any[];
-    // 🔒 WP-006: projectTargetLabels è opzionale per backward compat.
-    projectTargetLabels?: any[];
-    // 🔒 WP-009: projectTargetArtists è opzionale per backward compat.
-    projectTargetArtists?: any[];
   }
 ): void {
   if (!email || typeof window === "undefined") return;

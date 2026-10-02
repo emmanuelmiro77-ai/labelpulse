@@ -22,50 +22,7 @@ import {
   apiCreateRelease,
   apiUpdateRelease,
   apiDeleteRelease,
-  // 🔒 Phase 1: Project CRUD — entità ISOLATA, non collegata ad altri moduli
-  apiFetchAllProjects,
-  apiCreateProject,
-  apiUpdateProject,
-  apiDeleteProject,
-  // 🔒 WP-006: ProjectTargetLabel CRUD — relazione Project ↔ Label.
-  // Entità isolata in questo task: nessun collegamento automatico con UI.
-  apiFetchProjectTargetLabels,
-  apiCreateProjectTargetLabel,
-  apiUpdateProjectTargetLabel,
-  apiDeleteProjectTargetLabel,
-  // 🔒 WP-009: ProjectTargetArtist CRUD — relazione Project ↔ Artist.
-  // Entità isolata in questo task: nessun collegamento automatico con UI.
-  apiFetchProjectTargetArtists,
-  apiCreateProjectTargetArtist,
-  apiUpdateProjectTargetArtist,
-  apiDeleteProjectTargetArtist,
 } from "./api-client";
-import type {
-  Project,
-  ProjectInput,
-  ProjectRow,
-  ProjectUpdate,
-} from "@/types/project";
-import { rowToProject } from "@/types/project";
-// 🔒 WP-006 — ProjectTargetLabel: modello e mapper.
-import type {
-  ProjectTargetLabel,
-  ProjectTargetLabelInput,
-  ProjectTargetLabelRow,
-  ProjectTargetLabelUpdate,
-} from "@/types/project-target-label";
-import { rowToProjectTargetLabel } from "@/types/project-target-label";
-// 🔒 WP-009 — ProjectTargetArtist: modello e mapper.
-import type {
-  ProjectTargetArtist,
-  ProjectTargetArtistInput,
-  ProjectTargetArtistRow,
-  ProjectTargetArtistUpdate,
-} from "@/types/project-target-artist";
-import { rowToProjectTargetArtist } from "@/types/project-target-artist";
-// 🔒 WP-008R — Calcolo centralizzato del progress del Project.
-// Tutta la logica decisionale vive nel modulo dedicato.
-import { calculateProjectProgress } from "@/lib/project-progress";
 // 🔒 SAFE LOAD — Utility non-destructive per caricamenti cloud.
 import {
   unionById,
@@ -424,51 +381,6 @@ export interface SentCampaign {
 
 const genId = () =>
   Date.now().toString(36) + Math.random().toString(36).slice(2, 7);
-
-/**
- * 🔒 WP-008R — Ricalcola e persiste il `progress` di un Project.
- *
- * Thin wrapper attorno a `calculateProjectProgress` (da `@/lib/project-progress`):
- * tutta la logica decisionale vive nel modulo dedicato. Questa funzione
- * si occupa solo di:
- *   1. Leggere lo stato corrente via `useAppStore.getState()`
- *   2. Delegare il calcolo a `calculateProjectProgress(projectId, state)`
- *   3. Se il progress è cambiato, aggiornare `projects[i].progress` nello
- *      stato locale (optimistic) + pushare al cloud via `apiUpdateProject`
- *
- * Da chiamare dopo ogni add/delete/load di target labels per un project.
- * Non ritorna nulla. Errori di cloud sync sono solo loggati.
- */
-function recomputeProjectProgress(projectId: string): void {
-  const state = useAppStore.getState();
-  const project = state.projects.find((p) => p.id === projectId);
-  if (!project) return;
-
-  // 🔒 WP-008R — Calcolo delegato al modulo centralizzato.
-  const newProgress = calculateProjectProgress(projectId, state);
-
-  // No-op se il progress non è cambiato. Evita write inutili al cloud
-  // e re-render della UI (la progress bar resta stabile).
-  if (project.progress === newProgress) return;
-
-  // Optimistic update locale.
-  useAppStore.setState((s) => ({
-    projects: s.projects.map((p) =>
-      p.id === projectId
-        ? { ...p, progress: newProgress, updatedAt: new Date().toISOString() }
-        : p,
-    ),
-    lastSavedAt: new Date().toISOString(),
-  }));
-
-  // Background cloud write. Solo il campo `progress` viene patchato.
-  apiUpdateProject(projectId, { progress: newProgress }).catch((err) =>
-    console.error(
-      `[projects] recomputeProjectProgress cloud sync failed for ${projectId}:`,
-      err,
-    ),
-  );
-}
 
 // Convert imported data to Label objects
 function buildLabelsFromData(): Label[] {
@@ -1325,38 +1237,6 @@ interface AppState {
   addSentCampaign: (campaign: Omit<SentCampaign, "id" | "sentAt">) => string;
   deleteSentCampaign: (id: string) => void;
 
-  // 🔒 Phase 1: Projects — entità ISOLATA. Non collegata a Demo / Release /
-  // Promotion / Pitch. I metodi qui sotto sono intenzionalmente separati
-  // dagli altri moduli: loadProjects() NON viene chiamato da loadFromNewTables()
-  // né da loadFromCloud(). È responsabilità della pagina /projects chiamarlo.
-  projects: Project[];
-  loadProjects: () => Promise<void>;
-  addProject: (input: ProjectInput) => string; // returns new id (optimistic)
-  updateProject: (id: string, updates: ProjectUpdate) => void;
-  deleteProject: (id: string) => void;
-
-  // 🔒 WP-006 — Project Target Labels. Relazione Project ↔ Label.
-  // Entità ISOLATA in questo task: nessun collegamento con UI o Lifecycle
-  // Engine. I metodi sono chiamati solo dalla futura UI WP-007+.
-  // `projectTargetLabels` è un array piatto (non per-project) per semplicità;
-  // i consumer filtrano per `projectId` via selector.
-  projectTargetLabels: ProjectTargetLabel[];
-  loadProjectTargetLabels: (projectId: string) => Promise<void>;
-  addProjectTargetLabel: (input: ProjectTargetLabelInput) => string | null;
-  updateProjectTargetLabel: (id: string, updates: ProjectTargetLabelUpdate) => void;
-  deleteProjectTargetLabel: (id: string) => void;
-
-  // 🔒 WP-009 — Project Target Artists. Relazione Project ↔ Artist.
-  // Entità ISOLATA in questo task: nessun collegamento con UI o Lifecycle
-  // Engine. Pattern speculare a projectTargetLabels (WP-006).
-  // `projectTargetArtists` è un array piatto; i consumer filtrano per
-  // `projectId` via selector.
-  projectTargetArtists: ProjectTargetArtist[];
-  loadProjectTargetArtists: (projectId: string) => Promise<void>;
-  addProjectTargetArtist: (input: ProjectTargetArtistInput) => string | null;
-  updateProjectTargetArtist: (id: string, updates: ProjectTargetArtistUpdate) => void;
-  deleteProjectTargetArtist: (id: string) => void;
-
   // Navigation
   setActiveTab: (tab: "dashboard" | "labels" | "artists" | "rankings" | "demos" | "pitch" | "profile") => void;
 
@@ -1903,12 +1783,7 @@ export const useAppStore = create<AppState>()(
       releases: [] as Release[],
       savedPitches: [] as SavedPitch[],
       sentCampaigns: [] as SentCampaign[],
-      // 🔒 Phase 1: Project state iniziale vuoto. Non viene seedato.
-      projects: [] as Project[],
-      // 🔒 WP-006: Project Target Labels state iniziale vuoto.
-      projectTargetLabels: [] as ProjectTargetLabel[],
-      // 🔒 WP-009: Project Target Artists state iniziale vuoto.
-      projectTargetArtists: [] as ProjectTargetArtist[],
+
       lastReplyScanAt: null,
       newRepliesCount: 0,
       rankingsUpdatedAt: null as string | null,
@@ -2292,468 +2167,6 @@ export const useAppStore = create<AppState>()(
         syncToCloud();
         // 🔒 FASE C.5: dual write — delete from pitch_campaigns
         apiDeletePitch(id).catch((err) => console.error("[cloud sync] failed:", err));
-      },
-
-      // ==================== PROJECTS (Phase 1 Foundation) ====================
-      // 🔒 Entità ISOLATA: nessun syncToCloud(), nessun pushRankingsToCloud(),
-      // nessun collegamento con loadFromNewTables. Il cloud sync è gestito
-      // esclusivamente dalle funzioni apiFetchAllProjects / apiCreateProject /
-      // apiUpdateProject / apiDeleteProject, chiamate qui dentro.
-      //
-      // Pattern: optimistic update + background cloud write. Se il cloud write
-      // fallisce, lo stato locale resta aggiornato (l'errore viene solo loggato).
-      // Al prossimo loadProjects() il cloud riallineerà lo stato.
-
-      loadProjects: async () => {
-        if (typeof window === "undefined") return;
-        try {
-          const rows = await apiFetchAllProjects();
-          if (Array.isArray(rows)) {
-            const projects = rows.map(rowToProject);
-            useAppStore.setState({ projects });
-            console.log(
-              `[projects] loadProjects: loaded ${projects.length} projects from cloud`,
-            );
-          }
-        } catch (err) {
-          console.error("[projects] loadProjects failed:", err);
-        }
-      },
-
-      addProject: (input) => {
-        const newId =
-          input.id && input.id.trim() !== ""
-            ? input.id
-            : `proj_${genId()}`;
-        const now = new Date().toISOString();
-        const newProject: Project = {
-          id: newId,
-          title: input.title,
-          artist: input.artist ?? "",
-          status: input.status ?? "idea",
-          goal: input.goal ?? "",
-          progress:
-            typeof input.progress === "number" &&
-            Number.isFinite(input.progress)
-              ? Math.max(0, Math.min(100, Math.round(input.progress)))
-              : 0,
-          sourceUrl: input.source_url ?? "",
-          createdAt: now,
-          updatedAt: now,
-        };
-        // Optimistic update: aggiungi subito in testa alla lista locale.
-        set((state) => ({
-          projects: [newProject, ...state.projects],
-          lastSavedAt: now,
-        }));
-        // Background cloud write. Se fallisce, l'errore è solo loggato:
-        // al prossimo loadProjects() il cloud riallineerà. Non facciamo
-        // rollback ottimistico per non penalizzare UX su reti lente.
-        apiCreateProject({
-          id: newId,
-          title: newProject.title,
-          artist: newProject.artist,
-          status: newProject.status,
-          goal: newProject.goal,
-          progress: newProject.progress,
-          source_url: newProject.sourceUrl || undefined,
-        })
-          .then((row) => {
-            if (row) {
-              // Riallinea con il payload canonico del server (timestamp DB).
-              const canonical = rowToProject(row as ProjectRow);
-              set((state) => ({
-                projects: state.projects.map((p) =>
-                  p.id === newId ? { ...p, ...canonical } : p,
-                ),
-              }));
-            }
-          })
-          .catch((err) =>
-            console.error("[projects] addProject cloud sync failed:", err),
-          );
-        return newId;
-      },
-
-      updateProject: (id, updates) => {
-        const now = new Date().toISOString();
-        // Clamp progress in optimistic update (defensive: il server rifà
-        // lo stesso clamp, ma così evitiamo闪烁 di valori fuori range
-        // nella UI prima della risposta del cloud).
-        const sanitizedUpdates: ProjectUpdate = { ...updates };
-        if (
-          typeof sanitizedUpdates.progress === "number" &&
-          Number.isFinite(sanitizedUpdates.progress)
-        ) {
-          sanitizedUpdates.progress = Math.max(
-            0,
-            Math.min(100, Math.round(sanitizedUpdates.progress)),
-          );
-        }
-        // Optimistic update.
-        set((state) => ({
-          projects: state.projects.map((p) =>
-            p.id === id
-              ? {
-                  ...p,
-                  ...sanitizedUpdates,
-                  // source_url (snake) → sourceUrl (camel)
-                  ...(sanitizedUpdates.source_url !== undefined
-                    ? { sourceUrl: sanitizedUpdates.source_url }
-                    : {}),
-                  updatedAt: now,
-                }
-              : p,
-          ),
-          lastSavedAt: now,
-        }));
-        // Background cloud write.
-        apiUpdateProject(id, sanitizedUpdates)
-          .then((row) => {
-            if (row) {
-              const canonical = rowToProject(row as ProjectRow);
-              set((state) => ({
-                projects: state.projects.map((p) =>
-                  p.id === id ? { ...p, ...canonical } : p,
-                ),
-              }));
-            }
-          })
-          .catch((err) =>
-            console.error("[projects] updateProject cloud sync failed:", err),
-          );
-      },
-
-      deleteProject: (id) => {
-        // Optimistic update: rimuovi subito dalla lista locale.
-        set((state) => ({
-          projects: state.projects.filter((p) => p.id !== id),
-          lastSavedAt: new Date().toISOString(),
-        }));
-        // Background cloud write.
-        apiDeleteProject(id).catch((err) =>
-          console.error("[projects] deleteProject cloud sync failed:", err),
-        );
-      },
-
-      // ==================== PROJECT TARGET LABELS (WP-006) ====================
-      // 🔒 Entità ISOLATA: nessun syncToCloud(), nessun collegamento con altri
-      // moduli. Il cloud sync è gestito esclusivamente dalle funzioni
-      // apiFetchProjectTargetLabels / apiCreateProjectTargetLabel /
-      // apiUpdateProjectTargetLabel / apiDeleteProjectTargetLabel.
-      //
-      // Pattern: optimistic update + background cloud write. Se il cloud write
-      // fallisce, lo stato locale resta aggiornato (l'errore viene solo loggato).
-      // Al prossimo loadProjectTargetLabels() il cloud riallineerà lo stato.
-      //
-      // `projectTargetLabels` è un array piatto. `loadProjectTargetLabels(pid)`
-      // sostituisce SOLO le righe di quel projectId (merge per-project),
-      // preservando le righe degli altri project già caricate — questo
-      // permette di cambiare project nella Overview senza dover ricaricare tutto.
-
-      loadProjectTargetLabels: async (projectId) => {
-        if (typeof window === "undefined") return;
-        try {
-          const rows = await apiFetchProjectTargetLabels(projectId);
-          if (Array.isArray(rows)) {
-            const targetLabels = rows.map(rowToProjectTargetLabel);
-            set((state) => ({
-              // Sostituisci solo le righe del projectId richiesto; mantieni
-              // le righe degli altri project (cache locale cross-project).
-              projectTargetLabels: [
-                ...state.projectTargetLabels.filter(
-                  (tl) => tl.projectId !== projectId,
-                ),
-                ...targetLabels,
-              ],
-              lastSavedAt: new Date().toISOString(),
-            }));
-            console.log(
-              `[project-target-labels] loadProjectTargetLabels: loaded ${targetLabels.length} target labels for project ${projectId}`,
-            );
-            // 🔒 WP-008 — Ricalcola il progress dopo il load dal cloud.
-            // Necessario perché il cloud può avere un numero diverso di
-            // target labels rispetto allo stato locale (es. utente ha
-            // aggiunto target da un altro dispositivo). Va chiamato DOPO
-            // il set() così recomputeProjectProgress vede il nuovo count.
-            recomputeProjectProgress(projectId);
-          }
-        } catch (err) {
-          console.error("[project-target-labels] loadProjectTargetLabels failed:", err);
-        }
-      },
-
-      addProjectTargetLabel: (input) => {
-        const newId =
-          input.id && input.id.trim() !== ""
-            ? input.id
-            : `ptl_${genId()}`;
-        const now = new Date().toISOString();
-        const newTargetLabel: ProjectTargetLabel = {
-          id: newId,
-          projectId: input.project_id,
-          labelId: input.label_id,
-          createdAt: now,
-        };
-        // Defensive: se la (projectId, labelId) esiste già in stato locale,
-        // non duplicare. Ritorna null (coerente con la 409 del server).
-        const exists = get().projectTargetLabels.some(
-          (tl) =>
-            tl.projectId === newTargetLabel.projectId &&
-            tl.labelId === newTargetLabel.labelId,
-        );
-        if (exists) {
-          console.warn(
-            "[project-target-labels] addProjectTargetLabel: target label already exists locally",
-          );
-          return null;
-        }
-        // Optimistic update.
-        set((state) => ({
-          projectTargetLabels: [...state.projectTargetLabels, newTargetLabel],
-          lastSavedAt: now,
-        }));
-        // 🔒 WP-008 — Ricalcola il progress del project dopo l'aggiunta.
-        // Va chiamato DOPO il set() così recomputeProjectProgress vede
-        // il nuovo count. Background, no blocco.
-        recomputeProjectProgress(newTargetLabel.projectId);
-        // Background cloud write. Se fallisce (incluso 409), l'errore è solo
-        // loggato: al prossimo loadProjectTargetLabels() il cloud riallineerà.
-        apiCreateProjectTargetLabel({
-          id: newId,
-          project_id: newTargetLabel.projectId,
-          label_id: newTargetLabel.labelId,
-        })
-          .then((row) => {
-            if (row) {
-              const canonical = rowToProjectTargetLabel(row as ProjectTargetLabelRow);
-              set((state) => ({
-                projectTargetLabels: state.projectTargetLabels.map((tl) =>
-                  tl.id === newId ? { ...tl, ...canonical } : tl,
-                ),
-              }));
-            }
-          })
-          .catch((err) =>
-            console.error(
-              "[project-target-labels] addProjectTargetLabel cloud sync failed:",
-              err,
-            ),
-          );
-        return newId;
-      },
-
-      updateProjectTargetLabel: (id, updates) => {
-        const now = new Date().toISOString();
-        // Optimistic update.
-        set((state) => ({
-          projectTargetLabels: state.projectTargetLabels.map((tl) =>
-            tl.id === id
-              ? {
-                  ...tl,
-                  ...(updates.label_id !== undefined
-                    ? { labelId: updates.label_id }
-                    : {}),
-                }
-              : tl,
-          ),
-          lastSavedAt: now,
-        }));
-        // Background cloud write.
-        apiUpdateProjectTargetLabel(id, updates)
-          .then((row) => {
-            if (row) {
-              const canonical = rowToProjectTargetLabel(row as ProjectTargetLabelRow);
-              set((state) => ({
-                projectTargetLabels: state.projectTargetLabels.map((tl) =>
-                  tl.id === id ? { ...tl, ...canonical } : tl,
-                ),
-              }));
-            }
-          })
-          .catch((err) =>
-            console.error(
-              "[project-target-labels] updateProjectTargetLabel cloud sync failed:",
-              err,
-            ),
-          );
-      },
-
-      deleteProjectTargetLabel: (id) => {
-        // 🔒 WP-008 — Cattura il projectId PRIMA di rimuovere la target
-        // label. Dopo il set() non sarebbe più reperibile dallo stato.
-        const targetLabel = get().projectTargetLabels.find((tl) => tl.id === id);
-        const projectId = targetLabel?.projectId;
-        // Optimistic update: rimuovi subito dalla lista locale.
-        set((state) => ({
-          projectTargetLabels: state.projectTargetLabels.filter(
-            (tl) => tl.id !== id,
-          ),
-          lastSavedAt: new Date().toISOString(),
-        }));
-        // 🔒 WP-008 — Ricalcola il progress del project dopo la rimozione.
-        // Va chiamato DOPO il set() così recomputeProjectProgress vede il
-        // nuovo count (decrementato).
-        if (projectId) {
-          recomputeProjectProgress(projectId);
-        }
-        // Background cloud write.
-        apiDeleteProjectTargetLabel(id).catch((err) =>
-          console.error(
-            "[project-target-labels] deleteProjectTargetLabel cloud sync failed:",
-            err,
-          ),
-        );
-      },
-
-      // ==================== PROJECT TARGET ARTISTS (WP-009) ====================
-      // 🔒 Entità ISOLATA: nessun syncToCloud(), nessun collegamento con altri
-      // moduli. Pattern speculare a projectTargetLabels (WP-006).
-      //
-      // NOTA: in WP-009 NON viene chiamato recomputeProjectProgress perché
-      // il calcolo del progress (WP-008R) considera per ora SOLO le target
-      // labels. Quando il calcolo verrà esteso per includere anche le
-      // target artists (fase successiva), basterà modificare il modulo
-      // centralizzato `src/lib/project-progress.ts` — queste azioni non
-      // dovranno essere toccate.
-      //
-      // `projectTargetArtists` è un array piatto. `loadProjectTargetArtists(pid)`
-      // sostituisce SOLO le righe di quel projectId (merge per-project),
-      // preservando le righe degli altri project già caricate.
-
-      loadProjectTargetArtists: async (projectId) => {
-        if (typeof window === "undefined") return;
-        try {
-          const rows = await apiFetchProjectTargetArtists(projectId);
-          if (Array.isArray(rows)) {
-            const targetArtists = rows.map(rowToProjectTargetArtist);
-            set((state) => ({
-              // Sostituisci solo le righe del projectId richiesto; mantieni
-              // le righe degli altri project (cache locale cross-project).
-              projectTargetArtists: [
-                ...state.projectTargetArtists.filter(
-                  (ta) => ta.projectId !== projectId,
-                ),
-                ...targetArtists,
-              ],
-              lastSavedAt: new Date().toISOString(),
-            }));
-            console.log(
-              `[project-target-artists] loadProjectTargetArtists: loaded ${targetArtists.length} target artists for project ${projectId}`,
-            );
-          }
-        } catch (err) {
-          console.error("[project-target-artists] loadProjectTargetArtists failed:", err);
-        }
-      },
-
-      addProjectTargetArtist: (input) => {
-        const newId =
-          input.id && input.id.trim() !== ""
-            ? input.id
-            : `pta_${genId()}`;
-        const now = new Date().toISOString();
-        const newTargetArtist: ProjectTargetArtist = {
-          id: newId,
-          projectId: input.project_id,
-          artistId: input.artist_id,
-          createdAt: now,
-        };
-        // Defensive: se la (projectId, artistId) esiste già in stato locale,
-        // non duplicare. Ritorna null (coerente con la 409 del server).
-        const exists = get().projectTargetArtists.some(
-          (ta) =>
-            ta.projectId === newTargetArtist.projectId &&
-            ta.artistId === newTargetArtist.artistId,
-        );
-        if (exists) {
-          console.warn(
-            "[project-target-artists] addProjectTargetArtist: target artist already exists locally",
-          );
-          return null;
-        }
-        // Optimistic update.
-        set((state) => ({
-          projectTargetArtists: [...state.projectTargetArtists, newTargetArtist],
-          lastSavedAt: now,
-        }));
-        // Background cloud write. Se fallisce (incluso 409), l'errore è solo
-        // loggato: al prossimo loadProjectTargetArtists() il cloud riallineerà.
-        apiCreateProjectTargetArtist({
-          id: newId,
-          project_id: newTargetArtist.projectId,
-          artist_id: newTargetArtist.artistId,
-        })
-          .then((row) => {
-            if (row) {
-              const canonical = rowToProjectTargetArtist(row as ProjectTargetArtistRow);
-              set((state) => ({
-                projectTargetArtists: state.projectTargetArtists.map((ta) =>
-                  ta.id === newId ? { ...ta, ...canonical } : ta,
-                ),
-              }));
-            }
-          })
-          .catch((err) =>
-            console.error(
-              "[project-target-artists] addProjectTargetArtist cloud sync failed:",
-              err,
-            ),
-          );
-        return newId;
-      },
-
-      updateProjectTargetArtist: (id, updates) => {
-        const now = new Date().toISOString();
-        // Optimistic update.
-        set((state) => ({
-          projectTargetArtists: state.projectTargetArtists.map((ta) =>
-            ta.id === id
-              ? {
-                  ...ta,
-                  ...(updates.artist_id !== undefined
-                    ? { artistId: updates.artist_id }
-                    : {}),
-                }
-              : ta,
-          ),
-          lastSavedAt: now,
-        }));
-        // Background cloud write.
-        apiUpdateProjectTargetArtist(id, updates)
-          .then((row) => {
-            if (row) {
-              const canonical = rowToProjectTargetArtist(row as ProjectTargetArtistRow);
-              set((state) => ({
-                projectTargetArtists: state.projectTargetArtists.map((ta) =>
-                  ta.id === id ? { ...ta, ...canonical } : ta,
-                ),
-              }));
-            }
-          })
-          .catch((err) =>
-            console.error(
-              "[project-target-artists] updateProjectTargetArtist cloud sync failed:",
-              err,
-            ),
-          );
-      },
-
-      deleteProjectTargetArtist: (id) => {
-        // Optimistic update: rimuovi subito dalla lista locale.
-        set((state) => ({
-          projectTargetArtists: state.projectTargetArtists.filter(
-            (ta) => ta.id !== id,
-          ),
-          lastSavedAt: new Date().toISOString(),
-        }));
-        // Background cloud write.
-        apiDeleteProjectTargetArtist(id).catch((err) =>
-          console.error(
-            "[project-target-artists] deleteProjectTargetArtist cloud sync failed:",
-            err,
-          ),
-        );
       },
 
       advanceDemoStatus: (id) => {
@@ -3544,7 +2957,7 @@ export const useAppStore = create<AppState>()(
     }),
     {
       name: PRIMARY_KEY,
-      version: 22,  // 🔒 WP-009: bump 21→22 per backfillare projectTargetArtists su IndexedDB
+      version: 22,
       storage: createJSONStorage(() => idbStorage), // 🔒 Task 3: IndexedDB invece di localStorage
       migrate: (persisted: any, version: number) => {
         // 🔒 FASE D FIX v19: rimuovi labels dal persisted state (occupavano 4MB+ inutilmente)
@@ -3552,32 +2965,7 @@ export const useAppStore = create<AppState>()(
           console.log("[LabelPulse] Migrating v18→v19: removing labels from localStorage (was causing QuotaExceededError)");
           delete persisted.labels;
         }
-        // 🔒 Phase 2: backfill goal="" e progress=0 sui projects persistiti
-        // da Phase 1 (che non avevano questi campi).
-        if (version < 20 && Array.isArray(persisted.projects)) {
-          persisted.projects = persisted.projects.map((p: any) => ({
-            ...p,
-            goal: typeof p.goal === "string" ? p.goal : "",
-            progress:
-              typeof p.progress === "number" && Number.isFinite(p.progress)
-                ? Math.max(0, Math.min(100, Math.round(p.progress)))
-                : 0,
-          }));
-        }
-        // 🔒 WP-006: backfill projectTargetLabels = [] se mancante (project
-        // pre-WP-006 non avevano questo campo nel persisted state).
-        if (version < 21) {
-          if (!Array.isArray(persisted.projectTargetLabels)) {
-            persisted.projectTargetLabels = [];
-          }
-        }
-        // 🔒 WP-009: backfill projectTargetArtists = [] se mancante (project
-        // pre-WP-009 non avevano questo campo nel persisted state).
-        if (version < 22) {
-          if (!Array.isArray(persisted.projectTargetArtists)) {
-            persisted.projectTargetArtists = [];
-          }
-        }
+
         if (version < 5) {
           if (persisted.demos) {
             const seedIds = ["demo_1", "demo_2", "demo_3", "demo_4", "demo_5", "demo_6"];
@@ -3824,18 +3212,6 @@ export const useAppStore = create<AppState>()(
         releases: state.releases,
         savedPitches: state.savedPitches,
         sentCampaigns: state.sentCampaigns,
-        // 🔒 Phase 1: persist projects localmente per UX (istantaneo al boot,
-        // riallineato dal cloud da loadProjects() quando la pagina /projects
-        // viene montata).
-        projects: state.projects,
-        // 🔒 WP-006: persist projectTargetLabels per UX (istantaneo al boot,
-        // riallineato dal cloud da loadProjectTargetLabels() quando la
-        // pagina Overview viene montata).
-        projectTargetLabels: state.projectTargetLabels,
-        // 🔒 WP-009: persist projectTargetArtists per UX (istantaneo al boot,
-        // riallineato dal cloud da loadProjectTargetArtists() quando la
-        // pagina Overview viene montata).
-        projectTargetArtists: state.projectTargetArtists,
         activeTab: state.activeTab,
         locale: state.locale,
         userProfile: state.userProfile,
@@ -3948,12 +3324,6 @@ export function setAutoBackupEmail(email: string | null): void {
       rankingSnapshots: state.rankingSnapshots,
       rankingsUpdatedAt: state.rankingsUpdatedAt,
       locale: state.locale,
-      // 🔒 Phase 1: includi projects nello snapshot di backup automatico
-      projects: state.projects,
-      // 🔒 WP-006: includi projectTargetLabels nello snapshot di backup
-      projectTargetLabels: state.projectTargetLabels,
-      // 🔒 WP-009: includi projectTargetArtists nello snapshot di backup
-      projectTargetArtists: state.projectTargetArtists,
     });
   }
 }
@@ -3969,10 +3339,7 @@ useAppStore.subscribe((state, prevState) => {
     state.userProfile === prevState.userProfile &&
     state.savedPitches === prevState.savedPitches &&
     state.sentCampaigns === prevState.sentCampaigns &&
-    state.rankingSnapshots === prevState.rankingSnapshots &&
-    state.projects === prevState.projects &&
-    state.projectTargetLabels === prevState.projectTargetLabels &&
-    state.projectTargetArtists === prevState.projectTargetArtists
+    state.rankingSnapshots === prevState.rankingSnapshots
   ) {
     return;
   }
@@ -3986,12 +3353,6 @@ useAppStore.subscribe((state, prevState) => {
     rankingSnapshots: state.rankingSnapshots,
     rankingsUpdatedAt: state.rankingsUpdatedAt,
     locale: state.locale,
-    // 🔒 Phase 1: includi projects nello snapshot di backup automatico
-    projects: state.projects,
-    // 🔒 WP-006: includi projectTargetLabels nello snapshot di backup
-    projectTargetLabels: state.projectTargetLabels,
-    // 🔒 WP-009: includi projectTargetArtists nello snapshot di backup
-    projectTargetArtists: state.projectTargetArtists,
   });
 });
 

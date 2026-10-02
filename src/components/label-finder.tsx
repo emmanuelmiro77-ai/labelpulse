@@ -3,11 +3,6 @@
 import { useAppStore, getLabelTier, type Label, type Artist, type ArtistTrack, type Demo } from "@/lib/store";
 import { t } from "@/lib/i18n";
 import { getLabelDiscoveryUrls } from "@/lib/label-links";
-// 🔒 WP-004 — Project Context: hook opzionale per leggere il Project
-// corrente. Ritorna null quando Label Finder è usato fuori da un
-// <ProjectProvider> (es. tab Labels della home): in quel caso il
-// comportamento del componente è IDENTICO a prima.
-import { useProject } from "@/context/project-context";
 import React, { useState, useMemo, useCallback, useEffect, useRef } from "react";
 import { sendEmail, ensureValidToken } from "@/lib/gmail";
 import {
@@ -459,17 +454,9 @@ function LabelDiscoveryIcons({
 }
 
 export function LabelFinder() {
-  const { labels, demos, releases, addLabel, updateLabel, deleteLabel, toggleFavoriteLabel, addDemo, locale, getGenres, setActiveTab, userProfile, setUserProfile, gmailAuth, setGmailAuth, selectedLabelId, setSelectedLabelId, selectedArtistId, setSelectedArtistId, setNavigationReturnTo, artists, projectTargetLabels, addProjectTargetLabel } =
+  const { labels, demos, releases, addLabel, updateLabel, deleteLabel, toggleFavoriteLabel, addDemo, locale, getGenres, setActiveTab, userProfile, setUserProfile, gmailAuth, setGmailAuth, selectedLabelId, setSelectedLabelId, selectedArtistId, setSelectedArtistId, setNavigationReturnTo, artists } =
     useAppStore();
-  // 🔒 WP-004 — Project Context. `project` è null quando Label Finder è
-  // montato fuori da <ProjectProvider> (es. tab Labels della home). In
-  // quel caso tutte le letture `project?.*` cadono su undefined e il
-  // comportamento è IDENTICO a prima. Nessun salvataggio automatico,
-  // nessun cambio di flusso: il Project è solo contesto interno opzionale.
-  // `project?.artist` è usato come fallback per pitchArtistName quando
-  // userProfile.artistName è vuoto. `project?.goal` è disponibile come
-  // contesto per future personalizzazioni (nessun effetto visibile ora).
-  const project = useProject();
+
   const genres = getGenres();
   const { toast } = useToast();
   const [sendingEmail, setSendingEmail] = useState(false);
@@ -1010,7 +997,7 @@ export function LabelFinder() {
     //   sovrascritto. L'utente può ancora editare il campo manualmente;
     //   l'eventuale onBlur save verso userProfile resta invariato
     //   (riga 1409: confronta con userProfile.artistName, non con project).
-    setPitchArtistName(userProfile.artistName || project?.artist || "");
+    setPitchArtistName(userProfile.artistName || "");
     // ⚠️ scLink is the SoundCloud link OF THE TRACK being pitched, NOT the
     // user's profile SoundCloud link. Previously this was initialized from
     // userProfile.scLink, which (combined with the onBlur handler that saved
@@ -1428,22 +1415,12 @@ export function LabelFinder() {
   }, [demos, detailLabel, pitchTrackName]);
 
   // Save profile fields on blur
-  // 🔒 WP-004 — Project-aware: NON salviamo automaticamente quando il valore
-  // corrente deriva dal fallback del Project (project?.artist). L'auto-save
-  // scatta solo se l'utente ha effettivamente digitato qualcosa di diverso
-  // sia dal userProfile che dal project. Questo rispetta il vincolo
-  // "nessun salvataggio automatico" del task.
+  // Save profile fields on blur
   const handlePitchArtistBlur = useCallback(() => {
-    const trimmed = pitchArtistName.trim();
-    const projectArtist = project?.artist?.trim() || "";
-    if (
-      trimmed &&
-      trimmed !== userProfile.artistName &&
-      trimmed !== projectArtist
-    ) {
-      setUserProfile({ artistName: trimmed });
+    if (pitchArtistName.trim() && pitchArtistName.trim() !== userProfile.artistName) {
+      setUserProfile({ artistName: pitchArtistName.trim() });
     }
-  }, [pitchArtistName, userProfile.artistName, setUserProfile, project]);
+  }, [pitchArtistName, userProfile.artistName, setUserProfile]);
 
   const handlePitchScLinkBlur = useCallback(() => {
     // Intentionally a no-op: scLink is the SoundCloud link of the track
@@ -2080,53 +2057,6 @@ export function LabelFinder() {
                         onClick={(e) => { e.stopPropagation(); setDeleteConfirmId(label.id); }}>
                         <Trash2 className="h-3 w-3" />
                       </Button>
-                    </div>
-                  )}
-                  {/* 🔒 WP-007 — "Add to Project" button.
-                      Visibile SOLO quando Label Finder è dentro un
-                      <ProjectProvider> (project !== null). Fuori dal
-                      Provider (tab Labels della home) non viene renderizzato
-                      e il comportamento è IDENTICO a prima.
-                      - Stop propagation: non triggera openDetail.
-                      - Se la label è già target del project corrente,
-                        mostra stato "aggiunto" (icona Check, disabled).
-                      - Al click: crea ProjectTargetLabel via store action
-                        (optimistic update + background cloud write). */}
-                  {project && (
-                    <div className="flex items-center gap-1 shrink-0">
-                      {projectTargetLabels.some(
-                        (tl) =>
-                          tl.projectId === project.id &&
-                          tl.labelId === label.id,
-                      ) ? (
-                        <Button
-                          variant="ghost"
-                          size="sm"
-                          className="h-7 gap-1 text-emerald-400 cursor-default"
-                          onClick={(e) => e.stopPropagation()}
-                          title="Aggiunta al project"
-                        >
-                          <Check className="h-3 w-3" />
-                          <span className="text-[10px]">Added</span>
-                        </Button>
-                      ) : (
-                        <Button
-                          variant="ghost"
-                          size="sm"
-                          className="h-7 gap-1 text-primary hover:text-primary"
-                          onClick={(e) => {
-                            e.stopPropagation();
-                            addProjectTargetLabel({
-                              project_id: project.id,
-                              label_id: label.id,
-                            });
-                          }}
-                          title="Aggiungi al project corrente"
-                        >
-                          <Target className="h-3 w-3" />
-                          <span className="text-[10px]">Add to Project</span>
-                        </Button>
-                      )}
                     </div>
                   )}
                 </div>
