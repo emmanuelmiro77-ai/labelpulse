@@ -5336,13 +5336,32 @@ async function pushRankingsToCloud(): Promise<void> {
       ? state.rankingSnapshots
       : null; // null = non aggiornare il campo nel DB
 
-    console.log(`[push-rankings] Pushing ${labelsWithRank.length} labels + ${state.rankingSnapshots.length} snapshots to cloud...`);
+    // 🔒 Riduci il payload: estrai SOLO i campi Beatport necessari per il
+    // ranking globale. Evita di inviare campi personali (emails, notes,
+    // status, website, ecc.) che non servono alla riga global e che
+    // gonfiano il payload causando HTTP 413 su Vercel (1MB body limit).
+    const labelsForPush = labelsWithRank.map((l: any) => ({
+      id: l.id,
+      name: l.name,
+      genres: l.genres || [],
+      rankByGenre: l.rankByGenre || {},
+      pointsByGenre: l.pointsByGenre || {},
+      trending: l.trending || false,
+      trendingRankByGenre: l.trendingRankByGenre || {},
+      trendingPointsByGenre: l.trendingPointsByGenre || {},
+      imageUrl: l.imageUrl || null,
+      slug: l.slug || null,
+      beatportId: l.beatportId || null,
+      prevRankByGenre: l.prevRankByGenre || {},
+    }));
+
+    console.log(`[push-rankings] Pushing ${labelsForPush.length} labels + ${state.rankingSnapshots.length} snapshots to cloud...`);
 
     const res = await fetch("/api/admin/push-rankings", {
       method: "POST",
       headers: { "Content-Type": "application/json" },
       body: JSON.stringify({
-        labels: labelsWithRank,
+        labels: labelsForPush,
         rankingSnapshots: snapshotsToPush,
         rankingsUpdatedAt: state.rankingsUpdatedAt || new Date().toISOString(),
       }),
