@@ -542,7 +542,7 @@ export function clearAllLocalData(): void {
     selectedArtistId: null,
     selectedLabelId: null,
     navigationReturnTo: null,
-    activeTab: "dashboard",
+    activeTab: "rankings",
     locale: "it" as Locale,
     userProfile: {
       artistName: "", scLink: "", bio: "", email: "", photoUrl: "",
@@ -1185,7 +1185,7 @@ interface AppState {
    * list (existing behavior).
    */
   navigationReturnTo: { kind: "label"; labelId: string; labelName?: string } | null;
-  activeTab: "dashboard" | "labels" | "artists" | "rankings" | "demos" | "pitch" | "profile" | "tracks";
+  activeTab: "rankings" | "labels" | "history" | "profile";
   locale: Locale;
   userProfile: UserProfile;
   gmailAuth: GmailAuth;
@@ -1238,7 +1238,7 @@ interface AppState {
   deleteSentCampaign: (id: string) => void;
 
   // Navigation
-  setActiveTab: (tab: "dashboard" | "labels" | "artists" | "rankings" | "demos" | "pitch" | "profile") => void;
+  setActiveTab: (tab: "rankings" | "labels" | "history" | "profile") => void;
 
   // Artists (Phase 2 — Beatport scraper v2)
   setSelectedArtistId: (id: string | null) => void;
@@ -1776,7 +1776,7 @@ export const useAppStore = create<AppState>()(
       selectedLabelId: null as string | null,
       selectedReleaseId: null as string | null, // 🔒 RP-001: vista ReleaseDetail
       navigationReturnTo: null as { kind: "label"; labelId: string; labelName?: string } | null,
-      activeTab: "dashboard" as const,
+      activeTab: "rankings" as const,
       locale: "it" as Locale,
       userProfile: { artistName: "", scLink: "", bio: "", email: "", photoUrl: "", links: [], cyaniteApiToken: "", supabaseUrl: "", supabaseAnonKey: "", notifications: { master: false, followUp: true, rankings: true, weeklyRecap: true } } as UserProfile,
       gmailAuth: { isConnected: false, email: "", accessToken: "", expiresAt: 0 } as GmailAuth,
