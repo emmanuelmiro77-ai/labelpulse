@@ -3480,6 +3480,62 @@ export const useAppStore = create<AppState>()(
           syncToCloud();
           pushRankingsToCloud();
 
+          // 🔒 RELATIONAL SNAPSHOT: salva lo snapshot nelle tabelle dedicate
+          // beatport_snapshots + beatport_chart_history tramite l'API esistente.
+          // Fire-and-forget: se fallisce, l'import e lo storico JSON non vengono
+          // persi. Usa i tracks[] del payload originale se presenti (scraper v2),
+          // altrimenti ricostruisce i tracks dai label mergiati.
+          if ((isRankingsImport || hasGenresAndLabels) && typeof window !== "undefined") {
+            try {
+              const snapshotDate = (
+                parsed._meta?.source === 'beatstats' && parsed._meta?.scrapedPeriod
+                  ? parsed._meta.scrapedPeriod.split('T')[0]
+                  : new Date().toISOString().split('T')[0]
+              );
+              const importTracks = Array.isArray(parsed.tracks) ? parsed.tracks : [];
+              const snapshotPayload = {
+                snapshotDate,
+                source: parsed._meta?.source || "admin-import",
+                totalGenres: parsed._meta?.totalGenres || (parsed.genres?.length ?? 0),
+                totalLabels: parsed._meta?.totalLabels || (importedLabels?.length ?? 0),
+                totalArtists: parsed._meta?.totalArtists || (Array.isArray(parsed.artists) ? parsed.artists.length : 0),
+                totalTracks: parsed._meta?.totalTracks || importTracks.length,
+                incompleteGenres: parsed._meta?.failedGenres ? [String(parsed._meta.failedGenres)] : [],
+                notes: "Imported via " + (parsed._meta?.source || "import"),
+                tracks: importTracks,
+              };
+              if (snapshotPayload.tracks.length > 0) {
+                console.info("[LabelPulse Import] Saving relational snapshot...", {
+                  date: snapshotDate,
+                  tracks: snapshotPayload.tracks.length,
+                });
+                fetch("/api/snapshots/save", {
+                  method: "POST",
+                  headers: { "Content-Type": "application/json" },
+                  body: JSON.stringify(snapshotPayload),
+                })
+                  .then((r) => (r.ok ? r.json() : Promise.reject(r)))
+                  .then((res) => {
+                    if (res?.diff) {
+                      const d = res.diff;
+                      console.info("[LabelPulse Import] Relational snapshot saved ✓", {
+                        snapshotId: d.snapshotId,
+                        previous: d.previousSnapshotDate,
+                        newEntries: d.newEntries,
+                        climbers: d.climbers,
+                        droppers: d.droppers,
+                      });
+                    }
+                  })
+                  .catch((err) => {
+                    console.warn("[LabelPulse Import] Relational snapshot save failed (non-blocking):", err?.status || err);
+                  });
+              }
+            } catch (snapErr) {
+              console.warn("[LabelPulse Import] Relational snapshot setup error (non-blocking):", snapErr);
+            }
+          }
+
           return true;
         } catch {
           return false;
