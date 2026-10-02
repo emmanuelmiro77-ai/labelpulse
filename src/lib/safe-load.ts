@@ -15,8 +15,10 @@
 
 /**
  * Union by id: mantiene tutti gli elementi locali e cloud.
- * Se un elemento esiste in entrambi, cloud vince (per i campi che ha).
- * Gli elementi solo-locali sopravvivono.
+ * Se un elemento esiste in entrambi con lo stesso id:
+ * - se entrambi hanno `updatedAt` valido, vince il più recente;
+ * - se i timestamp sono identici o uno dei due manca, cloud vince (comportamento di default);
+ * - gli elementi solo-locali sopravvivono sempre.
  */
 export function unionById<T extends { id: string }>(
   local: T[] | null | undefined,
@@ -33,10 +35,45 @@ export function unionById<T extends { id: string }>(
   for (const item of b) {
     if (item?.id) {
       const existing = map.get(item.id);
-      map.set(item.id, existing ? { ...existing, ...item } : item);
+      if (!existing) {
+        map.set(item.id, item);
+      } else {
+        // 🔒 SAFE MERGE: confronta updatedAt per evitare che dati cloud
+        // stale sovrascrivano dati locali più recenti.
+        const localTime = parseTimestamp((existing as any)?.updatedAt);
+        const cloudTime = parseTimestamp((item as any)?.updatedAt);
+        if (localTime !== null && cloudTime !== null) {
+          if (localTime > cloudTime) {
+            // Locale è più recente → mantieni locale, mergia solo campi nuovi dal cloud
+            map.set(item.id, { ...item, ...existing });
+          } else {
+            // Cloud è più recente o uguale → cloud wins (comportamento di default)
+            map.set(item.id, { ...existing, ...item });
+          }
+        } else {
+          // Almeno un timestamp manca/non valido → cloud wins (comportamento di default)
+          map.set(item.id, { ...existing, ...item });
+        }
+      }
     }
   }
   return Array.from(map.values());
+}
+
+/**
+ * Parse a timestamp value (ISO string or number) into milliseconds.
+ * Returns null if the value is missing, not a valid date, or NaN.
+ */
+function parseTimestamp(value: unknown): number | null {
+  if (value === undefined || value === null) return null;
+  if (typeof value === "number") {
+    return Number.isFinite(value) ? value : null;
+  }
+  if (typeof value === "string") {
+    const t = new Date(value).getTime();
+    return Number.isFinite(t) ? t : null;
+  }
+  return null;
 }
 
 /**

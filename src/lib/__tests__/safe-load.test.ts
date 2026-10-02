@@ -332,3 +332,125 @@ describe("TEST 8: Different device → data from DB identical", () => {
     expect(result[0].trackName).toBe("Cloud Track");
   });
 });
+
+// ==================== TIMESTAMP AWARE MERGE ====================
+
+describe("unionById: timestamp-aware merge", () => {
+  it("local newer → local prevails", () => {
+    const local = [
+      { id: "d1", name: "Updated", updatedAt: "2026-10-01T12:00:00Z" },
+    ];
+    const cloud = [
+      { id: "d1", name: "Old", updatedAt: "2026-10-01T10:00:00Z" },
+    ];
+
+    const result = unionById(local, cloud);
+
+    expect(result[0].name).toBe("Updated");
+    expect(result[0].updatedAt).toBe("2026-10-01T12:00:00Z");
+  });
+
+  it("cloud newer → cloud prevails", () => {
+    const local = [
+      { id: "d1", name: "Old", updatedAt: "2026-10-01T10:00:00Z" },
+    ];
+    const cloud = [
+      { id: "d1", name: "Updated", updatedAt: "2026-10-01T12:00:00Z" },
+    ];
+
+    const result = unionById(local, cloud);
+
+    expect(result[0].name).toBe("Updated");
+    expect(result[0].updatedAt).toBe("2026-10-01T12:00:00Z");
+  });
+
+  it("equal timestamps → cloud prevails (default behavior)", () => {
+    const local = [
+      { id: "d1", name: "Local", updatedAt: "2026-10-01T12:00:00Z" },
+    ];
+    const cloud = [
+      { id: "d1", name: "Cloud", updatedAt: "2026-10-01T12:00:00Z" },
+    ];
+
+    const result = unionById(local, cloud);
+
+    expect(result[0].name).toBe("Cloud");
+  });
+
+  it("missing local updatedAt → cloud wins (default behavior)", () => {
+    const local = [
+      { id: "d1", name: "Local" } as any,
+    ];
+    const cloud = [
+      { id: "d1", name: "Cloud", updatedAt: "2026-10-01T12:00:00Z" },
+    ];
+
+    const result = unionById(local, cloud);
+
+    expect(result[0].name).toBe("Cloud");
+  });
+
+  it("missing cloud updatedAt → cloud wins (default behavior)", () => {
+    const local = [
+      { id: "d1", name: "Local", updatedAt: "2026-10-01T12:00:00Z" },
+    ];
+    const cloud = [
+      { id: "d1", name: "Cloud" } as any,
+    ];
+
+    const result = unionById(local, cloud);
+
+    expect(result[0].name).toBe("Cloud");
+  });
+
+  it("both updatedAt missing → cloud wins (default behavior)", () => {
+    const local = [
+      { id: "d1", name: "Local" } as any,
+    ];
+    const cloud = [
+      { id: "d1", name: "Cloud" } as any,
+    ];
+
+    const result = unionById(local, cloud);
+
+    expect(result[0].name).toBe("Cloud");
+  });
+
+  it("item only in local → preserved", () => {
+    const local = [
+      { id: "d1", name: "Local Only", updatedAt: "2026-10-01T12:00:00Z" },
+    ];
+    const cloud: any[] = [];
+
+    const result = unionById(local, cloud);
+
+    expect(result).toHaveLength(1);
+    expect(result[0].name).toBe("Local Only");
+  });
+
+  it("item only in cloud → added", () => {
+    const local: any[] = [];
+    const cloud = [
+      { id: "d1", name: "Cloud Only", updatedAt: "2026-10-01T12:00:00Z" },
+    ];
+
+    const result = unionById(local, cloud);
+
+    expect(result).toHaveLength(1);
+    expect(result[0].name).toBe("Cloud Only");
+  });
+
+  it("local newer but cloud has extra fields → extra cloud fields merged onto local base", () => {
+    const local = [
+      { id: "d1", name: "LocalName", updatedAt: "2026-10-01T12:00:00Z" },
+    ];
+    const cloud = [
+      { id: "d1", name: "CloudName", updatedAt: "2026-10-01T10:00:00Z", extraField: "fromCloud" } as any,
+    ];
+
+    const result = unionById(local, cloud);
+
+    expect(result[0].name).toBe("LocalName"); // local wins (newer)
+    expect((result[0] as any).extraField).toBe("fromCloud"); // cloud extra field merged
+  });
+});
